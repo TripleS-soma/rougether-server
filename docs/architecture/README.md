@@ -18,4 +18,4 @@
 - 도메인 패키지 구조
 - Facade 사용 범위
 - MVP ERD 최종안
-- API 우선순위
+- [API 우선순위](api-priority.md)
