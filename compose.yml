@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: rougether-mysql
+    environment:
+      MYSQL_DATABASE: rougether
+      MYSQL_USER: rougether
+      MYSQL_PASSWORD: rougether
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - rougether_mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  rougether_mysql_data:
+
