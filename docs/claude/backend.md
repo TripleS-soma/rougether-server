@@ -37,20 +37,14 @@ com.triples.rougether
 
 도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가합니다. 아직 확정되지 않은 도메인 구조를 미리 과하게 나누지 않습니다.
 
-## 인증/인가 유예 기준
+## 인증/인가 (MVP 포함)
 
-멘토 피드백에 따라 인증/인가 구현은 추후로 미룹니다.
+멘토 결정에 따라 인증/인가를 MVP에 포함합니다. **소셜 로그인(카카오·구글·애플) + JWT** 기반.
 
-다만 API와 DB 모델에는 추후 guard를 붙일 수 있도록 다음 경계를 유지합니다.
-
-- `userId`
-- `ownerUserId`
-- `roomId`
-- `householdId`
-- `memberId`
-- household membership relation
-
-초기 구현에서는 dev user 또는 seed user로 `me` path를 임시 처리할 수 있습니다.
+- 인증: 소셜 로그인으로 발급된 `userId` 기준. 로그인 수단은 `oauth_accounts` 테이블(spec ERD 참고 — ERDCloud 정본 반영 필요).
+- 인가: 소유권 식별자(`userId`, `ownerUserId`, `roomUserId`, `houseId`, `membershipId`)로 권한(guard)을 실제 적용합니다.
+- `me` path는 인증된 사용자를 가리킵니다.
+- 토큰 만료·refresh 등 상세는 spec `open-questions.md`(P0) 참고.
 
 ## 구현 전 확인
 
