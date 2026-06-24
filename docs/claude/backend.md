@@ -4,47 +4,74 @@
 
 ## 기술 스택
 
-- Java 17
+- Java 17 (Gradle toolchain, foojay auto-provision)
 - Spring Boot 4.1
-- Gradle
+- Gradle 멀티모듈
 - Spring Web MVC
 - Spring Security
 - Spring Data JPA
 - Flyway
-- MySQL
-- 로컬 개발 및 테스트용 H2
+- MySQL (운영) · H2 (로컬·테스트)
+
+## 모듈 구조
+
+저장소는 멀티모듈로 구성합니다.
+
+```text
+common/      프레임워크 비의존 공유 부품 (ErrorCode, ErrorResponse, BusinessException, util)
+domain/      도메인별 Entity + Repository + Flyway migration. 스키마 단일 소스. JPA를 api 로 노출.
+user-api/    사용자 대면 앱 :8080  /api/v1  OAuth2(카카오/구글/애플)+JWT(stateless)   [부팅]
+admin-api/   운영자 대면 앱 :8081  /admin   아이디·비밀번호 + 세션(form login)        [부팅]
+```
+
+의존 방향은 `user-api`/`admin-api` → `domain` → `common`입니다. 앱끼리는 서로 의존하지 않습니다.
+
+### 산출물을 어느 모듈에 두는가
+
+| 산출물 | 모듈 | 패키지 |
+| --- | --- | --- |
+| Entity, Repository | `domain` | `com.triples.rougether.domain.<도메인>` |
+| Flyway migration | `domain` | `src/main/resources/db/migration/V{n}__*.sql` |
+| Service (비즈니스 로직) | 각 앱 | `...userapi.<도메인>` / `...adminapi.<도메인>` |
+| Controller, DTO | 각 앱 | 위와 동일 |
+| 공통 에러·util | `common` | `com.triples.rougether.common.*` |
+
+현재 결정상 `domain`은 영속 계층(Entity+Repository)만 둡니다. Service는 각 앱에 둡니다. 같은 핵심 로직(재화 지급 등)을 admin도 쓰게 되면 그 Service만 `domain`으로 승격하는 것을 검토합니다. 도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가하고, 아직 확정되지 않은 구조를 미리 과하게 나누지 않습니다.
 
 ## 기본 API 기준
 
-- API prefix는 `/api/v1`입니다.
+- API prefix는 user-api `/api/v1`, admin-api `/admin`입니다.
 - Controller는 요청/응답 변환과 validation 진입점 중심으로 얇게 유지합니다.
 - 여러 table을 함께 변경하는 쓰기 흐름에는 `@Transactional`을 사용합니다.
 - 조회 서비스에는 `@Transactional(readOnly = true)`를 사용합니다.
-- DB 변경은 Flyway migration으로 관리합니다.
+- DB 변경은 Flyway migration으로 관리합니다 (`domain` 모듈).
 - 응답 DTO는 frontend가 쓰기 좋은 형태로 설계하고, DB table을 그대로 노출하지 않습니다.
-
-## 패키지 방향
-
-현재 저장소는 최소 구조로 시작했습니다.
-
-```text
-com.triples.rougether
-  global
-    api
-    config
-    error
-```
-
-도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가합니다. 아직 확정되지 않은 도메인 구조를 미리 과하게 나누지 않습니다.
+- 에러 응답은 spec `api.md` 형식 `{ code, message, fieldErrors }`를 따릅니다 (`common.error.ErrorResponse` / `BusinessException` + `ErrorCode`).
 
 ## 인증/인가 (MVP 포함)
 
-멘토 결정에 따라 인증/인가를 MVP에 포함합니다. **소셜 로그인(카카오·구글·애플) + JWT** 기반.
+`user-api`와 `admin-api`는 인증 주체·테이블·방식이 완전히 분리됩니다. 두 앱의 `SecurityFilterChain`은 공유하지 않으며, 토큰/세션 부품만 필요 시 `common`에 둡니다.
 
-- 인증: 소셜 로그인으로 발급된 `userId` 기준. 로그인 수단은 `oauth_accounts` 테이블(spec ERD 참고 — ERDCloud 정본 반영 필요).
-- 인가: 소유권 식별자(`userId`, `ownerUserId`, `roomUserId`, `houseId`, `membershipId`)로 권한(guard)을 실제 적용합니다.
-- `me` path는 인증된 사용자를 가리킵니다.
-- 토큰 만료·refresh 등 상세는 spec `open-questions.md`(P0) 참고.
+- **user-api**: 소셜 로그인(카카오·구글·애플) + JWT(stateless). 주체는 `users`/`oauth_accounts`.
+  - 인증: 소셜 로그인으로 발급된 `userId` 기준.
+  - 인가: 소유권 식별자(`userId`, `ownerUserId`, `roomUserId`, `houseId`, `membershipId`)로 권한(guard)을 실제 적용합니다.
+  - `me` path는 인증된 사용자를 가리킵니다.
+  - 토큰 만료·refresh 등 상세는 spec `open-questions.md`(P0) 참고.
+- **admin-api**: 아이디/비밀번호 + 세션(form login). 주체는 별도 `admin_accounts` 테이블. user 인증과 섞지 않습니다.
+
+## 테스트 정책
+
+- 모든 도메인 기능에 의미 있는 테스트를 작성합니다 (getter/assertNotNull 도배 금지).
+  - Service → 비즈니스 로직·트랜잭션·예외
+  - Controller → `@WebMvcTest`로 요청/응답 계약·validation·에러 형식(`code`)
+  - Repository → 커스텀 쿼리가 있을 때만 `@DataJpaTest`
+- 위험영역은 트랜잭션·롤백·정합성까지 꼼꼼히 테스트합니다 (필수): 재화 지급/차감(`user_wallets`), 루틴/투두 완료·취소(코인+스트릭), 뽑기(`gacha` 확률·중복→다이아), 인증/인가(소유권 guard·admin 세션), 집 미션 정산(기여도·중복 수령).
+- 스펙 미정값(enum 등)에 의존하는 부분은 테스트도 미루거나 최소화합니다 (값이 바뀌면 깨지므로).
+
+## 코드 주석 스타일
+
+- 코드 주석(Java/Gradle/JavaDoc)은 한국어 음슴체(~함/~음)로 작성합니다.
+- 문서 산문(이 docs, 마크다운 등)은 평서/존대 문장으로 작성합니다. 주석 음슴체를 산문에 쓰지 않습니다.
 
 ## 구현 전 확인
 
@@ -68,6 +95,11 @@ git diff --check
 서버 smoke check:
 
 ```bash
-./gradlew bootRun
+./gradlew :user-api:bootRun     # :8080
 curl http://localhost:8080/api/v1/health
+
+./gradlew :admin-api:bootRun    # :8081
+curl http://localhost:8081/admin/health
 ```
+
+작업을 마칠 때 `bootRun` 같은 장기 실행 프로세스를 남겨두지 않습니다.

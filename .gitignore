@@ -38,4 +38,4 @@ out/
 
 ### Local env ###
 .env
-.claude/
+.claude/settings.local.json

@@ -28,7 +28,7 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 
 | 작업 성격 | 문서 |
 | --- | --- |
-| 백엔드 공통 규칙, 실행/테스트, migration | [docs/claude/backend.md](docs/claude/backend.md) |
+| 백엔드 공통 규칙, 모듈 구조, 실행/테스트, migration | [docs/claude/backend.md](docs/claude/backend.md) |
 | 프론트 연동 기준, 응답 형태, 이미지 로딩 | [docs/claude/frontend.md](docs/claude/frontend.md) |
 | 방/공동집 API | [docs/claude/domains/room-house.md](docs/claude/domains/room-house.md) |
 | 루틴/투두 API 의존성 | [docs/claude/domains/routine-todo.md](docs/claude/domains/routine-todo.md) |
