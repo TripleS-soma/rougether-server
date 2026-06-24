@@ -1,0 +1,14 @@
+dependencies {
+	api project(':common')
+
+	// 앱이 엔티티·JPA 설정 애너테이션을 직접 쓰므로 api 로 노출 (implementation 이면 안 보임).
+	api 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-mysql'
+
+	runtimeOnly 'com.h2database:h2'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-flyway-test'
+}
