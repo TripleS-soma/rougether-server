@@ -106,7 +106,7 @@ CREATE TABLE routines (
     category_id    BIGINT       NULL,
     title          VARCHAR(160) NOT NULL,
     auth_type      VARCHAR(30)  NOT NULL,
-    status         VARCHAR(30)  NOT NULL DEFAULT 'active',
+    status         VARCHAR(30)  NOT NULL DEFAULT 'ACTIVE',
     repeat_type    VARCHAR(40)  NULL,
     repeat_days    JSON         NULL,
     scheduled_time TIME         NULL,
@@ -134,8 +134,8 @@ CREATE TABLE photo_verifications (
     id               BIGINT       NOT NULL AUTO_INCREMENT,
     routine_log_id   BIGINT       NOT NULL,
     storage_key      VARCHAR(255) NOT NULL,
-    privacy_scope    VARCHAR(30)  NOT NULL DEFAULT 'private',
-    ai_review_status VARCHAR(30)  NOT NULL DEFAULT 'pending',
+    privacy_scope    VARCHAR(30)  NOT NULL DEFAULT 'PRIVATE',
+    ai_review_status VARCHAR(30)  NOT NULL DEFAULT 'PENDING',
     uploaded_at      TIMESTAMP    NOT NULL,
     deleted_at       TIMESTAMP    NULL,
     PRIMARY KEY (id)
@@ -148,7 +148,7 @@ CREATE TABLE todos (
     title                VARCHAR(160) NOT NULL,
     description          TEXT         NULL,
     due_date             DATE         NULL,
-    status               VARCHAR(30)  NOT NULL DEFAULT 'pending',
+    status               VARCHAR(30)  NOT NULL DEFAULT 'PENDING',
     completed_at         TIMESTAMP    NULL,
     reward_currency_type VARCHAR(30)  NULL,
     reward_amount        INT          NOT NULL,
@@ -165,7 +165,7 @@ CREATE TABLE streaks (
     longest_count       INT         NOT NULL,
     last_success_date   DATE        NULL,
     last_evaluated_date DATE        NULL,
-    status              VARCHAR(30) NOT NULL DEFAULT 'active',
+    status              VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     updated_at          TIMESTAMP   NOT NULL,
     PRIMARY KEY (id)
 );
@@ -295,8 +295,8 @@ CREATE TABLE house_members (
     id        BIGINT      NOT NULL AUTO_INCREMENT,
     house_id  BIGINT      NOT NULL,
     user_id   BIGINT      NOT NULL,
-    role      VARCHAR(30) NOT NULL DEFAULT 'member',
-    status    VARCHAR(30) NOT NULL DEFAULT 'active',
+    role      VARCHAR(30) NOT NULL DEFAULT 'MEMBER',
+    status    VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     joined_at TIMESTAMP   NOT NULL,
     left_at   TIMESTAMP   NULL,
     PRIMARY KEY (id)
@@ -315,7 +315,7 @@ CREATE TABLE house_missions (
     title        VARCHAR(160) NOT NULL,
     mission_type VARCHAR(50)  NOT NULL,
     target_value INT          NOT NULL,
-    status       VARCHAR(30)  NOT NULL DEFAULT 'active',
+    status       VARCHAR(30)  NOT NULL DEFAULT 'ACTIVE',
     starts_at    TIMESTAMP    NULL,
     ends_at      TIMESTAMP    NULL,
     created_at   TIMESTAMP    NOT NULL,
@@ -340,6 +340,12 @@ CREATE TABLE house_mission_participants (
 ALTER TABLE oauth_accounts ADD CONSTRAINT uq_oauth_provider_user UNIQUE (provider, provider_user_id);
 -- 같은 집 중복 가입만 차단(user_id 단독 unique는 두지 않음 — 다중 집 가입 허용).
 ALTER TABLE house_members ADD CONSTRAINT uq_house_member UNIQUE (house_id, user_id);
+-- 초대코드 고유성(중복 발급 시 findByInviteCode가 엉뚱한 집 매칭). invite_code는 nullable이라 NULL 다중은 허용됨.
+ALTER TABLE house ADD CONSTRAINT uq_house_invite UNIQUE (invite_code);
+-- 1미션 1멤버 1참여(findByMissionIdAndMemberId Optional).
+ALTER TABLE house_mission_participants ADD CONSTRAINT uq_hmp_mission_member UNIQUE (mission_id, membership_id);
+-- 유저당 streak 1행(findByUserId Optional).
+ALTER TABLE streaks ADD CONSTRAINT uq_streak_user UNIQUE (user_id);
 
 -- ============================================================
 -- Foreign keys
