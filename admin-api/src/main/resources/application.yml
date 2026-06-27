@@ -33,6 +33,12 @@ admin:
     username: admin
     password: admin1234
 
+# 에셋 S3 (자격증명은 env / IAM 으로 해결). bucket·region 은 환경 공통.
+asset:
+  s3:
+    bucket: rougether-assets
+    region: ap-northeast-2
+
 ---
 spring:
   config:
