@@ -26,6 +26,13 @@ management:
       exposure:
         include: health,info
 
+# 로컬 개발용 어드민 시드 계정 (운영 mysql profile 에서는 비활성).
+admin:
+  seed:
+    enabled: true
+    username: admin
+    password: admin1234
+
 ---
 spring:
   config:
@@ -38,4 +45,9 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   # 운영 공유 DB 에서는 user-api 만 migration 을 실행함. admin 은 검증만 수행.
   flyway:
+    enabled: false
+
+# 운영에서는 시드 비활성 — 어드민 계정은 별도로 안전하게 생성.
+admin:
+  seed:
     enabled: false
