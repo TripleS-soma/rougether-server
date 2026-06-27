@@ -36,4 +36,14 @@ public class OauthAccount extends BaseCreatedEntity {
 
     @Column(name = "provider_user_id", length = 255, nullable = false)
     private String providerUserId;
+
+    private OauthAccount(User user, OauthProvider provider, String providerUserId) {
+        this.user = user;
+        this.provider = provider;
+        this.providerUserId = providerUserId;
+    }
+
+    public static OauthAccount link(User user, OauthProvider provider, String providerUserId) {
+        return new OauthAccount(user, provider, providerUserId);
+    }
 }

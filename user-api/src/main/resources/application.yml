@@ -30,6 +30,11 @@ management:
       exposure:
         include: health,info
 
+jwt:
+  secret: ${JWT_SECRET:local-dev-only-secret-change-in-prod-hs256-needs-32-bytes-min}
+  access-ttl: 30m
+  refresh-ttl: 14d
+
 ---
 spring:
   config:

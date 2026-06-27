@@ -30,4 +30,13 @@ public class User extends BaseEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    // 소셜 가입 시점엔 닉네임을 받지 않음(온보딩에서 채움) → nickname null.
+    public static User signUp() {
+        return new User();
+    }
+
+    public void recordLogin(Instant now) {
+        this.lastLoginAt = now;
+    }
 }
