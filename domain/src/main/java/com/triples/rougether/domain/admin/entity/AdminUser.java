@@ -13,7 +13,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// 어드민 계정 (issue #4 결정 = B: 유저와 분리). 스키마(V2)와 같은 domain 모듈에 둠.
+// 어드민 계정 (issue #4 결정 = B: 유저와 분리). 스키마 migration과 같은 domain 모듈에 둠.
 // 인증 로직(UserDetailsService)은 admin-api 에만 두어 어드민 인증 경로를 분리한다.
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
