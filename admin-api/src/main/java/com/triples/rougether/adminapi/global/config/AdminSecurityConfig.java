@@ -2,15 +2,13 @@ package com.triples.rougether.adminapi.global.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
-// 어드민 인증: admin_users 기반(AdminUserDetailsService) + BCrypt + form login.
-// 유저(소셜 로그인)와 완전히 분리. UserDetailsService·PasswordEncoder bean 이 있으면
-// Spring Security 가 DaoAuthenticationProvider 를 자동 구성해 form login 에 연결한다.
+// 어드민 인증: admin_users 기반(AdminUserDetailsService) + BCrypt + Thymeleaf form login.
+// 유저(소셜 로그인)와 완전히 분리. 로그인 후 메인(/) 은 에셋 업로드 화면.
 @Configuration
 public class AdminSecurityConfig {
 
@@ -19,14 +17,23 @@ public class AdminSecurityConfig {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
+                                "/login",
+                                "/css/**", "/js/**", "/images/**",
                                 "/admin/health",
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .formLogin(Customizer.withDefaults())
-                .logout(Customizer.withDefaults());
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .defaultSuccessUrl("/", true)
+                        .permitAll()
+                )
+                .logout(logout -> logout
+                        .logoutSuccessUrl("/login?logout")
+                        .permitAll()
+                );
 
         return http.build();
     }

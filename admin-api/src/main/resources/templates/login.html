@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 로그인</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="auth-body">
+    <main class="auth-card">
+        <div class="brand">
+            <span class="brand-mark">R</span>
+            <div class="brand-text">
+                <h1>Rougether <span class="badge">ADMIN</span></h1>
+                <p>에셋 관리 콘솔</p>
+            </div>
+        </div>
+
+        <div th:if="${param.error}" class="alert alert-error">
+            아이디 또는 비밀번호가 올바르지 않습니다.
+        </div>
+        <div th:if="${param.logout}" class="alert alert-success">
+            로그아웃되었습니다.
+        </div>
+
+        <form th:action="@{/login}" method="post" class="auth-form">
+            <label class="field">
+                <span class="field-label">아이디</span>
+                <input type="text" name="username" autocomplete="username"
+                       autofocus required placeholder="admin">
+            </label>
+            <label class="field">
+                <span class="field-label">비밀번호</span>
+                <input type="password" name="password" autocomplete="current-password"
+                       required placeholder="••••••••">
+            </label>
+            <button type="submit" class="btn-primary">로그인</button>
+        </form>
+
+        <p class="auth-footer">Rougether 백오피스 · 관계자 외 접근 금지</p>
+    </main>
+</body>
+</html>

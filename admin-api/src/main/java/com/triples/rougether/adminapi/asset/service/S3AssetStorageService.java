@@ -36,7 +36,7 @@ public class S3AssetStorageService implements AssetStorageService {
         String key = kind + "/" + UUID.randomUUID() + "." + extension;
         s3Client.putObject(
                 PutObjectRequest.builder()
-                        .bucket(properties.bucket())
+                        .bucket(properties.s3().bucket())
                         .key(key)
                         .contentType(contentType)
                         .build(),

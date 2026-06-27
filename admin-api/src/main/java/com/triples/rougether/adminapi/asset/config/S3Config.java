@@ -15,7 +15,7 @@ public class S3Config {
     @Bean
     S3Client s3Client(AssetProperties properties) {
         return S3Client.builder()
-                .region(Region.of(properties.region()))
+                .region(Region.of(properties.s3().region()))
                 .build();
     }
 }
