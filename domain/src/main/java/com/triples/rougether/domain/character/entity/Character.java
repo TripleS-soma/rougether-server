@@ -34,4 +34,24 @@ public class Character {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    private Character(String code, String name, String baseAssetKey, int sortOrder, boolean active) {
+        this.code = code;
+        this.name = name;
+        this.baseAssetKey = baseAssetKey;
+        this.sortOrder = sortOrder;
+        this.active = active;
+    }
+
+    public static Character create(String code, String name, String baseAssetKey, int sortOrder, boolean active) {
+        return new Character(code, name, baseAssetKey, sortOrder, active);
+    }
+
+    public void update(String code, String name, String baseAssetKey, int sortOrder, boolean active) {
+        this.code = code;
+        this.name = name;
+        this.baseAssetKey = baseAssetKey;
+        this.sortOrder = sortOrder;
+        this.active = active;
+    }
 }

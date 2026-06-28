@@ -61,4 +61,80 @@ public class Item {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    private Item(
+            Theme theme,
+            String categoryCode,
+            PlacementType placementType,
+            String surfaceSlotType,
+            String characterSlotType,
+            String name,
+            CurrencyType purchaseCurrencyType,
+            Integer priceAmount,
+            String assetKey,
+            boolean limited,
+            boolean active) {
+        this.theme = theme;
+        this.categoryCode = categoryCode;
+        this.placementType = placementType;
+        this.surfaceSlotType = surfaceSlotType;
+        this.characterSlotType = characterSlotType;
+        this.name = name;
+        this.purchaseCurrencyType = purchaseCurrencyType;
+        this.priceAmount = priceAmount;
+        this.assetKey = assetKey;
+        this.limited = limited;
+        this.active = active;
+    }
+
+    public static Item create(
+            Theme theme,
+            String categoryCode,
+            PlacementType placementType,
+            String surfaceSlotType,
+            String characterSlotType,
+            String name,
+            CurrencyType purchaseCurrencyType,
+            Integer priceAmount,
+            String assetKey,
+            boolean limited,
+            boolean active) {
+        return new Item(
+                theme,
+                categoryCode,
+                placementType,
+                surfaceSlotType,
+                characterSlotType,
+                name,
+                purchaseCurrencyType,
+                priceAmount,
+                assetKey,
+                limited,
+                active);
+    }
+
+    public void update(
+            Theme theme,
+            String categoryCode,
+            PlacementType placementType,
+            String surfaceSlotType,
+            String characterSlotType,
+            String name,
+            CurrencyType purchaseCurrencyType,
+            Integer priceAmount,
+            String assetKey,
+            boolean limited,
+            boolean active) {
+        this.theme = theme;
+        this.categoryCode = categoryCode;
+        this.placementType = placementType;
+        this.surfaceSlotType = surfaceSlotType;
+        this.characterSlotType = characterSlotType;
+        this.name = name;
+        this.purchaseCurrencyType = purchaseCurrencyType;
+        this.priceAmount = priceAmount;
+        this.assetKey = assetKey;
+        this.limited = limited;
+        this.active = active;
+    }
 }

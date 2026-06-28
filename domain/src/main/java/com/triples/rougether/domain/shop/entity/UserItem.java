@@ -38,4 +38,14 @@ public class UserItem {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private UserItem(User user, Item item, Instant acquiredAt) {
+        this.user = user;
+        this.item = item;
+        this.acquiredAt = acquiredAt;
+    }
+
+    public static UserItem acquire(User user, Item item, Instant acquiredAt) {
+        return new UserItem(user, item, acquiredAt);
+    }
 }

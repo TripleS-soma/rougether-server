@@ -31,4 +31,22 @@ public class Theme {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    private Theme(String code, String name, String coverImageKey, boolean active) {
+        this.code = code;
+        this.name = name;
+        this.coverImageKey = coverImageKey;
+        this.active = active;
+    }
+
+    public static Theme create(String code, String name, String coverImageKey, boolean active) {
+        return new Theme(code, name, coverImageKey, active);
+    }
+
+    public void update(String code, String name, String coverImageKey, boolean active) {
+        this.code = code;
+        this.name = name;
+        this.coverImageKey = coverImageKey;
+        this.active = active;
+    }
 }

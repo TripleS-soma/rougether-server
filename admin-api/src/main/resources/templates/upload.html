@@ -25,11 +25,11 @@
         </div>
     </header>
 
-    <main class="app-main">
+    <main class="app-main app-main-wide">
         <div class="upload-card">
             <div class="upload-head">
                 <h2>에셋 업로드</h2>
-                <p>이미지를 S3에 올리고 asset key를 발급합니다. 발급된 key를 각 도메인 컬럼에 저장하세요.</p>
+                <p>이미지를 S3에 올리고 asset key를 발급합니다. 발급된 key는 아래 콘텐츠 데이터 폼에 바로 연결할 수 있습니다.</p>
             </div>
 
             <form id="upload-form" class="upload-form">
@@ -71,6 +71,241 @@
                 </div>
             </div>
         </div>
+
+        <section class="content-panel">
+            <div class="upload-head">
+                <h2>콘텐츠 데이터</h2>
+                <p>프론트 앱이 조회할 마스터 데이터에 업로드한 asset key를 저장합니다.</p>
+            </div>
+
+            <div class="alert alert-error" id="content-error" hidden></div>
+            <div class="alert alert-success" id="content-success" hidden></div>
+
+            <div class="content-grid">
+                <section class="content-section">
+                    <h3>테마</h3>
+                    <form id="theme-form" class="content-form">
+                        <input type="hidden" id="theme-id">
+                        <label class="field">
+                            <span class="field-label">code</span>
+                            <input type="text" id="theme-code" maxlength="50" required placeholder="cozy_dev_room">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">name</span>
+                            <input type="text" id="theme-name" maxlength="100" required placeholder="포근한 개발자 룸">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">coverImageKey</span>
+                            <input type="text" id="theme-cover-key" maxlength="255" placeholder="themes/....png">
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" id="theme-active" checked>
+                            <span>활성</span>
+                        </label>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary btn-compact">테마 저장</button>
+                            <button type="button" class="btn-ghost" data-reset-form="theme-form">새로 입력</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="content-section">
+                    <h3>아이템</h3>
+                    <form id="item-form" class="content-form">
+                        <input type="hidden" id="item-id">
+                        <label class="field">
+                            <span class="field-label">theme</span>
+                            <select id="item-theme-id" required>
+                                <option value="">테마 선택</option>
+                                <option th:each="theme : ${content.themes}"
+                                        th:value="${theme.id}"
+                                        th:text="${theme.code + ' · ' + theme.name}">theme</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">name</span>
+                            <input type="text" id="item-name" maxlength="120" required placeholder="구름 침대">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">assetKey</span>
+                            <input type="text" id="item-asset-key" maxlength="255" required placeholder="items/....png">
+                        </label>
+                        <div class="form-row">
+                            <label class="field">
+                                <span class="field-label">categoryCode</span>
+                                <input type="text" id="item-category-code" maxlength="50" required placeholder="bed">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">placementType</span>
+                                <select id="item-placement-type" required>
+                                    <option th:each="type : ${placementTypes}" th:value="${type}" th:text="${type}">SURFACE</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span class="field-label">surfaceSlotType</span>
+                                <input type="text" id="item-surface-slot-type" maxlength="40" placeholder="BED">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">characterSlotType</span>
+                                <input type="text" id="item-character-slot-type" maxlength="40" placeholder="HAT">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="field">
+                                <span class="field-label">currency</span>
+                                <select id="item-purchase-currency-type">
+                                    <option value="">없음</option>
+                                    <option th:each="type : ${currencyTypes}" th:value="${type}" th:text="${type}">DIAMOND</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">price</span>
+                                <input type="number" id="item-price-amount" min="0" step="1" placeholder="100">
+                            </label>
+                        </div>
+                        <div class="check-row">
+                            <label class="check-field">
+                                <input type="checkbox" id="item-limited">
+                                <span>한정</span>
+                            </label>
+                            <label class="check-field">
+                                <input type="checkbox" id="item-active" checked>
+                                <span>활성</span>
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary btn-compact">아이템 저장</button>
+                            <button type="button" class="btn-ghost" data-reset-form="item-form">새로 입력</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="content-section">
+                    <h3>캐릭터</h3>
+                    <form id="character-form" class="content-form">
+                        <input type="hidden" id="character-id">
+                        <label class="field">
+                            <span class="field-label">code</span>
+                            <input type="text" id="character-code" maxlength="50" required placeholder="bear_basic">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">name</span>
+                            <input type="text" id="character-name" maxlength="100" required placeholder="곰돌이">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">baseAssetKey</span>
+                            <input type="text" id="character-base-key" maxlength="255" required placeholder="characters/....png">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">sortOrder</span>
+                            <input type="number" id="character-sort-order" min="0" step="1" required value="0">
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" id="character-active" checked>
+                            <span>활성</span>
+                        </label>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary btn-compact">캐릭터 저장</button>
+                            <button type="button" class="btn-ghost" data-reset-form="character-form">새로 입력</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <div class="content-list">
+                <section>
+                    <h3>테마 목록</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>code</th><th>name</th><th>coverImageKey</th><th>상태</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="theme : ${content.themes}">
+                                    <td th:text="${theme.id}">1</td>
+                                    <td th:text="${theme.code}">code</td>
+                                    <td th:text="${theme.name}">name</td>
+                                    <td><code th:text="${theme.coverImageKey}">themes/key.png</code></td>
+                                    <td th:text="${theme.active ? 'active' : 'inactive'}">active</td>
+                                    <td>
+                                        <button type="button" class="link-btn edit-theme"
+                                                th:attr="data-id=${theme.id},data-code=${theme.code},data-name=${theme.name},data-cover=${theme.coverImageKey},data-active=${theme.active}">
+                                            수정
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(content.themes)}">
+                                    <td colspan="6">등록된 테마가 없습니다.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>아이템 목록</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>theme</th><th>name</th><th>assetKey</th><th>slot</th><th>price</th><th>상태</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="item : ${content.items}">
+                                    <td th:text="${item.id}">1</td>
+                                    <td th:text="${item.themeCode}">theme</td>
+                                    <td th:text="${item.name}">name</td>
+                                    <td><code th:text="${item.assetKey}">items/key.png</code></td>
+                                    <td th:text="${item.placementType + ':' + (item.surfaceSlotType ?: item.characterSlotType)}">SURFACE:BED</td>
+                                    <td th:text="${item.purchaseCurrencyType == null ? '-' : item.purchaseCurrencyType + ' ' + item.priceAmount}">DIAMOND 100</td>
+                                    <td th:text="${item.active ? 'active' : 'inactive'}">active</td>
+                                    <td>
+                                        <button type="button" class="link-btn edit-item"
+                                                th:attr="data-id=${item.id},data-theme-id=${item.themeId},data-category=${item.categoryCode},data-placement=${item.placementType},data-surface=${item.surfaceSlotType},data-character=${item.characterSlotType},data-name=${item.name},data-currency=${item.purchaseCurrencyType},data-price=${item.priceAmount},data-asset=${item.assetKey},data-limited=${item.limited},data-active=${item.active}">
+                                            수정
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(content.items)}">
+                                    <td colspan="8">등록된 아이템이 없습니다.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>캐릭터 목록</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>code</th><th>name</th><th>baseAssetKey</th><th>정렬</th><th>상태</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="character : ${content.characters}">
+                                    <td th:text="${character.id}">1</td>
+                                    <td th:text="${character.code}">code</td>
+                                    <td th:text="${character.name}">name</td>
+                                    <td><code th:text="${character.baseAssetKey}">characters/key.png</code></td>
+                                    <td th:text="${character.sortOrder}">0</td>
+                                    <td th:text="${character.active ? 'active' : 'inactive'}">active</td>
+                                    <td>
+                                        <button type="button" class="link-btn edit-character"
+                                                th:attr="data-id=${character.id},data-code=${character.code},data-name=${character.name},data-base=${character.baseAssetKey},data-sort=${character.sortOrder},data-active=${character.active}">
+                                            수정
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(content.characters)}">
+                                    <td colspan="7">등록된 캐릭터가 없습니다.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </section>
     </main>
 
     <script th:inline="javascript">
@@ -133,6 +368,7 @@
                 }
                 const data = await res.json();
                 showResult(data.key);
+                applyAssetKeyToContentForm(data.key, document.getElementById('kind').value);
             } catch (err) {
                 showError('업로드 중 오류: ' + err.message);
             } finally {
@@ -160,6 +396,154 @@
             btn.textContent = '복사됨';
             setTimeout(() => { btn.textContent = '복사'; }, 1200);
         });
+
+        bindContentForms();
+        bindEditButtons();
+        bindResetButtons();
+
+        function bindContentForms() {
+            document.getElementById('theme-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('theme-id').value;
+                await submitContent(id ? `/admin/content/themes/${id}` : '/admin/content/themes', id ? 'PUT' : 'POST', {
+                    code: valueOf('theme-code'),
+                    name: valueOf('theme-name'),
+                    coverImageKey: valueOf('theme-cover-key') || null,
+                    active: document.getElementById('theme-active').checked
+                });
+            });
+
+            document.getElementById('item-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('item-id').value;
+                const price = valueOf('item-price-amount');
+                await submitContent(id ? `/admin/content/items/${id}` : '/admin/content/items', id ? 'PUT' : 'POST', {
+                    themeId: Number(valueOf('item-theme-id')),
+                    categoryCode: valueOf('item-category-code'),
+                    placementType: valueOf('item-placement-type'),
+                    surfaceSlotType: valueOf('item-surface-slot-type') || null,
+                    characterSlotType: valueOf('item-character-slot-type') || null,
+                    name: valueOf('item-name'),
+                    purchaseCurrencyType: valueOf('item-purchase-currency-type') || null,
+                    priceAmount: price ? Number(price) : null,
+                    assetKey: valueOf('item-asset-key'),
+                    limited: document.getElementById('item-limited').checked,
+                    active: document.getElementById('item-active').checked
+                });
+            });
+
+            document.getElementById('character-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('character-id').value;
+                await submitContent(id ? `/admin/content/characters/${id}` : '/admin/content/characters', id ? 'PUT' : 'POST', {
+                    code: valueOf('character-code'),
+                    name: valueOf('character-name'),
+                    baseAssetKey: valueOf('character-base-key'),
+                    sortOrder: Number(valueOf('character-sort-order')),
+                    active: document.getElementById('character-active').checked
+                });
+            });
+        }
+
+        async function submitContent(url, method, payload) {
+            hideContentMessages();
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    [csrfHeader]: csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                showContentError('저장 실패 (HTTP ' + res.status + ')');
+                return;
+            }
+            showContentSuccess('저장되었습니다. 목록을 갱신합니다.');
+            setTimeout(() => window.location.reload(), 600);
+        }
+
+        function bindEditButtons() {
+            document.querySelectorAll('.edit-theme').forEach((btn) => btn.addEventListener('click', () => {
+                setValue('theme-id', btn.dataset.id);
+                setValue('theme-code', btn.dataset.code);
+                setValue('theme-name', btn.dataset.name);
+                setValue('theme-cover-key', btn.dataset.cover || '');
+                document.getElementById('theme-active').checked = btn.dataset.active === 'true';
+                document.getElementById('theme-code').focus();
+            }));
+
+            document.querySelectorAll('.edit-item').forEach((btn) => btn.addEventListener('click', () => {
+                setValue('item-id', btn.dataset.id);
+                setValue('item-theme-id', btn.dataset.themeId);
+                setValue('item-category-code', btn.dataset.category);
+                setValue('item-placement-type', btn.dataset.placement);
+                setValue('item-surface-slot-type', btn.dataset.surface || '');
+                setValue('item-character-slot-type', btn.dataset.character || '');
+                setValue('item-name', btn.dataset.name);
+                setValue('item-purchase-currency-type', btn.dataset.currency || '');
+                setValue('item-price-amount', btn.dataset.price || '');
+                setValue('item-asset-key', btn.dataset.asset);
+                document.getElementById('item-limited').checked = btn.dataset.limited === 'true';
+                document.getElementById('item-active').checked = btn.dataset.active === 'true';
+                document.getElementById('item-name').focus();
+            }));
+
+            document.querySelectorAll('.edit-character').forEach((btn) => btn.addEventListener('click', () => {
+                setValue('character-id', btn.dataset.id);
+                setValue('character-code', btn.dataset.code);
+                setValue('character-name', btn.dataset.name);
+                setValue('character-base-key', btn.dataset.base);
+                setValue('character-sort-order', btn.dataset.sort);
+                document.getElementById('character-active').checked = btn.dataset.active === 'true';
+                document.getElementById('character-code').focus();
+            }));
+        }
+
+        function bindResetButtons() {
+            document.querySelectorAll('[data-reset-form]').forEach((btn) => btn.addEventListener('click', () => {
+                const form = document.getElementById(btn.dataset.resetForm);
+                form.reset();
+                form.querySelector('input[type="hidden"]').value = '';
+            }));
+        }
+
+        function applyAssetKeyToContentForm(key, kind) {
+            if (kind === 'themes') {
+                setValue('theme-cover-key', key);
+            }
+            if (kind === 'items') {
+                setValue('item-asset-key', key);
+            }
+            if (kind === 'characters') {
+                setValue('character-base-key', key);
+            }
+        }
+
+        function valueOf(id) {
+            return document.getElementById(id).value.trim();
+        }
+
+        function setValue(id, value) {
+            document.getElementById(id).value = value || '';
+        }
+
+        function hideContentMessages() {
+            document.getElementById('content-error').hidden = true;
+            document.getElementById('content-success').hidden = true;
+        }
+
+        function showContentError(msg) {
+            const box = document.getElementById('content-error');
+            box.textContent = msg;
+            box.hidden = false;
+        }
+
+        function showContentSuccess(msg) {
+            const box = document.getElementById('content-success');
+            box.textContent = msg;
+            box.hidden = false;
+        }
     </script>
 </body>
 </html>
