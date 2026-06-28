@@ -1,6 +1,10 @@
 spring:
   application:
     name: rougether-admin-api
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     url: jdbc:h2:mem:rougether-admin;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
@@ -32,6 +36,14 @@ admin:
     enabled: true
     username: admin
     password: admin1234
+
+# 에셋 S3 (자격증명은 env / IAM 으로 해결). bucket·region 은 환경 공통.
+# public-base-url 은 공개 이미지 base — 추후 CloudFront/CDN 으로 교체 시 이 값만 바꾼다.
+asset:
+  s3:
+    bucket: rougether-assets
+    region: ap-northeast-2
+  public-base-url: https://rougether-assets.s3.ap-northeast-2.amazonaws.com
 
 ---
 spring:
