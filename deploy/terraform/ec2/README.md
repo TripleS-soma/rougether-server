@@ -9,7 +9,7 @@ This stack is a small team/dev deployment:
 - EC2 instance role for S3 uploads to the existing asset bucket
 - SSM SecureString parameters for runtime secrets
 - SSM Session Manager access by default, with optional SSH
-- Docker containers pulled from GHCR
+- Private ECR repositories for Docker images
 
 It is intentionally simpler than ECS/Fargate. Use this for an early team environment, not a hardened production deployment.
 
@@ -29,43 +29,47 @@ Edit `terraform.tfvars`:
 - Set `allowed_admin_api_cidrs` to team/VPN public IP CIDRs.
 - Keep `allowed_ssh_cidrs = []` unless you need SSH.
 - Set `admin_seed_password` or let Terraform generate one.
-- Set `user_api_image` and `admin_api_image` to the GHCR tags built by GitHub Actions.
-- If GHCR packages are private, set `container_registry_username` and `container_registry_password_ssm_parameter`.
+- Leave `user_api_image`, `admin_api_image`, and `container_registry_server` as `null` to use the Terraform-managed private ECR repositories.
+- Override image and registry variables only when deploying from another registry.
 
 Do not commit `terraform.tfvars` or Terraform state.
 
 ## Build Images
 
-Docker images are built by `.github/workflows/docker-publish.yml`.
+Terraform creates these private ECR repositories:
 
-- `user-api` image: `ghcr.io/triples-soma/rougether-user-api`
-- `admin-api` image: `ghcr.io/triples-soma/rougether-admin-api`
-- PR/dev branch tag: `dev`
-- `main` branch tag: `latest`
-- Every push also gets a commit SHA tag.
+- `rougether-dev/user-api`
+- `rougether-dev/admin-api`
 
-Manual local build examples:
+Build, tag, and push `:dev` images before replacing the EC2 instance:
 
 ```bash
+terraform apply \
+  -target=aws_ecr_repository.user_api \
+  -target=aws_ecr_repository.admin_api
+
+REGISTRY="$(terraform output -raw ecr_registry_server)"
+aws ecr get-login-password --region ap-northeast-2 \
+  | docker login "$REGISTRY" --username AWS --password-stdin
+
 docker build --build-arg APP_MODULE=user-api -t rougether-user-api:local .
 docker build --build-arg APP_MODULE=admin-api -t rougether-admin-api:local .
+
+docker tag rougether-user-api:local "$REGISTRY/rougether-dev/user-api:dev"
+docker tag rougether-admin-api:local "$REGISTRY/rougether-dev/admin-api:dev"
+
+docker push "$REGISTRY/rougether-dev/user-api:dev"
+docker push "$REGISTRY/rougether-dev/admin-api:dev"
 ```
 
-For private GHCR packages, create a GitHub token with package read access and store it in SSM:
-
-```bash
-aws ssm put-parameter \
-  --name /rougether-dev/ghcr/token \
-  --type SecureString \
-  --value "YOUR_GITHUB_TOKEN" \
-  --region ap-northeast-2
-```
-
-Then set:
+The `.github/workflows/docker-publish.yml` workflow still publishes GHCR images for CI/CD experiments. To deploy from GHCR or another registry, set:
 
 ```hcl
-container_registry_username               = "YOUR_GITHUB_USERNAME"
-container_registry_password_ssm_parameter = "/rougether-dev/ghcr/token"
+user_api_image                            = "REGISTRY/user-api:TAG"
+admin_api_image                           = "REGISTRY/admin-api:TAG"
+container_registry_server                 = "REGISTRY"
+container_registry_username               = "USERNAME"
+container_registry_password_ssm_parameter = "/path/to/token"
 ```
 
 ## AWS Permissions
@@ -74,6 +78,7 @@ The IAM identity running Terraform needs permission to manage:
 
 - EC2 instance, security groups, AMI/VPC/subnet lookups
 - RDS MySQL and DB subnet groups
+- ECR repositories and lifecycle policies
 - IAM role, instance profile, role policy, and `iam:PassRole`
 - SSM parameters
 - Random local Terraform values

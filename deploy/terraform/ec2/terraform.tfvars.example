@@ -1,13 +1,14 @@
 aws_region  = "ap-northeast-2"
 environment = "dev"
 
-# Built by .github/workflows/docker-publish.yml.
-# Use :latest after main is the deploy source; use :dev for the PR branch.
-user_api_image  = "ghcr.io/triples-soma/rougether-user-api:dev"
-admin_api_image = "ghcr.io/triples-soma/rougether-admin-api:dev"
+# Leave null to use Terraform-managed private ECR repositories.
+# Override only when deploying from another registry.
+user_api_image  = null
+admin_api_image = null
 
-# Leave null if the GHCR packages are public.
-# For private GHCR packages, store a token in SSM SecureString and set both values.
+# Leave null to use Terraform-managed ECR login on EC2.
+# For another private registry, store a token in SSM SecureString and set both values.
+container_registry_server                 = null
 container_registry_username               = null
 container_registry_password_ssm_parameter = null
 

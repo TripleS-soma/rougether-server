@@ -50,7 +50,9 @@ EOF
 
 chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env"
 
-if [ -n '${registry_password_param}' ] && [ -n '${registry_username}' ]; then
+if [[ '${registry_server}' == *.dkr.ecr.*.amazonaws.com ]]; then
+  aws ecr get-login-password --region '${aws_region}' | docker login '${registry_server}' --username AWS --password-stdin
+elif [ -n '${registry_password_param}' ] && [ -n '${registry_username}' ]; then
   REGISTRY_PASSWORD="$(aws ssm get-parameter --name '${registry_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
   printf '%s' "$REGISTRY_PASSWORD" | docker login '${registry_server}' --username '${registry_username}' --password-stdin
 fi

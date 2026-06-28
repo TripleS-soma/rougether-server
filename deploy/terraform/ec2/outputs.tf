@@ -18,6 +18,21 @@ output "admin_health_url" {
   value       = "http://${aws_instance.app.public_ip}:8081/admin/health"
 }
 
+output "ecr_registry_server" {
+  description = "ECR registry server used by EC2."
+  value       = local.ecr_registry_server
+}
+
+output "user_api_image" {
+  description = "Docker image used by user-api."
+  value       = local.user_api_image_value
+}
+
+output "admin_api_image" {
+  description = "Docker image used by admin-api."
+  value       = local.admin_api_image_value
+}
+
 output "rds_endpoint" {
   description = "Private RDS endpoint."
   value       = aws_db_instance.mysql.endpoint

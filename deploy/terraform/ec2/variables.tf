@@ -29,21 +29,21 @@ variable "repository_branch" {
 }
 
 variable "user_api_image" {
-  description = "Docker image used for user-api."
+  description = "Docker image used for user-api. If null, Terraform-managed ECR is used."
   type        = string
-  default     = "ghcr.io/triples-soma/rougether-user-api:dev"
+  default     = null
 }
 
 variable "admin_api_image" {
-  description = "Docker image used for admin-api."
+  description = "Docker image used for admin-api. If null, Terraform-managed ECR is used."
   type        = string
-  default     = "ghcr.io/triples-soma/rougether-admin-api:dev"
+  default     = null
 }
 
 variable "container_registry_server" {
-  description = "Container registry server. Use ghcr.io for GitHub Container Registry."
+  description = "Container registry server. If null, Terraform-managed ECR is used."
   type        = string
-  default     = "ghcr.io"
+  default     = null
 }
 
 variable "container_registry_username" {

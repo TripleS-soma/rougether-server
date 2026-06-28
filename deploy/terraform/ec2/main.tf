@@ -9,6 +9,7 @@ locals {
   db_password_param         = "/${local.name}/db/password"
   admin_seed_password_param = "/${local.name}/admin/seed-password"
   jwt_secret_param          = "/${local.name}/jwt/secret"
+  ecr_registry_server       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -83,6 +84,72 @@ resource "aws_ssm_parameter" "jwt_secret" {
   type        = "SecureString"
   value       = local.jwt_secret_value
   tags        = local.tags
+}
+
+resource "aws_ecr_repository" "user_api" {
+  name                 = "${local.name}/user-api"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}/user-api" })
+}
+
+resource "aws_ecr_repository" "admin_api" {
+  name                 = "${local.name}/admin-api"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}/admin-api" })
+}
+
+resource "aws_ecr_lifecycle_policy" "user_api" {
+  repository = aws_ecr_repository.user_api.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the last 10 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = {
+        type = "expire"
+      }
+    }]
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "admin_api" {
+  repository = aws_ecr_repository.admin_api.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the last 10 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = {
+        type = "expire"
+      }
+    }]
+  })
+}
+
+locals {
+  user_api_image_value            = var.user_api_image == null ? "${aws_ecr_repository.user_api.repository_url}:dev" : var.user_api_image
+  admin_api_image_value           = var.admin_api_image == null ? "${aws_ecr_repository.admin_api.repository_url}:dev" : var.admin_api_image
+  container_registry_server_value = var.container_registry_server == null ? local.ecr_registry_server : var.container_registry_server
 }
 
 resource "aws_security_group" "ec2" {
@@ -234,6 +301,25 @@ resource "aws_iam_role_policy" "app" {
           for prefix in var.asset_allowed_prefixes :
           "arn:aws:s3:::${var.asset_bucket_name}/${prefix}"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = [
+          aws_ecr_repository.user_api.arn,
+          aws_ecr_repository.admin_api.arn
+        ]
       }
     ]
   })
@@ -267,9 +353,9 @@ resource "aws_instance" "app" {
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
     aws_region                = var.aws_region
-    user_api_image            = var.user_api_image
-    admin_api_image           = var.admin_api_image
-    registry_server           = var.container_registry_server
+    user_api_image            = local.user_api_image_value
+    admin_api_image           = local.admin_api_image_value
+    registry_server           = local.container_registry_server_value
     registry_username         = var.container_registry_username == null ? "" : var.container_registry_username
     registry_password_param   = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
     db_url                    = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
