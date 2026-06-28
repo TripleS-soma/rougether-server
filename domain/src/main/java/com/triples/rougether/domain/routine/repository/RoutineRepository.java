@@ -3,8 +3,16 @@ package com.triples.rougether.domain.routine.repository;
 import com.triples.rougether.domain.routine.entity.Routine;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
     List<Routine> findByUserIdAndStatusAndDeletedAtIsNull(Long userId, String status);
+
+    // flushAutomatically: 같은 트랜잭션의 category soft delete가 먼저 반영되어야 유실되지 않음
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Routine r set r.category = null where r.category.id = :categoryId")
+    int clearCategory(@Param("categoryId") Long categoryId);
 }
