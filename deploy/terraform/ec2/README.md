@@ -71,7 +71,7 @@ docker push "$REGISTRY/rougether-dev/user-api:dev"
 docker push "$REGISTRY/rougether-dev/admin-api:dev"
 ```
 
-To deploy from GHCR or another registry, set:
+Terraform-managed ECR is the default registry for this dev stack. To deploy from a separate private registry instead, set:
 
 ```hcl
 user_api_image                            = "REGISTRY/user-api:TAG"

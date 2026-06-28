@@ -47,13 +47,13 @@ variable "container_registry_server" {
 }
 
 variable "container_registry_username" {
-  description = "Optional container registry username. Leave null for public images."
+  description = "Optional external registry username. Leave null when using Terraform-managed ECR."
   type        = string
   default     = null
 }
 
 variable "container_registry_password_ssm_parameter" {
-  description = "Optional SSM SecureString parameter name containing a registry token. Leave null for public images."
+  description = "Optional SSM SecureString parameter name containing an external registry token. Leave null when using Terraform-managed ECR."
   type        = string
   default     = null
 }
