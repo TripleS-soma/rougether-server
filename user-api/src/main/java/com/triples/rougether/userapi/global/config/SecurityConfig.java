@@ -24,14 +24,12 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/v1/health",
                                 "/api/v1/auth/**",
                                 "/actuator/health",
                                 "/actuator/info",
-                                "/h2-console/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

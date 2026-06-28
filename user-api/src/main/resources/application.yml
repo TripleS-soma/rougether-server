@@ -1,15 +1,8 @@
 spring:
   application:
     name: rougether-user-api
-  datasource:
-    url: jdbc:h2:mem:rougether;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+  profiles:
+    default: local
   jpa:
     hibernate:
       ddl-auto: validate
@@ -34,14 +27,3 @@ jwt:
   secret: ${JWT_SECRET:local-dev-only-secret-change-in-prod-hs256-needs-32-bytes-min}
   access-ttl: 30m
   refresh-ttl: 14d
-
----
-spring:
-  config:
-    activate:
-      on-profile: mysql
-  datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
