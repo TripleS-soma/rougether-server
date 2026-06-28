@@ -41,13 +41,27 @@ Terraform creates these private ECR repositories:
 - `rougether-dev/user-api`
 - `rougether-dev/admin-api`
 
+PRs into `main` or `feat/admin-assets` run `.github/workflows/pr-gate.yml`:
+
+1. run `./gradlew test`
+2. build both Docker images without pushing, to catch Dockerfile/module packaging failures
+
 After the stack creates the GitHub Actions deploy role, pushes to `main` or
 `feat/admin-assets` run `.github/workflows/docker-publish.yml`:
 
-1. build `user-api` and `admin-api` as `linux/amd64`
-2. push both images to ECR with `:dev` and commit SHA tags
-3. use SSM to restart the EC2 systemd services
-4. verify local and public health endpoints
+1. run `./gradlew test`
+2. build `user-api` and `admin-api` as `linux/amd64`
+3. push both images to ECR with `:dev` and commit SHA tags
+4. deploy the immutable commit SHA tags through SSM
+5. restart the EC2 systemd services and verify local health endpoints
+6. verify public health endpoints
+
+The SSM deploy script records the previously deployed images before restarting
+the services. If the new `user-api` or `admin-api` image fails its local health
+check, the script rewrites the systemd image env files back to the previous
+images and restarts both services. The GitHub Actions run still fails so the
+bad deployment is visible, but the EC2 service is rolled back when a previous
+image is available.
 
 Manual local build examples remain useful for bootstrap or debugging. Build, tag,
 and push `:dev` images before replacing the EC2 instance:

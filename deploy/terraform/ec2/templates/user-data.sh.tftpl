@@ -57,6 +57,26 @@ elif [ -n '${registry_password_param}' ] && [ -n '${registry_username}' ]; then
   printf '%s' "$REGISTRY_PASSWORD" | docker login '${registry_server}' --username '${registry_username}' --password-stdin
 fi
 
+docker pull ${user_api_image}
+docker pull ${admin_api_image}
+
+cat > "$ENV_DIR/user-api.deploy.env" <<EOF
+ROUGETHER_USER_API_IMAGE=${user_api_image}
+EOF
+
+cat > "$ENV_DIR/admin-api.deploy.env" <<EOF
+ROUGETHER_ADMIN_API_IMAGE=${admin_api_image}
+EOF
+
+cat > "$ENV_DIR/deploy-state.env" <<EOF
+USER_API_IMAGE=${user_api_image}
+ADMIN_API_IMAGE=${admin_api_image}
+DEPLOYED_SHA=bootstrap
+DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+chmod 600 "$ENV_DIR/user-api.deploy.env" "$ENV_DIR/admin-api.deploy.env" "$ENV_DIR/deploy-state.env"
+
 cat > /etc/systemd/system/rougether-user-api.service <<'EOF'
 [Unit]
 Description=Rougether user-api container
@@ -67,9 +87,9 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStartPre=/usr/bin/docker pull ${user_api_image}
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${user_api_image}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
@@ -86,9 +106,9 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+EnvironmentFile=/etc/rougether/admin-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
-ExecStartPre=/usr/bin/docker pull ${admin_api_image}
-ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${admin_api_image}
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_ADMIN_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-admin-api
 
 [Install]
