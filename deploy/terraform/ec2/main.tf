@@ -10,6 +10,7 @@ locals {
   admin_seed_password_param = "/${local.name}/admin/seed-password"
   jwt_secret_param          = "/${local.name}/jwt/secret"
   ecr_registry_server       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url           = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -329,6 +330,108 @@ resource "aws_iam_instance_profile" "ec2" {
   name = "${local.name}-ec2-profile"
   role = aws_iam_role.ec2.name
   tags = local.tags
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url = local.github_oidc_url
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
+  ]
+
+  tags = merge(local.tags, { Name = "${local.name}-github-actions-oidc" })
+}
+
+resource "aws_iam_role" "github_actions_deploy" {
+  name = "${local.name}-github-actions-deploy"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:TripleS-soma/rougether-server:ref:refs/heads/main",
+            "repo:TripleS-soma/rougether-server:ref:refs/heads/feat/admin-assets"
+          ]
+        }
+      }
+    }]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy" "github_actions_deploy" {
+  name = "${local.name}-github-actions-deploy-policy"
+  role = aws_iam_role.github_actions_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:DescribeRepositories",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+        ]
+        Resource = [
+          aws_ecr_repository.user_api.arn,
+          aws_ecr_repository.admin_api.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.app.id}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetCommandInvocation"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_instance" "app" {

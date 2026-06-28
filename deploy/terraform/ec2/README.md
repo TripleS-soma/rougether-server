@@ -41,7 +41,16 @@ Terraform creates these private ECR repositories:
 - `rougether-dev/user-api`
 - `rougether-dev/admin-api`
 
-Build, tag, and push `:dev` images before replacing the EC2 instance:
+After the stack creates the GitHub Actions deploy role, pushes to `main` or
+`feat/admin-assets` run `.github/workflows/docker-publish.yml`:
+
+1. build `user-api` and `admin-api` as `linux/amd64`
+2. push both images to ECR with `:dev` and commit SHA tags
+3. use SSM to restart the EC2 systemd services
+4. verify local and public health endpoints
+
+Manual local build examples remain useful for bootstrap or debugging. Build, tag,
+and push `:dev` images before replacing the EC2 instance:
 
 ```bash
 terraform apply \
@@ -62,7 +71,7 @@ docker push "$REGISTRY/rougether-dev/user-api:dev"
 docker push "$REGISTRY/rougether-dev/admin-api:dev"
 ```
 
-The `.github/workflows/docker-publish.yml` workflow still publishes GHCR images for CI/CD experiments. To deploy from GHCR or another registry, set:
+To deploy from GHCR or another registry, set:
 
 ```hcl
 user_api_image                            = "REGISTRY/user-api:TAG"
@@ -79,7 +88,7 @@ The IAM identity running Terraform needs permission to manage:
 - EC2 instance, security groups, AMI/VPC/subnet lookups
 - RDS MySQL and DB subnet groups
 - ECR repositories and lifecycle policies
-- IAM role, instance profile, role policy, and `iam:PassRole`
+- IAM role, instance profile, role policy, OIDC provider, and `iam:PassRole`
 - SSM parameters
 - Random local Terraform values
 
