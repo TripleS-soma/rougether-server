@@ -1,0 +1,99 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/rougether-user-data.log) 2>&1
+
+ENV_DIR="/etc/rougether"
+
+dnf update -y
+dnf install -y docker awscli
+systemctl enable --now docker
+
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+mkdir -p "$ENV_DIR"
+chmod 700 "$ENV_DIR"
+
+export AWS_REGION='${aws_region}'
+DB_PASSWORD="$(aws ssm get-parameter --name '${db_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
+JWT_SECRET="$(aws ssm get-parameter --name '${jwt_secret_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
+ADMIN_SEED_PASSWORD="$(aws ssm get-parameter --name '${admin_seed_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
+
+cat > "$ENV_DIR/user-api.env" <<EOF
+SPRING_PROFILES_ACTIVE=mysql
+SERVER_PORT=8080
+DB_URL=${db_url}
+DB_USERNAME=${db_username}
+DB_PASSWORD=$DB_PASSWORD
+JWT_SECRET=$JWT_SECRET
+EOF
+
+cat > "$ENV_DIR/admin-api.env" <<EOF
+SPRING_PROFILES_ACTIVE=mysql
+SERVER_PORT=8081
+DB_URL=${db_url}
+DB_USERNAME=${db_username}
+DB_PASSWORD=$DB_PASSWORD
+ADMIN_SEED_ENABLED=${admin_seed_enabled}
+ADMIN_SEED_USERNAME=${admin_seed_username}
+ADMIN_SEED_PASSWORD=$ADMIN_SEED_PASSWORD
+ASSET_S3_BUCKET=${asset_bucket_name}
+ASSET_S3_REGION=${asset_region}
+ASSET_PUBLIC_BASE_URL=${asset_public_base_url}
+EOF
+
+chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env"
+
+if [ -n '${registry_password_param}' ] && [ -n '${registry_username}' ]; then
+  REGISTRY_PASSWORD="$(aws ssm get-parameter --name '${registry_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
+  printf '%s' "$REGISTRY_PASSWORD" | docker login '${registry_server}' --username '${registry_username}' --password-stdin
+fi
+
+cat > /etc/systemd/system/rougether-user-api.service <<'EOF'
+[Unit]
+Description=Rougether user-api container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
+ExecStartPre=/usr/bin/docker pull ${user_api_image}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${user_api_image}
+ExecStop=/usr/bin/docker stop rougether-user-api
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
+[Unit]
+Description=Rougether admin-api container
+After=docker.service network-online.target rougether-user-api.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
+ExecStartPre=/usr/bin/docker pull ${admin_api_image}
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${admin_api_image}
+ExecStop=/usr/bin/docker stop rougether-admin-api
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable rougether-user-api rougether-admin-api
+systemctl restart rougether-user-api
+systemctl restart rougether-admin-api

@@ -39,3 +39,10 @@ out/
 ### Local env ###
 .env
 .claude/settings.local.json
+
+### Terraform ###
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/terraform.tfvars
+**/*.tfplan

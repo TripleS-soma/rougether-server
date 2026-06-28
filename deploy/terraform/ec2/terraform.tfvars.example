@@ -1,0 +1,29 @@
+aws_region  = "ap-northeast-2"
+environment = "dev"
+
+# Built by .github/workflows/docker-publish.yml.
+# Use :latest after main is the deploy source; use :dev for the PR branch.
+user_api_image  = "ghcr.io/triples-soma/rougether-user-api:dev"
+admin_api_image = "ghcr.io/triples-soma/rougether-admin-api:dev"
+
+# Leave null if the GHCR packages are public.
+# For private GHCR packages, store a token in SSM SecureString and set both values.
+container_registry_username               = null
+container_registry_password_ssm_parameter = null
+
+# Keep admin restricted to team/VPN IPs whenever possible.
+allowed_user_api_cidrs  = ["0.0.0.0/0"]
+allowed_admin_api_cidrs = ["YOUR_PUBLIC_IP/32"]
+allowed_ssh_cidrs      = []
+
+# Optional. Leave null and use SSM Session Manager instead of SSH.
+key_name = null
+
+# Free Tier eligibility depends on account creation date and current AWS offers.
+instance_type     = "t3.micro"
+db_instance_class = "db.t3.micro"
+
+admin_seed_username = "admin"
+# admin_seed_password = "replace-with-a-strong-password"
+
+# jwt_secret = "replace-with-at-least-32-random-bytes"
