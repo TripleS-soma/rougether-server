@@ -22,7 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-// 전체 스택(보안 필터·실제 H2·Flyway)에서 인증 가드와 refresh 회전·재사용을 검증함.
+// 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·재사용을 검증함.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AuthSecurityIntegrationTest {
