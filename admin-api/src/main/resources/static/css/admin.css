@@ -167,6 +167,7 @@ body {
 .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 
 .app-main { max-width: 640px; margin: 0 auto; padding: 40px 24px; }
+.app-main-wide { max-width: 1180px; display: flex; flex-direction: column; gap: 24px; }
 
 /* ===== 에셋 업로드 ===== */
 .upload-card {
@@ -252,9 +253,149 @@ body {
 .result-url { font-size: 13px; color: var(--primary); text-decoration: none; }
 .result-url:hover { text-decoration: underline; }
 
+/* ===== 콘텐츠 데이터 ===== */
+.content-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: var(--shadow);
+}
+
+.content-grid {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.content-section {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fbfcff;
+}
+
+.content-section h3,
+.content-list h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+
+.content-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.check-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-soft);
+}
+
+.check-field input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+}
+
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-compact {
+    height: 38px;
+    margin-top: 0;
+    padding: 0 16px;
+    box-shadow: none;
+}
+
+.content-list {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+    background: var(--surface);
+}
+
+th,
+td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+th {
+    background: var(--bg);
+    color: var(--text-soft);
+    font-weight: 700;
+}
+
+td code {
+    display: block;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+tr:last-child td { border-bottom: none; }
+
+.link-btn {
+    border: none;
+    background: transparent;
+    color: var(--primary-strong);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+
 @media (max-width: 520px) {
     .auth-card { padding: 32px 24px; }
     .app-main { padding: 28px 18px; }
     .upload-card { padding: 24px; }
+    .content-panel { padding: 24px; }
+    .content-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
     .result { flex-direction: column; }
+}
+
+@media (max-width: 980px) {
+    .content-grid { grid-template-columns: 1fr; }
 }
