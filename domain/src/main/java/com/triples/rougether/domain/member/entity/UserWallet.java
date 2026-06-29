@@ -37,4 +37,12 @@ public class UserWallet extends BaseEntity {
 
     @Column(name = "balance", nullable = false)
     private int balance;
+
+    public void add(int amount) {
+        this.balance += amount;
+    }
+
+    public void subtract(int amount) {
+        this.balance -= amount;
+    }
 }

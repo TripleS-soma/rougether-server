@@ -55,4 +55,45 @@ public class Streak {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private Streak(User user, LocalDate today) {
+        this.user = user;
+        this.currentCount = 1;
+        this.longestCount = 1;
+        this.lastSuccessDate = today;
+        this.status = StreakStatus.ACTIVE;
+    }
+
+    // 오늘 첫 완료로 스트릭을 시작함(streak row 없을 때)
+    public static Streak start(User user, LocalDate today) {
+        return new Streak(user, today);
+    }
+
+    // 오늘 첫 완료 시 호출. 어제 성공이면 +1, 아니면 1로 리셋. 이미 오늘 반영됐으면 변화 없음(방어).
+    public void applySuccess(LocalDate today) {
+        if (today.equals(lastSuccessDate)) {
+            return;
+        }
+        if (today.minusDays(1).equals(lastSuccessDate)) {
+            currentCount += 1;
+        } else {
+            currentCount = 1;
+        }
+        longestCount = Math.max(longestCount, currentCount);
+        lastSuccessDate = today;
+        status = StreakStatus.ACTIVE;
+    }
+
+    // 오늘 완료가 0개가 됐을 때 호출. count-1, last_success_date는 어제로 근사 복원(0이면 null).
+    // longest_count는 보수적으로 줄이지 않음.
+    public void rollback(LocalDate today) {
+        currentCount = Math.max(0, currentCount - 1);
+        if (currentCount > 0) {
+            lastSuccessDate = today.minusDays(1);
+            status = StreakStatus.ACTIVE;
+        } else {
+            lastSuccessDate = null;
+            status = StreakStatus.BROKEN;
+        }
+    }
 }

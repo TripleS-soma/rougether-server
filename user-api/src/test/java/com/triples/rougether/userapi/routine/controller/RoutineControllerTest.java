@@ -13,17 +13,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
+import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
+import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
+import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
+import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
+import com.triples.rougether.userapi.routine.service.RoutineLogService;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +52,8 @@ class RoutineControllerTest {
 
     @MockitoBean
     private RoutineService routineService;
+    @MockitoBean
+    private RoutineLogService routineLogService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     // JwtAuthenticationFilter가 슬라이스에 로드되며 요구함.
@@ -145,5 +156,56 @@ class RoutineControllerTest {
         mockMvc.perform(delete("/api/v1/routines/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROUTINE_NOT_FOUND"));
+    }
+
+    @Test
+    void 완료는_201과_streak_요약을_포함해_응답한다() throws Exception {
+        when(routineLogService.complete(eq(1L), eq(7L), any(RoutineLogCreateRequest.class)))
+                .thenReturn(new RoutineLogResponse(100L, LocalDate.of(2026, 6, 29),
+                        RoutineLogStatus.COMPLETED, Instant.parse("2026-06-29T07:00:00Z"),
+                        CurrencyType.COIN, 10, new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29))));
+
+        mockMvc.perform(post("/api/v1/routines/7/logs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.rewardAmount").value(10))
+                .andExpect(jsonPath("$.streak.currentCount").value(3))
+                .andExpect(jsonPath("$.streak.longestCount").value(10));
+    }
+
+    @Test
+    void 중복_완료는_409와_ALREADY_COMPLETED를_응답한다() throws Exception {
+        when(routineLogService.complete(eq(1L), eq(7L), any(RoutineLogCreateRequest.class)))
+                .thenThrow(new BusinessException(RoutineLogErrorCode.ALREADY_COMPLETED));
+
+        mockMvc.perform(post("/api/v1/routines/7/logs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ALREADY_COMPLETED"));
+    }
+
+    @Test
+    void 완료_취소는_200과_갱신된_streak_요약을_응답한다() throws Exception {
+        when(routineLogService.cancel(1L, 7L, 50L))
+                .thenReturn(new StreakSummaryResponse(2, 10, LocalDate.of(2026, 6, 28)));
+
+        mockMvc.perform(delete("/api/v1/routines/7/logs/50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentCount").value(2))
+                .andExpect(jsonPath("$.lastSuccessDate").value("2026-06-28"));
+    }
+
+    @Test
+    void 당일이_아닌_log_취소는_409와_LOG_NOT_CANCELABLE을_응답한다() throws Exception {
+        when(routineLogService.cancel(1L, 7L, 50L))
+                .thenThrow(new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE));
+
+        mockMvc.perform(delete("/api/v1/routines/7/logs/50"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("LOG_NOT_CANCELABLE"));
     }
 }

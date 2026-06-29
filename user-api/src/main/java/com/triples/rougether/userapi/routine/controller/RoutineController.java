@@ -5,8 +5,12 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
+import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
+import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
+import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
+import com.triples.rougether.userapi.routine.service.RoutineLogService;
 import com.triples.rougether.userapi.routine.service.RoutineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoutineController {
 
     private final RoutineService routineService;
+    private final RoutineLogService routineLogService;
 
     @Operation(summary = "내 루틴 목록 조회",
             description = "로그인한 회원이 소유한 루틴을 반환합니다. categoryId·status로 필터링할 수 있습니다.")
@@ -72,5 +77,27 @@ public class RoutineController {
     public void delete(@CurrentUser AuthUser authUser,
                        @Parameter(description = "루틴 ID") @PathVariable Long id) {
         routineService.delete(authUser.id(), id);
+    }
+
+    @Operation(summary = "루틴 완료 체크",
+            description = "당일 루틴을 완료 처리합니다. 코인 10을 지급하고 스트릭을 갱신합니다.")
+    @PostMapping("/{id}/logs")
+    @ResponseStatus(HttpStatus.CREATED)
+    public RoutineLogResponse complete(
+            @CurrentUser AuthUser authUser,
+            @Parameter(description = "루틴 ID") @PathVariable Long id,
+            @RequestBody(required = false) RoutineLogCreateRequest request) {
+        RoutineLogCreateRequest body = request != null ? request : new RoutineLogCreateRequest(null);
+        return routineLogService.complete(authUser.id(), id, body);
+    }
+
+    @Operation(summary = "루틴 완료 취소",
+            description = "당일 완료 기록을 취소합니다. 지급한 코인을 회수하고 스트릭을 롤백합니다.")
+    @DeleteMapping("/{id}/logs/{logId}")
+    public StreakSummaryResponse cancelLog(
+            @CurrentUser AuthUser authUser,
+            @Parameter(description = "루틴 ID") @PathVariable Long id,
+            @Parameter(description = "완료 기록 ID") @PathVariable Long logId) {
+        return routineLogService.cancel(authUser.id(), id, logId);
     }
 }
