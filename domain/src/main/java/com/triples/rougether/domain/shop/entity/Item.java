@@ -33,9 +33,10 @@ public class Item {
     @Column(name = "category_code", length = 50, nullable = false)
     private String categoryCode;
 
-    @Enumerated(EnumType.STRING)
+    // 배치 방식(positioned / surface_slot)은 문자열로 보관, 해석은 프론트가 담당.
+    // 배치 모델이 확정되면 그때 enum 화한다.
     @Column(name = "placement_type", length = 40, nullable = false)
-    private PlacementType placementType;
+    private String placementType;
 
     @Column(name = "surface_slot_type", length = 40)
     private String surfaceSlotType;
@@ -61,4 +62,20 @@ public class Item {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    public Item(Theme theme, String categoryCode, String placementType, String surfaceSlotType,
+                String characterSlotType, String name, CurrencyType purchaseCurrencyType,
+                Integer priceAmount, String assetKey, boolean limited, boolean active) {
+        this.theme = theme;
+        this.categoryCode = categoryCode;
+        this.placementType = placementType;
+        this.surfaceSlotType = surfaceSlotType;
+        this.characterSlotType = characterSlotType;
+        this.name = name;
+        this.purchaseCurrencyType = purchaseCurrencyType;
+        this.priceAmount = priceAmount;
+        this.assetKey = assetKey;
+        this.limited = limited;
+        this.active = active;
+    }
 }
