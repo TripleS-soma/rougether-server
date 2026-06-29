@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:tc:mysql:8.4:///rougether
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+jwt:
+  secret: test-only-secret-hs256-needs-at-least-32-bytes-long-padding
+  access-ttl: 30m
+  refresh-ttl: 14d

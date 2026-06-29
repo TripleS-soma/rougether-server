@@ -1,0 +1,66 @@
+name: PR Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/admin-assets
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Gradle test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant Gradle wrapper permission
+        run: chmod +x ./gradlew
+
+      - name: Run tests
+        run: ./gradlew test
+
+  docker-build:
+    name: Docker build ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - module: user-api
+          - module: admin-api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build linux/amd64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            APP_MODULE=${{ matrix.module }}
+          push: false
+          tags: rougether-${{ matrix.module }}:pr-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.module }}-amd64

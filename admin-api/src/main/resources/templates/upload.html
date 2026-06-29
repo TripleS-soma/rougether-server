@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 에셋 업로드</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="upload-card">
+            <div class="upload-head">
+                <h2>에셋 업로드</h2>
+                <p>이미지를 S3에 올리고 asset key를 발급합니다. 발급된 key를 각 도메인 컬럼에 저장하세요.</p>
+            </div>
+
+            <form id="upload-form" class="upload-form">
+                <label class="field">
+                    <span class="field-label">종류 (kind)</span>
+                    <select name="kind" id="kind" required>
+                        <option value="items">items — 상점 아이템 (방 가구/장식)</option>
+                        <option value="characters">characters — 캐릭터</option>
+                        <option value="categories">categories — 카테고리 아이콘</option>
+                        <option value="themes">themes — 테마 커버</option>
+                        <option value="house">house — 집 커버</option>
+                    </select>
+                </label>
+
+                <label class="dropzone" id="dropzone">
+                    <input type="file" name="file" id="file"
+                           accept="image/png,image/jpeg,image/webp" hidden>
+                    <span class="dropzone-icon">⬆️</span>
+                    <span class="dropzone-text" id="dropzone-text">이미지를 선택하거나 끌어다 놓으세요</span>
+                    <span class="dropzone-hint">PNG · JPG · WEBP · 최대 10MB</span>
+                </label>
+
+                <button type="submit" class="btn-primary" id="submit-btn">업로드</button>
+            </form>
+
+            <div class="alert alert-error" id="error" hidden></div>
+
+            <div class="result" id="result" hidden>
+                <div class="result-preview">
+                    <img id="result-img" alt="업로드 미리보기">
+                </div>
+                <div class="result-info">
+                    <span class="field-label">발급된 asset key</span>
+                    <div class="key-box">
+                        <code id="result-key"></code>
+                        <button type="button" class="copy-btn" id="copy-btn">복사</button>
+                    </div>
+                    <a id="result-url" class="result-url" target="_blank" rel="noopener">공개 URL 열기 ↗</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
+
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file');
+        const dropzone = document.getElementById('dropzone');
+        const dropzoneText = document.getElementById('dropzone-text');
+        const result = document.getElementById('result');
+        const errorBox = document.getElementById('error');
+        const submitBtn = document.getElementById('submit-btn');
+
+        fileInput.addEventListener('change', () => {
+            dropzoneText.textContent = fileInput.files[0]
+                ? fileInput.files[0].name
+                : '이미지를 선택하거나 끌어다 놓으세요';
+        });
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        ['dragleave', 'drop'].forEach((ev) =>
+            dropzone.addEventListener(ev, (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+            }));
+        dropzone.addEventListener('drop', (e) => {
+            if (e.dataTransfer.files[0]) {
+                fileInput.files = e.dataTransfer.files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorBox.hidden = true;
+            result.hidden = true;
+            if (!fileInput.files[0]) {
+                showError('파일을 선택하세요.');
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.textContent = '업로드 중…';
+            try {
+                const fd = new FormData();
+                fd.append('file', fileInput.files[0]);
+                fd.append('kind', document.getElementById('kind').value);
+                const res = await fetch('/admin/assets', {
+                    method: 'POST',
+                    body: fd,
+                    headers: { [csrfHeader]: csrfToken }
+                });
+                if (!res.ok) {
+                    showError('업로드 실패 (HTTP ' + res.status + ')');
+                    return;
+                }
+                const data = await res.json();
+                showResult(data.key);
+            } catch (err) {
+                showError('업로드 중 오류: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '업로드';
+            }
+        });
+
+        function showResult(key) {
+            const url = s3BaseUrl + '/' + key;
+            document.getElementById('result-key').textContent = key;
+            document.getElementById('result-img').src = url;
+            document.getElementById('result-url').href = url;
+            result.hidden = false;
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+        }
+
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(document.getElementById('result-key').textContent);
+            const btn = document.getElementById('copy-btn');
+            btn.textContent = '복사됨';
+            setTimeout(() => { btn.textContent = '복사'; }, 1200);
+        });
+    </script>
+</body>
+</html>

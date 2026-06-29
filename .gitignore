@@ -40,3 +40,10 @@ out/
 .env
 .claude/settings.local.json
 .claude/commands/commit.md
+
+### Terraform ###
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/terraform.tfvars
+**/*.tfplan
