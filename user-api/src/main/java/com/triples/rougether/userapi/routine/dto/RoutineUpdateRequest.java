@@ -16,8 +16,8 @@ public record RoutineUpdateRequest(
         AuthType authType,
         @Schema(description = "반복 유형(DAILY/WEEKLY)", example = "WEEKLY")
         @Pattern(regexp = "DAILY|WEEKLY") String repeatType,
-        @Schema(description = "반복 설정 JSON", example = "{\"daysOfWeek\":[\"MON\",\"WED\"]}")
-        String repeatDays,
+        @Schema(description = "반복 설정(WEEKLY일 때 요일 지정)")
+        RepeatDays repeatDays,
         @Schema(description = "수행 예정 시각(HH:mm:ss)", example = "07:00:00")
         LocalTime scheduledTime,
         @Schema(description = "시작일(ISO-8601)", example = "2026-07-01")

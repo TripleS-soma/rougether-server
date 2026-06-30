@@ -21,8 +21,8 @@ public record RoutineResponse(
         RoutineStatus status,
         @Schema(description = "반복 유형", example = "WEEKLY")
         String repeatType,
-        @Schema(description = "반복 설정 JSON", example = "{\"daysOfWeek\":[\"MON\",\"WED\"]}")
-        String repeatDays,
+        @Schema(description = "반복 설정(WEEKLY일 때 요일)")
+        RepeatDays repeatDays,
         @Schema(description = "수행 예정 시각(HH:mm:ss)", example = "07:00:00")
         LocalTime scheduledTime,
         @Schema(description = "시작일(ISO-8601)", example = "2026-07-01")
@@ -40,7 +40,7 @@ public record RoutineResponse(
                 routine.getAuthType(),
                 routine.getStatus(),
                 routine.getRepeatType(),
-                routine.getRepeatDays(),
+                RepeatDays.fromJson(routine.getRepeatDays()),
                 routine.getScheduledTime(),
                 routine.getStartsOn(),
                 routine.getEndsOn()

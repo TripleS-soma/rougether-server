@@ -16,7 +16,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -92,12 +94,14 @@ public class RoutineController {
     }
 
     @Operation(summary = "루틴 완료 취소",
-            description = "당일 완료 기록을 취소합니다. 지급한 코인을 회수하고 스트릭을 롤백합니다.")
-    @DeleteMapping("/{id}/logs/{logId}")
+            description = "당일 완료 기록을 취소합니다. 지급한 코인을 회수하고 스트릭을 롤백합니다. "
+                    + "date에는 화면에서 보고 있는 날짜를 보내며, 오늘이 아니면 취소되지 않습니다.")
+    @DeleteMapping("/{id}/logs")
     public StreakSummaryResponse cancelLog(
             @CurrentUser AuthUser authUser,
             @Parameter(description = "루틴 ID") @PathVariable Long id,
-            @Parameter(description = "완료 기록 ID") @PathVariable Long logId) {
-        return routineLogService.cancel(authUser.id(), id, logId);
+            @Parameter(description = "취소할 완료의 날짜(ISO-8601)")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return routineLogService.cancel(authUser.id(), id, date);
     }
 }

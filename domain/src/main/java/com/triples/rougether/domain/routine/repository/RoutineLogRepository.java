@@ -22,6 +22,7 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     long countByRoutine_UserIdAndRoutineDateAndStatus(
             Long userId, LocalDate routineDate, RoutineLogStatus status);
 
-    // 취소 시 소유권+조회
-    Optional<RoutineLog> findByIdAndRoutine_UserId(Long id, Long userId);
+    // 오늘 현황용: 유저의 그날 완료 log(루틴별 완료 판정)
+    List<RoutineLog> findByRoutine_UserIdAndRoutineDateAndStatus(
+            Long userId, LocalDate routineDate, RoutineLogStatus status);
 }

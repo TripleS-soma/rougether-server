@@ -69,23 +69,26 @@ public class RoutineLogService {
         return RoutineLogResponse.from(log, streak);
     }
 
-    // 완료 취소: 코인 차감 + log hard delete + 스트릭 롤백을 한 트랜잭션으로 처리함
+    // 완료 취소: 코인 차감 + log hard delete + 스트릭 롤백을 한 트랜잭션으로 처리함.
+    // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
     @Transactional
-    public StreakSummaryResponse cancel(Long userId, Long routineId, Long logId) {
-        RoutineLog log = routineLogRepository.findByIdAndRoutine_UserId(logId, userId)
-                .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
-        // path의 routineId와 log가 어긋나면 이 루틴 밑에는 없는 것 → 노출 회피로 404
-        if (!log.getRoutine().getId().equals(routineId)) {
-            throw new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND);
-        }
+    public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
+        findOwnedRoutine(userId, routineId); // 소유권 guard(타인·미존재·삭제 → ROUTINE_NOT_FOUND)
 
         LocalDate today = LocalDate.now(KST);
-        // 당일 완료만 취소 가능
-        if (!log.getRoutineDate().equals(today)) {
+        // 당일 완료만 취소 가능 — 과거 날짜를 보내면 오늘 걸 취소하는 게 아니라 거부함
+        if (!date.equals(today)) {
             throw new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
         }
+        RoutineLog log = routineLogRepository
+                .findByRoutineIdAndRoutineDateAndStatus(routineId, today, RoutineLogStatus.COMPLETED)
+                .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
 
         UserWallet wallet = findWallet(userId);
+        // 회수 정책 확정 전 음수 잔액 진입만 막는 방어적 가드(투두 취소와 동일)
+        if (wallet.getBalance() < log.getRewardAmount()) {
+            throw new BusinessException(RoutineLogErrorCode.WALLET_INSUFFICIENT);
+        }
         wallet.subtract(log.getRewardAmount());
 
         routineLogRepository.delete(log);

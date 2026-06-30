@@ -20,6 +20,7 @@ import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
@@ -71,7 +72,7 @@ class RoutineControllerTest {
     void 목록은_items_배열로_감싸_응답한다() throws Exception {
         when(routineService.list(1L, null, null)).thenReturn(new RoutineListResponse(List.of(
                 new RoutineResponse(10L, "아침 운동", 3L, AuthType.PHOTO, RoutineStatus.ACTIVE,
-                        "WEEKLY", "{\"daysOfWeek\":[\"MON\"]}", null, null, null))));
+                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null))));
 
         mockMvc.perform(get("/api/v1/routines"))
                 .andExpect(status().isOk())
@@ -91,7 +92,7 @@ class RoutineControllerTest {
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"물 마시기\",\"authType\":\"CHECK\"}"))
+                        .content("{\"title\":\"물 마시기\",\"authType\":\"CHECK\",\"repeatType\":\"DAILY\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(5))
                 .andExpect(jsonPath("$.title").value("물 마시기"))
@@ -99,10 +100,35 @@ class RoutineControllerTest {
     }
 
     @Test
+    void repeatDays를_객체로_보내면_201로_등록된다() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(new RoutineResponse(5L, "아침 운동", null, AuthType.CHECK,
+                        RoutineStatus.ACTIVE, "WEEKLY", new RepeatDays(List.of("MON", "WED")),
+                        null, null, null));
+
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"아침 운동\",\"authType\":\"CHECK\",\"repeatType\":\"WEEKLY\","
+                                + "\"repeatDays\":{\"daysOfWeek\":[\"MON\",\"WED\"]}}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.repeatDays.daysOfWeek[0]").value("MON"))
+                .andExpect(jsonPath("$.repeatDays.daysOfWeek[1]").value("WED"));
+    }
+
+    @Test
+    void 본문이_깨지면_400과_MALFORMED_REQUEST를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"x\",\"authType\":\"CHECK\",\"repeatDays\":\"문자열\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
+
+    @Test
     void title이_비면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"  \",\"authType\":\"CHECK\"}"))
+                        .content("{\"title\":\"  \",\"authType\":\"CHECK\",\"repeatType\":\"DAILY\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("title"));
@@ -112,10 +138,20 @@ class RoutineControllerTest {
     void authType이_없으면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"물 마시기\"}"))
+                        .content("{\"title\":\"물 마시기\",\"repeatType\":\"DAILY\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("authType"));
+    }
+
+    @Test
+    void repeatType이_없으면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"물 마시기\",\"authType\":\"CHECK\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("repeatType"));
     }
 
     @Test
@@ -190,21 +226,21 @@ class RoutineControllerTest {
 
     @Test
     void 완료_취소는_200과_갱신된_streak_요약을_응답한다() throws Exception {
-        when(routineLogService.cancel(1L, 7L, 50L))
+        when(routineLogService.cancel(eq(1L), eq(7L), any(LocalDate.class)))
                 .thenReturn(new StreakSummaryResponse(2, 10, LocalDate.of(2026, 6, 28)));
 
-        mockMvc.perform(delete("/api/v1/routines/7/logs/50"))
+        mockMvc.perform(delete("/api/v1/routines/7/logs").param("date", "2026-06-29"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentCount").value(2))
                 .andExpect(jsonPath("$.lastSuccessDate").value("2026-06-28"));
     }
 
     @Test
-    void 당일이_아닌_log_취소는_409와_LOG_NOT_CANCELABLE을_응답한다() throws Exception {
-        when(routineLogService.cancel(1L, 7L, 50L))
+    void 당일이_아닌_날짜_취소는_409와_LOG_NOT_CANCELABLE을_응답한다() throws Exception {
+        when(routineLogService.cancel(eq(1L), eq(7L), any(LocalDate.class)))
                 .thenThrow(new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE));
 
-        mockMvc.perform(delete("/api/v1/routines/7/logs/50"))
+        mockMvc.perform(delete("/api/v1/routines/7/logs").param("date", "2026-06-28"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("LOG_NOT_CANCELABLE"));
     }

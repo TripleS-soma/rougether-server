@@ -103,7 +103,7 @@ class RoutineCompletionRollbackTest {
 
         doThrow(new RuntimeException("스트릭 롤백 실패")).when(streakRepository).findByUserId(anyLong());
 
-        assertThatThrownBy(() -> service.cancel(userId, routineId, logId))
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(routineLogRepository.findById(logId)).isPresent();

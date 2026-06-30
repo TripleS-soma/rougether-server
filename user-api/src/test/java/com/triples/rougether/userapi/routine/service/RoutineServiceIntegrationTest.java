@@ -15,7 +15,9 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
+import java.util.List;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
@@ -76,11 +78,13 @@ class RoutineServiceIntegrationTest {
 
         RoutineResponse created = routineService.create(userId,
                 new RoutineCreateRequest("아침 운동", categoryId, AuthType.PHOTO,
-                        "WEEKLY", "{\"daysOfWeek\":[\"MON\"]}", LocalTime.of(7, 0), null, null));
+                        "WEEKLY", new RepeatDays(List.of("MON")), LocalTime.of(7, 0), null, null));
 
         assertThat(created.categoryId()).isEqualTo(categoryId);
         assertThat(created.authType()).isEqualTo(AuthType.PHOTO);
         assertThat(created.repeatType()).isEqualTo("WEEKLY");
+        // 객체 → 저장(JSON 문자열) → 객체 round-trip
+        assertThat(created.repeatDays().daysOfWeek()).containsExactly("MON");
     }
 
     @Test

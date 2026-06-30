@@ -60,8 +60,9 @@ public class RoutineService {
         User user = userRepository.getReferenceById(userId);
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
+        String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
-                request.repeatType(), request.repeatDays(), request.scheduledTime(),
+                request.repeatType(), repeatDays, request.scheduledTime(),
                 request.startsOn(), request.endsOn());
         return RoutineResponse.from(routineRepository.save(routine));
     }
@@ -72,8 +73,9 @@ public class RoutineService {
         if (request.categoryId() != null) {
             routine.changeCategory(findOwnedCategory(userId, request.categoryId()));
         }
+        String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
         routine.update(request.title(), request.authType(), request.repeatType(),
-                request.repeatDays(), request.scheduledTime(), request.startsOn(),
+                repeatDays, request.scheduledTime(), request.startsOn(),
                 request.endsOn());
         return RoutineResponse.from(routine);
     }

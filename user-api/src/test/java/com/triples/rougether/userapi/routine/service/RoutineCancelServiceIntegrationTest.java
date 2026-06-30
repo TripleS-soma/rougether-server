@@ -10,7 +10,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
-import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.entity.StreakStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
@@ -21,8 +21,8 @@ import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
+import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +72,7 @@ class RoutineCancelServiceIntegrationTest {
         RoutineLogResponse completed = service.complete(userId, routineId, new RoutineLogCreateRequest(null));
         assertThat(walletBalance()).isEqualTo(10);
 
-        StreakSummaryResponse streak = service.cancel(userId, routineId, completed.id());
+        StreakSummaryResponse streak = service.cancel(userId, routineId, TODAY);
 
         assertThat(routineLogRepository.findById(completed.id())).isEmpty();
         assertThat(walletBalance()).isEqualTo(0);
@@ -84,9 +84,9 @@ class RoutineCancelServiceIntegrationTest {
     void 오늘_다른_완료가_남으면_스트릭은_변하지_않는다() {
         Long secondRoutine = persistRoutine(userRepository.findById(userId).orElseThrow());
         service.complete(userId, routineId, new RoutineLogCreateRequest(null));
-        RoutineLogResponse second = service.complete(userId, secondRoutine, new RoutineLogCreateRequest(null));
+        service.complete(userId, secondRoutine, new RoutineLogCreateRequest(null));
 
-        service.cancel(userId, secondRoutine, second.id());
+        service.cancel(userId, secondRoutine, TODAY);
 
         Streak streak = streakRepository.findByUserId(userId).orElseThrow();
         assertThat(streak.getCurrentCount()).isEqualTo(1);
@@ -94,36 +94,54 @@ class RoutineCancelServiceIntegrationTest {
     }
 
     @Test
-    void 당일이_아닌_log_취소는_LOG_NOT_CANCELABLE() {
-        Long pastLogId = persistPastLog(routineId, TODAY.minusDays(2));
+    void 오늘이_아닌_날짜_취소는_LOG_NOT_CANCELABLE() {
+        service.complete(userId, routineId, new RoutineLogCreateRequest(null));
 
-        assertThatThrownBy(() -> service.cancel(userId, routineId, pastLogId))
+        // 과거 날짜로 취소 시도 → 오늘 걸 취소하지 않고 거부함
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY.minusDays(2)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
+        // 오늘 완료는 그대로 남아 있어야 함
+        assertThat(routineLogRepository
+                .findByRoutineIdAndRoutineDateAndStatus(routineId, TODAY, RoutineLogStatus.COMPLETED))
+                .isPresent();
     }
 
     @Test
-    void 타인_log_취소는_ROUTINE_LOG_NOT_FOUND() {
+    void 타인_루틴_취소는_ROUTINE_NOT_FOUND() {
         User other = userRepository.save(User.signUp());
         Long otherRoutine = persistRoutine(other);
         persistWallet(other, 0);
-        RoutineLogResponse othersLog = service.complete(other.getId(), otherRoutine,
-                new RoutineLogCreateRequest(null));
+        service.complete(other.getId(), otherRoutine, new RoutineLogCreateRequest(null));
 
-        assertThatThrownBy(() -> service.cancel(userId, otherRoutine, othersLog.id()))
+        assertThatThrownBy(() -> service.cancel(userId, otherRoutine, TODAY))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND);
+                .isEqualTo(RoutineErrorCode.ROUTINE_NOT_FOUND);
     }
 
     @Test
-    void path의_routineId가_log의_루틴과_다르면_ROUTINE_LOG_NOT_FOUND() {
-        Long otherRoutine = persistRoutine(userRepository.findById(userId).orElseThrow());
-        RoutineLogResponse log = service.complete(userId, routineId, new RoutineLogCreateRequest(null));
+    void 받은_코인을_소비한_뒤_취소하면_WALLET_INSUFFICIENT() {
+        service.complete(userId, routineId, new RoutineLogCreateRequest(null)); // +10
+        spendAllCoins(); // 다른 곳에서 소비해 잔액 0
 
-        // 같은 유저가 소유하지만 log는 routineId 소속 → otherRoutine 경로로는 취소 불가
-        assertThatThrownBy(() -> service.cancel(userId, otherRoutine, log.id()))
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineLogErrorCode.WALLET_INSUFFICIENT);
+        // 가드가 걸려 완료 기록·잔액 모두 그대로
+        assertThat(routineLogRepository
+                .findByRoutineIdAndRoutineDateAndStatus(routineId, TODAY, RoutineLogStatus.COMPLETED))
+                .isPresent();
+        assertThat(walletBalance()).isZero();
+    }
+
+    @Test
+    void 오늘_완료가_없는_루틴_취소는_ROUTINE_LOG_NOT_FOUND() {
+        Long notCompleted = persistRoutine(userRepository.findById(userId).orElseThrow());
+
+        assertThatThrownBy(() -> service.cancel(userId, notCompleted, TODAY))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND);
@@ -133,12 +151,6 @@ class RoutineCancelServiceIntegrationTest {
         Routine routine = Routine.create(owner, null, "아침 운동", AuthType.CHECK,
                 null, null, null, null, null);
         return routineRepository.save(routine).getId();
-    }
-
-    private Long persistPastLog(Long routineId, LocalDate date) {
-        Routine routine = routineRepository.findById(routineId).orElseThrow();
-        RoutineLog log = RoutineLog.complete(routine, date, Instant.now(), CurrencyType.COIN, 10);
-        return routineLogRepository.save(log).getId();
     }
 
     private void persistWallet(User owner, int balance) {
@@ -156,6 +168,13 @@ class RoutineCancelServiceIntegrationTest {
         ReflectionTestUtils.setField(streak, "longestCount", currentCount);
         ReflectionTestUtils.setField(streak, "status", StreakStatus.ACTIVE);
         streakRepository.save(streak);
+    }
+
+    private void spendAllCoins() {
+        UserWallet wallet = userWalletRepository.findByUserIdAndCurrencyType(userId, CurrencyType.COIN)
+                .orElseThrow();
+        ReflectionTestUtils.setField(wallet, "balance", 0);
+        userWalletRepository.save(wallet);
     }
 
     private int walletBalance() {
