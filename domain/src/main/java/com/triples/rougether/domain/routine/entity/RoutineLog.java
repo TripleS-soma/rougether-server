@@ -49,4 +49,19 @@ public class RoutineLog extends BaseCreatedEntity {
 
     @Column(name = "reward_amount", nullable = false)
     private int rewardAmount;
+
+    private RoutineLog(Routine routine, LocalDate routineDate, Instant completedAt,
+                       CurrencyType rewardCurrencyType, int rewardAmount) {
+        this.routine = routine;
+        this.routineDate = routineDate;
+        this.status = RoutineLogStatus.COMPLETED;
+        this.completedAt = completedAt;
+        this.rewardCurrencyType = rewardCurrencyType;
+        this.rewardAmount = rewardAmount;
+    }
+
+    public static RoutineLog complete(Routine routine, LocalDate routineDate, Instant completedAt,
+                                      CurrencyType rewardCurrencyType, int rewardAmount) {
+        return new RoutineLog(routine, routineDate, completedAt, rewardCurrencyType, rewardAmount);
+    }
 }

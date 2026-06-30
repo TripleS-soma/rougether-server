@@ -39,6 +39,7 @@ out/
 ### Local env ###
 .env
 .claude/settings.local.json
+.claude/commands/commit.md
 
 ### Terraform ###
 **/.terraform/

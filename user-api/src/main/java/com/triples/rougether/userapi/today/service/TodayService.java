@@ -1,0 +1,190 @@
+package com.triples.rougether.userapi.today.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.triples.rougether.domain.routine.entity.Category;
+import com.triples.rougether.domain.routine.entity.Routine;
+import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
+import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.routine.entity.Streak;
+import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
+import com.triples.rougether.userapi.today.dto.TodayResponse;
+import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
+import com.triples.rougether.userapi.today.dto.TodayStreak;
+import com.triples.rougether.userapi.today.dto.TodaySummary;
+import com.triples.rougether.userapi.today.dto.TodayTodoItem;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class TodayService {
+
+    // KST 고정 — "오늘"·요일 판정 모두 이 기준임
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // repeat_days JSON 파싱 전용. user-api 컨텍스트에 ObjectMapper 빈이 없어 자체 인스턴스 사용함
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private final RoutineRepository routineRepository;
+    private final RoutineLogRepository routineLogRepository;
+    private final TodoRepository todoRepository;
+    private final StreakRepository streakRepository;
+
+    @Transactional(readOnly = true)
+    public TodayResponse today(Long userId, LocalDate date) {
+        LocalDate targetDate = date != null ? date : LocalDate.now(KST);
+
+        // ACTIVE 루틴 중 오늘 반복 대상만 추림(repeat·기간 판정은 in-app)
+        List<Routine> routines = routineRepository
+                .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                        userId, RoutineStatus.ACTIVE)
+                .stream()
+                .filter(routine -> isTargetToday(routine, targetDate))
+                .toList();
+
+        // 당일 완료한 루틴 id 집합
+        Set<Long> completedRoutineIds = routineLogRepository
+                .findByRoutine_UserIdAndRoutineDateAndStatus(userId, targetDate, RoutineLogStatus.COMPLETED)
+                .stream()
+                .map(log -> log.getRoutine().getId())
+                .collect(Collectors.toSet());
+
+        // 오늘까지 마감(overdue 포함) 투두
+        List<Todo> todos = todoRepository
+                .findByUserIdAndDueDateLessThanEqualAndDeletedAtIsNull(userId, targetDate);
+
+        List<TodayCategoryGroup> categories = groupByCategory(routines, completedRoutineIds, todos);
+        TodaySummary summary = summarize(routines, completedRoutineIds, todos);
+        TodayStreak streak = TodayStreak.from(streakRepository.findByUserId(userId).orElse(null));
+        return new TodayResponse(targetDate, categories, summary, streak);
+    }
+
+    // 카테고리별 묶음. 미분류(category=null)는 categoryId=null 그룹으로 분리, 맨 뒤로 둠
+    private List<TodayCategoryGroup> groupByCategory(List<Routine> routines,
+                                                     Set<Long> completedRoutineIds,
+                                                     List<Todo> todos) {
+        // categoryId(null=미분류) → 누적기. null 키 허용 위해 LinkedHashMap 사용
+        Map<Long, Accumulator> groups = new LinkedHashMap<>();
+        for (Routine routine : routines) {
+            Category category = routine.getCategory();
+            Long key = category != null ? category.getId() : null;
+            groups.computeIfAbsent(key, k -> new Accumulator(category))
+                    .routines.add(new TodayRoutineItem(routine.getId(), routine.getTitle(),
+                            routine.getScheduledTime(), routine.getAuthType(),
+                            completedRoutineIds.contains(routine.getId())));
+        }
+        for (Todo todo : todos) {
+            Category category = todo.getCategory();
+            Long key = category != null ? category.getId() : null;
+            groups.computeIfAbsent(key, k -> new Accumulator(category))
+                    .todos.add(new TodayTodoItem(todo.getId(), todo.getTitle(),
+                            todo.getDueDate(), todo.getStatus(), todo.getCompletedAt()));
+        }
+
+        return groups.values().stream()
+                // 분류 그룹은 categoryId 오름차순, 미분류(null)는 맨 뒤
+                .sorted(Comparator.comparing(a -> a.categoryId() == null ? Long.MAX_VALUE : a.categoryId()))
+                .map(Accumulator::toGroup)
+                .toList();
+    }
+
+    private TodaySummary summarize(List<Routine> routines, Set<Long> completedRoutineIds,
+                                   List<Todo> todos) {
+        int completedRoutines = (int) routines.stream()
+                .filter(r -> completedRoutineIds.contains(r.getId())).count();
+        int completedTodos = (int) todos.stream()
+                .filter(t -> t.getStatus() == TodoStatus.COMPLETED).count();
+        int total = routines.size() + todos.size();
+        int completedCount = completedRoutines + completedTodos;
+        int remainingCount = total - completedCount;
+        double progressRate = total == 0 ? 0.0 : (double) completedCount / total;
+        return new TodaySummary(completedCount, remainingCount, progressRate);
+    }
+
+    // starts_on~ends_on 범위 안이고 repeat 규칙이 오늘에 맞으면 대상
+    private boolean isTargetToday(Routine routine, LocalDate date) {
+        if (routine.getStartsOn() != null && date.isBefore(routine.getStartsOn())) {
+            return false;
+        }
+        if (routine.getEndsOn() != null && date.isAfter(routine.getEndsOn())) {
+            return false;
+        }
+        String repeatType = routine.getRepeatType();
+        if (repeatType == null) {
+            return false;
+        }
+        if ("DAILY".equalsIgnoreCase(repeatType)) {
+            return true;
+        }
+        if ("WEEKLY".equalsIgnoreCase(repeatType)) {
+            return matchesWeekday(routine.getRepeatDays(), date);
+        }
+        return false;
+    }
+
+    // repeat_days JSON의 daysOfWeek에 date의 요일(MON~SUN)이 포함되는지
+    private boolean matchesWeekday(String repeatDays, LocalDate date) {
+        if (repeatDays == null || repeatDays.isBlank()) {
+            return false;
+        }
+        // MONDAY → MON (저장 토큰과 동일 형태)
+        String token = date.getDayOfWeek().name().substring(0, 3);
+        try {
+            JsonNode days = OBJECT_MAPPER.readTree(repeatDays).get("daysOfWeek");
+            if (days == null || !days.isArray()) {
+                return false;
+            }
+            for (JsonNode day : days) {
+                if (token.equalsIgnoreCase(day.asText())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return false;
+        }
+    }
+
+    // 카테고리별 루틴·투두 누적기. 정렬 후 DTO로 변환함
+    private static final class Accumulator {
+        private final Category category;
+        private final List<TodayRoutineItem> routines = new ArrayList<>();
+        private final List<TodayTodoItem> todos = new ArrayList<>();
+
+        private Accumulator(Category category) {
+            this.category = category;
+        }
+
+        private Long categoryId() {
+            return category != null ? category.getId() : null;
+        }
+
+        private TodayCategoryGroup toGroup() {
+            // 루틴은 scheduled_time 시간순(null은 뒤), 그다음 id
+            routines.sort(Comparator
+                    .comparing(TodayRoutineItem::scheduledTime,
+                            Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(TodayRoutineItem::id));
+            return new TodayCategoryGroup(categoryId(),
+                    category != null ? category.getName() : null,
+                    List.copyOf(routines), List.copyOf(todos));
+        }
+    }
+}

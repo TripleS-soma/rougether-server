@@ -5,8 +5,11 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final UserWalletRepository userWalletRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
     private final RefreshTokenReuseGuard refreshTokenReuseGuard;
@@ -30,6 +34,10 @@ public class AuthService {
         boolean isNewUser;
         if (userId == null) {
             user = userRepository.save(User.signUp());
+            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매)
+            for (CurrencyType currencyType : CurrencyType.values()) {
+                userWalletRepository.save(UserWallet.create(user, currencyType));
+            }
             isNewUser = true;
         } else {
             user = userRepository.findById(userId)

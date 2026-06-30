@@ -70,4 +70,60 @@ public class Routine extends BaseEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private Routine(User user, Category category, String title, AuthType authType,
+                    String repeatType, String repeatDays, LocalTime scheduledTime,
+                    LocalDate startsOn, LocalDate endsOn) {
+        this.user = user;
+        this.category = category;
+        this.title = title;
+        this.authType = authType;
+        this.status = RoutineStatus.ACTIVE;
+        this.repeatType = repeatType;
+        this.repeatDays = repeatDays;
+        this.scheduledTime = scheduledTime;
+        this.startsOn = startsOn;
+        this.endsOn = endsOn;
+    }
+
+    public static Routine create(User user, Category category, String title, AuthType authType,
+                                 String repeatType, String repeatDays, LocalTime scheduledTime,
+                                 LocalDate startsOn, LocalDate endsOn) {
+        return new Routine(user, category, title, authType, repeatType, repeatDays,
+                scheduledTime, startsOn, endsOn);
+    }
+
+    public void update(String title, AuthType authType, String repeatType, String repeatDays,
+                       LocalTime scheduledTime, LocalDate startsOn, LocalDate endsOn) {
+        // title은 NOT NULL 업무필수라 공백이면 덮어쓰지 않음
+        if (title != null && !title.isBlank()) {
+            this.title = title;
+        }
+        if (authType != null) {
+            this.authType = authType;
+        }
+        if (repeatType != null) {
+            this.repeatType = repeatType;
+        }
+        if (repeatDays != null) {
+            this.repeatDays = repeatDays;
+        }
+        if (scheduledTime != null) {
+            this.scheduledTime = scheduledTime;
+        }
+        if (startsOn != null) {
+            this.startsOn = startsOn;
+        }
+        if (endsOn != null) {
+            this.endsOn = endsOn;
+        }
+    }
+
+    public void changeCategory(Category category) {
+        this.category = category;
+    }
+
+    public void softDelete(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }

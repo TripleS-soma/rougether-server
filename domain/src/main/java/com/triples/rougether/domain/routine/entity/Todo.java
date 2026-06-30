@@ -63,4 +63,54 @@ public class Todo extends BaseEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private Todo(User user, Category category, String title, String description, LocalDate dueDate) {
+        this.user = user;
+        this.category = category;
+        this.title = title;
+        this.description = description;
+        this.dueDate = dueDate;
+        this.status = TodoStatus.PENDING;
+        this.rewardAmount = 0;
+    }
+
+    public static Todo create(User user, Category category, String title, String description,
+                              LocalDate dueDate) {
+        return new Todo(user, category, title, description, dueDate);
+    }
+
+    public void update(String title, String description, LocalDate dueDate) {
+        // title은 NOT NULL 업무필수라 공백이면 덮어쓰지 않음
+        if (title != null && !title.isBlank()) {
+            this.title = title;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (dueDate != null) {
+            this.dueDate = dueDate;
+        }
+    }
+
+    public void changeCategory(Category category) {
+        this.category = category;
+    }
+
+    public void complete(CurrencyType rewardCurrencyType, int rewardAmount, Instant completedAt) {
+        this.status = TodoStatus.COMPLETED;
+        this.completedAt = completedAt;
+        this.rewardCurrencyType = rewardCurrencyType;
+        this.rewardAmount = rewardAmount;
+    }
+
+    public void cancelComplete() {
+        this.status = TodoStatus.PENDING;
+        this.completedAt = null;
+        this.rewardCurrencyType = null;
+        this.rewardAmount = 0;
+    }
+
+    public void softDelete(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }
