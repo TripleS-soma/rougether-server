@@ -40,4 +40,14 @@ public class PersonalRoom {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private PersonalRoom(User user) {
+        this.user = user;
+        this.growthLevel = 0;
+    }
+
+    // 첫 방문 시 lazy 생성용. growth_level 0 으로 시작(@MapsId 로 user.id 가 그대로 PK).
+    public static PersonalRoom create(User user) {
+        return new PersonalRoom(user);
+    }
 }
