@@ -1,0 +1,135 @@
+package com.triples.rougether.userapi.todo.service;
+
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.routine.entity.Category;
+import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
+import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
+import com.triples.rougether.userapi.todo.dto.TodoListResponse;
+import com.triples.rougether.userapi.todo.dto.TodoResponse;
+import com.triples.rougether.userapi.todo.dto.TodoUpdateRequest;
+import com.triples.rougether.userapi.todo.error.TodoErrorCode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class TodoService {
+
+    // KST 고정 — 완료 취소 "당일" 판정 기준
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 투두 보상: 루틴(10)과 별도로 5코인 고정
+    private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
+    private static final int REWARD_AMOUNT = 5;
+
+    private final TodoRepository todoRepository;
+    private final CategoryRepository categoryRepository;
+    private final UserRepository userRepository;
+    private final UserWalletRepository userWalletRepository;
+
+    @Transactional(readOnly = true)
+    public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
+        return new TodoListResponse(
+                todoRepository.findOwnedWithFilters(userId, categoryId, status, dueDate).stream()
+                        .map(TodoResponse::from)
+                        .toList());
+    }
+
+    @Transactional(readOnly = true)
+    public TodoResponse get(Long userId, Long todoId) {
+        return TodoResponse.from(findOwned(userId, todoId));
+    }
+
+    @Transactional
+    public TodoResponse create(Long userId, TodoCreateRequest request) {
+        User user = userRepository.getReferenceById(userId);
+        Category category = request.categoryId() != null
+                ? findOwnedCategory(userId, request.categoryId()) : null;
+        Todo todo = Todo.create(user, category, request.title(), request.description(),
+                request.dueDate());
+        return TodoResponse.from(todoRepository.save(todo));
+    }
+
+    @Transactional
+    public TodoResponse update(Long userId, Long todoId, TodoUpdateRequest request) {
+        Todo todo = findOwned(userId, todoId);
+        if (request.categoryId() != null) {
+            todo.changeCategory(findOwnedCategory(userId, request.categoryId()));
+        }
+        todo.update(request.title(), request.description(), request.dueDate());
+        return TodoResponse.from(todo);
+    }
+
+    @Transactional
+    public void delete(Long userId, Long todoId) {
+        findOwned(userId, todoId).softDelete(Instant.now());
+    }
+
+    // 완료: todos + user_wallets 2개 테이블을 한 트랜잭션으로 변경함(재화 정합성)
+    @Transactional
+    public TodoCompleteResponse complete(Long userId, Long todoId) {
+        Todo todo = findOwned(userId, todoId);
+        if (todo.getStatus() == TodoStatus.COMPLETED) {
+            throw new BusinessException(TodoErrorCode.TODO_ALREADY_COMPLETED);
+        }
+
+        todo.complete(REWARD_CURRENCY, REWARD_AMOUNT, Instant.now());
+
+        UserWallet wallet = findWallet(userId);
+        wallet.add(REWARD_AMOUNT);
+
+        return TodoCompleteResponse.from(todo);
+    }
+
+    // 완료 취소: 코인 차감 + 완료 상태 되돌리기를 한 트랜잭션으로 처리함(재화 정합성)
+    @Transactional
+    public TodoResponse cancelComplete(Long userId, Long todoId) {
+        Todo todo = findOwned(userId, todoId);
+        if (todo.getStatus() != TodoStatus.COMPLETED) {
+            throw new BusinessException(TodoErrorCode.TODO_NOT_COMPLETED);
+        }
+        // 당일 완료만 취소 가능(과거 완료 취소 금지)
+        LocalDate completedDate = todo.getCompletedAt().atZone(KST).toLocalDate();
+        if (!completedDate.equals(LocalDate.now(KST))) {
+            throw new BusinessException(TodoErrorCode.TODO_NOT_CANCELABLE);
+        }
+
+        UserWallet wallet = findWallet(userId);
+        // 회수 정책 확정 전 음수 잔액 진입만 막는 방어적 가드(재화 도메인 합의 시 재검토)
+        if (wallet.getBalance() < todo.getRewardAmount()) {
+            throw new BusinessException(TodoErrorCode.WALLET_INSUFFICIENT);
+        }
+        wallet.subtract(todo.getRewardAmount());
+
+        todo.cancelComplete();
+        return TodoResponse.from(todo);
+    }
+
+    private Todo findOwned(Long userId, Long todoId) {
+        return todoRepository.findByIdAndUserIdAndDeletedAtIsNull(todoId, userId)
+                .orElseThrow(() -> new BusinessException(TodoErrorCode.TODO_NOT_FOUND));
+    }
+
+    private Category findOwnedCategory(Long userId, Long categoryId) {
+        return categoryRepository.findByIdAndUserIdAndDeletedAtIsNull(categoryId, userId)
+                .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
+    }
+
+    private UserWallet findWallet(Long userId) {
+        return userWalletRepository.findByUserIdAndCurrencyType(userId, REWARD_CURRENCY)
+                .orElseThrow(() -> new BusinessException(TodoErrorCode.WALLET_NOT_FOUND));
+    }
+}
