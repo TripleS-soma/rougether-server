@@ -38,6 +38,17 @@ public class UserWallet extends BaseEntity {
     @Column(name = "balance", nullable = false)
     private int balance;
 
+    private UserWallet(User user, CurrencyType currencyType) {
+        this.user = user;
+        this.currencyType = currencyType;
+        this.balance = 0;
+    }
+
+    // 가입 시 잔액 0으로 지갑 발급
+    public static UserWallet create(User user, CurrencyType currencyType) {
+        return new UserWallet(user, currencyType);
+    }
+
     public void add(int amount) {
         this.balance += amount;
     }

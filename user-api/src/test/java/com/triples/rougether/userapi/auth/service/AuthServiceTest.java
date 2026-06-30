@@ -6,14 +6,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -31,6 +36,8 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private UserWalletRepository userWalletRepository;
+    @Mock
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private TokenService tokenService;
@@ -40,7 +47,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository, refreshTokenRepository, tokenService,
+                userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository));
     }
 
@@ -60,6 +67,12 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-raw");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
+        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함
+        ArgumentCaptor<UserWallet> walletCaptor = ArgumentCaptor.forClass(UserWallet.class);
+        verify(userWalletRepository, times(CurrencyType.values().length)).save(walletCaptor.capture());
+        assertThat(walletCaptor.getAllValues())
+                .extracting(UserWallet::getCurrencyType)
+                .containsExactlyInAnyOrder(CurrencyType.values());
     }
 
     @Test
@@ -75,6 +88,7 @@ class AuthServiceTest {
         assertThat(response.userId()).isEqualTo(7L);
         assertThat(existing.getLastLoginAt()).isNotNull();
         verify(userRepository, never()).save(any(User.class));
+        verify(userWalletRepository, never()).save(any(UserWallet.class));
         verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 

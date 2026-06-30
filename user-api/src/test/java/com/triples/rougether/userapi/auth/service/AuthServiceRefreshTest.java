@@ -16,6 +16,7 @@ import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +35,8 @@ class AuthServiceRefreshTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private UserWalletRepository userWalletRepository;
+    @Mock
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private TokenService tokenService;
@@ -43,7 +46,7 @@ class AuthServiceRefreshTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository, refreshTokenRepository, tokenService,
+                userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository));
     }
 
