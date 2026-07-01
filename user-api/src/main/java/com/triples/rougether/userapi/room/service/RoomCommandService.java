@@ -1,6 +1,8 @@
 package com.triples.rougether.userapi.room.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomSlotType;
@@ -29,17 +31,20 @@ public class RoomCommandService {
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final UserItemRepository userItemRepository;
+    private final UserCharacterRepository userCharacterRepository;
     private final StreakRepository streakRepository;
     private final UserRepository userRepository;
 
     public RoomCommandService(PersonalRoomRepository personalRoomRepository,
                               RoomSurfaceSlotRepository roomSurfaceSlotRepository,
                               UserItemRepository userItemRepository,
+                              UserCharacterRepository userCharacterRepository,
                               StreakRepository streakRepository,
                               UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.userItemRepository = userItemRepository;
+        this.userCharacterRepository = userCharacterRepository;
         this.streakRepository = streakRepository;
         this.userRepository = userRepository;
     }
@@ -62,7 +67,9 @@ public class RoomCommandService {
 
         List<RoomSurfaceSlot> slots = roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId);
         Streak streak = streakRepository.findByUserId(userId).orElse(null);
-        return RoomResponse.of(room, slots, streak);
+        UserCharacter selectedCharacter = userCharacterRepository
+                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
+        return RoomResponse.of(room, slots, streak, selectedCharacter);
     }
 
     // 같은 slotType 을 한 요청에 두 번 지정하면 upsert 결과가 모호 → 진입 시 거부.

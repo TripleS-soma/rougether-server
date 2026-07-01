@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.room.service;
 
+import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
@@ -19,15 +21,18 @@ public class RoomQueryService {
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final StreakRepository streakRepository;
+    private final UserCharacterRepository userCharacterRepository;
     private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
                             RoomSurfaceSlotRepository roomSurfaceSlotRepository,
                             StreakRepository streakRepository,
+                            UserCharacterRepository userCharacterRepository,
                             UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.streakRepository = streakRepository;
+        this.userCharacterRepository = userCharacterRepository;
         this.userRepository = userRepository;
     }
 
@@ -40,7 +45,9 @@ public class RoomQueryService {
 
         List<RoomSurfaceSlot> slots = roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId);
         Streak streak = streakRepository.findByUserId(userId).orElse(null);
+        UserCharacter selectedCharacter = userCharacterRepository
+                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
 
-        return RoomResponse.of(room, slots, streak);
+        return RoomResponse.of(room, slots, streak, selectedCharacter);
     }
 }
