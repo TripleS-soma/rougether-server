@@ -19,7 +19,7 @@ public record GachaResponse(
                 gacha.getId(),
                 gacha.getCode(),
                 gacha.getName(),
-                gacha.getTheme().getId(),
+                gacha.getTheme() != null ? gacha.getTheme().getId() : null,
                 gacha.getCostCurrencyType(),
                 gacha.getCostAmount(),
                 gacha.getDrawCount(),

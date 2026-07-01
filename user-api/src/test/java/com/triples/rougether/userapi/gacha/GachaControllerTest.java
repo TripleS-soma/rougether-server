@@ -60,7 +60,7 @@ class GachaControllerTest {
         when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
                 .thenReturn(new AuthUser(1L, null));
         when(gachaService.draw(eq(1L), eq(10L), any())).thenReturn(new GachaDrawResponse(
-                List.of(new GachaDrawResponse.DrawResult("ITEM", 100L, "가구A", "items/a.png", "일반", false, null)),
+                List.of(new GachaDrawResponse.DrawResult("ITEM", 100L, null, "가구A", "items/a.png", "일반", false, null)),
                 new GachaDrawResponse.WalletSummary(CurrencyType.COIN, 750)));
 
         mockMvc.perform(post("/api/v1/gacha/10/draw")

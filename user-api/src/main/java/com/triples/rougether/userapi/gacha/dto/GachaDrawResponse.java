@@ -10,6 +10,7 @@ public record GachaDrawResponse(List<DrawResult> results, WalletSummary wallet) 
     public record DrawResult(
             String rewardType,
             Long itemId,
+            Long characterId,
             String name,
             String assetKey,
             String rarity,

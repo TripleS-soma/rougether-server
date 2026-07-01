@@ -1,5 +1,6 @@
 package com.triples.rougether.domain.gacha.entity;
 
+import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shop.entity.Item;
 import jakarta.persistence.Column;
@@ -38,6 +39,10 @@ public class GachaPoolEntry {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id")
     private Item item;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "character_id")
+    private Character character;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "currency_type", length = 30)
