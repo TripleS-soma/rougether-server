@@ -59,6 +59,19 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 - **이미 적용된 마이그레이션은 수정 금지 (불변)**: 적용된 `.sql` 내용을 고치면 checksum이 달라져 같은 오류가 납니다. 변경이 필요하면 반드시 새 버전으로 추가합니다.
 - 충돌 증상·복구: 배포 로그에 `Migration checksum mismatch for migration version N`이 뜨면 그 앱이 기동 못 합니다. dev에서는 `flyway_schema_history`(DB)와 코드의 V번호를 대조해 정리합니다.
 
+## 브랜치 · 머지 규칙
+
+여러 담당자가 같은 main을 공유하므로, 아래를 지켜 main이 깨지지 않게 합니다. (main에 CI 강제(branch protection)가 없으므로 습관으로 예방합니다.)
+
+- **머지 전 전체 컴파일 확인 (필수)**: 특정 모듈만(`:user-api:test`) 돌리지 말고 최소 `./gradlew compileJava`(전체 모듈)로 다른 모듈·담당자 코드가 함께 컴파일되는지 확인합니다. 한 모듈 테스트만 통과해도 공유 코드를 바꿨다면 다른 모듈(auth/todo/routine 등)이 깨질 수 있습니다.
+- **파일을 복사해 push할 때(worktree 등) main 최신을 덮어쓰지 않기 (필수)**: 새 파일이 아닌 **수정(기존) 파일**은 로컬 working tree가 main보다 오래됐을 수 있어, 복사 시 다른 담당자가 main에서 추가한 메서드/변경을 유실시킬 수 있습니다(공유 엔티티: `UserWallet`, `UserItem` 등). push 전 diff로 의도한 변경만인지, 예상 밖 삭제(`-`)가 없는지 확인합니다.
+  ```bash
+  git -C <worktree> diff --cached
+  ```
+- **CI(pr-gate) fail이면 merge 금지 (필수)**: `Gradle test`가 fail이면(컴파일 실패 포함) 절대 merge하지 않고, 원인을 고친 뒤 재확인합니다.
+
+> 실제 사고: gacha 작업 중 오래된 로컬 `UserWallet`이 main의 `create`/`subtract`를 덮어써 `compileJava`가 깨졌고, CI가 fail을 잡았는데도 그대로 merge되어 hotfix가 필요했습니다. 위 세 가지 중 하나만 지켰어도 막혔습니다.
+
 ## 인증/인가 (MVP 포함)
 
 `user-api`와 `admin-api`는 인증 주체·테이블·방식이 완전히 분리됩니다. 두 앱의 `SecurityFilterChain`은 공유하지 않으며, 토큰/세션 부품만 필요 시 `common`에 둡니다.
