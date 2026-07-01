@@ -57,6 +57,7 @@ class RoomControllerTest {
         RoomResponse response = new RoomResponse(
                 1L,
                 5,
+                null,
                 List.of(new RoomResponse.RoomSlotResponse("wallpaper", 10L, "items/wp.png", Instant.EPOCH)),
                 new RoomResponse.RoomStreakResponse(3, 7),
                 Instant.EPOCH);
@@ -79,6 +80,7 @@ class RoomControllerTest {
         RoomResponse response = new RoomResponse(
                 1L,
                 5,
+                null,
                 List.of(new RoomResponse.RoomSlotResponse("topLeft", 10L, "items/bed.png", Instant.EPOCH)),
                 new RoomResponse.RoomStreakResponse(0, 0),
                 Instant.EPOCH);

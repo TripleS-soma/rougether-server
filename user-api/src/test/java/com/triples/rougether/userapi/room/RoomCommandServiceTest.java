@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
@@ -37,6 +38,7 @@ class RoomCommandServiceTest {
     @Mock private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     @Mock private UserItemRepository userItemRepository;
     @Mock private StreakRepository streakRepository;
+    @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomCommandService roomCommandService;
 
@@ -65,6 +67,7 @@ class RoomCommandServiceTest {
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.empty());
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
         roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("topLeft", 10L))));
 
@@ -82,6 +85,7 @@ class RoomCommandServiceTest {
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "floor")).thenReturn(Optional.of(existing));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
         roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("floor", 20L))));
 
@@ -137,6 +141,7 @@ class RoomCommandServiceTest {
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.of(existing));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
         roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("topLeft", null))));
 
