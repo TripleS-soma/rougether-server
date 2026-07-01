@@ -95,18 +95,17 @@ class TodoCompletionServiceIntegrationTest {
     }
 
     @Test
-    void 받은_코인을_소비한_뒤_취소하면_WALLET_INSUFFICIENT() {
+    void 받은_코인을_소비한_뒤_취소하면_잔액이_음수가_되어도_취소된다() {
         service.complete(userId, todoId); // 잔액 5
         spendAllCoins();                  // 다른 곳에서 소비해 잔액 0
 
-        assertThatThrownBy(() -> service.cancelComplete(userId, todoId))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(TodoErrorCode.WALLET_INSUFFICIENT);
-        // 가드가 걸려 상태·잔액 모두 변하지 않음
+        service.cancelComplete(userId, todoId);
+
+        // 음수 잔액을 허용하므로 취소가 성공하고 상태가 PENDING으로 되돌아감
         assertThat(todoRepository.findById(todoId).orElseThrow().getStatus())
-                .isEqualTo(TodoStatus.COMPLETED);
-        assertThat(walletBalance()).isZero();
+                .isEqualTo(TodoStatus.PENDING);
+        // 잔액 0에서 5를 회수해 -5가 됨
+        assertThat(walletBalance()).isEqualTo(-5);
     }
 
     @Test

@@ -122,19 +122,18 @@ class RoutineCancelServiceIntegrationTest {
     }
 
     @Test
-    void 받은_코인을_소비한_뒤_취소하면_WALLET_INSUFFICIENT() {
+    void 받은_코인을_소비한_뒤_취소하면_잔액이_음수가_되어도_취소된다() {
         service.complete(userId, routineId, new RoutineLogCreateRequest(null)); // +10
         spendAllCoins(); // 다른 곳에서 소비해 잔액 0
 
-        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(RoutineLogErrorCode.WALLET_INSUFFICIENT);
-        // 가드가 걸려 완료 기록·잔액 모두 그대로
+        service.cancel(userId, routineId, TODAY);
+
+        // 음수 잔액을 허용하므로 취소가 성공하고 완료 기록이 삭제됨
         assertThat(routineLogRepository
                 .findByRoutineIdAndRoutineDateAndStatus(routineId, TODAY, RoutineLogStatus.COMPLETED))
-                .isPresent();
-        assertThat(walletBalance()).isZero();
+                .isEmpty();
+        // 잔액 0에서 10을 회수해 -10이 됨
+        assertThat(walletBalance()).isEqualTo(-10);
     }
 
     @Test

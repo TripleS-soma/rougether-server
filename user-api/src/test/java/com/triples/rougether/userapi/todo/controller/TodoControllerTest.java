@@ -167,14 +167,4 @@ class TodoControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TODO_NOT_COMPLETED"));
     }
-
-    @Test
-    void 잔액_부족_취소는_409와_WALLET_INSUFFICIENT를_응답한다() throws Exception {
-        when(todoService.cancelComplete(1L, 7L))
-                .thenThrow(new BusinessException(TodoErrorCode.WALLET_INSUFFICIENT));
-
-        mockMvc.perform(delete("/api/v1/todos/7/complete"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("WALLET_INSUFFICIENT"));
-    }
 }
