@@ -19,6 +19,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
@@ -88,11 +89,11 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(100);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, "COIN")).thenReturn(Optional.of(wallet));
+        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.INSUFFICIENT_COIN));
-        verify(wallet, never()).deduct(anyInt());
+        verify(wallet, never()).subtract(anyInt());
     }
 
     @Test
@@ -101,14 +102,14 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, "COIN")).thenReturn(Optional.of(wallet));
+        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
         singleItemPool(100L, 10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
         when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).deduct(250);
+        verify(wallet).subtract(250);
         verify(userItemRepository).save(any(UserItem.class));
         verify(wallet).add(0);
         assertThat(res.results()).hasSize(1);
@@ -122,7 +123,7 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, "COIN")).thenReturn(Optional.of(wallet));
+        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
         Item item = singleItemPool(100L, 10L);
         UserItem owned = mock(UserItem.class);
         when(owned.getItem()).thenReturn(item);
@@ -131,7 +132,7 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).deduct(250);
+        verify(wallet).subtract(250);
         verify(wallet).add(40);
         verify(userItemRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();

@@ -90,12 +90,12 @@ public class GachaService {
         }
 
         int cost = count == 1 ? gacha.getCostAmount() : gacha.getCostAmount() * MULTI_MULTIPLIER;
-        UserWallet wallet = walletRepository.findByUserIdAndCurrencyType(userId, CurrencyType.COIN.name())
+        UserWallet wallet = walletRepository.findByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
         if (wallet.getBalance() < cost) {
             throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
         }
-        wallet.deduct(cost);
+        wallet.subtract(cost);
 
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
                 .filter(e -> e.getRewardType() == RewardType.ITEM && e.getItem() != null)
