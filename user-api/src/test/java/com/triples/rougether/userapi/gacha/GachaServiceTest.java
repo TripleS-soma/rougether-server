@@ -17,6 +17,9 @@ import com.triples.rougether.domain.gacha.repository.GachaPoolEntryRepository;
 import com.triples.rougether.domain.gacha.repository.GachaRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
@@ -42,6 +45,7 @@ class GachaServiceTest {
     @Mock private GachaPoolEntryRepository poolRepository;
     @Mock private UserItemRepository userItemRepository;
     @Mock private UserWalletRepository walletRepository;
+    @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private GachaService gachaService;
 
@@ -105,6 +109,7 @@ class GachaServiceTest {
         when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
         singleItemPool(100L, 10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
         when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
@@ -128,6 +133,7 @@ class GachaServiceTest {
         UserItem owned = mock(UserItem.class);
         when(owned.getItem()).thenReturn(item);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of(owned));
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
         when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
@@ -137,5 +143,62 @@ class GachaServiceTest {
         verify(userItemRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundAmount()).isEqualTo(40);
+    }
+
+    // 캐릭터 pool 을 1개(rarity 미부여)로 만들어 추첨 결과를 결정적으로 고정.
+    private Character singleCharacterPool(Long characterId, Long gachaId) {
+        Character ch = mock(Character.class);
+        when(ch.getId()).thenReturn(characterId);
+        when(ch.getName()).thenReturn("곰");
+        when(ch.getBaseAssetKey()).thenReturn("characters/bear.png");
+        GachaPoolEntry entry = mock(GachaPoolEntry.class);
+        when(entry.getRewardType()).thenReturn(RewardType.CHARACTER);
+        when(entry.getCharacter()).thenReturn(ch);
+        when(poolRepository.findByGachaIdAndActiveIsTrue(gachaId)).thenReturn(List.of(entry));
+        return ch;
+    }
+
+    @Test
+    void 미소유_캐릭터는_지급되고_코인1000이_차감된다() {
+        Gacha g = activeGacha(1000);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(2000);
+        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        singleCharacterPool(5L, 10L);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
+        when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
+
+        GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
+
+        verify(wallet).subtract(1000);
+        verify(userCharacterRepository).save(any(UserCharacter.class));
+        assertThat(res.results().get(0).rewardType()).isEqualTo("CHARACTER");
+        assertThat(res.results().get(0).characterId()).isEqualTo(5L);
+        assertThat(res.results().get(0).converted()).isFalse();
+    }
+
+    @Test
+    void 이미_소유한_캐릭터는_지급대신_코인200_환급된다() {
+        Gacha g = activeGacha(1000);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(2000);
+        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        Character ch = singleCharacterPool(5L, 10L);
+        UserCharacter owned = mock(UserCharacter.class);
+        when(owned.getCharacter()).thenReturn(ch);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of(owned));
+        when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
+
+        GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
+
+        verify(wallet).subtract(1000);
+        verify(wallet).add(200);
+        verify(userCharacterRepository, never()).save(any());
+        assertThat(res.results().get(0).converted()).isTrue();
+        assertThat(res.results().get(0).refundAmount()).isEqualTo(200);
     }
 }
