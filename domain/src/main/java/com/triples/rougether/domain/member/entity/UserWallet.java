@@ -38,22 +38,13 @@ public class UserWallet extends BaseEntity {
     @Column(name = "balance", nullable = false)
     private int balance;
 
-    private UserWallet(User user, CurrencyType currencyType) {
-        this.user = user;
-        this.currencyType = currencyType;
-        this.balance = 0;
+    // 재화 차감(잔액 검증은 호출 서비스 책임).
+    public void deduct(int amount) {
+        this.balance -= amount;
     }
 
-    // 가입 시 잔액 0으로 지갑 발급
-    public static UserWallet create(User user, CurrencyType currencyType) {
-        return new UserWallet(user, currencyType);
-    }
-
+    // 재화 적립(뽑기 중복 환급, 보상 지급 등).
     public void add(int amount) {
         this.balance += amount;
-    }
-
-    public void subtract(int amount) {
-        this.balance -= amount;
     }
 }
