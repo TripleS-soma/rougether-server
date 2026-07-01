@@ -2,6 +2,7 @@ package com.triples.rougether.domain.room.repository;
 
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 public interface RoomSurfaceSlotRepository extends JpaRepository<RoomSurfaceSlot, Long> {
 
     List<RoomSurfaceSlot> findByRoomUserId(Long roomUserId);
+
+    Optional<RoomSurfaceSlot> findByRoomUserIdAndSlotType(Long roomUserId, String slotType);
 
     // 슬롯 + 배치된 user_item + item 을 fetch join(assetKey 조인, N+1 회피). 빈 슬롯 포함 위해 left join.
     @Query("""
