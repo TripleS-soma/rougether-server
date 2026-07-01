@@ -38,4 +38,22 @@ public class RoomSurfaceSlot {
 
     @Column(name = "saved_at", nullable = false)
     private Instant savedAt;
+
+    private RoomSurfaceSlot(PersonalRoom room, String slotType, UserItem userItem) {
+        this.room = room;
+        this.slotType = slotType;
+        this.userItem = userItem;
+        this.savedAt = Instant.now();
+    }
+
+    // 슬롯 신규 배치.
+    public static RoomSurfaceSlot create(PersonalRoom room, String slotType, UserItem userItem) {
+        return new RoomSurfaceSlot(room, slotType, userItem);
+    }
+
+    // 배치 아이템 교체 + 저장 시각 갱신.
+    public void assign(UserItem userItem) {
+        this.userItem = userItem;
+        this.savedAt = Instant.now();
+    }
 }
