@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 에셋 조회</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}" class="active">에셋 조회</a>
+            <a th:href="@{/item-slots}">슬롯 편집</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide">
+        <div class="upload-card">
+            <div class="upload-head">
+                <h2>에셋 조회</h2>
+                <p>S3에 올라간 에셋을 종류별로 둘러보고 asset key를 복사합니다. 프론트는 key를 CDN base URL과 조합해 사용합니다.</p>
+            </div>
+
+            <div class="asset-tabs" id="tabs">
+                <button class="asset-tab active" data-kind="items">items</button>
+                <button class="asset-tab" data-kind="characters">characters</button>
+                <button class="asset-tab" data-kind="categories">categories</button>
+                <button class="asset-tab" data-kind="themes">themes</button>
+                <button class="asset-tab" data-kind="house">house</button>
+            </div>
+
+            <div class="slot-toolbar">
+                <input type="search" id="filter" class="slot-search" placeholder="key 검색 (예: bakery, chair)">
+                <span class="slot-count" id="count"></span>
+            </div>
+
+            <div class="alert alert-error" id="error" hidden></div>
+            <div class="asset-grid" id="grid"></div>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+
+        const grid = document.getElementById('grid');
+        const filterInput = document.getElementById('filter');
+        const countEl = document.getElementById('count');
+        const errorBox = document.getElementById('error');
+        const tabs = document.getElementById('tabs');
+        // kind 별 목록 캐시 — 탭을 오갈 때 재요청하지 않는다.
+        const cache = {};
+        let currentKind = 'items';
+        let assets = [];
+
+        loadKind(currentKind);
+
+        tabs.addEventListener('click', (e) => {
+            const tab = e.target.closest('.asset-tab');
+            if (!tab || tab.dataset.kind === currentKind) return;
+            tabs.querySelectorAll('.asset-tab').forEach((t) => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentKind = tab.dataset.kind;
+            loadKind(currentKind);
+        });
+
+        async function loadKind(kind) {
+            if (cache[kind]) {
+                assets = cache[kind];
+                render();
+                return;
+            }
+            grid.replaceChildren();
+            countEl.textContent = '불러오는 중…';
+            try {
+                const res = await fetch('/admin/assets?kind=' + encodeURIComponent(kind));
+                if (!res.ok) {
+                    showError('목록 조회 실패 (HTTP ' + res.status + ')');
+                    return;
+                }
+                cache[kind] = (await res.json()).items;
+                assets = cache[kind];
+                render();
+            } catch (err) {
+                showError('목록 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function render() {
+            const keyword = filterInput.value.trim().toLowerCase();
+            const visible = keyword
+                ? assets.filter((a) => a.key.toLowerCase().includes(keyword))
+                : assets;
+
+            grid.replaceChildren(...visible.map(buildCard));
+            countEl.textContent = visible.length + ' / ' + assets.length + '개';
+        }
+
+        function buildCard(asset) {
+            const card = document.createElement('div');
+            card.className = 'asset-card';
+
+            const thumbWrap = document.createElement('div');
+            thumbWrap.className = 'asset-thumb-wrap';
+            const img = document.createElement('img');
+            img.className = 'asset-thumb';
+            img.loading = 'lazy';
+            img.alt = asset.key;
+            img.src = s3BaseUrl + '/' + asset.key;
+            thumbWrap.appendChild(img);
+
+            const keyEl = document.createElement('div');
+            keyEl.className = 'asset-key';
+            keyEl.textContent = fileName(asset.key);
+            keyEl.title = asset.key;
+
+            const meta = document.createElement('div');
+            meta.className = 'asset-meta';
+            meta.textContent = formatSize(asset.size);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'copy-btn asset-copy';
+            copyBtn.textContent = 'key 복사';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(asset.key);
+                copyBtn.textContent = '복사됨';
+                setTimeout(() => { copyBtn.textContent = 'key 복사'; }, 1200);
+            });
+
+            card.append(thumbWrap, keyEl, meta, copyBtn);
+            return card;
+        }
+
+        function fileName(key) {
+            return key.substring(key.lastIndexOf('/') + 1);
+        }
+
+        function formatSize(bytes) {
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+            return bytes + ' B';
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+            setTimeout(() => { errorBox.hidden = true; }, 4000);
+        }
+
+        filterInput.addEventListener('input', render);
+    </script>
+</body>
+</html>

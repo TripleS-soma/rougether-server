@@ -330,6 +330,52 @@ body {
 .slot-status.ok { color: var(--success); }
 .slot-status.err { color: var(--danger); }
 
+/* ===== 에셋 조회 ===== */
+.asset-tabs { margin-top: 22px; display: flex; gap: 8px; flex-wrap: wrap; }
+.asset-tab {
+    height: 36px; padding: 0 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 13.5px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+}
+.asset-tab:hover { border-color: var(--primary); color: var(--primary); }
+.asset-tab.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
+
+.asset-grid {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+}
+.asset-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.asset-thumb-wrap {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+.asset-thumb { max-width: 100%; max-height: 100%; object-fit: contain; }
+.asset-key {
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.asset-meta { font-size: 11px; color: var(--text-soft); }
+.asset-copy { align-self: stretch; }
+
 @media (max-width: 520px) {
     .auth-card { padding: 32px 24px; }
     .app-main { padding: 28px 18px; }

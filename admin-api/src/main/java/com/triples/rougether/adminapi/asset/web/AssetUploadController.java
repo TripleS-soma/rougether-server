@@ -1,5 +1,6 @@
 package com.triples.rougether.adminapi.asset.web;
 
+import com.triples.rougether.adminapi.asset.AssetKinds;
 import com.triples.rougether.adminapi.asset.service.AssetStorageService;
 import java.io.IOException;
 import java.util.Set;
@@ -19,8 +20,6 @@ public class AssetUploadController {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES =
             Set.of("image/png", "image/jpeg", "image/webp");
-    private static final Set<String> ALLOWED_KINDS =
-            Set.of("characters", "categories", "themes", "items", "house");
     private static final long MAX_SIZE_BYTES = 10L * 1024 * 1024;
 
     private final AssetStorageService storage;
@@ -42,7 +41,7 @@ public class AssetUploadController {
         if (file.isEmpty()) {
             throw badRequest("파일이 비어 있습니다.");
         }
-        if (!ALLOWED_KINDS.contains(kind)) {
+        if (!AssetKinds.ALLOWED.contains(kind)) {
             throw badRequest("허용되지 않은 kind: " + kind);
         }
         if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
