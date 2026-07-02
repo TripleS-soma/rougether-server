@@ -63,6 +63,10 @@ public class Item {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    // positioned 가구의 기본 배치 슬롯(topLeft…bottomRight). surface 아이템은 null. admin 에서 조정 가능.
+    @Column(name = "default_slot", length = 40)
+    private String defaultSlot;
+
     public Item(Theme theme, String categoryCode, String placementType, String surfaceSlotType,
                 String characterSlotType, String name, CurrencyType purchaseCurrencyType,
                 Integer priceAmount, String assetKey, boolean limited, boolean active) {
@@ -77,5 +81,10 @@ public class Item {
         this.assetKey = assetKey;
         this.limited = limited;
         this.active = active;
+    }
+
+    // admin 에서 배치 슬롯 조정.
+    public void updateDefaultSlot(String defaultSlot) {
+        this.defaultSlot = defaultSlot;
     }
 }

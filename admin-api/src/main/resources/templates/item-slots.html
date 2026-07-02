@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 기본 슬롯 편집</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/item-slots}" class="active">슬롯 편집</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide">
+        <div class="upload-card">
+            <div class="upload-head">
+                <h2>가구 기본 슬롯 편집</h2>
+                <p>positioned 가구가 방에 처음 배치될 슬롯(3x3 앵커)을 지정합니다. 변경 즉시 저장됩니다.</p>
+            </div>
+
+            <div class="slot-toolbar">
+                <input type="search" id="filter" class="slot-search"
+                       placeholder="이름·테마·asset key 검색">
+                <span class="slot-count" id="count"></span>
+            </div>
+
+            <div class="alert alert-error" id="error" hidden></div>
+
+            <table class="slot-table">
+                <thead>
+                <tr>
+                    <th></th>
+                    <th>아이템</th>
+                    <th>테마</th>
+                    <th>기본 슬롯</th>
+                    <th class="slot-status-col"></th>
+                </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
+
+        // RoomSlotType 의 positioned 계열 코드와 동일해야 한다 (topCenter 는 캐릭터 자리라 없음).
+        const SLOTS = [
+            ['topLeft', '상단 왼쪽'], ['topRight', '상단 오른쪽'],
+            ['midLeft', '중단 왼쪽'], ['midCenter', '중단 중앙'], ['midRight', '중단 오른쪽'],
+            ['bottomLeft', '하단 왼쪽'], ['bottomCenter', '하단 중앙'], ['bottomRight', '하단 오른쪽']
+        ];
+
+        const tbody = document.getElementById('rows');
+        const filterInput = document.getElementById('filter');
+        const countEl = document.getElementById('count');
+        const errorBox = document.getElementById('error');
+        let items = [];
+
+        init();
+
+        async function init() {
+            try {
+                const res = await fetch('/admin/items/slots');
+                if (!res.ok) {
+                    showError('목록 조회 실패 (HTTP ' + res.status + ')');
+                    return;
+                }
+                items = (await res.json()).items;
+                render();
+            } catch (err) {
+                showError('목록 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function render() {
+            const keyword = filterInput.value.trim().toLowerCase();
+            const visible = keyword
+                ? items.filter((item) =>
+                    [item.name, item.themeName, item.assetKey].join(' ').toLowerCase().includes(keyword))
+                : items;
+
+            tbody.replaceChildren(...visible.map(buildRow));
+            countEl.textContent = visible.length + ' / ' + items.length + '개';
+        }
+
+        function buildRow(item) {
+            const tr = document.createElement('tr');
+
+            const thumbCell = document.createElement('td');
+            const img = document.createElement('img');
+            img.className = 'slot-thumb';
+            img.loading = 'lazy';
+            img.alt = item.name;
+            img.src = s3BaseUrl + '/' + item.assetKey;
+            thumbCell.appendChild(img);
+
+            const nameCell = document.createElement('td');
+            const nameEl = document.createElement('div');
+            nameEl.className = 'slot-name';
+            nameEl.textContent = item.name;
+            const keyEl = document.createElement('div');
+            keyEl.className = 'slot-key';
+            keyEl.textContent = item.assetKey;
+            nameCell.append(nameEl, keyEl);
+
+            const themeCell = document.createElement('td');
+            themeCell.textContent = item.themeName;
+
+            const selectCell = document.createElement('td');
+            const select = document.createElement('select');
+            select.className = 'slot-select';
+            const none = new Option('— 미지정 —', '');
+            select.add(none);
+            SLOTS.forEach(([code, label]) => select.add(new Option(label + ' (' + code + ')', code)));
+            select.value = item.defaultSlot ?? '';
+            selectCell.appendChild(select);
+
+            const statusCell = document.createElement('td');
+            statusCell.className = 'slot-status';
+
+            select.addEventListener('change', () => saveSlot(item, select, statusCell));
+
+            tr.append(thumbCell, nameCell, themeCell, selectCell, statusCell);
+            return tr;
+        }
+
+        async function saveSlot(item, select, statusCell) {
+            const previous = item.defaultSlot ?? '';
+            const next = select.value;
+            select.disabled = true;
+            statusCell.textContent = '저장 중…';
+            statusCell.className = 'slot-status';
+            try {
+                const res = await fetch('/admin/items/' + item.id + '/slot', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify({ slot: next || null })
+                });
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status);
+                }
+                const updated = await res.json();
+                item.defaultSlot = updated.defaultSlot;
+                statusCell.textContent = '저장됨';
+                statusCell.classList.add('ok');
+                setTimeout(() => { statusCell.textContent = ''; }, 1500);
+            } catch (err) {
+                select.value = previous;
+                statusCell.textContent = '실패';
+                statusCell.classList.add('err');
+                showError(item.name + ' 저장 실패: ' + err.message);
+            } finally {
+                select.disabled = false;
+            }
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+            setTimeout(() => { errorBox.hidden = true; }, 4000);
+        }
+
+        filterInput.addEventListener('input', render);
+    </script>
+</body>
+</html>
