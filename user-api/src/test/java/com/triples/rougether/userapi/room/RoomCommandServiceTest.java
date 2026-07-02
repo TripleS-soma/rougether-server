@@ -112,8 +112,9 @@ class RoomCommandServiceTest {
         when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(mock(PersonalRoom.class)));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of());
 
+        // midCenter 는 캐릭터 자리라 슬롯 집합에 없다 (프론트 FurnitureSlot 과 동일).
         assertThatThrownBy(() -> roomCommandService.updateSlots(
-                userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("topCenter", 1L)))))
+                userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("midCenter", 1L)))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(RoomErrorCode.INVALID_SLOT_TYPE));
     }

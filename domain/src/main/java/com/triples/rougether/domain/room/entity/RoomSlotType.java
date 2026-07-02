@@ -2,9 +2,9 @@ package com.triples.rougether.domain.room.entity;
 
 import java.util.Arrays;
 
-// 방 슬롯 타입 값 집합. Figma 실측(3x3 앵커 그리드) 기준.
-// surface 3종 + positioned 8종. topCenter 는 캐릭터(곰/호랑이) 전용이라 슬롯에서 제외.
-// DB room_surface_slots.slot_type 은 code 문자열(프론트 FurnitureSlot 과 동일 표기)로 저장.
+// 방 슬롯 타입 값 집합. 프론트 FurnitureSlot(rougether-mobile src/resources/furniture.ts)과 동일 표기.
+// surface 3종 + positioned 8종(상단 3 / 중단 좌우 2 / 하단 3). 방 한가운데는 캐릭터(곰/호랑이) 자리라 midCenter 는 없다.
+// DB room_surface_slots.slot_type 과 items.default_slot 은 code 문자열로 저장.
 public enum RoomSlotType {
 
     // surface 계열 (벽지/바닥/배경)
@@ -12,11 +12,11 @@ public enum RoomSlotType {
     FLOOR("floor"),
     BACKGROUND("background"),
 
-    // positioned 계열 (가구/소품) — Figma 3x3 앵커. topCenter 는 캐릭터 자리라 없음.
+    // positioned 계열 (가구/소품) — 캐릭터가 서는 중앙(midCenter)만 제외한 앵커 8종.
     TOP_LEFT("topLeft"),
+    TOP_CENTER("topCenter"),
     TOP_RIGHT("topRight"),
     MID_LEFT("midLeft"),
-    MID_CENTER("midCenter"),
     MID_RIGHT("midRight"),
     BOTTOM_LEFT("bottomLeft"),
     BOTTOM_CENTER("bottomCenter"),

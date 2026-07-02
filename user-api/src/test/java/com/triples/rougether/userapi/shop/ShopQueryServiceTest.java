@@ -42,7 +42,7 @@ class ShopQueryServiceTest {
         Long userId = 1L;
         Theme theme = mock(Theme.class);
         when(theme.getId()).thenReturn(10L);
-        Item withSlot = positionedItem(100L, theme, "midCenter");
+        Item withSlot = positionedItem(100L, theme, "bottomCenter");
         Item withoutSlot = positionedItem(101L, theme, null);
         when(itemRepository.findActiveWithTheme()).thenReturn(List.of(withSlot, withoutSlot));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of());
@@ -50,7 +50,7 @@ class ShopQueryServiceTest {
         ItemListResponse response = shopQueryService.getItems(userId, null);
 
         assertThat(response.items()).hasSize(2);
-        assertThat(response.items().get(0).defaultSlot()).isEqualTo("midCenter");
+        assertThat(response.items().get(0).defaultSlot()).isEqualTo("bottomCenter");
         assertThat(response.items().get(1).defaultSlot()).isNull();
     }
 
