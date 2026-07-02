@@ -64,10 +64,10 @@
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
 
-        // RoomSlotType 의 positioned 계열 코드와 동일해야 한다 (topCenter 는 캐릭터 자리라 없음).
+        // RoomSlotType 의 positioned 계열 코드와 동일해야 한다 (midCenter 는 캐릭터 자리라 없음, 프론트 FurnitureSlot 과 일치).
         const SLOTS = [
-            ['topLeft', '상단 왼쪽'], ['topRight', '상단 오른쪽'],
-            ['midLeft', '중단 왼쪽'], ['midCenter', '중단 중앙'], ['midRight', '중단 오른쪽'],
+            ['topLeft', '상단 왼쪽'], ['topCenter', '상단 중앙'], ['topRight', '상단 오른쪽'],
+            ['midLeft', '중단 왼쪽'], ['midRight', '중단 오른쪽'],
             ['bottomLeft', '하단 왼쪽'], ['bottomCenter', '하단 중앙'], ['bottomRight', '하단 오른쪽']
         ];
 

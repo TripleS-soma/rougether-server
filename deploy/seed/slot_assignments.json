@@ -14,8 +14,8 @@
   {
     "assetKey": "items/bakery-morning/furniture/bakery-morning-breakfast-table.png",
     "name": "Bakery Morning Set - Breakfast Table",
-    "slot": "midCenter",
-    "reason": "방 중심을 차지하는 원형 대형 식탁 - 중단 중앙 주요 가구 자리"
+    "slot": "bottomCenter",
+    "reason": "방 중앙은 캐릭터 자리 - 러그가 깔린 하단 중앙에 식탁 배치"
   },
   {
     "assetKey": "items/bakery-morning/furniture/bakery-morning-mini-oven.png",
@@ -80,8 +80,8 @@
   {
     "assetKey": "items/calm-hanok/furniture/calm-hanok-folding-screen.png",
     "name": "Calm Hanok Set - Folding Screen",
-    "slot": "midCenter",
-    "reason": "세로로 높은 병풍은 배경처럼 서는 대형 가구라 중단 중앙에 배치"
+    "slot": "topCenter",
+    "reason": "벽면에 세우는 병풍 - 상단 중앙 벽 슬롯"
   },
   {
     "assetKey": "items/calm-hanok/furniture/calm-hanok-mungap-cabinet.png",
@@ -146,8 +146,8 @@
   {
     "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-low-nightstand.png",
     "name": "Cloud Nap Room Set - Low Nightstand",
-    "slot": "midCenter",
-    "reason": "서랍장 수납 가구라 중단 중앙의 대형 가구 자리에 배치"
+    "slot": "midRight",
+    "reason": "침구 옆 낮은 협탁 - 의자 곁 중단 우측"
   },
   {
     "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-cloud-rug.png",
@@ -200,8 +200,8 @@
   {
     "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-coding-desk.png",
     "name": "Cozy Developer Room Set - Coding Desk",
-    "slot": "midCenter",
-    "reason": "모니터·키보드가 놓인 대형 책상은 방의 핵심 가구라 중단 중앙 자리에 배치"
+    "slot": "midRight",
+    "reason": "벽에 붙는 대형 책상 - 책장 곁 중단 우측"
   },
   {
     "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png",
@@ -272,8 +272,8 @@
   {
     "assetKey": "items/cozy-space/furniture/cozy-space-telescope-desk.png",
     "name": "Cozy Space Set - Telescope Desk",
-    "slot": "midCenter",
-    "reason": "망원경이 놓인 책상+스툴 세트로 주요 대형 가구라 중단에 배치."
+    "slot": "midRight",
+    "reason": "망원경 책상 - 캐비닛 곁 중단 우측"
   },
   {
     "assetKey": "items/cozy-space/furniture/cozy-space-star-cabinet.png",
@@ -338,8 +338,8 @@
   {
     "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-soft-armchair.png",
     "name": "Cozy Zombie Hideout Set - Soft Armchair",
-    "slot": "midCenter",
-    "reason": "등받이 있는 대형 안락의자로 중단 좌석 가구 자리에 어울린다"
+    "slot": "bottomCenter",
+    "reason": "러그 위 하단 중앙 안락의자"
   },
   {
     "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-first-aid-nightstand.png",
@@ -386,8 +386,8 @@
   {
     "assetKey": "items/forest-sage/furniture/forest-sage-sofa-chair.png",
     "name": "Forest Sage Set - Sofa Chair",
-    "slot": "midCenter",
-    "reason": "1인 소파는 부피가 큰 좌석 가구라 중단 중앙에 배치"
+    "slot": "bottomCenter",
+    "reason": "러그 위 하단 중앙 소파"
   },
   {
     "assetKey": "items/forest-sage/furniture/forest-sage-writing-desk.png",
@@ -500,8 +500,8 @@
   {
     "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-neon-coding-desk.png",
     "name": "Pastel Cyberpunk Room Set - Neon Coding Desk",
-    "slot": "midCenter",
-    "reason": "모니터가 놓인 대형 책상이라 방 중앙 주요 대형 가구 자리"
+    "slot": "midLeft",
+    "reason": "벽에 붙는 네온 책상 - 책장 곁 중단 좌측"
   },
   {
     "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-cyber-bookcase.png",
@@ -578,8 +578,8 @@
   {
     "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-reading-chair.png",
     "name": "Rainy Afternoon Study Set - Reading Chair",
-    "slot": "midCenter",
-    "reason": "등받이 있는 대형 안락의자, 캐릭터가 앉는 중앙 좌석 자리에 어울림"
+    "slot": "midRight",
+    "reason": "독서 의자 - 램프 곁 중단 우측"
   },
   {
     "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-tea-table-cup.png",
@@ -602,8 +602,8 @@
   {
     "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-study-desk.png",
     "name": "Stationery Study Room Set - Study Desk",
-    "slot": "midCenter",
-    "reason": "상판·서랍·책 선반이 달린 방의 주역 대형 책상이라 중단 정중앙에 배치"
+    "slot": "midRight",
+    "reason": "벽에 붙는 공부 책상 - 책장 곁 중단 우측"
   },
   {
     "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-study-chair.png",

@@ -58,7 +58,7 @@ class ItemSlotTest {
     void 벌크_적재는_asset_key로_매칭해_슬롯을_적용하고_실패건을_리포트한다() throws Exception {
         String body = """
                 [
-                  {"assetKey": "items/slot-test/chair.png", "slot": "midCenter", "reason": "중앙 대형 가구"},
+                  {"assetKey": "items/slot-test/chair.png", "slot": "bottomCenter", "reason": "하단 중앙 대형 가구"},
                   {"assetKey": "items/slot-test/missing.png", "slot": "topLeft"},
                   {"assetKey": "items/slot-test/wallpaper.png", "slot": "badSlot"}
                 ]
@@ -72,7 +72,7 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.invalid[0]").value("items/slot-test/wallpaper.png"));
 
         assertThat(itemRepository.findById(positionedItem.getId()).orElseThrow().getDefaultSlot())
-                .isEqualTo("midCenter");
+                .isEqualTo("bottomCenter");
 
         // 재실행해도 같은 최종 상태(멱등)
         mockMvc.perform(post("/admin/items/slots/import")
@@ -117,10 +117,10 @@ class ItemSlotTest {
                         .content("{\"slot\": \"wallpaper\"}").with(csrf()))
                 .andExpect(status().isBadRequest());
 
-        // topCenter 는 캐릭터 자리라 슬롯 집합에 없다
+        // midCenter 는 캐릭터 자리라 슬롯 집합에 없다 (프론트 FurnitureSlot 과 동일)
         mockMvc.perform(put("/admin/items/{itemId}/slot", positionedItem.getId())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"slot\": \"topCenter\"}").with(csrf()))
+                        .content("{\"slot\": \"midCenter\"}").with(csrf()))
                 .andExpect(status().isBadRequest());
     }
 
