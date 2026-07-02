@@ -60,8 +60,9 @@ class GachaControllerTest {
         when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
                 .thenReturn(new AuthUser(1L, null));
         when(gachaService.draw(eq(1L), eq(10L), any())).thenReturn(new GachaDrawResponse(
-                List.of(new GachaDrawResponse.DrawResult("ITEM", 100L, null, "가구A", "items/a.png", "일반", false, null)),
-                new GachaDrawResponse.WalletSummary(CurrencyType.COIN, 750)));
+                List.of(new GachaDrawResponse.DrawResult("ITEM", 100L, null, "가구A", "items/a.png", "일반", false, null, null)),
+                List.of(new GachaDrawResponse.WalletSummary(CurrencyType.COIN, 750),
+                        new GachaDrawResponse.WalletSummary(CurrencyType.DIAMOND, 30))));
 
         mockMvc.perform(post("/api/v1/gacha/10/draw")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -69,6 +70,9 @@ class GachaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].rewardType").value("ITEM"))
                 .andExpect(jsonPath("$.results[0].rarity").value("일반"))
-                .andExpect(jsonPath("$.wallet.balance").value(750));
+                .andExpect(jsonPath("$.wallets[0].currencyType").value("COIN"))
+                .andExpect(jsonPath("$.wallets[0].balance").value(750))
+                .andExpect(jsonPath("$.wallets[1].currencyType").value("DIAMOND"))
+                .andExpect(jsonPath("$.wallets[1].balance").value(30));
     }
 }
