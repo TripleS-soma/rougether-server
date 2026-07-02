@@ -27,8 +27,9 @@ aws ssm get-parameter \
 
 ## RDS MySQL
 
-RDS는 public access가 꺼져 있어서 로컬 IDE에서 직접 RDS endpoint로 접속하지 않습니다.
-SSM 포트 포워딩으로 `localhost`를 열고 IntelliJ/DataGrip에서 그 포트로 접속합니다.
+기본 접속 경로는 SSM 포트 포워딩입니다 — `localhost`를 열고 IntelliJ/DataGrip에서 그 포트로 접속합니다.
+예외로, 보안그룹에 등록된 특정 개인 IP는 RDS endpoint 직접 접속이 허용돼 있습니다
+(`deploy/terraform/ec2` 변수 `db_direct_access_cidrs`, 값은 커밋하지 않고 로컬 `terraform.tfvars`로 관리 — IP가 바뀌면 tfvars 수정 후 `terraform apply`).
 
 - Database: `rougether`
 - Username: `rougether`
