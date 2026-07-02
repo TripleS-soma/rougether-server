@@ -227,6 +227,18 @@ resource "aws_vpc_security_group_ingress_rule" "rds_mysql_from_ec2" {
   description                  = "mysql from rougether ec2"
 }
 
+# 로컬 IDE 직접 접속용 (dev 한정, IP 는 공개 repo 에 안 남기고 terraform.tfvars 로 주입).
+# 기본 접속 경로는 SSM 터널(deploy/scripts/db-tunnel.sh) - 이 목록이 비어 있으면 RDS 는 비공개.
+resource "aws_vpc_security_group_ingress_rule" "rds_mysql_from_dev" {
+  count             = length(var.db_direct_access_cidrs)
+  security_group_id = aws_security_group.rds.id
+  cidr_ipv4         = var.db_direct_access_cidrs[count.index]
+  from_port         = 3306
+  ip_protocol       = "tcp"
+  to_port           = 3306
+  description       = "mysql from dev local IP (temporary, dev only)"
+}
+
 resource "aws_vpc_security_group_egress_rule" "rds_all" {
   security_group_id = aws_security_group.rds.id
   cidr_ipv4         = "0.0.0.0/0"
@@ -252,7 +264,8 @@ resource "aws_db_instance" "mysql" {
   password               = random_password.db.result
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
+  # 직접 접속 CIDR 이 있으면 공개(접근은 위 SG 규칙으로 IP 제한), 없으면 비공개(SSM 터널만).
+  publicly_accessible    = length(var.db_direct_access_cidrs) > 0
   multi_az               = false
 
   backup_retention_period = var.db_backup_retention_period
