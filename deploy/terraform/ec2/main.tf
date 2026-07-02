@@ -304,6 +304,19 @@ resource "aws_iam_role_policy" "app" {
         ]
       },
       {
+        # 어드민 에셋 조회(/admin/assets)의 ListObjectsV2 용. 허용 prefix 아래만 나열 가능.
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = ["arn:aws:s3:::${var.asset_bucket_name}"]
+        Condition = {
+          StringLike = {
+            "s3:prefix" = var.asset_allowed_prefixes
+          }
+        }
+      },
+      {
         Effect = "Allow"
         Action = [
           "ecr:GetAuthorizationToken"
