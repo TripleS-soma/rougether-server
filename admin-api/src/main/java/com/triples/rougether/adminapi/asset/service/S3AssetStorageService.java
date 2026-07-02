@@ -1,11 +1,13 @@
 package com.triples.rougether.adminapi.asset.service;
 
 import com.triples.rougether.adminapi.asset.config.AssetProperties;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 // 이미지를 S3 에 올리고 object key 를 발급한다. key 규칙: {kind}/{uuid}.{ext}
@@ -42,5 +44,18 @@ public class S3AssetStorageService implements AssetStorageService {
                         .build(),
                 RequestBody.fromBytes(content));
         return key;
+    }
+
+    @Override
+    public List<AssetSummary> list(String kind) {
+        // listObjectsV2Paginator 가 continuation token 을 처리해 1000개 초과도 전부 순회한다.
+        return s3Client.listObjectsV2Paginator(
+                        ListObjectsV2Request.builder()
+                                .bucket(properties.s3().bucket())
+                                .prefix(kind + "/")
+                                .build())
+                .contents().stream()
+                .map(object -> new AssetSummary(object.key(), object.size(), object.lastModified()))
+                .toList();
     }
 }
