@@ -10,11 +10,14 @@ import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.KakaoApiClient;
+import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +30,8 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
     private final RefreshTokenReuseGuard refreshTokenReuseGuard;
+    private final KakaoApiClient kakaoApiClient;
+    private final KakaoLoginHandler kakaoLoginHandler;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -50,6 +55,19 @@ public class AuthService {
         String accessToken = tokenService.issueAccessToken(user.getId(), MemberRole.NORMAL);
         String refreshToken = issueRefreshToken(user);
         return new LoginResponse(user.getId(), accessToken, refreshToken, isNewUser);
+    }
+
+    // 카카오 로그인 오케스트레이션. 트랜잭션은 KakaoLoginHandler.login이 소유함(HTTP 호출을 트랜잭션 밖에 둠).
+    public LoginResponse kakaoLogin(String accessToken) {
+        // 토큰 검증(app_id 대조) 후 카카오 회원번호·email 조회. 실패는 KakaoApiClient가 401/502로 변환함.
+        KakaoUser kakaoUser = kakaoApiClient.fetchUser(accessToken);
+        try {
+            return kakaoLoginHandler.login(kakaoUser);
+        } catch (DataIntegrityViolationException race) {
+            // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
+            // 이제 승자가 만든 연동이 보여 로그인으로 전환됨.
+            return kakaoLoginHandler.login(kakaoUser);
+        }
     }
 
     @Transactional

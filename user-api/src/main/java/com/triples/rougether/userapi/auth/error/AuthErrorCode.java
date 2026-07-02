@@ -7,6 +7,8 @@ public enum AuthErrorCode implements ErrorCode {
     USER_NOT_FOUND("AUTH_USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", 404),
     INVALID_TOKEN("AUTH_INVALID_TOKEN", "인증 토큰이 유효하지 않습니다.", 401),
     REFRESH_TOKEN_INVALID("AUTH_REFRESH_TOKEN_INVALID", "refresh 토큰이 유효하지 않습니다.", 401),
+    OAUTH_KAKAO_TOKEN_INVALID("AUTH_OAUTH_KAKAO_TOKEN_INVALID", "카카오 토큰이 유효하지 않습니다.", 401),
+    OAUTH_KAKAO_UNAVAILABLE("AUTH_OAUTH_KAKAO_UNAVAILABLE", "카카오 인증 서버 응답에 실패했습니다.", 502),
     FORBIDDEN("AUTH_FORBIDDEN", "접근 권한이 없습니다.", 403);
 
     private final String code;

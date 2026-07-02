@@ -18,6 +18,7 @@ import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +42,10 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private TokenService tokenService;
+    @Mock
+    private KakaoApiClient kakaoApiClient;
+    @Mock
+    private KakaoLoginHandler kakaoLoginHandler;
 
     private AuthService authService;
 
@@ -48,7 +53,7 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
-                new RefreshTokenReuseGuard(refreshTokenRepository));
+                new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler);
     }
 
     @Test

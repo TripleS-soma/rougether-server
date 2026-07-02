@@ -25,15 +25,27 @@ public class User extends BaseEntity {
     @Column(name = "nickname", length = 30)
     private String nickname;
 
+    @Column(name = "email", length = 255)
+    private String email;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    private User(String email) {
+        this.email = email;
+    }
+
     // 소셜 가입 시점엔 닉네임을 받지 않음(온보딩에서 채움) → nickname null.
     public static User signUp() {
         return new User();
+    }
+
+    // 소셜 provider가 이메일을 제공/동의한 경우 가입 시 저장함(미제공이면 null).
+    public static User signUp(String email) {
+        return new User(email);
     }
 
     public void recordLogin(Instant now) {
