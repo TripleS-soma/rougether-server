@@ -1,0 +1,674 @@
+[
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-apron-wall-hook.png",
+    "name": "Bakery Morning Set - Apron Wall Hook",
+    "slot": "topLeft",
+    "reason": "벽걸이 후크 보드와 앞치마 - 벽에 붙는 상단 슬롯이 적합"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-bread-display-shelf.png",
+    "name": "Bakery Morning Set - Bread Display Shelf",
+    "slot": "topRight",
+    "reason": "다단 진열장이지만 벽면 선반 성격이 강해 상단 벽 슬롯에 배치"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-breakfast-table.png",
+    "name": "Bakery Morning Set - Breakfast Table",
+    "slot": "midCenter",
+    "reason": "방 중심을 차지하는 원형 대형 식탁 - 중단 중앙 주요 가구 자리"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-mini-oven.png",
+    "name": "Bakery Morning Set - Mini Oven",
+    "slot": "midLeft",
+    "reason": "부피 있는 대형 조리 가전 - 중단 좌측 주요 가구 자리"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-chair.png",
+    "name": "Bakery Morning Set - Chair",
+    "slot": "midRight",
+    "reason": "중간 크기 좌석 가구로 식탁 옆 중단 우측에 배치"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-bag-stand.png",
+    "name": "Bakery Morning Set - Bag Stand",
+    "slot": "bottomLeft",
+    "reason": "바닥에 세우는 슬림한 스탠드 - 하단 좌측 코너에 배치"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-gingham-rug.png",
+    "name": "Bakery Morning Set - Gingham Rug",
+    "slot": "bottomCenter",
+    "reason": "대형 오벌 러그 - 바닥 정중앙(하단 중앙)이 정석"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-herb-plant.png",
+    "name": "Bakery Morning Set - Herb Plant",
+    "slot": "bottomRight",
+    "reason": "바닥 화분 소품 - 하단 우측 코너 데코 자리"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-toaster.png",
+    "name": "Bakery Morning Set - Toaster",
+    "slot": "midLeft",
+    "reason": "카운터형 소형 가전으로 미니오븐과 함께 중단 좌측 조리 구역에 배치"
+  },
+  {
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-milk-cup-plate.png",
+    "name": "Bakery Morning Set - Milk Cup Plate",
+    "slot": "bottomCenter",
+    "reason": "작은 컵·접시 테이블웨어 소품 - 러그 위 하단 중앙 바닥 소품으로 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-changho-window.png",
+    "name": "Calm Hanok Set - Changho Window",
+    "slot": "topLeft",
+    "reason": "벽에 붙는 전통 창호(창문)이므로 상단 벽 슬롯이 적합"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-tea-set.png",
+    "name": "Calm Hanok Set - Tea Set",
+    "slot": "topRight",
+    "reason": "작은 다기 쟁반 소품이라 상단 선반/벽 슬롯에 진열용으로 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-low-sleeping-platform.png",
+    "name": "Calm Hanok Set - Low Sleeping Platform",
+    "slot": "midLeft",
+    "reason": "이불을 얹은 낮은 침상으로 대형 주요 가구라 중단 큰 자리에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-folding-screen.png",
+    "name": "Calm Hanok Set - Folding Screen",
+    "slot": "midCenter",
+    "reason": "세로로 높은 병풍은 배경처럼 서는 대형 가구라 중단 중앙에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-mungap-cabinet.png",
+    "name": "Calm Hanok Set - Mungap Cabinet",
+    "slot": "midRight",
+    "reason": "서랍·문이 달린 전통 수납장이라 중단 주요 가구 자리에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-low-writing-desk.png",
+    "name": "Calm Hanok Set - Low Writing Desk",
+    "slot": "midLeft",
+    "reason": "책과 붓통이 놓인 좌식 책상(서안)은 주요 가구라 중단에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-soban-table.png",
+    "name": "Calm Hanok Set - Soban Table",
+    "slot": "bottomCenter",
+    "reason": "다과가 놓인 낮은 소반 테이블은 바닥 소품이라 하단 중앙에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-floor-cushion.png",
+    "name": "Calm Hanok Set - Floor Cushion",
+    "slot": "bottomLeft",
+    "reason": "바닥에 까는 방석이라 하단 바닥 소품 자리에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-plum-vase.png",
+    "name": "Calm Hanok Set - Plum Vase",
+    "slot": "bottomRight",
+    "reason": "매화가 꽂힌 바닥 화병/화분이라 하단 소품 자리에 배치"
+  },
+  {
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-paper-lantern.png",
+    "name": "Calm Hanok Set - Paper Lantern",
+    "slot": "bottomLeft",
+    "reason": "다리가 달린 좌식 청사초롱 조명이라 하단 바닥 조명 소품으로 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-sunny-window.png",
+    "name": "Cloud Nap Room Set - Sunny Window",
+    "slot": "topLeft",
+    "reason": "커튼 달린 창문은 벽에 붙는 대표적 벽걸이라 상단 좌측이 적합"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-cloud-wall-shelf.png",
+    "name": "Cloud Nap Room Set - Cloud Wall Shelf",
+    "slot": "topRight",
+    "reason": "액자와 화분이 올라간 벽걸이 선반이라 상단 우측 벽면에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-cloud-bed.png",
+    "name": "Cloud Nap Room Set - Cloud Bed",
+    "slot": "midLeft",
+    "reason": "방의 가장 큰 주요 가구인 침대라 중단 좌측 큰 자리에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-cloud-chair.png",
+    "name": "Cloud Nap Room Set - Cloud Chair",
+    "slot": "midRight",
+    "reason": "부피 있는 대형 안락의자라 중단 우측 주요 가구 자리에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-low-nightstand.png",
+    "name": "Cloud Nap Room Set - Low Nightstand",
+    "slot": "midCenter",
+    "reason": "서랍장 수납 가구라 중단 중앙의 대형 가구 자리에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-cloud-rug.png",
+    "name": "Cloud Nap Room Set - Cloud Rug",
+    "slot": "bottomCenter",
+    "reason": "바닥에 까는 러그의 정석 위치인 하단 중앙에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-sleepy-plant.png",
+    "name": "Cloud Nap Room Set - Sleepy Plant",
+    "slot": "bottomLeft",
+    "reason": "바닥에 두는 화분 소품이라 하단 좌측 코너에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-pillow-pile.png",
+    "name": "Cloud Nap Room Set - Pillow Pile",
+    "slot": "bottomRight",
+    "reason": "바닥에 쌓는 쿠션 더미라 하단 우측 소품 자리에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-bedside-lamp.png",
+    "name": "Cloud Nap Room Set - Bedside Lamp",
+    "slot": "bottomLeft",
+    "reason": "작은 탁상 조명 소품이라 하단 좌측 바닥 조명 자리에 배치"
+  },
+  {
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-blanket-basket.png",
+    "name": "Cloud Nap Room Set - Blanket Basket",
+    "slot": "bottomRight",
+    "reason": "담요를 담은 바닥 수납 바구니 소품이라 하단 우측에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-morning-code-window.png",
+    "name": "Cozy Developer Room Set - Morning Code Window",
+    "slot": "topLeft",
+    "reason": "커튼 달린 창문은 벽에 붙는 대표 오브젝트라 상단 벽 자리인 topLeft가 적합"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-memo-board.png",
+    "name": "Cozy Developer Room Set - Memo Board",
+    "slot": "topRight",
+    "reason": "벽걸이 메모보드는 상단 벽에 걸리는 소품이라 topRight에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-server-router-shelf.png",
+    "name": "Cozy Developer Room Set - Server Router Shelf",
+    "slot": "topLeft",
+    "reason": "라우터가 올라간 벽 선반은 상단 벽걸이 성격이라 창문 옆 topLeft 영역이 어울림"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-coding-desk.png",
+    "name": "Cozy Developer Room Set - Coding Desk",
+    "slot": "midCenter",
+    "reason": "모니터·키보드가 놓인 대형 책상은 방의 핵심 가구라 중단 중앙 자리에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png",
+    "name": "Cozy Developer Room Set - Cozy Chair",
+    "slot": "midLeft",
+    "reason": "큰 사무용 의자는 대형 가구라 책상 옆 중단 midLeft에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-developer-bookcase.png",
+    "name": "Cozy Developer Room Set - Developer Bookcase",
+    "slot": "midRight",
+    "reason": "키 큰 벽면 책장은 대형 수납 가구라 중단 midRight가 적합"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-headphone-drawer-cabinet.png",
+    "name": "Cozy Developer Room Set - Headphone Drawer Cabinet",
+    "slot": "midLeft",
+    "reason": "헤드폰 걸린 서랍장은 중형 수납 가구라 중단 좌측 영역에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-command-key-rug.png",
+    "name": "Cozy Developer Room Set - Command Key Rug",
+    "slot": "bottomCenter",
+    "reason": "커맨드키 모양 러그는 바닥에 깔리는 러그라 관례대로 bottomCenter"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-coffee-plant-set.png",
+    "name": "Cozy Developer Room Set - Coffee Plant Set",
+    "slot": "bottomLeft",
+    "reason": "머그컵과 작은 화분 세트는 바닥/낮은 소품이라 하단 bottomLeft에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-desk-lamp.png",
+    "name": "Cozy Developer Room Set - Desk Lamp",
+    "slot": "bottomRight",
+    "reason": "책상용 조명은 낮은 소품이라 하단 bottomRight에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-laptop-stand.png",
+    "name": "Cozy Developer Room Set - Laptop Stand",
+    "slot": "bottomRight",
+    "reason": "노트북 거치대는 작은 바닥/책상 소품이라 하단 우측 영역에 배치"
+  },
+  {
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-cable-basket.png",
+    "name": "Cozy Developer Room Set - Cable Basket",
+    "slot": "bottomLeft",
+    "reason": "케이블·멀티탭이 담긴 바구니는 바닥에 놓는 소품이라 하단 bottomLeft에 배치"
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-space-window.png",
+    "name": "Cozy Space Set - Space Window",
+    "slot": "topLeft",
+    "reason": "별밤 하늘이 보이는 창문+커튼은 벽에 붙는 요소라 상단 벽 자리에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-moon-shelf.png",
+    "name": "Cozy Space Set - Moon Shelf",
+    "slot": "topRight",
+    "reason": "초승달 벽걸이 선반은 벽 부착형이라 상단 자리에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-moon-bed.png",
+    "name": "Cozy Space Set - Moon Bed",
+    "slot": "midLeft",
+    "reason": "대형 초승달 침대라 중단의 큰 자리에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-telescope-desk.png",
+    "name": "Cozy Space Set - Telescope Desk",
+    "slot": "midCenter",
+    "reason": "망원경이 놓인 책상+스툴 세트로 주요 대형 가구라 중단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-star-cabinet.png",
+    "name": "Cozy Space Set - Star Cabinet",
+    "slot": "midRight",
+    "reason": "서랍+수납장 형태의 대형 수납 가구라 중단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-star-chair.png",
+    "name": "Cozy Space Set - Star Chair",
+    "slot": "bottomLeft",
+    "reason": "별 쿠션 1인 소파(암체어)로 바닥에 놓이는 좌식 가구라 하단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-star-rug.png",
+    "name": "Cozy Space Set - Star Rug",
+    "slot": "bottomCenter",
+    "reason": "오벌형 러그는 바닥 중앙에 까는 소품이라 하단 중앙에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table.png",
+    "name": "Cozy Space Set - Planet Mobile Table",
+    "slot": "bottomRight",
+    "reason": "모빌이 달린 낮은 원형 테이블이라 바닥 소품 자리인 하단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-planet-lamp.png",
+    "name": "Cozy Space Set - Planet Lamp",
+    "slot": "bottomRight",
+    "reason": "행성 모양 스탠드 조명은 바닥/낮은 위치 조명 소품이라 하단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-space/furniture/cozy-space-moon-cactus.png",
+    "name": "Cozy Space Set - Moon Cactus",
+    "slot": "bottomLeft",
+    "reason": "화분에 심긴 선인장은 바닥에 놓는 소품 화분이라 하단에 배치."
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-boarded-window.png",
+    "name": "Cozy Zombie Hideout Set - Boarded Window",
+    "slot": "topLeft",
+    "reason": "커튼과 판자가 달린 벽 창문이라 벽에 붙는 상단 슬롯이 맞다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-barricade-bookshelf.png",
+    "name": "Cozy Zombie Hideout Set - Barricade Bookshelf",
+    "slot": "topRight",
+    "reason": "세로로 높은 선반형 가구라 벽면 상단에 세워두기 적합하다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-patched-nap-cot.png",
+    "name": "Cozy Zombie Hideout Set - Patched Nap Cot",
+    "slot": "midLeft",
+    "reason": "침대는 부피가 큰 주요 가구라 중단의 넓은 자리에 배치한다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-diary-desk.png",
+    "name": "Cozy Zombie Hideout Set - Diary Desk",
+    "slot": "midRight",
+    "reason": "의자와 램프까지 딸린 대형 책상이라 중단 주요 가구 자리에 둔다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-soft-armchair.png",
+    "name": "Cozy Zombie Hideout Set - Soft Armchair",
+    "slot": "midCenter",
+    "reason": "등받이 있는 대형 안락의자로 중단 좌석 가구 자리에 어울린다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-first-aid-nightstand.png",
+    "name": "Cozy Zombie Hideout Set - First Aid Nightstand",
+    "slot": "bottomLeft",
+    "reason": "낮은 2단 협탁이라 침대 옆 바닥 자리인 하단 좌측에 둔다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-stitched-hand-rug.png",
+    "name": "Cozy Zombie Hideout Set - Stitched Hand Rug",
+    "slot": "bottomCenter",
+    "reason": "바닥에 까는 타원형 러그라 중앙 바닥 자리가 정석이다"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-hand-sprout-plant.png",
+    "name": "Cozy Zombie Hideout Set - Hand Sprout Plant",
+    "slot": "bottomRight",
+    "reason": "화분 소품이라 바닥에 놓는 하단 우측 자리에 배치한다"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-arched-window.png",
+    "name": "Forest Sage Set - Arched Window",
+    "slot": "topLeft",
+    "reason": "벽에 붙는 아치형 창문이라 상단 벽면 자리가 적합"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-plant-shelf.png",
+    "name": "Forest Sage Set - Plant Shelf",
+    "slot": "topRight",
+    "reason": "화분·액자가 놓인 벽걸이 선반이라 상단 벽면에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-bed.png",
+    "name": "Forest Sage Set - Bed",
+    "slot": "midLeft",
+    "reason": "침대는 방의 대형 주요 가구라 중단 큰 자리에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-storage-cabinet.png",
+    "name": "Forest Sage Set - Storage Cabinet",
+    "slot": "midRight",
+    "reason": "서랍·수납장은 벽에 붙는 대형 수납 가구라 중단에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-sofa-chair.png",
+    "name": "Forest Sage Set - Sofa Chair",
+    "slot": "midCenter",
+    "reason": "1인 소파는 부피가 큰 좌석 가구라 중단 중앙에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-writing-desk.png",
+    "name": "Forest Sage Set - Writing Desk",
+    "slot": "midLeft",
+    "reason": "책상·의자 세트는 대형 가구라 중단 자리에 배치(침대와 공유)"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-oval-rug.png",
+    "name": "Forest Sage Set - Oval Rug",
+    "slot": "bottomCenter",
+    "reason": "타원형 러그는 바닥 중앙에 까는 것이 관례"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-potted-plant.png",
+    "name": "Forest Sage Set - Potted Plant",
+    "slot": "bottomLeft",
+    "reason": "바닥에 놓는 화분 소품이라 하단에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-low-tea-table.png",
+    "name": "Forest Sage Set - Low Tea Table",
+    "slot": "bottomRight",
+    "reason": "찻주전자가 놓인 낮은 좌식 테이블이라 바닥 소품 하단에 배치"
+  },
+  {
+    "assetKey": "items/forest-sage/furniture/forest-sage-table-lamp.png",
+    "name": "Forest Sage Set - Table Lamp",
+    "slot": "bottomRight",
+    "reason": "작은 스탠드 조명 소품이라 하단 바닥 자리에 배치(테이블과 공유)"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-robe-hanger.png",
+    "name": "Onsen Bath Routine Set - Robe Hanger",
+    "slot": "topLeft",
+    "reason": "옷걸이에 걸린 목욕가운 — 벽에 거는 벽걸이형이라 상단 벽면이 적합"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-towel-shelf.png",
+    "name": "Onsen Bath Routine Set - Towel Shelf",
+    "slot": "topRight",
+    "reason": "수건이 걸린 나무 선반 — 벽에 붙는 선반형 수납이라 상단 벽면에 배치"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bathtub.png",
+    "name": "Onsen Bath Routine Set - Wooden Bathtub",
+    "slot": "midLeft",
+    "reason": "테마의 핵심 대형 가구인 원형 나무 욕조 — 중단 주요 자리에 배치"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-soap-table.png",
+    "name": "Onsen Bath Routine Set - Soap Table",
+    "slot": "midRight",
+    "reason": "비누·용품이 놓인 낮은 나무 테이블 — 중단 측면 실용 가구로 배치"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-bath-mat.png",
+    "name": "Onsen Bath Routine Set - Bath Mat",
+    "slot": "bottomCenter",
+    "reason": "납작한 직사각 목욕 매트 — 러그류라 바닥 중앙에 깔기 적합"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-bamboo-plant.png",
+    "name": "Onsen Bath Routine Set - Bamboo Plant",
+    "slot": "bottomLeft",
+    "reason": "화분에 심긴 대나무 — 바닥에 두는 화분 소품이라 하단 모서리"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-bath-stool.png",
+    "name": "Onsen Bath Routine Set - Bath Stool",
+    "slot": "bottomRight",
+    "reason": "낮은 나무 목욕 의자 — 바닥에 놓는 소형 스툴이라 하단 자리"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bucket.png",
+    "name": "Onsen Bath Routine Set - Wooden Bucket",
+    "slot": "bottomRight",
+    "reason": "국자 딸린 작은 나무 바가지 — 바닥 소품이라 목욕 의자 옆 하단에 배치"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wash-basin.png",
+    "name": "Onsen Bath Routine Set - Wash Basin",
+    "slot": "bottomLeft",
+    "reason": "물이 담긴 세면 대야 — 바닥에 두는 작은 소품이라 하단에 배치"
+  },
+  {
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-yuzu-basket.png",
+    "name": "Onsen Bath Routine Set - Yuzu Basket",
+    "slot": "bottomCenter",
+    "reason": "유자가 담긴 작은 바구니 — 바닥에 놓는 소품이라 매트 근처 하단 중앙"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-circuit-memo-board.png",
+    "name": "Pastel Cyberpunk Room Set - Circuit Memo Board",
+    "slot": "topLeft",
+    "reason": "벽에 붙는 코르크형 메모보드라 상단 벽면 위치가 자연스럽다"
+  },
+  {
+    "name": "Pastel Cyberpunk Room Set - Round Neon City Window",
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-round-neon-city-window.png",
+    "slot": "topRight",
+    "reason": "원형 네온 창문은 벽에 붙는 창이므로 상단 벽면에 배치"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-mini-server-router-shelf.png",
+    "name": "Pastel Cyberpunk Room Set - Mini Server Router Shelf",
+    "slot": "topRight",
+    "reason": "라우터를 올린 낮은 선반형 유닛이라 상단 벽 선반 자리에 어울린다"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-neon-coding-desk.png",
+    "name": "Pastel Cyberpunk Room Set - Neon Coding Desk",
+    "slot": "midCenter",
+    "reason": "모니터가 놓인 대형 책상이라 방 중앙 주요 대형 가구 자리"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-cyber-bookcase.png",
+    "name": "Pastel Cyberpunk Room Set - Cyber Bookcase",
+    "slot": "midLeft",
+    "reason": "세로로 큰 책장/수납장이라 중단 대형 가구 위치가 맞다"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-robot-drawer-cabinet.png",
+    "name": "Pastel Cyberpunk Room Set - Robot Drawer Cabinet",
+    "slot": "midRight",
+    "reason": "세로형 서랍 수납장이라 중단 대형 가구 라인에 배치"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-hover-chair.png",
+    "name": "Pastel Cyberpunk Room Set - Hover Chair",
+    "slot": "midRight",
+    "reason": "등받이 있는 주요 의자 가구라 책상 옆 중단 자리가 어울린다"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-circuit-rug.png",
+    "name": "Pastel Cyberpunk Room Set - Circuit Rug",
+    "slot": "bottomCenter",
+    "reason": "바닥에 까는 러그라 하단 중앙이 정석 위치"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-coffee-glow-plant-set.png",
+    "name": "Pastel Cyberpunk Room Set - Coffee Glow Plant Set",
+    "slot": "bottomLeft",
+    "reason": "화분과 머그컵 바닥 소품이라 하단 코너에 두기 좋다"
+  },
+  {
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-cyber-bear.png",
+    "name": "Pastel Cyberpunk Room Set - Cyber Bear",
+    "slot": "bottomRight",
+    "reason": "작은 곰인형 소품이라 바닥 하단 코너에 배치"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-rainy-window.png",
+    "name": "Rainy Afternoon Study Set - Rainy Window",
+    "slot": "topLeft",
+    "reason": "커튼 달린 벽걸이 창문이라 벽에 붙는 상단 슬롯이 정석"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-bookshelf.png",
+    "name": "Rainy Afternoon Study Set - Bookshelf",
+    "slot": "topRight",
+    "reason": "벽에 붙는 키 큰 책장이라 상단 코너에 배치해 벽면을 채움"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-desk-lamp.png",
+    "name": "Rainy Afternoon Study Set - Desk Lamp",
+    "slot": "midRight",
+    "reason": "탁상용 조명으로 벽 근처 중단에 세워 책상 옆 분위기를 냄"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-low-study-desk.png",
+    "name": "Rainy Afternoon Study Set - Low Study Desk",
+    "slot": "midLeft",
+    "reason": "펼친 책이 올려진 대형 좌식 책상, 중단 주요 가구 자리"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-oval-rug.png",
+    "name": "Rainy Afternoon Study Set - Oval Rug",
+    "slot": "bottomCenter",
+    "reason": "타원형 러그는 바닥 정중앙 하단에 까는 것이 기본"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-potted-plant.png",
+    "name": "Rainy Afternoon Study Set - Potted Plant",
+    "slot": "bottomLeft",
+    "reason": "바닥에 두는 화분이라 하단 코너에 배치해 여백을 채움"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-reading-chair.png",
+    "name": "Rainy Afternoon Study Set - Reading Chair",
+    "slot": "midCenter",
+    "reason": "등받이 있는 대형 안락의자, 캐릭터가 앉는 중앙 좌석 자리에 어울림"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-tea-table-cup.png",
+    "name": "Rainy Afternoon Study Set - Tea Table Cup",
+    "slot": "bottomRight",
+    "reason": "찻잔 올린 낮은 원형 테이블, 바닥 소품이라 하단 코너에 배치"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-soft-cushion.png",
+    "name": "Rainy Afternoon Study Set - Soft Cushion",
+    "slot": "bottomCenter",
+    "reason": "바닥에 놓는 방석이라 러그 위 중앙 하단에 자연스럽게 겹쳐 배치"
+  },
+  {
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-umbrella-stand.png",
+    "name": "Rainy Afternoon Study Set - Umbrella Stand",
+    "slot": "bottomLeft",
+    "reason": "바닥에 세우는 우산꽂이라 하단 코너에 배치해 비 오는 테마 소품으로 마감"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-study-desk.png",
+    "name": "Stationery Study Room Set - Study Desk",
+    "slot": "midCenter",
+    "reason": "상판·서랍·책 선반이 달린 방의 주역 대형 책상이라 중단 정중앙에 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-study-chair.png",
+    "name": "Stationery Study Room Set - Study Chair",
+    "slot": "midLeft",
+    "reason": "바퀴 달린 사무용 의자로 책상 옆 중단 좌측에 두는 것이 자연스러움"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-bookcase.png",
+    "name": "Stationery Study Room Set - Bookcase",
+    "slot": "midRight",
+    "reason": "키 큰 2단 책장(대형 수납 가구)이라 중단 우측 주요 가구 자리에 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-drawer-cabinet.png",
+    "name": "Stationery Study Room Set - Drawer Cabinet",
+    "slot": "topRight",
+    "reason": "3단 서랍장 수납 가구이나 중단이 찼으므로 벽면 상단 우측에 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-memo-board.png",
+    "name": "Stationery Study Room Set - Memo Board",
+    "slot": "topLeft",
+    "reason": "끈으로 벽에 거는 메모/코르크 보드라 상단 벽걸이 좌측이 적합"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-round-rug.png",
+    "name": "Stationery Study Room Set - Round Rug",
+    "slot": "bottomCenter",
+    "reason": "타원형 러그는 바닥 정중앙에 까는 것이 정석이라 하단 중앙"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-potted-plant.png",
+    "name": "Stationery Study Room Set - Potted Plant",
+    "slot": "bottomLeft",
+    "reason": "바닥에 놓는 화분 소품이라 하단 좌측 바닥 자리에 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-stationery-cup.png",
+    "name": "Stationery Study Room Set - Stationery Cup",
+    "slot": "bottomLeft",
+    "reason": "작은 연필꽂이 소품이라 하단 좌측 바닥 소품 자리에 함께 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-desk-lamp.png",
+    "name": "Stationery Study Room Set - Desk Lamp",
+    "slot": "bottomRight",
+    "reason": "받침대 있는 조명 소품이라 하단 우측 바닥 자리에 배치"
+  },
+  {
+    "assetKey": "items/stationery-study-room-imagegen-v2/furniture/stationery-study-room-imagegen-v2-notebook-stack.png",
+    "name": "Stationery Study Room Set - Notebook Stack",
+    "slot": "bottomRight",
+    "reason": "작은 노트 더미 소품이라 하단 우측 바닥 소품 자리에 함께 배치"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-emergency-lantern-table.png",
+    "name": "Emergency Lantern Table",
+    "slot": "bottomLeft",
+    "reason": "낮은 랜턴 테이블 소품 - 하단 배치 (수동 보정)"
+  },
+  {
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-zombie-bear-plush.png",
+    "name": "Zombie Bear Plush",
+    "slot": "bottomRight",
+    "reason": "봉제 인형 소품 - 하단 배치 (수동 보정)"
+  }
+]

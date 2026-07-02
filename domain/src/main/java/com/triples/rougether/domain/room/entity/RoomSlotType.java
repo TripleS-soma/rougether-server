@@ -35,4 +35,11 @@ public enum RoomSlotType {
     public static boolean isValid(String code) {
         return Arrays.stream(values()).anyMatch(type -> type.code.equals(code));
     }
+
+    // positioned 가구가 배치될 수 있는 슬롯 코드인지 (items.default_slot 값 검증용).
+    public static boolean isPositionedCode(String code) {
+        return Arrays.stream(values())
+                .filter(type -> type != WALLPAPER && type != FLOOR && type != BACKGROUND)
+                .anyMatch(type -> type.code.equals(code));
+    }
 }
