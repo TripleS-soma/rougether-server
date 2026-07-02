@@ -35,12 +35,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 뽑기 조회 + 실행. 2단계 추첨(등급 70/25/5 -> 등급 pool 균등), COIN 차감.
-// 보상은 아이템(가구) 또는 캐릭터. 이미 보유한 보상이 나오면 코인 환급.
+// 보상은 아이템(가구) 또는 캐릭터. 중복 보유 시 아이템은 다이아, 캐릭터는 코인으로 전환(프론트 재화 규칙).
 @Service
 public class GachaService {
 
-    private static final int ITEM_REFUND_COIN = 40;        // 아이템 중복 환급
-    private static final int CHARACTER_REFUND_COIN = 200;   // 캐릭터 중복 환급
+    private static final int ITEM_REFUND_DIA = 30;           // 아이템 중복 -> 다이아 전환 (프론트 DUPLICATE_DIA)
+    private static final int CHARACTER_REFUND_COIN = 200;    // 캐릭터 중복 -> 코인 환급 (spec)
     private static final int TIER_NORMAL_MAX = 70;   // roll 0~69 -> 일반
     private static final int TIER_RARE_MAX = 95;     // 70~94 -> 희귀, 95~99 -> 전설
     private static final int MULTI_COUNT = 10;
@@ -98,12 +98,13 @@ public class GachaService {
         }
 
         int cost = count == 1 ? gacha.getCostAmount() : gacha.getCostAmount() * MULTI_MULTIPLIER;
-        UserWallet wallet = walletRepository.findByUserIdAndCurrencyType(userId, CurrencyType.COIN)
+        // 행 락으로 동시 뽑기의 이중 차감을 막는다.
+        UserWallet wallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
         if (wallet.getBalance() < cost) {
             throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
         }
-        wallet.subtract(cost);
+        wallet.spend(cost);
 
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
                 .filter(this::hasReward)
@@ -124,16 +125,32 @@ public class GachaService {
         User user = userRepository.getReferenceById(userId);
 
         List<DrawResult> results = new ArrayList<>();
-        int refundTotal = 0;
+        int coinRefund = 0;
+        int diaRefund = 0;
         for (int i = 0; i < count; i++) {
             GachaPoolEntry picked = pickEntry(pool, byRarity);
-            refundTotal += (picked.getRewardType() == RewardType.CHARACTER)
-                    ? drawCharacter(user, picked, ownedCharacterIds, results)
-                    : drawItem(user, picked, ownedItemIds, results);
+            if (picked.getRewardType() == RewardType.CHARACTER) {
+                coinRefund += drawCharacter(user, picked, ownedCharacterIds, results);
+            } else {
+                diaRefund += drawItem(user, picked, ownedItemIds, results);
+            }
         }
-        wallet.add(refundTotal);
+        wallet.add(coinRefund);
 
-        return new GachaDrawResponse(results, new WalletSummary(CurrencyType.COIN, wallet.getBalance()));
+        // 전환 적립도 행 락으로 조회해 동시 요청의 적립 유실을 막는다. 지갑이 없으면 최초 전환 시점에 발급
+        // (가입 시엔 코인 지갑만 생성됨. 동시 발급은 uq_user_wallets_user_currency 가 막는다).
+        UserWallet diaWallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.DIAMOND)
+                .orElse(null);
+        if (diaRefund > 0) {
+            if (diaWallet == null) {
+                diaWallet = walletRepository.save(UserWallet.create(user, CurrencyType.DIAMOND));
+            }
+            diaWallet.add(diaRefund);
+        }
+
+        return new GachaDrawResponse(results, List.of(
+                new WalletSummary(CurrencyType.COIN, wallet.getBalance()),
+                new WalletSummary(CurrencyType.DIAMOND, diaWallet == null ? 0 : diaWallet.getBalance())));
     }
 
     private boolean hasReward(GachaPoolEntry e) {
@@ -141,18 +158,18 @@ public class GachaService {
                 || (e.getRewardType() == RewardType.CHARACTER && e.getCharacter() != null);
     }
 
-    // 아이템(가구) 지급. 이미 보유 시 코인 환급하고 환급액 반환.
+    // 아이템(가구) 지급. 이미 보유 시 다이아로 전환하고 전환액 반환.
     private int drawItem(User user, GachaPoolEntry picked, Set<Long> ownedItemIds, List<DrawResult> results) {
         Item item = picked.getItem();
         if (ownedItemIds.contains(item.getId())) {
             results.add(new DrawResult("CURRENCY", item.getId(), null, item.getName(),
-                    item.getAssetKey(), picked.getRarity(), true, ITEM_REFUND_COIN));
-            return ITEM_REFUND_COIN;
+                    item.getAssetKey(), picked.getRarity(), true, CurrencyType.DIAMOND, ITEM_REFUND_DIA));
+            return ITEM_REFUND_DIA;
         }
         userItemRepository.save(UserItem.create(user, item));
         ownedItemIds.add(item.getId());
         results.add(new DrawResult("ITEM", item.getId(), null, item.getName(),
-                item.getAssetKey(), picked.getRarity(), false, null));
+                item.getAssetKey(), picked.getRarity(), false, null, null));
         return 0;
     }
 
@@ -161,13 +178,13 @@ public class GachaService {
         Character character = picked.getCharacter();
         if (ownedCharacterIds.contains(character.getId())) {
             results.add(new DrawResult("CURRENCY", null, character.getId(), character.getName(),
-                    character.getBaseAssetKey(), picked.getRarity(), true, CHARACTER_REFUND_COIN));
+                    character.getBaseAssetKey(), picked.getRarity(), true, CurrencyType.COIN, CHARACTER_REFUND_COIN));
             return CHARACTER_REFUND_COIN;
         }
         userCharacterRepository.save(UserCharacter.create(user, character));
         ownedCharacterIds.add(character.getId());
         results.add(new DrawResult("CHARACTER", null, character.getId(), character.getName(),
-                character.getBaseAssetKey(), picked.getRarity(), false, null));
+                character.getBaseAssetKey(), picked.getRarity(), false, null, null));
         return 0;
     }
 

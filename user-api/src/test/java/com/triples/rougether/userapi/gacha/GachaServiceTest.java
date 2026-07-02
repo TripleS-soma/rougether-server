@@ -93,11 +93,11 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(100);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.INSUFFICIENT_COIN));
-        verify(wallet, never()).subtract(anyInt());
+        verify(wallet, never()).spend(anyInt());
     }
 
     @Test
@@ -106,7 +106,8 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
         singleItemPool(100L, 10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
         when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
@@ -114,21 +115,27 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).subtract(250);
+        verify(wallet).spend(250);
         verify(userItemRepository).save(any(UserItem.class));
         verify(wallet).add(0);
         assertThat(res.results()).hasSize(1);
         assertThat(res.results().get(0).converted()).isFalse();
         assertThat(res.results().get(0).rewardType()).isEqualTo("ITEM");
+        // 응답에 두 재화 잔액이 모두 담긴다 (다이아 지갑이 없으면 0)
+        assertThat(res.wallets()).extracting(w -> w.currencyType())
+                .containsExactly(CurrencyType.COIN, CurrencyType.DIAMOND);
+        assertThat(res.wallets().get(1).balance()).isZero();
     }
 
     @Test
-    void 이미_소유한_아이템은_지급대신_코인40_환급된다() {
+    void 이미_소유한_아이템은_지급대신_다이아30으로_전환된다() {
         Gacha g = activeGacha(250);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        UserWallet diaWallet = mock(UserWallet.class);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.of(diaWallet));
         Item item = singleItemPool(100L, 10L);
         UserItem owned = mock(UserItem.class);
         when(owned.getItem()).thenReturn(item);
@@ -138,11 +145,38 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).subtract(250);
-        verify(wallet).add(40);
+        verify(wallet).spend(250);
+        verify(wallet).add(0);
+        verify(diaWallet).add(30);
         verify(userItemRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
-        assertThat(res.results().get(0).refundAmount()).isEqualTo(40);
+        assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.DIAMOND);
+        assertThat(res.results().get(0).refundAmount()).isEqualTo(30);
+    }
+
+    @Test
+    void 아이템_중복_전환시_다이아_지갑이_없으면_새로_발급한다() {
+        Gacha g = activeGacha(250);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(1000);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
+        UserWallet createdDia = mock(UserWallet.class);
+        when(createdDia.getBalance()).thenReturn(30);
+        when(walletRepository.save(any(UserWallet.class))).thenReturn(createdDia);
+        Item item = singleItemPool(100L, 10L);
+        UserItem owned = mock(UserItem.class);
+        when(owned.getItem()).thenReturn(item);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of(owned));
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
+        when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
+
+        GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
+
+        verify(walletRepository).save(any(UserWallet.class));
+        verify(createdDia).add(30);
+        assertThat(res.wallets().get(1).balance()).isEqualTo(30);
     }
 
     // 캐릭터 pool 을 1개(rarity 미부여)로 만들어 추첨 결과를 결정적으로 고정.
@@ -164,7 +198,8 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(2000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
         singleCharacterPool(5L, 10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
         when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
@@ -172,7 +207,7 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).subtract(1000);
+        verify(wallet).spend(1000);
         verify(userCharacterRepository).save(any(UserCharacter.class));
         assertThat(res.results().get(0).rewardType()).isEqualTo("CHARACTER");
         assertThat(res.results().get(0).characterId()).isEqualTo(5L);
@@ -185,7 +220,8 @@ class GachaServiceTest {
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(2000);
-        when(walletRepository.findByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
         Character ch = singleCharacterPool(5L, 10L);
         UserCharacter owned = mock(UserCharacter.class);
         when(owned.getCharacter()).thenReturn(ch);
@@ -195,10 +231,11 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).subtract(1000);
+        verify(wallet).spend(1000);
         verify(wallet).add(200);
         verify(userCharacterRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
+        assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.COIN);
         assertThat(res.results().get(0).refundAmount()).isEqualTo(200);
     }
 }

@@ -66,10 +66,11 @@ public class CatalogImportService {
                 theme = themeRepository.findByCode(i.themeCode())
                         .orElseThrow(() -> new IllegalArgumentException("unknown theme code: " + i.themeCode()));
             }
+            // 상점 구매 재화는 다이아 (코인은 루틴 보상·뽑기 전용, 프론트·스펙 기준).
             itemRepository.save(new Item(
                     theme, i.categoryCode(), i.placementType(),
                     blankToNull(i.surfaceSlotType()), blankToNull(i.characterSlotType()),
-                    i.name(), CurrencyType.COIN, i.priceAmount(), i.assetKey(),
+                    i.name(), CurrencyType.DIAMOND, i.priceAmount(), i.assetKey(),
                     i.limited(), i.active()));
             itemsCreated++;
         }
