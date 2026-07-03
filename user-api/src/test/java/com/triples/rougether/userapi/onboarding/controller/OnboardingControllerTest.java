@@ -145,6 +145,15 @@ class OnboardingControllerTest {
     }
 
     @Test
+    void 캐릭터ID가_없으면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(put("/api/v1/onboarding/character")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     void 온보딩_상태_조회는_목표_대표_선택_완료여부를_응답한다() throws Exception {
         when(onboardingQueryService.getOnboarding(1L)).thenReturn(new OnboardingResponse(
                 List.of(new OnboardingGoalsResponse.GoalSelection(10L, "wake_up", "일찍 일어나기")),

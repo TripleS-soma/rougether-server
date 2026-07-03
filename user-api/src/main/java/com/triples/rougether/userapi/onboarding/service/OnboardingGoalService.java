@@ -10,6 +10,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,9 @@ public class OnboardingGoalService {
                 .toList();
         userGoalRepository.saveAll(saved);
 
-        return OnboardingGoalsResponse.of(saved);
+        List<UserGoal> ordered = saved.stream()
+                .sorted(Comparator.comparingInt(ug -> ug.getGoal().getSortOrder()))
+                .toList();
+        return OnboardingGoalsResponse.of(ordered);
     }
 }

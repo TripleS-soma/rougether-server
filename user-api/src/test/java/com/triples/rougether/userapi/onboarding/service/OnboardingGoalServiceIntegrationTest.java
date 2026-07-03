@@ -90,6 +90,16 @@ class OnboardingGoalServiceIntegrationTest {
     }
 
     @Test
+    void 응답_goals는_마스터_sortOrder_오름차순이다() {
+        Long high = goalRepository.save(goal("hi", true, 5)).getId();
+        Long low = goalRepository.save(goal("lo", true, 1)).getId();
+
+        var items = service.replaceGoals(userId, new OnboardingGoalsRequest(List.of(high, low), null)).goals();
+
+        assertThat(items).extracting(OnboardingGoalsResponse.GoalSelection::goalId).containsExactly(low, high);
+    }
+
+    @Test
     void 중복_goalId는_dedupe된다() {
         service.replaceGoals(userId, new OnboardingGoalsRequest(List.of(g1, g1, g2), null));
 
@@ -131,10 +141,14 @@ class OnboardingGoalServiceIntegrationTest {
     }
 
     private Goal goal(String code, boolean active) {
+        return goal(code, active, 0);
+    }
+
+    private Goal goal(String code, boolean active, int sortOrder) {
         Goal g = BeanUtils.instantiateClass(Goal.class);
         ReflectionTestUtils.setField(g, "code", code);
         ReflectionTestUtils.setField(g, "name", code + "-name");
-        ReflectionTestUtils.setField(g, "sortOrder", 0);
+        ReflectionTestUtils.setField(g, "sortOrder", sortOrder);
         ReflectionTestUtils.setField(g, "active", active);
         return g;
     }
