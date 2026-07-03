@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UserGoalRepository extends JpaRepository<UserGoal, Long> {
 
     List<UserGoal> findByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }
