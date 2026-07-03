@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.onboarding.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,8 +18,10 @@ import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterResponse;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse;
+import com.triples.rougether.userapi.onboarding.dto.OnboardingResponse;
 import com.triples.rougether.userapi.onboarding.service.OnboardingCharacterService;
 import com.triples.rougether.userapi.onboarding.service.OnboardingGoalService;
+import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +43,8 @@ class OnboardingControllerTest {
     private OnboardingGoalService onboardingGoalService;
     @MockitoBean
     private OnboardingCharacterService onboardingCharacterService;
+    @MockitoBean
+    private OnboardingQueryService onboardingQueryService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     @MockitoBean
@@ -137,5 +142,20 @@ class OnboardingControllerTest {
                         .content("{\"characterId\":7}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CHARACTER_NOT_OWNED"));
+    }
+
+    @Test
+    void 온보딩_상태_조회는_목표_대표_선택_완료여부를_응답한다() throws Exception {
+        when(onboardingQueryService.getOnboarding(1L)).thenReturn(new OnboardingResponse(
+                List.of(new OnboardingGoalsResponse.GoalSelection(10L, "wake_up", "일찍 일어나기")),
+                10L, 5L, true));
+
+        mockMvc.perform(get("/api/v1/onboarding"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.goals[0].goalId").value(10))
+                .andExpect(jsonPath("$.goals[0].code").value("wake_up"))
+                .andExpect(jsonPath("$.primaryGoalId").value(10))
+                .andExpect(jsonPath("$.selectedCharacterId").value(5))
+                .andExpect(jsonPath("$.completed").value(true));
     }
 }
