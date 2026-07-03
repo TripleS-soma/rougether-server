@@ -54,4 +54,23 @@ public class UserCharacter extends BaseEntity {
     public static UserCharacter create(User user, Character character) {
         return new UserCharacter(user, character);
     }
+
+    private UserCharacter(User user, Character character, Instant acquiredAt, boolean selected) {
+        this.user = user;
+        this.character = character;
+        this.acquiredAt = acquiredAt;
+        this.selected = selected;
+    }
+
+    public static UserCharacter of(User user, Character character, Instant acquiredAt, boolean selected) {
+        return new UserCharacter(user, character, acquiredAt, selected);
+    }
+
+    public void select() {
+        this.selected = true;
+    }
+
+    public void unselect() {
+        this.selected = false;
+    }
 }

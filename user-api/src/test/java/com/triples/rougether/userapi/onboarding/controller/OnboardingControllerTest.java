@@ -13,8 +13,11 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterRequest;
+import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterResponse;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse;
+import com.triples.rougether.userapi.onboarding.service.OnboardingCharacterService;
 import com.triples.rougether.userapi.onboarding.service.OnboardingGoalService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +38,8 @@ class OnboardingControllerTest {
 
     @MockitoBean
     private OnboardingGoalService onboardingGoalService;
+    @MockitoBean
+    private OnboardingCharacterService onboardingCharacterService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     @MockitoBean
@@ -96,5 +101,41 @@ class OnboardingControllerTest {
                         .content("{\"goalIds\":[10],\"primaryGoalId\":20}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PRIMARY_GOAL_NOT_IN_SELECTION"));
+    }
+
+    @Test
+    void 캐릭터_선택은_200과_선택된_캐릭터를_응답한다() throws Exception {
+        when(onboardingCharacterService.selectCharacter(eq(1L), eq(5L)))
+                .thenReturn(new OnboardingCharacterResponse(5L));
+
+        mockMvc.perform(put("/api/v1/onboarding/character")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.selectedCharacterId").value(5));
+    }
+
+    @Test
+    void 비존재_캐릭터는_404와_CHARACTER_NOT_FOUND를_응답한다() throws Exception {
+        when(onboardingCharacterService.selectCharacter(eq(1L), eq(999L)))
+                .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_NOT_FOUND));
+
+        mockMvc.perform(put("/api/v1/onboarding/character")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":999}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_FOUND"));
+    }
+
+    @Test
+    void 미보유_캐릭터는_409와_CHARACTER_NOT_OWNED를_응답한다() throws Exception {
+        when(onboardingCharacterService.selectCharacter(eq(1L), eq(7L)))
+                .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_NOT_OWNED));
+
+        mockMvc.perform(put("/api/v1/onboarding/character")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":7}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_OWNED"));
     }
 }
