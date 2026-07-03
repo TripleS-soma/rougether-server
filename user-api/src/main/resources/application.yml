@@ -27,3 +27,8 @@ jwt:
   secret: ${JWT_SECRET:local-dev-only-secret-change-in-prod-hs256-needs-32-bytes-min}
   access-ttl: 30m
   refresh-ttl: 14d
+
+kakao:
+  api-base-url: ${KAKAO_API_BASE_URL:https://kapi.kakao.com}
+  # 앱 ID는 비밀값이 아님(토큰 검증용 식별자). 환경별로 다른 카카오 앱을 쓸 수 있게 env로 덮어쓰기 허용.
+  app-id: ${KAKAO_APP_ID:1501738}

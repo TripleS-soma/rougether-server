@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.auth.controller;
 import com.triples.rougether.userapi.auth.service.AuthService;
 
 import com.triples.rougether.userapi.auth.dto.DevLoginRequest;
+import com.triples.rougether.userapi.auth.dto.KakaoLoginRequest;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.LogoutRequest;
 import com.triples.rougether.userapi.auth.dto.RefreshRequest;
@@ -32,6 +33,13 @@ public class AuthController {
     @PostMapping("/dev-login")
     public LoginResponse devLogin(@RequestBody DevLoginRequest request) {
         return authService.devLogin(request.userId());
+    }
+
+    @Operation(summary = "카카오 로그인", description = "카카오 access token으로 로그인합니다. 최초 로그인이면 회원을 자동 생성합니다.")
+    @SecurityRequirements
+    @PostMapping("/kakao")
+    public LoginResponse kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
+        return authService.kakaoLogin(request.accessToken());
     }
 
     @Operation(summary = "토큰 재발급", description = "refresh token으로 access/refresh token을 재발급합니다.")
