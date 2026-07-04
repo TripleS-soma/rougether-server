@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.today.controller;
+package com.triples.rougether.userapi.today.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

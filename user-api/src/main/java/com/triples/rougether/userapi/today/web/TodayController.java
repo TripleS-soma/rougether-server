@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.today.controller;
+package com.triples.rougether.userapi.today.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;

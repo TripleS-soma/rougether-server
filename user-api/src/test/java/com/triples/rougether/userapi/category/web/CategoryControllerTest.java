@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.category.controller;
+package com.triples.rougether.userapi.category.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

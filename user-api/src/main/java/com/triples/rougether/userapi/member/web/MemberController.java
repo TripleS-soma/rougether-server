@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.member.controller;
+package com.triples.rougether.userapi.member.web;
 
 import com.triples.rougether.userapi.member.service.MemberService;
 import com.triples.rougether.userapi.member.dto.MeResponse;

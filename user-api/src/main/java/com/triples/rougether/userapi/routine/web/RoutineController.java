@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.routine.controller;
+package com.triples.rougether.userapi.routine.web;
 
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.userapi.global.security.AuthUser;

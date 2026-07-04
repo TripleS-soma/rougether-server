@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.member.controller;
+package com.triples.rougether.userapi.member.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;

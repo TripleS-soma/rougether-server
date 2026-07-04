@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.category.controller;
+package com.triples.rougether.userapi.category.web;
 
 import com.triples.rougether.userapi.category.dto.CategoryCreateRequest;
 import com.triples.rougether.userapi.category.dto.CategoryListResponse;

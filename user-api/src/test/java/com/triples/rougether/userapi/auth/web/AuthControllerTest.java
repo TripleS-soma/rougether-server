@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.auth.controller;
+package com.triples.rougether.userapi.auth.web;
 
 import com.triples.rougether.userapi.auth.service.AuthService;
 import com.triples.rougether.userapi.auth.service.TokenService;

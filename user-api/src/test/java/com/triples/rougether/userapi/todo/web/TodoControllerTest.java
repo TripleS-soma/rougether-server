@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.todo.controller;
+package com.triples.rougether.userapi.todo.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

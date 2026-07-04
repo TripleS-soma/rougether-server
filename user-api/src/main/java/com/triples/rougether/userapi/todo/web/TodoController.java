@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.todo.controller;
+package com.triples.rougether.userapi.todo.web;
 
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.userapi.global.security.AuthUser;
