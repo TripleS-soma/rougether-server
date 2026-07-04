@@ -12,8 +12,10 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -174,6 +176,33 @@ class HouseControllerTest {
                         .content("{\"inviteCode\": \"ABCD2345\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVITE_CODE_EXPIRED"));
+    }
+
+    @Test
+    void 탐색_집_참여_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseJoinService.join(7L, 1L)).thenReturn(new HouseJoinDetailResponse(
+                12L, 1L, 7L, HouseMemberRole.MEMBER, HouseMemberStatus.ACTIVE,
+                Instant.parse("2026-07-03T00:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/join"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipId").value(12))
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.role").value("MEMBER"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void 없는_집_참여는_404와_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.join(7L, 99L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+
+        mockMvc.perform(post("/api/v1/houses/99/join"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_FOUND"));
     }
 
     @Test

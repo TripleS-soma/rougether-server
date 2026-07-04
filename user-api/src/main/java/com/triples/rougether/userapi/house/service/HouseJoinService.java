@@ -7,6 +7,7 @@ import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -39,6 +40,24 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.INVITE_CODE_EXPIRED);
         }
 
+        HouseMember member = join(house, userId);
+        return new HouseJoinResponse(member.getId(), house.getId(), member.getStatus());
+    }
+
+    // 탐색 목록에서 houseId 로 직접 참여. 초대코드 참여와 동일 정책(즉시가입·정원 락·재활성화).
+    @Transactional
+    public HouseJoinDetailResponse join(Long userId, Long houseId) {
+        House house = houseRepository.findWithLockById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+
+        HouseMember member = join(house, userId);
+        return HouseJoinDetailResponse.of(member, house.getId(), userId);
+    }
+
+    // 공용 참여 판정: 중복(active) -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
+    // 호출자는 house 를 행 락으로 조회한 상태여야 한다.
+    private HouseMember join(House house, Long userId) {
         HouseMember existing = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
                 .orElse(null);
         if (existing != null && existing.isActive()) {
@@ -58,8 +77,7 @@ public class HouseJoinService {
                     HouseMember.create(house, userRepository.getReferenceById(userId), HouseMemberRole.MEMBER));
         }
         house.increaseMemberCount();
-
-        return new HouseJoinResponse(member.getId(), house.getId(), member.getStatus());
+        return member;
     }
 
     @Transactional(readOnly = true)

@@ -5,6 +5,7 @@ import com.triples.rougether.common.error.ErrorCode;
 public enum HouseErrorCode implements ErrorCode {
 
     HOUSE_GOAL_INVALID("HOUSE_GOAL_INVALID", "존재하지 않거나 비활성인 목표가 포함되어 있습니다.", 400),
+    HOUSE_NOT_FOUND("HOUSE_NOT_FOUND", "존재하지 않는 집입니다.", 404),
     INVITE_CODE_INVALID("INVITE_CODE_INVALID", "유효하지 않은 초대코드입니다.", 404),
     INVITE_CODE_EXPIRED("INVITE_CODE_EXPIRED", "만료된 초대코드입니다.", 409),
     HOUSE_FULL("HOUSE_FULL", "집 정원이 가득 찼습니다.", 409),

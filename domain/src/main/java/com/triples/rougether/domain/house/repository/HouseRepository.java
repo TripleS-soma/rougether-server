@@ -17,5 +17,9 @@ public interface HouseRepository extends JpaRepository<House, Long> {
     @Query("select h from House h where h.inviteCode = :inviteCode")
     Optional<House> findWithLockByInviteCode(@Param("inviteCode") String inviteCode);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select h from House h where h.id = :houseId")
+    Optional<House> findWithLockById(@Param("houseId") Long houseId);
+
     boolean existsByInviteCode(String inviteCode);
 }
