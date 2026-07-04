@@ -59,4 +59,15 @@ public class HouseMember {
         member.joinedAt = Instant.now();
         return member;
     }
+
+    // LEFT 이력 재가입 - uq_house_member(house_id,user_id) 제약상 새 row 대신 기존 row 를 재활성화한다.
+    public void reactivate() {
+        this.status = HouseMemberStatus.ACTIVE;
+        this.joinedAt = Instant.now();
+        this.leftAt = null;
+    }
+
+    public boolean isActive() {
+        return status == HouseMemberStatus.ACTIVE;
+    }
 }

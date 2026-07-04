@@ -4,11 +4,18 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinByCodeRequest;
+import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
+import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
+import com.triples.rougether.userapi.house.service.HouseJoinService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,9 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class HouseController {
 
     private final HouseCommandService houseCommandService;
+    private final HouseJoinService houseJoinService;
 
-    public HouseController(HouseCommandService houseCommandService) {
+    public HouseController(HouseCommandService houseCommandService, HouseJoinService houseJoinService) {
         this.houseCommandService = houseCommandService;
+        this.houseJoinService = houseJoinService;
     }
 
     @Operation(summary = "공동집 생성",
@@ -34,5 +43,20 @@ public class HouseController {
     public HouseCreateResponse create(@CurrentUser AuthUser user,
                                       @Valid @RequestBody HouseCreateRequest request) {
         return houseCommandService.create(user.id(), request);
+    }
+
+    @Operation(summary = "초대코드로 집 참여",
+            description = "초대코드로 집에 즉시 가입합니다. 탈퇴 이력이 있으면 기존 구성원 정보를 재활성화합니다.")
+    @PostMapping("/join-by-code")
+    public HouseJoinResponse joinByCode(@CurrentUser AuthUser user,
+                                        @Valid @RequestBody HouseJoinByCodeRequest request) {
+        return houseJoinService.joinByCode(user.id(), request.inviteCode());
+    }
+
+    @Operation(summary = "초대코드로 집 미리보기",
+            description = "참여 전에 초대코드로 집 정보와 정원, 코드 만료 여부를 확인합니다.")
+    @GetMapping("/by-code/{inviteCode}")
+    public HousePreviewResponse preview(@Parameter(description = "초대코드") @PathVariable String inviteCode) {
+        return houseJoinService.preview(inviteCode);
     }
 }

@@ -76,4 +76,23 @@ public class House extends BaseEntity {
         house.inviteExpiresAt = inviteExpiresAt;
         return house;
     }
+
+    // 참여 확정 시 구성원 수 증가. 정원 검사와 같은 트랜잭션(행 락) 안에서 호출한다.
+    public void increaseMemberCount() {
+        this.currentMemberCount++;
+    }
+
+    // 만료 시각이 없으면(발급 이력 없음) 만료로 취급.
+    public boolean isInviteExpired() {
+        return inviteExpiresAt == null || inviteExpiresAt.isBefore(Instant.now());
+    }
+
+    // max_members 가 null 이면 무제한.
+    public boolean isFull() {
+        return maxMembers != null && currentMemberCount >= maxMembers;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
 }
