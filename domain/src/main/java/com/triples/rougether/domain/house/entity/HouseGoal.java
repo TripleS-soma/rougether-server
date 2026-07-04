@@ -30,4 +30,11 @@ public class HouseGoal {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "goal_id", nullable = false)
     private Goal goal;
+
+    public static HouseGoal create(House house, Goal goal) {
+        HouseGoal houseGoal = new HouseGoal();
+        houseGoal.house = house;
+        houseGoal.goal = goal;
+        return houseGoal;
+    }
 }
