@@ -17,10 +17,12 @@ import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
+import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.HouseController;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -43,6 +45,9 @@ class HouseControllerTest {
 
     @MockitoBean
     private HouseJoinService houseJoinService;
+
+    @MockitoBean
+    private HouseQueryService houseQueryService;
 
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
@@ -203,6 +208,53 @@ class HouseControllerTest {
         mockMvc.perform(post("/api/v1/houses/99/join"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("HOUSE_NOT_FOUND"));
+    }
+
+    @Test
+    void 집_탐색_목록_기본_경로_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseQueryService.explore(0, 20, null)).thenReturn(new HouseListResponse(
+                java.util.List.of(), 0, 20, 0L));
+
+        mockMvc.perform(get("/api/v1/houses"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void 페이지가_음수면_400() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(get("/api/v1/houses").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 페이지_크기가_0이면_400() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(get("/api/v1/houses").param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 집_탐색_목록_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseQueryService.explore(0, 20, "morning_routine")).thenReturn(new HouseListResponse(
+                java.util.List.of(new HouseListResponse.HouseSummary(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, 0,
+                        java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")))),
+                0, 20, 1L));
+
+        mockMvc.perform(get("/api/v1/houses").param("goalCode", "morning_routine"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].houseId").value(1))
+                .andExpect(jsonPath("$.items[0].goals[0].code").value("morning_routine"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test
