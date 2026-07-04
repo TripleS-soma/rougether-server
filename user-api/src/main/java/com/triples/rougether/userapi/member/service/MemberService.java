@@ -6,6 +6,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class MemberService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
+    private final OnboardingQueryService onboardingQueryService;
 
     @Transactional(readOnly = true)
     public MeResponse getMe(Long userId) {
@@ -27,6 +29,7 @@ public class MemberService {
         OffsetDateTime lastLoginAt = user.getLastLoginAt() == null
                 ? null
                 : user.getLastLoginAt().atZone(KST).toOffsetDateTime();
-        return new MeResponse(user.getId(), user.getNickname(), lastLoginAt);
+        return new MeResponse(user.getId(), user.getNickname(), lastLoginAt,
+                onboardingQueryService.getSummary(userId));
     }
 }
