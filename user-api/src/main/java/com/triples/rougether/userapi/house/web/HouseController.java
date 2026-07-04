@@ -5,21 +5,25 @@ import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinByCodeRequest;
+import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,10 +35,23 @@ public class HouseController {
 
     private final HouseCommandService houseCommandService;
     private final HouseJoinService houseJoinService;
+    private final HouseQueryService houseQueryService;
 
-    public HouseController(HouseCommandService houseCommandService, HouseJoinService houseJoinService) {
+    public HouseController(HouseCommandService houseCommandService, HouseJoinService houseJoinService,
+                           HouseQueryService houseQueryService) {
         this.houseCommandService = houseCommandService;
         this.houseJoinService = houseJoinService;
+        this.houseQueryService = houseQueryService;
+    }
+
+    @Operation(summary = "집 탐색 목록 조회",
+            description = "참여할 수 있는 집 목록을 최신 생성순으로 반환합니다. goalCode 로 목표별 필터링할 수 있습니다.")
+    @GetMapping
+    public HouseListResponse explore(
+            @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") @Min(1) int size,
+            @Parameter(description = "목표 코드 필터 (선택)") @RequestParam(required = false) String goalCode) {
+        return houseQueryService.explore(page, size, goalCode);
     }
 
     @Operation(summary = "공동집 생성",
