@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.onboarding.controller;
+package com.triples.rougether.userapi.onboarding.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,8 +19,7 @@ import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterResponse;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingResponse;
-import com.triples.rougether.userapi.onboarding.service.OnboardingCharacterService;
-import com.triples.rougether.userapi.onboarding.service.OnboardingGoalService;
+import com.triples.rougether.userapi.onboarding.service.OnboardingCommandService;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,9 +39,7 @@ class OnboardingControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private OnboardingGoalService onboardingGoalService;
-    @MockitoBean
-    private OnboardingCharacterService onboardingCharacterService;
+    private OnboardingCommandService onboardingCommandService;
     @MockitoBean
     private OnboardingQueryService onboardingQueryService;
     @MockitoBean
@@ -59,7 +56,7 @@ class OnboardingControllerTest {
 
     @Test
     void 목표_저장은_200과_저장된_상태를_응답한다() throws Exception {
-        when(onboardingGoalService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
+        when(onboardingCommandService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
                 .thenReturn(new OnboardingGoalsResponse(
                         List.of(new OnboardingGoalsResponse.GoalSelection(10L, "wake_up", "일찍 일어나기")), 10L));
 
@@ -74,7 +71,7 @@ class OnboardingControllerTest {
 
     @Test
     void 목표가_비면_400과_GOAL_REQUIRED를_응답한다() throws Exception {
-        when(onboardingGoalService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
+        when(onboardingCommandService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
                 .thenThrow(new BusinessException(MemberErrorCode.GOAL_REQUIRED));
 
         mockMvc.perform(put("/api/v1/onboarding/goals")
@@ -86,7 +83,7 @@ class OnboardingControllerTest {
 
     @Test
     void 비활성_목표는_400과_INVALID_GOAL을_응답한다() throws Exception {
-        when(onboardingGoalService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
+        when(onboardingCommandService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
                 .thenThrow(new BusinessException(MemberErrorCode.INVALID_GOAL));
 
         mockMvc.perform(put("/api/v1/onboarding/goals")
@@ -98,7 +95,7 @@ class OnboardingControllerTest {
 
     @Test
     void 대표가_선택에_없으면_400과_PRIMARY_GOAL_NOT_IN_SELECTION을_응답한다() throws Exception {
-        when(onboardingGoalService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
+        when(onboardingCommandService.replaceGoals(eq(1L), any(OnboardingGoalsRequest.class)))
                 .thenThrow(new BusinessException(MemberErrorCode.PRIMARY_GOAL_NOT_IN_SELECTION));
 
         mockMvc.perform(put("/api/v1/onboarding/goals")
@@ -110,7 +107,7 @@ class OnboardingControllerTest {
 
     @Test
     void 캐릭터_선택은_200과_선택된_캐릭터를_응답한다() throws Exception {
-        when(onboardingCharacterService.selectCharacter(eq(1L), eq(5L)))
+        when(onboardingCommandService.selectCharacter(eq(1L), eq(5L)))
                 .thenReturn(new OnboardingCharacterResponse(5L));
 
         mockMvc.perform(put("/api/v1/onboarding/character")
@@ -122,7 +119,7 @@ class OnboardingControllerTest {
 
     @Test
     void 비존재_캐릭터는_404와_CHARACTER_NOT_FOUND를_응답한다() throws Exception {
-        when(onboardingCharacterService.selectCharacter(eq(1L), eq(999L)))
+        when(onboardingCommandService.selectCharacter(eq(1L), eq(999L)))
                 .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_NOT_FOUND));
 
         mockMvc.perform(put("/api/v1/onboarding/character")
@@ -134,7 +131,7 @@ class OnboardingControllerTest {
 
     @Test
     void 미보유_캐릭터는_409와_CHARACTER_NOT_OWNED를_응답한다() throws Exception {
-        when(onboardingCharacterService.selectCharacter(eq(1L), eq(7L)))
+        when(onboardingCommandService.selectCharacter(eq(1L), eq(7L)))
                 .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_NOT_OWNED));
 
         mockMvc.perform(put("/api/v1/onboarding/character")

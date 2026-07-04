@@ -8,6 +8,8 @@ import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.goal.repository.GoalRepository;
+import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.global.config.JpaConfig;
@@ -36,11 +38,15 @@ class OnboardingCharacterServiceIntegrationTest {
     private UserCharacterRepository userCharacterRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private GoalRepository goalRepository;
+    @Autowired
+    private UserGoalRepository userGoalRepository;
 
     @PersistenceContext
     private EntityManager em;
 
-    private OnboardingCharacterService service;
+    private OnboardingCommandService service;
     private Long userId;
     private Long c1;
     private Long c2;
@@ -48,7 +54,8 @@ class OnboardingCharacterServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        service = new OnboardingCharacterService(characterRepository, userCharacterRepository, userRepository);
+        service = new OnboardingCommandService(
+                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository);
         userId = userRepository.save(User.signUp()).getId();
         c1 = characterRepository.save(new Character("c1", "고양이", "characters/c1.png", 1, true)).getId();
         c2 = characterRepository.save(new Character("c2", "강아지", "characters/c2.png", 2, true)).getId();

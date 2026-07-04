@@ -25,7 +25,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class OnboardingGoalReplaceRollbackTest {
 
     @Autowired
-    private OnboardingGoalService service;
+    private OnboardingCommandService service;
     @Autowired
     private GoalRepository goalRepository;
     @Autowired

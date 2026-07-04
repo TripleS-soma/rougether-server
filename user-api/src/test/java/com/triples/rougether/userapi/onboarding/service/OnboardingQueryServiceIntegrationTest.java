@@ -47,7 +47,8 @@ class OnboardingQueryServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        service = new OnboardingQueryService(userGoalRepository, userCharacterRepository);
+        service = new OnboardingQueryService(
+                userGoalRepository, userCharacterRepository, goalRepository, characterRepository);
         user = userRepository.save(User.signUp());
     }
 

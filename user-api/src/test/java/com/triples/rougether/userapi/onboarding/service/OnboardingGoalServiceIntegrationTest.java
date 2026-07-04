@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.repository.CharacterRepository;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.goal.entity.Goal;
 import com.triples.rougether.domain.goal.entity.UserGoal;
 import com.triples.rougether.domain.goal.repository.GoalRepository;
@@ -35,8 +37,12 @@ class OnboardingGoalServiceIntegrationTest {
     private UserGoalRepository userGoalRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private CharacterRepository characterRepository;
+    @Autowired
+    private UserCharacterRepository userCharacterRepository;
 
-    private OnboardingGoalService service;
+    private OnboardingCommandService service;
     private Long userId;
     private Long g1;
     private Long g2;
@@ -45,7 +51,8 @@ class OnboardingGoalServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        service = new OnboardingGoalService(goalRepository, userGoalRepository, userRepository);
+        service = new OnboardingCommandService(
+                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository);
         userId = userRepository.save(User.signUp()).getId();
         g1 = goalRepository.save(goal("g1", true)).getId();
         g2 = goalRepository.save(goal("g2", true)).getId();

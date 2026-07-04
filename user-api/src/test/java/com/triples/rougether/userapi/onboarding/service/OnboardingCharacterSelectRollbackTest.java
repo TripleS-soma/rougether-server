@@ -23,7 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 class OnboardingCharacterSelectRollbackTest {
 
     @Autowired
-    private OnboardingCharacterService service;
+    private OnboardingCommandService service;
     @Autowired
     private CharacterRepository characterRepository;
     @Autowired

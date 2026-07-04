@@ -55,6 +55,11 @@ public class UserCharacter extends BaseEntity {
         return new UserCharacter(user, character);
     }
 
+    // 획득 즉시 대표로 착용(온보딩 최초 선택).
+    public static UserCharacter createSelected(User user, Character character) {
+        return new UserCharacter(user, character, Instant.now(), true);
+    }
+
     private UserCharacter(User user, Character character, Instant acquiredAt, boolean selected) {
         this.user = user;
         this.character = character;
