@@ -2,11 +2,15 @@ package com.triples.rougether.userapi.house.service;
 
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
+import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
+import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -22,10 +26,23 @@ public class HouseQueryService {
 
     private final HouseRepository houseRepository;
     private final HouseGoalRepository houseGoalRepository;
+    private final HouseMemberRepository houseMemberRepository;
 
-    public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository) {
+    public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository,
+                             HouseMemberRepository houseMemberRepository) {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
+        this.houseMemberRepository = houseMemberRepository;
+    }
+
+    // 내가 속한(ACTIVE) 집 목록 - 먼저 가입한 집 먼저. 삭제된 집 제외.
+    @Transactional(readOnly = true)
+    public MyHouseListResponse getMyHouses(Long userId) {
+        List<MyHouseSummary> items = houseMemberRepository
+                .findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE).stream()
+                .map(MyHouseSummary::of)
+                .toList();
+        return new MyHouseListResponse(items);
     }
 
     @Transactional(readOnly = true)
