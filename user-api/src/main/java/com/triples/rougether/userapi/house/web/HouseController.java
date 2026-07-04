@@ -5,6 +5,7 @@ import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinByCodeRequest;
+import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
@@ -51,6 +52,14 @@ public class HouseController {
     public HouseJoinResponse joinByCode(@CurrentUser AuthUser user,
                                         @Valid @RequestBody HouseJoinByCodeRequest request) {
         return houseJoinService.joinByCode(user.id(), request.inviteCode());
+    }
+
+    @Operation(summary = "집 참여",
+            description = "탐색한 집에 즉시 가입합니다. 탈퇴 이력이 있으면 기존 구성원 정보를 재활성화합니다.")
+    @PostMapping("/{houseId}/join")
+    public HouseJoinDetailResponse join(@CurrentUser AuthUser user,
+                                        @Parameter(description = "참여할 집 ID") @PathVariable Long houseId) {
+        return houseJoinService.join(user.id(), houseId);
     }
 
     @Operation(summary = "초대코드로 집 미리보기",
