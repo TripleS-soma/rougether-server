@@ -48,4 +48,15 @@ public class HouseMember {
 
     @Column(name = "left_at")
     private Instant leftAt;
+
+    // 구성원 등록. 참여는 즉시가입 정책이라 항상 ACTIVE 로 시작.
+    public static HouseMember create(House house, User user, HouseMemberRole role) {
+        HouseMember member = new HouseMember();
+        member.house = house;
+        member.user = user;
+        member.role = role;
+        member.status = HouseMemberStatus.ACTIVE;
+        member.joinedAt = Instant.now();
+        return member;
+    }
 }

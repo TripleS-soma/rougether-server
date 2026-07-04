@@ -59,4 +59,21 @@ public class House extends BaseEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    // 집 생성. 생성 직후 구성원은 owner 1명, 레벨·성장포인트는 0에서 시작(개인 방 growthLevel 과 동일 기준).
+    public static House create(User owner, String name, String description, String coverImageKey,
+                               Integer maxMembers, String inviteCode, Instant inviteExpiresAt) {
+        House house = new House();
+        house.owner = owner;
+        house.name = name;
+        house.description = description;
+        house.coverImageKey = coverImageKey;
+        house.maxMembers = maxMembers;
+        house.currentMemberCount = 1;
+        house.level = 0;
+        house.growthPoints = 0;
+        house.inviteCode = inviteCode;
+        house.inviteExpiresAt = inviteExpiresAt;
+        return house;
+    }
 }
