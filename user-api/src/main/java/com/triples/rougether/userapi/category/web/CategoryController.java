@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,10 +33,14 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @Operation(summary = "내 카테고리 목록 조회",
-            description = "로그인한 회원이 소유한 카테고리를 정렬 순서(sortOrder) 오름차순으로 반환합니다. 삭제한 카테고리는 포함하지 않습니다.")
+            description = "로그인한 회원이 소유한 카테고리를 정렬 순서(sortOrder) 오름차순으로 반환합니다. "
+                    + "기본적으로 삭제한 카테고리는 포함하지 않으며, includeDeleted=true이면 삭제한 카테고리도 함께 반환하고 각 항목의 deleted 플래그로 구분합니다.")
     @GetMapping
-    public CategoryListResponse list(@CurrentUser AuthUser authUser) {
-        return categoryService.list(authUser.id());
+    public CategoryListResponse list(
+            @CurrentUser AuthUser authUser,
+            @Parameter(description = "삭제한 카테고리 포함 여부. true면 활성 + 삭제 카테고리를 모두 반환")
+            @RequestParam(defaultValue = "false") boolean includeDeleted) {
+        return categoryService.list(authUser.id(), includeDeleted);
     }
 
     @Operation(summary = "카테고리 생성",
@@ -59,7 +64,9 @@ public class CategoryController {
     }
 
     @Operation(summary = "카테고리 삭제",
-            description = "소유한 카테고리를 삭제합니다. 해당 카테고리에 속해 있던 루틴·투두는 삭제되지 않고 미분류(categoryId=null)로 변경됩니다.")
+            description = "소유한 카테고리를 삭제합니다. 이 카테고리를 사용하는 살아있는 루틴이 없을 때만 삭제할 수 있으며, "
+                    + "투두만 참조하는 경우에는 삭제할 수 있습니다. 삭제 후에도 투두의 categoryId는 그대로 유지되며, "
+                    + "삭제된 카테고리의 이름은 내 카테고리 목록 조회(GET /api/v1/categories?includeDeleted=true)로 조회합니다.")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser AuthUser authUser,

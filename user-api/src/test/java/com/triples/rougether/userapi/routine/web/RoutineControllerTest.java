@@ -71,7 +71,8 @@ class RoutineControllerTest {
     @Test
     void 목록은_items_배열로_감싸_응답한다() throws Exception {
         when(routineService.list(1L, null, null)).thenReturn(new RoutineListResponse(List.of(
-                new RoutineResponse(10L, "아침 운동", 3L, AuthType.PHOTO, RoutineStatus.ACTIVE,
+                new RoutineResponse(10L, "아침 운동", 3L,
+                        AuthType.PHOTO, RoutineStatus.ACTIVE,
                         "WEEKLY", new RepeatDays(List.of("MON")), null, null, null))));
 
         mockMvc.perform(get("/api/v1/routines"))
@@ -79,6 +80,7 @@ class RoutineControllerTest {
                 .andExpect(jsonPath("$.items[0].id").value(10))
                 .andExpect(jsonPath("$.items[0].title").value("아침 운동"))
                 .andExpect(jsonPath("$.items[0].categoryId").value(3))
+                .andExpect(jsonPath("$.items[0].category").doesNotExist())
                 .andExpect(jsonPath("$.items[0].authType").value("PHOTO"))
                 .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.items[0].repeatType").value("WEEKLY"));

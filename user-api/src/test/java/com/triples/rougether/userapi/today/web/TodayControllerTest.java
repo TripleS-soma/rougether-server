@@ -56,7 +56,7 @@ class TodayControllerTest {
     @Test
     void 응답은_categories_summary_streak_구조로_반환한다() throws Exception {
         TodayResponse response = new TodayResponse(LocalDate.of(2026, 6, 29),
-                List.of(new TodayCategoryGroup(3L, "운동",
+                List.of(new TodayCategoryGroup(3L,
                         List.of(new TodayRoutineItem(10L, "아침 운동", LocalTime.of(7, 0),
                                 AuthType.CHECK, true)),
                         List.of(new TodayTodoItem(20L, "장보기", LocalDate.of(2026, 6, 29),

@@ -55,7 +55,7 @@ class CategoryServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         categoryService = new CategoryService(
-                categoryRepository, routineRepository, todoRepository, userRepository);
+                categoryRepository, routineRepository, userRepository);
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -96,7 +96,7 @@ class CategoryServiceIntegrationTest {
         categoryService.create(userId, new CategoryCreateRequest("a", null, null, 1, null));
         categoryService.create(other, new CategoryCreateRequest("남의것", null, null, 0, null));
 
-        var items = categoryService.list(userId).items();
+        var items = categoryService.list(userId, false).items();
 
         assertThat(items).extracting(CategoryResponse::name).containsExactly("a", "b");
     }
@@ -147,30 +147,88 @@ class CategoryServiceIntegrationTest {
     }
 
     @Test
-    void 삭제하면_soft_delete되고_소속_루틴투두는_미분류로_전이된다() {
+    void ACTIVE_루틴이_있으면_삭제가_CATEGORY_IN_USE로_차단된다() {
         User user = userRepository.findById(userId).orElseThrow();
         Category category = categoryRepository.save(
                 Category.create(user, "삭제대상", null, null, 0, PrivacyScope.PRIVATE));
-        Long routineId = persistRoutine(user, category);
+        persistRoutine(user, category, RoutineStatus.ACTIVE);
+        em.flush();
+
+        assertThatThrownBy(() -> categoryService.delete(userId, category.getId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CategoryErrorCode.CATEGORY_IN_USE);
+        assertThat(CategoryErrorCode.CATEGORY_IN_USE.status()).isEqualTo(409);
+        assertThat(CategoryErrorCode.CATEGORY_IN_USE.message())
+                .isEqualTo("이 카테고리를 사용하는 루틴이 있어 삭제할 수 없습니다.");
+        assertThat(categoryRepository.findById(category.getId()).orElseThrow().getDeletedAt())
+                .isNull();
+    }
+
+    @Test
+    void PENDING_투두만_있으면_삭제되고_투두의_category는_유지된다() {
+        User user = userRepository.findById(userId).orElseThrow();
+        Category category = categoryRepository.save(
+                Category.create(user, "삭제대상", null, null, 0, PrivacyScope.PRIVATE));
         Long todoId = persistTodo(user, category);
 
         categoryService.delete(userId, category.getId());
+        em.flush();
         em.clear();
 
         Category reloaded = categoryRepository.findById(category.getId()).orElseThrow();
         assertThat(reloaded.getDeletedAt()).isNotNull();
-        assertThat(categoryService.list(userId).items()).isEmpty();
-        assertThat(routineRepository.findById(routineId).orElseThrow().getCategory()).isNull();
-        assertThat(todoRepository.findById(todoId).orElseThrow().getCategory()).isNull();
+        Todo todo = todoRepository.findById(todoId).orElseThrow();
+        assertThat(todo.getCategory()).isNotNull();
+        assertThat(todo.getCategory().getId()).isEqualTo(category.getId());
     }
 
-    private Long persistRoutine(User user, Category category) {
+    @Test
+    void 삭제된_루틴만_있으면_카테고리_삭제가_허용된다() {
+        User user = userRepository.findById(userId).orElseThrow();
+        Category category = categoryRepository.save(
+                Category.create(user, "삭제대상", null, null, 0, PrivacyScope.PRIVATE));
+        Long routineId = persistRoutine(user, category, RoutineStatus.ACTIVE);
+        routineRepository.findById(routineId).orElseThrow().softDelete(java.time.Instant.now());
+        em.flush();
+        em.clear();
+
+        categoryService.delete(userId, category.getId());
+        em.flush();
+
+        assertThat(categoryRepository.findById(category.getId()).orElseThrow().getDeletedAt())
+                .isNotNull();
+    }
+
+    @Test
+    void 목록은_기본으로_삭제_카테고리를_제외하고_includeDeleted면_deleted_플래그와_함께_포함한다() {
+        User user = userRepository.findById(userId).orElseThrow();
+        Category live = categoryRepository.save(
+                Category.create(user, "활성", null, null, 0, PrivacyScope.PRIVATE));
+        Category removed = categoryRepository.save(
+                Category.create(user, "삭제됨", null, null, 1, PrivacyScope.PRIVATE));
+        categoryService.delete(userId, removed.getId());
+        em.flush();
+        em.clear();
+
+        var active = categoryService.list(userId, false).items();
+        assertThat(active).extracting(CategoryResponse::id).containsExactly(live.getId());
+        assertThat(active).extracting(CategoryResponse::deleted).containsExactly(false);
+
+        var all = categoryService.list(userId, true).items();
+        assertThat(all).extracting(CategoryResponse::id)
+                .containsExactly(live.getId(), removed.getId());
+        assertThat(all).extracting(CategoryResponse::deleted)
+                .containsExactly(false, true);
+    }
+
+    private Long persistRoutine(User user, Category category, RoutineStatus status) {
         Routine routine = BeanUtils.instantiateClass(Routine.class);
         ReflectionTestUtils.setField(routine, "user", user);
         ReflectionTestUtils.setField(routine, "category", category);
         ReflectionTestUtils.setField(routine, "title", "아침 운동");
         ReflectionTestUtils.setField(routine, "authType", AuthType.CHECK);
-        ReflectionTestUtils.setField(routine, "status", RoutineStatus.ACTIVE);
+        ReflectionTestUtils.setField(routine, "status", status);
         return routineRepository.save(routine).getId();
     }
 

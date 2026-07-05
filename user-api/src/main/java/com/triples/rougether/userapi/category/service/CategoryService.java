@@ -7,7 +7,6 @@ import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
-import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.category.dto.CategoryCreateRequest;
 import com.triples.rougether.userapi.category.dto.CategoryListResponse;
 import com.triples.rougether.userapi.category.dto.CategoryResponse;
@@ -25,13 +24,14 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final RoutineRepository routineRepository;
-    private final TodoRepository todoRepository;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public CategoryListResponse list(Long userId) {
-        List<CategoryResponse> items = categoryRepository
-                .findByUserIdAndDeletedAtIsNullOrderBySortOrderAsc(userId).stream()
+    public CategoryListResponse list(Long userId, boolean includeDeleted) {
+        List<Category> categories = includeDeleted
+                ? categoryRepository.findByUserIdOrderBySortOrderAsc(userId)
+                : categoryRepository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAsc(userId);
+        List<CategoryResponse> items = categories.stream()
                 .map(CategoryResponse::from)
                 .toList();
         return new CategoryListResponse(items);
@@ -55,13 +55,14 @@ public class CategoryService {
         return CategoryResponse.from(category);
     }
 
-    // softDelete를 벌크 update보다 먼저 호출해야 함 — clearAutomatically가 detach하기 전에 flush됨
     @Transactional
     public void delete(Long userId, Long categoryId) {
         Category category = findOwned(userId, categoryId);
+        // status 무관 살아있는 루틴만 삭제 차단함. 투두는 참조해도 삭제 허용
+        if (routineRepository.existsByCategoryIdAndDeletedAtIsNull(categoryId)) {
+            throw new BusinessException(CategoryErrorCode.CATEGORY_IN_USE);
+        }
         category.softDelete(Instant.now());
-        routineRepository.clearCategory(categoryId);
-        todoRepository.clearCategory(categoryId);
     }
 
     private Category findOwned(Long userId, Long categoryId) {

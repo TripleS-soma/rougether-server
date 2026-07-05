@@ -128,7 +128,6 @@ class CalendarServiceIntegrationTest {
 
         assertThat(groups).hasSize(2);
         assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
-        assertThat(groups.get(0).name()).isEqualTo("운동");
         assertThat(groups.get(1).categoryId()).isNull();
         assertThat(groups.get(1).todos()).extracting(t -> t.title()).containsExactly("미분류 투두");
     }

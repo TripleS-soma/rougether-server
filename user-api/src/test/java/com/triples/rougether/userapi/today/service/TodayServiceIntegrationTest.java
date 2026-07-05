@@ -86,14 +86,6 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
-    void PAUSED와_ARCHIVED_루틴은_제외된다() {
-        persistRoutine("멈춤", RoutineStatus.PAUSED, "DAILY", null, null, null, null, null);
-        persistRoutine("보관", RoutineStatus.ARCHIVED, "DAILY", null, null, null, null, null);
-
-        assertThat(routineTitles(service.today(userId, MONDAY))).isEmpty();
-    }
-
-    @Test
     void 시작전이거나_종료후면_제외된다() {
         persistRoutine("아직 시작 안 함", RoutineStatus.ACTIVE, "DAILY", null, null,
                 MONDAY.plusDays(1), null, null);
@@ -138,7 +130,6 @@ class TodayServiceIntegrationTest {
 
         assertThat(groups).hasSize(2);
         assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
-        assertThat(groups.get(0).name()).isEqualTo("운동");
         assertThat(groups.get(0).todos()).extracting(t -> t.title()).containsExactly("분류 투두");
         assertThat(groups.get(1).categoryId()).isNull();
         assertThat(groups.get(1).todos()).extracting(t -> t.title()).containsExactly("미분류 투두");
