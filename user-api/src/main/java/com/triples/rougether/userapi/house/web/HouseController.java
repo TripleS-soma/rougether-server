@@ -7,6 +7,7 @@ import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinByCodeRequest;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
@@ -78,6 +79,14 @@ public class HouseController {
     public HouseDetailResponse detail(@CurrentUser AuthUser user,
                                       @Parameter(description = "집 ID") @PathVariable Long houseId) {
         return houseQueryService.getHouseDetail(user.id(), houseId);
+    }
+
+    @Operation(summary = "구성원 목록 조회",
+            description = "참여 중인 집의 구성원 목록을 가입한 순서로 반환합니다.")
+    @GetMapping("/{houseId}/members")
+    public HouseMemberListResponse members(@CurrentUser AuthUser user,
+                                           @Parameter(description = "집 ID") @PathVariable Long houseId) {
+        return houseQueryService.getMembers(user.id(), houseId);
     }
 
     @Operation(summary = "집 참여",
