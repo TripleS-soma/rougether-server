@@ -15,6 +15,7 @@ import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
+import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
@@ -255,6 +256,35 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void 집_상세_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseQueryService.getHouseDetail(7L, 1L)).thenReturn(new HouseDetailResponse(
+                1L, "아침 루틴 하우스", "같이 아침 루틴", "house/cover.png", 4, 3, 2, 120,
+                java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")),
+                HouseMemberRole.OWNER, "ABCD2345", Instant.parse("2026-07-10T00:00:00Z")));
+
+        mockMvc.perform(get("/api/v1/houses/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.coverImageKey").value("house/cover.png"))
+                .andExpect(jsonPath("$.growthPoints").value(120))
+                .andExpect(jsonPath("$.myRole").value("OWNER"))
+                .andExpect(jsonPath("$.inviteCode").value("ABCD2345"))
+                .andExpect(jsonPath("$.goals[0].code").value("morning_routine"));
+    }
+
+    @Test
+    void 비구성원_상세_조회는_403과_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseQueryService.getHouseDetail(7L, 1L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
+
+        mockMvc.perform(get("/api/v1/houses/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
     }
 
     @Test
