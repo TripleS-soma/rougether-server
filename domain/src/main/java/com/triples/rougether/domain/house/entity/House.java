@@ -93,6 +93,16 @@ public class House extends BaseEntity {
         this.currentMemberCount++;
     }
 
+    // 탈퇴/강퇴 확정 시 구성원 수 감소. 상태 전환과 같은 트랜잭션(행 락) 안에서 호출한다.
+    public void decreaseMemberCount() {
+        this.currentMemberCount--;
+    }
+
+    // 마지막 구성원 탈퇴 시 집 정리 - 탐색/조회에서 제외된다.
+    public void softDelete() {
+        this.deletedAt = Instant.now();
+    }
+
     // 만료 시각이 없으면(발급 이력 없음) 만료로 취급.
     public boolean isInviteExpired() {
         return inviteExpiresAt == null || inviteExpiresAt.isBefore(Instant.now());

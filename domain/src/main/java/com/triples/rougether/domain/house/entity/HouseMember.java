@@ -71,6 +71,12 @@ public class HouseMember {
         return status == HouseMemberStatus.ACTIVE;
     }
 
+    // 탈퇴 - LEFT 전환 + left_at 기록. 기여 기록은 유지되고 재가입 시 reactivate 로 되돌린다.
+    public void leave() {
+        this.status = HouseMemberStatus.LEFT;
+        this.leftAt = Instant.now();
+    }
+
     // 소유권 양도 - 반드시 기존 소유자 demote 와 한 트랜잭션으로 묶는다(소유자 2명 방지).
     public void promoteToOwner() {
         this.role = HouseMemberRole.OWNER;

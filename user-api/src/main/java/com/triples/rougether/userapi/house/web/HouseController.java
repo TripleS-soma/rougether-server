@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -119,6 +120,15 @@ public class HouseController {
                                                        @Parameter(description = "집 ID") @PathVariable Long houseId,
                                                        @Valid @RequestBody TransferOwnershipRequest request) {
         return houseMemberCommandService.transferOwnership(user.id(), houseId, request.targetMembershipId());
+    }
+
+    @Operation(summary = "집 탈퇴",
+            description = "참여 중인 집에서 나갑니다. 소유자는 소유권을 양도한 뒤 탈퇴할 수 있고, 마지막 구성원이 나가면 집이 정리됩니다.")
+    @DeleteMapping("/{houseId}/members/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void leave(@CurrentUser AuthUser user,
+                      @Parameter(description = "집 ID") @PathVariable Long houseId) {
+        houseMemberCommandService.leave(user.id(), houseId);
     }
 
     @Operation(summary = "초대코드로 집 미리보기",

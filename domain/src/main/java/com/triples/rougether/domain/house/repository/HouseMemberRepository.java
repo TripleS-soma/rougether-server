@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> {
 
+    long countByHouseIdAndStatus(Long houseId, HouseMemberStatus status);
+
     // 집 구성원 목록: 지정 상태(ACTIVE)만, 가입순. user fetch join(N+1 회피).
     @Query("select hm from HouseMember hm join fetch hm.user "
             + "where hm.house.id = :houseId and hm.status = :status "

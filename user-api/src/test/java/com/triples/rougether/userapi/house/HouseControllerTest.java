@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -380,6 +381,25 @@ class HouseControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 집_탈퇴는_204를_내려준다() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(delete("/api/v1/houses/1/members/me"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void 소유자의_양도_전_탈퇴는_409와_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        org.mockito.Mockito.doThrow(new BusinessException(HouseErrorCode.HOUSE_OWNER_MUST_TRANSFER))
+                .when(houseMemberCommandService).leave(7L, 1L);
+
+        mockMvc.perform(delete("/api/v1/houses/1/members/me"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HOUSE_OWNER_MUST_TRANSFER"));
     }
 
     @Test
