@@ -1,7 +1,9 @@
 package com.triples.rougether.domain.house.repository;
 
 import com.triples.rougether.domain.house.entity.HouseMission;
+import com.triples.rougether.domain.house.entity.HouseMissionStatus;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +17,9 @@ public interface HouseMissionRepository extends JpaRepository<HouseMission, Long
 
     // 집 미션 목록 - 최신 생성순.
     List<HouseMission> findByHouseIdOrderByCreatedAtDescIdDesc(Long houseId);
+
+    // 루틴 완료 기여 적립용 - 유저가 속한 여러 집의 진행 중 미션 일괄 조회.
+    List<HouseMission> findByHouseIdInAndStatus(Collection<Long> houseIds, HouseMissionStatus status);
 
     Optional<HouseMission> findByIdAndHouseId(Long id, Long houseId);
 

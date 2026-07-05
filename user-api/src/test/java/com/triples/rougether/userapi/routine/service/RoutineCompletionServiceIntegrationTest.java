@@ -57,8 +57,9 @@ class RoutineCompletionServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // 이벤트 구독(미션 기여)은 이 슬라이스 범위 밖 — no-op publisher 로 대체
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository);
+                userWalletRepository, streakRepository, event -> { });
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user);

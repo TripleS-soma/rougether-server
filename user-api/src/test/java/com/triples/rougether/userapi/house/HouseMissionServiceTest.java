@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.entity.HouseMission;
 import com.triples.rougether.domain.house.entity.HouseMissionParticipant;
 import com.triples.rougether.domain.house.entity.HouseMissionStatus;
@@ -63,6 +64,7 @@ class HouseMissionServiceTest {
 
     private HouseMission activeMission(Long missionId, Long houseId, int targetValue) {
         HouseMission mission = mock(HouseMission.class);
+        lenient().when(mission.getId()).thenReturn(missionId);
         lenient().when(mission.isActive()).thenReturn(true);
         lenient().when(mission.isWithinPeriod(any())).thenReturn(true);
         lenient().when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
@@ -268,6 +270,95 @@ class HouseMissionServiceTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED));
         verify(house, never()).addGrowthPoints(100);
+    }
+
+    @Test
+    void 자동_적립은_속한_모든_집의_진행중_미션에_1씩_쌓는다() {
+        House house1 = mock(House.class);
+        when(house1.isDeleted()).thenReturn(false);
+        when(house1.getId()).thenReturn(1L);
+        House house2 = mock(House.class);
+        when(house2.isDeleted()).thenReturn(false);
+        when(house2.getId()).thenReturn(2L);
+        HouseMember member1 = mock(HouseMember.class);
+        when(member1.getHouse()).thenReturn(house1);
+        lenient().when(member1.getId()).thenReturn(10L);
+        HouseMember member2 = mock(HouseMember.class);
+        when(member2.getHouse()).thenReturn(house2);
+        lenient().when(member2.getId()).thenReturn(20L);
+        when(houseMemberRepository.findByUserIdAndStatusWithHouse(7L, HouseMemberStatus.ACTIVE))
+                .thenReturn(List.of(member1, member2));
+        HouseMission mission1 = mock(HouseMission.class);
+        when(mission1.isWithinPeriod(any())).thenReturn(true);
+        when(mission1.getHouse()).thenReturn(house1);
+        lenient().when(mission1.getId()).thenReturn(3L);
+        HouseMission mission2 = mock(HouseMission.class);
+        when(mission2.isWithinPeriod(any())).thenReturn(true);
+        when(mission2.getHouse()).thenReturn(house2);
+        lenient().when(mission2.getId()).thenReturn(4L);
+        when(houseMissionRepository.findByHouseIdInAndStatus(any(), any()))
+                .thenReturn(List.of(mission1, mission2));
+        when(participantRepository.findByMissionIdAndMemberId(3L, 10L)).thenReturn(Optional.empty());
+        when(participantRepository.findByMissionIdAndMemberId(4L, 20L)).thenReturn(Optional.empty());
+        when(participantRepository.save(any(HouseMissionParticipant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        houseMissionService.accrueDailyContribution(7L);
+
+        verify(participantRepository, org.mockito.Mockito.times(2)).save(any(HouseMissionParticipant.class));
+    }
+
+    @Test
+    void 자동_적립은_오늘_이미_기여한_미션을_조용히_넘어간다() {
+        House house = mock(House.class);
+        when(house.isDeleted()).thenReturn(false);
+        when(house.getId()).thenReturn(1L);
+        HouseMember member = mock(HouseMember.class);
+        when(member.getHouse()).thenReturn(house);
+        lenient().when(member.getId()).thenReturn(10L);
+        when(houseMemberRepository.findByUserIdAndStatusWithHouse(7L, HouseMemberStatus.ACTIVE))
+                .thenReturn(List.of(member));
+        HouseMission mission = mock(HouseMission.class);
+        when(mission.isWithinPeriod(any())).thenReturn(true);
+        when(mission.getHouse()).thenReturn(house);
+        lenient().when(mission.getId()).thenReturn(3L);
+        when(houseMissionRepository.findByHouseIdInAndStatus(any(), any())).thenReturn(List.of(mission));
+        HouseMissionParticipant participant = mock(HouseMissionParticipant.class);
+        when(participant.getUpdatedAt()).thenReturn(Instant.now());
+        when(participantRepository.findByMissionIdAndMemberId(3L, 10L)).thenReturn(Optional.of(participant));
+
+        houseMissionService.accrueDailyContribution(7L);
+
+        verify(participant, never()).contribute(1);
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void 자동_적립은_기간_밖_미션을_건너뛴다() {
+        House house = mock(House.class);
+        when(house.isDeleted()).thenReturn(false);
+        when(house.getId()).thenReturn(1L);
+        HouseMember member = mock(HouseMember.class);
+        when(member.getHouse()).thenReturn(house);
+        when(houseMemberRepository.findByUserIdAndStatusWithHouse(7L, HouseMemberStatus.ACTIVE))
+                .thenReturn(List.of(member));
+        HouseMission mission = mock(HouseMission.class);
+        when(mission.isWithinPeriod(any())).thenReturn(false);
+        when(houseMissionRepository.findByHouseIdInAndStatus(any(), any())).thenReturn(List.of(mission));
+
+        houseMissionService.accrueDailyContribution(7L);
+
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void 속한_집이_없으면_자동_적립은_아무것도_하지_않는다() {
+        when(houseMemberRepository.findByUserIdAndStatusWithHouse(7L, HouseMemberStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        houseMissionService.accrueDailyContribution(7L);
+
+        verify(houseMissionRepository, never()).findByHouseIdInAndStatus(any(), any());
     }
 
     @Test

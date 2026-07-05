@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.entity.HouseMission;
 import com.triples.rougether.domain.house.entity.HouseMissionParticipant;
 import com.triples.rougether.domain.house.entity.HouseMissionStatus;
@@ -108,16 +109,10 @@ public class HouseMissionService {
         if (!mission.isActive() || !mission.isWithinPeriod(now)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE);
         }
-        HouseMissionParticipant participant = participantRepository
-                .findByMissionIdAndMemberId(missionId, me.getId())
-                .orElse(null);
-        if (participant != null && isSameKstDay(participant.getUpdatedAt(), now)) {
+        HouseMissionParticipant participant = contributeOncePerDay(mission, me, now);
+        if (participant == null) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED);
         }
-        if (participant == null) {
-            participant = participantRepository.save(HouseMissionParticipant.create(mission, me));
-        }
-        participant.contribute(1);
         // JPQL 실행 전 auto-flush 로 이번 +1 이 합산에 반영된다.
         long currentValue = participantRepository.sumContributionByMissionId(missionId);
         return new HouseMissionContributeResponse(
@@ -153,6 +148,51 @@ public class HouseMissionService {
         return new HouseMissionClaimResponse(
                 missionId, mission.getStatus(), GROWTH_POINTS_PER_MISSION,
                 house.getGrowthPoints(), house.getLevel());
+    }
+
+    // 루틴 완료 → 기여 자동 적립. 유저의 ACTIVE 집마다 진행 중(ACTIVE·기간 내) 미션에 +1.
+    // 수동 contribute 와 같은 daily-once 카운터(참여 row updated_at)를 공유 — 오늘 이미 기여한 미션은 조용히 skip.
+    // 루틴 완료 트랜잭션 안(리스너)에서만 호출한다. @Transactional 을 붙이면 여기서 난 예외가
+    // 트랜잭션 경계를 지나며 루틴 완료 트랜잭션을 rollback-only 로 만들어 리스너의 실패 격리(catch)가 무력화된다.
+    public void accrueDailyContribution(Long userId) {
+        Instant now = Instant.now();
+        List<HouseMember> memberships = houseMemberRepository
+                .findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE);
+        if (memberships.isEmpty()) {
+            return;
+        }
+        Map<Long, HouseMember> memberByHouseId = new HashMap<>();
+        for (HouseMember member : memberships) {
+            if (!member.getHouse().isDeleted()) {
+                memberByHouseId.put(member.getHouse().getId(), member);
+            }
+        }
+        if (memberByHouseId.isEmpty()) {
+            return;
+        }
+        List<HouseMission> missions = houseMissionRepository
+                .findByHouseIdInAndStatus(memberByHouseId.keySet(), HouseMissionStatus.ACTIVE);
+        for (HouseMission mission : missions) {
+            if (!mission.isWithinPeriod(now)) {
+                continue;
+            }
+            contributeOncePerDay(mission, memberByHouseId.get(mission.getHouse().getId()), now);
+        }
+    }
+
+    // 오늘(KST) 아직 기여 전이면 +1 하고 참여 row 를 반환, 이미 기여했으면 null.
+    private HouseMissionParticipant contributeOncePerDay(HouseMission mission, HouseMember member, Instant now) {
+        HouseMissionParticipant participant = participantRepository
+                .findByMissionIdAndMemberId(mission.getId(), member.getId())
+                .orElse(null);
+        if (participant != null && isSameKstDay(participant.getUpdatedAt(), now)) {
+            return null;
+        }
+        if (participant == null) {
+            participant = participantRepository.save(HouseMissionParticipant.create(mission, member));
+        }
+        participant.contribute(1);
+        return participant;
     }
 
     private House requireHouse(Long houseId) {

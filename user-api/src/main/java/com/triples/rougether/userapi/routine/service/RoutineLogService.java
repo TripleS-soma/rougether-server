@@ -12,6 +12,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
+import com.triples.rougether.userapi.routine.event.RoutineCompletedEvent;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
@@ -21,6 +22,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,7 @@ public class RoutineLogService {
     private final RoutineLogRepository routineLogRepository;
     private final UserWalletRepository userWalletRepository;
     private final StreakRepository streakRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함
     @Transactional
@@ -66,6 +69,8 @@ public class RoutineLogService {
         wallet.add(REWARD_AMOUNT);
 
         Streak streak = updateStreakOnComplete(routine, today, firstToday);
+        // 단체 미션 기여 등 완료에 반응하는 도메인에 알림 — 구독 쪽 실패는 구독 쪽에서 격리한다
+        eventPublisher.publishEvent(new RoutineCompletedEvent(userId, routineDate));
         return RoutineLogResponse.from(log, streak);
     }
 
