@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.today.service;
+package com.triples.rougether.userapi.calendar.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,23 +10,21 @@ import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
-import com.triples.rougether.domain.routine.entity.Streak;
-import com.triples.rougether.domain.routine.entity.StreakStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
-import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.global.config.JpaConfig;
-import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
-import com.triples.rougether.userapi.today.dto.TodayResponse;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +36,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
-class TodayServiceIntegrationTest {
+class CalendarServiceIntegrationTest {
 
     // 2026-06-29는 월요일(MON)
     private static final LocalDate MONDAY = LocalDate.of(2026, 6, 29);
@@ -50,47 +48,37 @@ class TodayServiceIntegrationTest {
     @Autowired
     private TodoRepository todoRepository;
     @Autowired
-    private StreakRepository streakRepository;
-    @Autowired
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
 
-    private TodayService service;
+    private CalendarService service;
     private User user;
     private Long userId;
 
     @BeforeEach
     void setUp() {
-        service = new TodayService(routineRepository, routineLogRepository, todoRepository,
-                streakRepository, new DailyAgendaAssembler());
+        service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
+                new DailyAgendaAssembler());
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }
 
     @Test
-    void DAILY_루틴은_매일_노출된다() {
+    void DAILY_루틴은_매일_대상이다() {
         persistRoutine("매일 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
 
-        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("매일 운동");
+        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("매일 운동");
     }
 
     @Test
-    void WEEKLY_루틴은_해당_요일만_노출되고_다른_요일은_제외된다() {
+    void WEEKLY_루틴은_해당_요일만_대상이고_다른_요일은_제외된다() {
         persistRoutine("월요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
                 "{\"daysOfWeek\":[\"MON\"]}", null, null, null, null);
         persistRoutine("화요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
                 "{\"daysOfWeek\":[\"TUE\"]}", null, null, null, null);
 
-        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("월요일 루틴");
-    }
-
-    @Test
-    void PAUSED와_ARCHIVED_루틴은_제외된다() {
-        persistRoutine("멈춤", RoutineStatus.PAUSED, "DAILY", null, null, null, null, null);
-        persistRoutine("보관", RoutineStatus.ARCHIVED, "DAILY", null, null, null, null, null);
-
-        assertThat(routineTitles(service.today(userId, MONDAY))).isEmpty();
+        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("월요일 루틴");
     }
 
     @Test
@@ -102,28 +90,30 @@ class TodayServiceIntegrationTest {
         persistRoutine("기간 내", RoutineStatus.ACTIVE, "DAILY", null, null,
                 MONDAY.minusDays(3), MONDAY.plusDays(3), null);
 
-        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("기간 내");
+        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("기간 내");
     }
 
     @Test
-    void 당일_완료_log가_있으면_completed_true() {
-        Long routineId = persistRoutine("운동", RoutineStatus.ACTIVE, "DAILY",
-                null, null, null, null, null);
-        persistCompletedLog(routineId);
+    void 그날_완료_log가_있으면_completed_true_없으면_false() {
+        Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistCompletedLog(done);
 
-        TodayRoutineItem item = service.today(userId, MONDAY).categories().get(0).routines().get(0);
+        List<TodayRoutineItem> routines = service.day(userId, MONDAY).categories().get(0).routines();
 
-        assertThat(item.completed()).isTrue();
+        assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
+                .extracting(TodayRoutineItem::completed).containsExactly(true);
+        assertThat(routines).filteredOn(r -> r.title().equals("미완료 루틴"))
+                .extracting(TodayRoutineItem::completed).containsExactly(false);
     }
 
     @Test
-    void 오늘까지_마감인_투두는_노출되고_미래_마감은_제외된다() {
-        persistTodo("오늘 마감", null, MONDAY);
+    void 투두는_마감일이_그날인_것만_노출되고_지난_마감과_미래_마감은_제외된다() {
+        persistTodo("그날 마감", null, MONDAY);
         persistTodo("지난 마감", null, MONDAY.minusDays(2));
         persistTodo("미래 마감", null, MONDAY.plusDays(1));
 
-        assertThat(todoTitles(service.today(userId, MONDAY)))
-                .containsExactlyInAnyOrder("오늘 마감", "지난 마감");
+        assertThat(todoTitles(service.day(userId, MONDAY))).containsExactly("그날 마감");
     }
 
     @Test
@@ -134,35 +124,24 @@ class TodayServiceIntegrationTest {
         persistTodo("분류 투두", category, MONDAY);
         persistTodo("미분류 투두", null, MONDAY);
 
-        var groups = service.today(userId, MONDAY).categories();
+        var groups = service.day(userId, MONDAY).categories();
 
         assertThat(groups).hasSize(2);
         assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
         assertThat(groups.get(0).name()).isEqualTo("운동");
-        assertThat(groups.get(0).todos()).extracting(t -> t.title()).containsExactly("분류 투두");
         assertThat(groups.get(1).categoryId()).isNull();
         assertThat(groups.get(1).todos()).extracting(t -> t.title()).containsExactly("미분류 투두");
     }
 
     @Test
-    void 루틴은_scheduled_time_시간순이고_null은_뒤로_정렬된다() {
-        persistRoutine("미정", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        persistRoutine("아침", RoutineStatus.ACTIVE, "DAILY", null, LocalTime.of(7, 0), null, null, null);
-        persistRoutine("저녁", RoutineStatus.ACTIVE, "DAILY", null, LocalTime.of(20, 0), null, null, null);
-
-        assertThat(routineTitles(service.today(userId, MONDAY)))
-                .containsExactly("아침", "저녁", "미정");
-    }
-
-    @Test
-    void summary는_루틴과_투두_완료_미완료_진행률을_정확히_계산한다() {
+    void summary는_그날_대상_기준_완료_미완료_진행률을_계산한다() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistCompletedLog(done);
         persistCompletedTodo("완료 투두", null, MONDAY);
         persistTodo("미완료 투두", null, MONDAY);
 
-        var summary = service.today(userId, MONDAY).summary();
+        var summary = service.day(userId, MONDAY).summary();
 
         // 완료: 루틴1 + 투두1 = 2, 전체: 루틴2 + 투두2 = 4
         assertThat(summary.completedCount()).isEqualTo(2);
@@ -171,53 +150,58 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
-    void date가_null이면_KST_오늘_기준으로_조회한다() {
-        // DAILY는 어떤 날이든 대상이라 오늘 기준 조회 경로를 결정적으로 검증함
-        persistRoutine("매일 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+    void 미래_날짜도_조회할_수_있다() {
+        // 오늘(2026-07-05)보다 뒤인 날짜 — 날짜 제한 없이 그날 대상 루틴이 나와야 함
+        LocalDate future = LocalDate.now().plusYears(1);
+        persistRoutine("미래 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
 
-        TodayResponse response = service.today(userId, null);
+        CalendarDayResponse response = service.day(userId, future);
 
-        assertThat(response.date()).isEqualTo(LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));
-        assertThat(routineTitles(response)).containsExactly("매일 루틴");
+        assertThat(response.date()).isEqualTo(future);
+        assertThat(routineTitles(response)).containsExactly("미래 루틴");
     }
 
     @Test
-    void 대상이_없으면_progressRate는_0이다() {
-        var summary = service.today(userId, MONDAY).summary();
+    void 투두의_완료_상태와_완료시각이_그대로_노출된다() {
+        persistCompletedTodo("완료 투두", null, MONDAY);
+        persistTodo("미완료 투두", null, MONDAY);
 
-        assertThat(summary.completedCount()).isZero();
-        assertThat(summary.remainingCount()).isZero();
-        assertThat(summary.progressRate()).isZero();
+        var todos = service.day(userId, MONDAY).categories().get(0).todos();
+
+        assertThat(todos).filteredOn(t -> t.title().equals("완료 투두"))
+                .allSatisfy(t -> {
+                    assertThat(t.status()).isEqualTo(TodoStatus.COMPLETED);
+                    assertThat(t.completedAt()).isNotNull();
+                });
+        assertThat(todos).filteredOn(t -> t.title().equals("미완료 투두"))
+                .allSatisfy(t -> {
+                    assertThat(t.status()).isEqualTo(TodoStatus.PENDING);
+                    assertThat(t.completedAt()).isNull();
+                });
     }
 
     @Test
-    void 스트릭이_없으면_0_null로_응답한다() {
-        var streak = service.today(userId, MONDAY).streak();
+    void 타인_소유_루틴과_투두는_노출되지_않는다() {
+        User other = userRepository.save(User.signUp());
+        routineRepository.save(Routine.create(other, null, "남의 루틴", AuthType.CHECK,
+                "DAILY", null, null, null, null));
+        todoRepository.save(Todo.create(other, null, "남의 투두", null, MONDAY));
 
-        assertThat(streak.currentCount()).isZero();
-        assertThat(streak.longestCount()).isZero();
-        assertThat(streak.lastSuccessDate()).isNull();
+        CalendarDayResponse response = service.day(userId, MONDAY);
+
+        assertThat(response.categories()).isEmpty();
+        assertThat(response.summary().completedCount()).isZero();
+        assertThat(response.summary().remainingCount()).isZero();
     }
 
-    @Test
-    void 스트릭이_있으면_반영한다() {
-        persistStreak(5, 9, MONDAY);
-
-        var streak = service.today(userId, MONDAY).streak();
-
-        assertThat(streak.currentCount()).isEqualTo(5);
-        assertThat(streak.longestCount()).isEqualTo(9);
-        assertThat(streak.lastSuccessDate()).isEqualTo(MONDAY);
-    }
-
-    private java.util.List<String> routineTitles(TodayResponse response) {
+    private List<String> routineTitles(CalendarDayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.routines().stream())
                 .map(TodayRoutineItem::title)
                 .toList();
     }
 
-    private java.util.List<String> todoTitles(TodayResponse response) {
+    private List<String> todoTitles(CalendarDayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.todos().stream())
                 .map(t -> t.title())
@@ -254,13 +238,5 @@ class TodayServiceIntegrationTest {
     private Category persistCategory(String name) {
         return categoryRepository.save(
                 Category.create(user, name, "#FFFFFF", null, 0, PrivacyScope.PRIVATE));
-    }
-
-    private void persistStreak(int currentCount, int longestCount, LocalDate lastSuccessDate) {
-        Streak streak = Streak.start(user, lastSuccessDate);
-        ReflectionTestUtils.setField(streak, "currentCount", currentCount);
-        ReflectionTestUtils.setField(streak, "longestCount", longestCount);
-        ReflectionTestUtils.setField(streak, "status", StreakStatus.ACTIVE);
-        streakRepository.save(streak);
     }
 }
