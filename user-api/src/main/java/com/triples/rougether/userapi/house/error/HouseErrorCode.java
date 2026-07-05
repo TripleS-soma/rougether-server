@@ -13,6 +13,7 @@ public enum HouseErrorCode implements ErrorCode {
     HOUSE_KICKED_MEMBER("HOUSE_KICKED_MEMBER", "강퇴된 집에는 다시 참여할 수 없습니다.", 409),
     HOUSE_KICK_SELF("HOUSE_KICK_SELF", "자기 자신은 강퇴할 수 없습니다. 탈퇴를 사용하세요.", 400),
     HOUSE_MEMBER_NOT_FOUND("HOUSE_MEMBER_NOT_FOUND", "이 집의 활성 구성원이 아닙니다.", 404),
+    HOUSE_MAX_MEMBERS_BELOW_CURRENT("HOUSE_MAX_MEMBERS_BELOW_CURRENT", "최대 인원은 현재 구성원 수보다 작게 줄일 수 없습니다.", 409),
     INVITE_CODE_INVALID("INVITE_CODE_INVALID", "유효하지 않은 초대코드입니다.", 404),
     INVITE_CODE_EXPIRED("INVITE_CODE_EXPIRED", "만료된 초대코드입니다.", 409),
     HOUSE_FULL("HOUSE_FULL", "집 정원이 가득 찼습니다.", 409),

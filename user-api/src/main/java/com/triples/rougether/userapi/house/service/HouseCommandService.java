@@ -14,6 +14,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
+import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
+import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
@@ -69,6 +71,28 @@ public class HouseCommandService {
         houseGoalRepository.saveAll(goals.stream().map(goal -> HouseGoal.create(house, goal)).toList());
 
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
+    }
+
+    // 설정 수정 - 소유자 전용, null 필드는 변경하지 않는 부분 수정.
+    @Transactional
+    public HouseUpdateResponse updateSettings(Long userId, Long houseId, HouseUpdateRequest request) {
+        House house = houseRepository.findById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        boolean isOwner = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .map(member -> member.getRole() == HouseMemberRole.OWNER)
+                .orElse(false);
+        if (!isOwner) {
+            throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
+        }
+        if (request.maxMembers() != null && request.maxMembers() < house.getCurrentMemberCount()) {
+            throw new BusinessException(HouseErrorCode.HOUSE_MAX_MEMBERS_BELOW_CURRENT);
+        }
+
+        house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers());
+        return new HouseUpdateResponse(house.getId(), house.getName(), house.getDescription(),
+                house.getCoverImageKey(), house.getMaxMembers());
     }
 
     // 초대코드 재발급 - 소유자 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.

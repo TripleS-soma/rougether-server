@@ -11,6 +11,8 @@ import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
+import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipRequest;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -103,6 +106,15 @@ public class HouseController {
     public HouseJoinDetailResponse join(@CurrentUser AuthUser user,
                                         @Parameter(description = "참여할 집 ID") @PathVariable Long houseId) {
         return houseJoinService.join(user.id(), houseId);
+    }
+
+    @Operation(summary = "집 설정 수정",
+            description = "집 소유자가 이름·소개글·대표 이미지·최대 인원을 수정합니다. 보내지 않은 필드는 변경되지 않습니다.")
+    @PutMapping("/{houseId}")
+    public HouseUpdateResponse updateSettings(@CurrentUser AuthUser user,
+                                              @Parameter(description = "집 ID") @PathVariable Long houseId,
+                                              @Valid @RequestBody HouseUpdateRequest request) {
+        return houseCommandService.updateSettings(user.id(), houseId, request);
     }
 
     @Operation(summary = "초대코드 재발급",

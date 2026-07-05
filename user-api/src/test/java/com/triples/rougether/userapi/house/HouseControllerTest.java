@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,6 +23,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -420,6 +422,44 @@ class HouseControllerTest {
         mockMvc.perform(post("/api/v1/houses/1/join"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("HOUSE_KICKED_MEMBER"));
+    }
+
+    @Test
+    void 집_설정_수정_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseCommandService.updateSettings(eq(7L), eq(1L), any())).thenReturn(
+                new HouseUpdateResponse(1L, "새 이름", "새 소개", "house/new.png", 6));
+
+        mockMvc.perform(put("/api/v1/houses/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"새 이름\", \"maxMembers\": 6}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.name").value("새 이름"))
+                .andExpect(jsonPath("$.maxMembers").value(6));
+    }
+
+    @Test
+    void 인원_미만_축소는_409와_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseCommandService.updateSettings(eq(7L), eq(1L), any()))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_MAX_MEMBERS_BELOW_CURRENT));
+
+        mockMvc.perform(put("/api/v1/houses/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxMembers\": 1}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HOUSE_MAX_MEMBERS_BELOW_CURRENT"));
+    }
+
+    @Test
+    void 설정_수정_이름이_짧으면_400() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(put("/api/v1/houses/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"a\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

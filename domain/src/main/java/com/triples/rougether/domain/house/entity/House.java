@@ -77,6 +77,22 @@ public class House extends BaseEntity {
         return house;
     }
 
+    // 설정 부분 수정 - null 필드는 변경하지 않는다. maxMembers 하향 검증은 서비스가 담당.
+    public void updateSettings(String name, String description, String coverImageKey, Integer maxMembers) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (coverImageKey != null) {
+            this.coverImageKey = coverImageKey;
+        }
+        if (maxMembers != null) {
+            this.maxMembers = maxMembers;
+        }
+    }
+
     // 소유권 양도 - house_members 의 role 전환과 한 트랜잭션으로 묶는다.
     public void changeOwner(User newOwner) {
         this.owner = newOwner;
