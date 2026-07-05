@@ -1,0 +1,29 @@
+package com.triples.rougether.userapi.onboarding.dto;
+
+import com.triples.rougether.domain.character.entity.Character;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
+
+public record CharacterListResponse(List<CharacterItem> items) {
+
+    public record CharacterItem(
+            @Schema(description = "캐릭터 ID", example = "1") Long id,
+            @Schema(description = "캐릭터 코드", example = "cat") String code,
+            @Schema(description = "캐릭터 이름", example = "고양이") String name,
+            @Schema(description = "기본 에셋 key", example = "characters/cat.png") String baseAssetKey,
+            @Schema(description = "정렬 순서", example = "0") int sortOrder) {
+
+        public static CharacterItem of(Character character) {
+            return new CharacterItem(
+                    character.getId(),
+                    character.getCode(),
+                    character.getName(),
+                    character.getBaseAssetKey(),
+                    character.getSortOrder());
+        }
+    }
+
+    public static CharacterListResponse of(List<Character> characters) {
+        return new CharacterListResponse(characters.stream().map(CharacterItem::of).toList());
+    }
+}

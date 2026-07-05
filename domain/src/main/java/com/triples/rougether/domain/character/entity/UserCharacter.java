@@ -42,4 +42,40 @@ public class UserCharacter extends BaseEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private UserCharacter(User user, Character character) {
+        this.user = user;
+        this.character = character;
+        this.selected = false;
+        this.acquiredAt = Instant.now();
+    }
+
+    // 캐릭터 지급(뽑기). 착용(selected)은 false 로 시작.
+    public static UserCharacter create(User user, Character character) {
+        return new UserCharacter(user, character);
+    }
+
+    // 획득 즉시 대표로 착용(온보딩 최초 선택).
+    public static UserCharacter createSelected(User user, Character character) {
+        return new UserCharacter(user, character, Instant.now(), true);
+    }
+
+    private UserCharacter(User user, Character character, Instant acquiredAt, boolean selected) {
+        this.user = user;
+        this.character = character;
+        this.acquiredAt = acquiredAt;
+        this.selected = selected;
+    }
+
+    public static UserCharacter of(User user, Character character, Instant acquiredAt, boolean selected) {
+        return new UserCharacter(user, character, acquiredAt, selected);
+    }
+
+    public void select() {
+        this.selected = true;
+    }
+
+    public void unselect() {
+        this.selected = false;
+    }
 }

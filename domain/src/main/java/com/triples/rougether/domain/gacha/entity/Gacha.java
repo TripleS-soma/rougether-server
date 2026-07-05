@@ -54,7 +54,8 @@ public class Gacha extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "theme_id", nullable = false)
+    // 가구 뽑기는 테마별, 캐릭터 뽑기는 테마 무관(null).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "theme_id")
     private Theme theme;
 }

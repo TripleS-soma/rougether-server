@@ -17,6 +17,11 @@
             <span class="brand-mark">R</span>
             <h1>Rougether <span class="badge">ADMIN</span></h1>
         </div>
+        <nav class="app-nav">
+            <a th:href="@{/}" class="active">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/item-slots}">슬롯 편집</a>
+        </nav>
         <div class="header-right">
             <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
             <form th:action="@{/logout}" method="post">

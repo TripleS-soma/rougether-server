@@ -69,6 +69,11 @@ resource "aws_ssm_parameter" "db_password" {
   type        = "SecureString"
   value       = random_password.db.result
   tags        = local.tags
+
+  # 비밀번호는 SSM 콘솔/CLI 로 수동 로테이트할 수 있다. terraform 이 초기값으로 되돌리지 않게 무시.
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "admin_seed_password" {
@@ -77,6 +82,11 @@ resource "aws_ssm_parameter" "admin_seed_password" {
   type        = "SecureString"
   value       = local.admin_seed_password_value
   tags        = local.tags
+
+  # 실제로 수동 로테이트된 이력 있음(v3, 2026-07). apply 가 현재 비밀번호를 덮어쓰면 안 된다.
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "jwt_secret" {
@@ -85,6 +95,10 @@ resource "aws_ssm_parameter" "jwt_secret" {
   type        = "SecureString"
   value       = local.jwt_secret_value
   tags        = local.tags
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ecr_repository" "user_api" {
@@ -213,6 +227,18 @@ resource "aws_vpc_security_group_ingress_rule" "rds_mysql_from_ec2" {
   description                  = "mysql from rougether ec2"
 }
 
+# 로컬 IDE 직접 접속용 (dev 한정, IP 는 공개 repo 에 안 남기고 terraform.tfvars 로 주입).
+# 기본 접속 경로는 SSM 터널(deploy/scripts/db-tunnel.sh) - 이 목록이 비어 있으면 RDS 는 비공개.
+resource "aws_vpc_security_group_ingress_rule" "rds_mysql_from_dev" {
+  count             = length(var.db_direct_access_cidrs)
+  security_group_id = aws_security_group.rds.id
+  cidr_ipv4         = var.db_direct_access_cidrs[count.index]
+  from_port         = 3306
+  ip_protocol       = "tcp"
+  to_port           = 3306
+  description       = "mysql from dev local IP (temporary, dev only)"
+}
+
 resource "aws_vpc_security_group_egress_rule" "rds_all" {
   security_group_id = aws_security_group.rds.id
   cidr_ipv4         = "0.0.0.0/0"
@@ -238,7 +264,8 @@ resource "aws_db_instance" "mysql" {
   password               = random_password.db.result
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
+  # 직접 접속 CIDR 이 있으면 공개(접근은 위 SG 규칙으로 IP 제한), 없으면 비공개(SSM 터널만).
+  publicly_accessible    = length(var.db_direct_access_cidrs) > 0
   multi_az               = false
 
   backup_retention_period = var.db_backup_retention_period
@@ -302,6 +329,19 @@ resource "aws_iam_role_policy" "app" {
           for prefix in var.asset_allowed_prefixes :
           "arn:aws:s3:::${var.asset_bucket_name}/${prefix}"
         ]
+      },
+      {
+        # 어드민 에셋 조회(/admin/assets)의 ListObjectsV2 용. 허용 prefix 아래만 나열 가능.
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = ["arn:aws:s3:::${var.asset_bucket_name}"]
+        Condition = {
+          StringLike = {
+            "s3:prefix" = var.asset_allowed_prefixes
+          }
+        }
       },
       {
         Effect = "Allow"
@@ -451,6 +491,13 @@ resource "aws_instance" "app" {
     volume_size = var.root_volume_size
     volume_type = "gp3"
     encrypted   = true
+  }
+
+  # dev 인스턴스는 재생성되면 public IP 가 바뀌어 문서/스크립트/deploy 정책이 깨진다.
+  # AMI 최신화(data source)와 user_data 개선이 자동으로 인스턴스 교체를 유발하지 않게 무시 -
+  # 부트스트랩을 갈아엎을 땐 terraform apply -replace=aws_instance.app 로 의도적으로 재생성한다.
+  lifecycle {
+    ignore_changes = [ami, user_data]
   }
 
   user_data_replace_on_change = true

@@ -252,6 +252,130 @@ body {
 .result-url { font-size: 13px; color: var(--primary); text-decoration: none; }
 .result-url:hover { text-decoration: underline; }
 
+/* ===== 헤더 네비게이션 ===== */
+.app-nav { display: flex; gap: 6px; }
+.app-nav a {
+    padding: 8px 14px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-soft);
+    text-decoration: none;
+    transition: color .15s, background .15s;
+}
+.app-nav a:hover { color: var(--primary); }
+.app-nav a.active { color: var(--primary-strong); background: var(--primary-soft); }
+
+/* ===== 아이템 기본 슬롯 편집 ===== */
+.app-main--wide { max-width: 1080px; }
+
+.slot-toolbar { margin-top: 24px; display: flex; align-items: center; gap: 14px; }
+.slot-search {
+    flex: 1;
+    height: 44px;
+    border: 1.5px solid var(--border);
+    border-radius: 11px;
+    padding: 0 14px;
+    font-size: 14.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border-color .15s, background .15s;
+}
+.slot-search:focus { border-color: var(--primary); background: var(--surface); }
+.slot-count { flex-shrink: 0; font-size: 13px; color: var(--text-soft); }
+
+.slot-table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 14px; }
+.slot-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-soft);
+    border-bottom: 1.5px solid var(--border);
+}
+.slot-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.slot-table tr:hover td { background: var(--bg); }
+
+.slot-thumb {
+    width: 46px; height: 46px;
+    border-radius: 9px;
+    object-fit: contain;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: block;
+}
+.slot-name { font-weight: 600; }
+.slot-key { font-size: 11.5px; color: var(--text-soft); margin-top: 2px; word-break: break-all; }
+
+.slot-select {
+    height: 38px;
+    min-width: 190px;
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    padding: 0 10px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface);
+    outline: none;
+    cursor: pointer;
+}
+.slot-select:focus { border-color: var(--primary); }
+.slot-select:disabled { opacity: .55; cursor: default; }
+
+.slot-status-col { width: 72px; }
+.slot-status { font-size: 12.5px; font-weight: 700; color: var(--text-soft); }
+.slot-status.ok { color: var(--success); }
+.slot-status.err { color: var(--danger); }
+
+/* ===== 에셋 조회 ===== */
+.asset-tabs { margin-top: 22px; display: flex; gap: 8px; flex-wrap: wrap; }
+.asset-tab {
+    height: 36px; padding: 0 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 13.5px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+}
+.asset-tab:hover { border-color: var(--primary); color: var(--primary); }
+.asset-tab.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
+
+.asset-grid {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+}
+.asset-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.asset-thumb-wrap {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+.asset-thumb { max-width: 100%; max-height: 100%; object-fit: contain; }
+.asset-key {
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.asset-meta { font-size: 11px; color: var(--text-soft); }
+.asset-copy { align-self: stretch; }
+
 @media (max-width: 520px) {
     .auth-card { padding: 32px 24px; }
     .app-main { padding: 28px 18px; }

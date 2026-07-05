@@ -35,4 +35,18 @@ public class UserGoal extends BaseCreatedEntity {
 
     @Column(name = "is_primary", nullable = false)
     private boolean primary;
+
+    private UserGoal(User user, Goal goal, boolean primary) {
+        this.user = user;
+        this.goal = goal;
+        this.primary = primary;
+    }
+
+    public static UserGoal of(User user, Goal goal, boolean primary) {
+        return new UserGoal(user, goal, primary);
+    }
+
+    public void changePrimary(boolean primary) {
+        this.primary = primary;
+    }
 }

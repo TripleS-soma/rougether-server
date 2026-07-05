@@ -191,3 +191,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "db_direct_access_cidrs" {
+  description = "RDS 3306 직접 접속을 허용할 CIDR 목록 (로컬 IDE 용, dev 한정). 개인 IP 라 repo 에 커밋하지 말고 terraform.tfvars 로 주입한다. 비우면 RDS 비공개 + SSM 터널만."
+  type        = list(string)
+  default     = []
+}

@@ -108,10 +108,7 @@ public class TodoService {
         }
 
         UserWallet wallet = findWallet(userId);
-        // 회수 정책 확정 전 음수 잔액 진입만 막는 방어적 가드(재화 도메인 합의 시 재검토)
-        if (wallet.getBalance() < todo.getRewardAmount()) {
-            throw new BusinessException(TodoErrorCode.WALLET_INSUFFICIENT);
-        }
+        // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(todo.getRewardAmount());
 
         todo.cancelComplete();
