@@ -45,4 +45,21 @@ public class HouseMissionParticipant {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    public static HouseMissionParticipant create(HouseMission mission, HouseMember member) {
+        HouseMissionParticipant participant = new HouseMissionParticipant();
+        participant.mission = mission;
+        participant.member = member;
+        participant.contributionValue = 0;
+        participant.rewardClaimed = false;
+        return participant;
+    }
+
+    public void contribute(int amount) {
+        this.contributionValue += amount;
+    }
+
+    public void markRewardClaimed() {
+        this.rewardClaimed = true;
+    }
 }

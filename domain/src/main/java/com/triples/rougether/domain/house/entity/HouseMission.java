@@ -50,4 +50,35 @@ public class HouseMission extends BaseCreatedEntity {
 
     @Column(name = "ends_at")
     private Instant endsAt;
+
+    // 미션 등록 - ACTIVE 로 시작. 달성 판정(currentValue)은 participants 합산으로 서비스가 계산한다.
+    public static HouseMission create(House house, String title, HouseMissionType missionType,
+                                      int targetValue, Instant startsAt, Instant endsAt) {
+        HouseMission mission = new HouseMission();
+        mission.house = house;
+        mission.title = title;
+        mission.missionType = missionType;
+        mission.targetValue = targetValue;
+        mission.status = HouseMissionStatus.ACTIVE;
+        mission.startsAt = startsAt;
+        mission.endsAt = endsAt;
+        return mission;
+    }
+
+    // 달성 확정 - claim 에서 성장 포인트 지급과 한 트랜잭션(행 락)으로 전환한다.
+    public void complete() {
+        this.status = HouseMissionStatus.COMPLETED;
+    }
+
+    public boolean isActive() {
+        return status == HouseMissionStatus.ACTIVE;
+    }
+
+    // 기간 밖(시작 전/종료 후)이면 기여 불가. 기간 미지정은 항상 기여 가능.
+    public boolean isWithinPeriod(Instant now) {
+        if (startsAt != null && now.isBefore(startsAt)) {
+            return false;
+        }
+        return endsAt == null || !now.isAfter(endsAt);
+    }
 }

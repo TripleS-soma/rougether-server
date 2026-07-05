@@ -1,0 +1,142 @@
+package com.triples.rougether.userapi.house;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMissionStatus;
+import com.triples.rougether.domain.house.entity.HouseMissionType;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
+import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
+import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
+import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
+// 단체 미션 전체 흐름 회귀 - 등록→기여(하루 1회)→달성→claim(성장 포인트 +100, 재클레임 불가)을 실제 DB(H2)로 검증.
+@SpringBootTest
+@Transactional
+class HouseMissionFlowIntegrationTest {
+
+    @Autowired private HouseMissionService houseMissionService;
+    @Autowired private HouseRepository houseRepository;
+    @Autowired private HouseMemberRepository houseMemberRepository;
+    @Autowired private HouseMissionParticipantRepository participantRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private JdbcTemplate jdbcTemplate;
+    @PersistenceContext private EntityManager entityManager;
+
+    private record Fixture(User owner, User member, House house, HouseMember ownerRow, HouseMember memberRow) {
+    }
+
+    private Fixture fixture() {
+        User owner = userRepository.save(User.signUp("mission-owner@rougether.dev"));
+        User member = userRepository.save(User.signUp("mission-member@rougether.dev"));
+        House house = houseRepository.save(House.create(
+                owner, "미션 하우스", null, null, 4, "MSSN2345", Instant.now().plus(Duration.ofDays(7))));
+        HouseMember ownerRow = houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
+        HouseMember memberRow = houseMemberRepository.save(HouseMember.create(house, member, HouseMemberRole.MEMBER));
+        house.increaseMemberCount();
+        return new Fixture(owner, member, house, ownerRow, memberRow);
+    }
+
+    @Test
+    void 등록부터_claim_까지_전체_흐름() {
+        Fixture f = fixture();
+        HouseMissionResponse created = houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("주간 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 2, null, null));
+        assertThat(created.status()).isEqualTo(HouseMissionStatus.ACTIVE);
+
+        // 소유자·구성원 각 1회 기여 → 목표(2) 달성
+        HouseMissionContributeResponse first =
+                houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId());
+        assertThat(first.currentValue()).isEqualTo(1);
+        assertThat(first.achieved()).isFalse();
+        HouseMissionContributeResponse second =
+                houseMissionService.contribute(f.member().getId(), f.house().getId(), created.missionId());
+        assertThat(second.currentValue()).isEqualTo(2);
+        assertThat(second.achieved()).isTrue();
+
+        // 같은 날 재기여는 409
+        assertThatThrownBy(() -> houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED));
+
+        // 구성원(비소유자)이 claim → COMPLETED + 성장 포인트 100 + 레벨 1
+        HouseMissionClaimResponse claimed =
+                houseMissionService.claim(f.member().getId(), f.house().getId(), created.missionId());
+        assertThat(claimed.status()).isEqualTo(HouseMissionStatus.COMPLETED);
+        assertThat(claimed.grantedGrowthPoints()).isEqualTo(100);
+        assertThat(claimed.houseGrowthPoints()).isEqualTo(100);
+        assertThat(claimed.houseLevel()).isEqualTo(1);
+        assertThat(f.house().getGrowthPoints()).isEqualTo(100);
+        assertThat(f.house().getLevel()).isEqualTo(1);
+        participantRepository.findByMissionId(created.missionId())
+                .forEach(participant -> assertThat(participant.isRewardClaimed()).isTrue());
+
+        // 재클레임은 409, 성장 포인트 그대로
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED));
+        assertThat(f.house().getGrowthPoints()).isEqualTo(100);
+
+        // COMPLETED 미션엔 기여 불가
+        assertThatThrownBy(() -> houseMissionService.contribute(f.member().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
+    }
+
+    @Test
+    void 어제_기여한_구성원은_오늘_다시_기여할_수_있다() {
+        Fixture f = fixture();
+        HouseMissionResponse created = houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("일일 미션", HouseMissionType.DAILY_MEMBER_RATE, 10, null, null));
+        houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId());
+
+        // 마지막 기여 시각을 어제로 되돌린다 (KST 하루 1회 판정 기준 = updated_at).
+        // 1차 캐시에 남은 참여 row 가 JDBC 수정을 가리지 않도록 flush 후 비운다.
+        entityManager.flush();
+        entityManager.clear();
+        jdbcTemplate.update(
+                "update house_mission_participants set updated_at = ? where mission_id = ?",
+                // JDBC 타임존 변환 여유를 두고 이틀 전으로 되돌린다 — "오늘이 아니면 기여 가능" 판정만 검증하면 된다.
+                Timestamp.from(Instant.now().minus(Duration.ofDays(2))), created.missionId());
+
+        HouseMissionContributeResponse again =
+                houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId());
+        assertThat(again.myContribution()).isEqualTo(2);
+        assertThat(again.currentValue()).isEqualTo(2);
+    }
+
+    @Test
+    void 기간이_지난_미션엔_기여할_수_없다() {
+        Fixture f = fixture();
+        Instant now = Instant.now();
+        HouseMissionResponse created = houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("지난 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 2,
+                        now.minus(Duration.ofDays(8)), now.minus(Duration.ofDays(1))));
+
+        assertThatThrownBy(() -> houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
+    }
+}
