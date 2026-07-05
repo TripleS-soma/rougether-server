@@ -1,16 +1,20 @@
 package com.triples.rougether.userapi.house.service;
 
+import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
+import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,6 +37,22 @@ public class HouseQueryService {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.houseMemberRepository = houseMemberRepository;
+    }
+
+    // 집 상세 - ACTIVE 구성원만 조회 가능. 초대코드는 소유자에게만 내려간다.
+    @Transactional(readOnly = true)
+    public HouseDetailResponse getHouseDetail(Long userId, Long houseId) {
+        House house = houseRepository.findById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        HouseMember me = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
+
+        List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
+                .map(HouseQueryService::toGoalSummary)
+                .toList();
+        return HouseDetailResponse.of(house, me.getRole(), goals);
     }
 
     // 내가 속한(ACTIVE) 집 목록 - 먼저 가입한 집 먼저. 삭제된 집 제외.
