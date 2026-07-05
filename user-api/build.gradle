@@ -17,6 +17,9 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
+	// 구글 id_token(RS256) 검증: JWK 조회·캐싱 + 서명·exp 검증(NimbusJwtDecoder)
+	implementation 'org.springframework.security:spring-security-oauth2-jose'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
