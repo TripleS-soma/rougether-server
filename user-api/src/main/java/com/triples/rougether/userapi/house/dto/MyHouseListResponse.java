@@ -10,11 +10,11 @@ import java.util.List;
 public record MyHouseListResponse(List<MyHouseSummary> items) {
 
     public record MyHouseSummary(
-            @Schema(description = "집 ID", example = "1")
+            @Schema(description = "집 ID. 집 상세 조회 등 /api/v1/houses/{houseId} 경로에 사용", example = "1")
             Long houseId,
             @Schema(description = "집 이름", example = "아침 루틴 하우스")
             String name,
-            @Schema(description = "커버 이미지 asset key", example = "house/1f9d1c2e.png")
+            @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/1f9d1c2e.png")
             String coverImageKey,
             @Schema(description = "집 레벨", example = "0")
             int level,
@@ -22,9 +22,9 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             int currentMemberCount,
             @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
             Integer maxMembers,
-            @Schema(description = "이 집에서 내 역할", example = "OWNER")
+            @Schema(description = "이 집에서 내 역할. OWNER(소유자 — 설정 수정·초대코드 재발급·강퇴·소유권 양도 가능), MEMBER(일반 구성원)", example = "OWNER")
             HouseMemberRole myRole,
-            @Schema(description = "내 가입 시각")
+            @Schema(description = "내 가입 시각. 목록은 이 값 오름차순(먼저 가입한 집 먼저) 정렬")
             Instant joinedAt) {
 
         public static MyHouseSummary of(HouseMember member) {

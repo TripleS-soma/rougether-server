@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 public record LogoutRequest(
-        @Schema(description = "폐기할 refresh token")
+        @Schema(description = "폐기할 refresh token (로그인/재발급 응답의 refreshToken 값)")
         @NotBlank String refreshToken
 ) {
 }

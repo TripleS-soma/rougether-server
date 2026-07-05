@@ -17,7 +17,7 @@ public class GoalController {
 
     private final OnboardingQueryService onboardingQueryService;
 
-    @Operation(summary = "목표 마스터 목록 조회", description = "온보딩에 필요한 활성 목표 마스터 목록을 조회합니다.")
+    @Operation(summary = "목표 마스터 목록 조회", description = "온보딩에 필요한 활성 목표 마스터 목록을 조회합니다. 활성(active) 목표만 sortOrder 오름차순으로 반환합니다. 응답의 id는 온보딩 목표 저장(goalIds)과 공동집 생성(goalId)에 사용합니다.")
     @GetMapping
     public GoalListResponse getGoals() {
         return onboardingQueryService.getGoals();

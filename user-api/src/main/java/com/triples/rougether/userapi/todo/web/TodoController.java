@@ -37,13 +37,18 @@ public class TodoController {
     private final TodoService todoService;
 
     @Operation(summary = "내 투두 목록 조회",
-            description = "로그인한 회원이 소유한 투두를 반환합니다. categoryId·status·dueDate로 필터링할 수 있습니다.")
+            description = "로그인한 회원이 소유한 투두를 반환합니다. categoryId·status·dueDate로 필터링할 수 있습니다. "
+                    + "categoryId는 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id를 사용합니다. "
+                    + "마감일(dueDate) 오름차순, 같으면 id 오름차순으로 정렬합니다. "
+                    + "미지정한 필터 조건은 적용하지 않으며(전체 반환), 삭제한 투두는 포함하지 않습니다.")
     @GetMapping
     public TodoListResponse list(
             @CurrentUser AuthUser authUser,
-            @Parameter(description = "카테고리 ID 필터") @RequestParam(required = false) Long categoryId,
-            @Parameter(description = "상태 필터") @RequestParam(required = false) TodoStatus status,
-            @Parameter(description = "마감일 필터(ISO-8601)")
+            @Parameter(description = "카테고리 ID 필터. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값. 미지정 시 전체 카테고리")
+            @RequestParam(required = false) Long categoryId,
+            @Parameter(description = "상태 필터. 허용값: PENDING(대기), COMPLETED(완료). 미지정 시 전체 상태")
+            @RequestParam(required = false) TodoStatus status,
+            @Parameter(description = "마감일 필터(YYYY-MM-DD). 마감일이 이 날짜와 정확히 일치하는 투두만 반환. 미지정 시 전체")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate) {
         return todoService.list(authUser.id(), categoryId, status, dueDate);
     }
@@ -51,11 +56,13 @@ public class TodoController {
     @Operation(summary = "투두 단건 조회", description = "소유한 투두 한 건을 반환합니다.")
     @GetMapping("/{id}")
     public TodoResponse get(@CurrentUser AuthUser authUser,
-                            @Parameter(description = "투두 ID") @PathVariable Long id) {
+                            @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id) {
         return todoService.get(authUser.id(), id);
     }
 
-    @Operation(summary = "투두 등록", description = "로그인한 회원의 새 투두를 등록합니다. 상태는 PENDING으로 시작합니다.")
+    @Operation(summary = "투두 등록",
+            description = "로그인한 회원의 새 투두를 등록합니다. 상태는 PENDING으로 시작합니다. "
+                    + "categoryId를 지정하지 않으면 미분류로 등록되며, 소유한 카테고리만 지정할 수 있습니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TodoResponse create(@CurrentUser AuthUser authUser,
@@ -63,34 +70,42 @@ public class TodoController {
         return todoService.create(authUser.id(), request);
     }
 
-    @Operation(summary = "투두 수정", description = "소유한 투두의 속성을 수정합니다. 지정하지 않은 필드는 변경하지 않습니다.")
+    @Operation(summary = "투두 수정",
+            description = "소유한 투두의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, title은 공백이면 기존 값을 유지합니다. "
+                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동합니다(null이면 기존 카테고리 유지).")
     @PutMapping("/{id}")
     public TodoResponse update(@CurrentUser AuthUser authUser,
-                               @Parameter(description = "투두 ID") @PathVariable Long id,
+                               @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id,
                                @Valid @RequestBody TodoUpdateRequest request) {
         return todoService.update(authUser.id(), id, request);
     }
 
-    @Operation(summary = "투두 삭제", description = "소유한 투두를 삭제합니다.")
+    @Operation(summary = "투두 삭제",
+            description = "소유한 투두를 삭제합니다. 삭제한 투두는 투두 목록·단건 조회·오늘 현황에서 더 이상 조회되지 않습니다.")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser AuthUser authUser,
-                       @Parameter(description = "투두 ID") @PathVariable Long id) {
+                       @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id) {
         todoService.delete(authUser.id(), id);
     }
 
-    @Operation(summary = "투두 완료 체크", description = "투두를 완료 처리합니다. 코인 5를 지급합니다.")
+    @Operation(summary = "투두 완료 체크",
+            description = "투두를 완료 처리합니다. 코인 5를 지급하고 완료 시각을 기록합니다. "
+                    + "PENDING 상태의 투두만 완료할 수 있습니다. 루틴 완료와 달리 스트릭에는 반영되지 않습니다.")
     @PostMapping("/{id}/complete")
     @ResponseStatus(HttpStatus.CREATED)
     public TodoCompleteResponse complete(@CurrentUser AuthUser authUser,
-                                         @Parameter(description = "투두 ID") @PathVariable Long id) {
+                                         @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id) {
         return todoService.complete(authUser.id(), id);
     }
 
-    @Operation(summary = "투두 완료 취소", description = "당일 완료를 취소합니다. 지급한 코인을 회수합니다.")
+    @Operation(summary = "투두 완료 취소",
+            description = "당일 완료를 취소합니다. 지급한 코인 5를 회수하고(잔액이 부족해도 그대로 차감) "
+                    + "상태를 PENDING으로 되돌리며 완료 시각·보상 정보를 초기화합니다. "
+                    + "완료한 당일(KST 기준)에만 취소할 수 있습니다.")
     @DeleteMapping("/{id}/complete")
     public TodoResponse cancelComplete(@CurrentUser AuthUser authUser,
-                                       @Parameter(description = "투두 ID") @PathVariable Long id) {
+                                       @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id) {
         return todoService.cancelComplete(authUser.id(), id);
     }
 }

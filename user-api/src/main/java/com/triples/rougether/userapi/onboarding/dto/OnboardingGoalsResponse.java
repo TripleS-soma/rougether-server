@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 public record OnboardingGoalsResponse(
+        @Schema(description = "저장된 목표 목록 — sortOrder 오름차순")
         List<GoalSelection> goals,
         @Schema(description = "대표 목표 ID(없으면 null)", example = "1") Long primaryGoalId) {
 

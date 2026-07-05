@@ -17,7 +17,7 @@ public class CharacterController {
 
     private final OnboardingQueryService onboardingQueryService;
 
-    @Operation(summary = "캐릭터 마스터 목록 조회", description = "온보딩에 필요한 활성 캐릭터 마스터 목록을 조회합니다.")
+    @Operation(summary = "캐릭터 마스터 목록 조회", description = "온보딩에 필요한 활성 캐릭터 마스터 목록을 조회합니다. 활성(active) 캐릭터만 sortOrder 오름차순으로 반환합니다. 응답의 id는 대표 캐릭터 선택(characterId)에 사용합니다.")
     @GetMapping
     public CharacterListResponse getCharacters() {
         return onboardingQueryService.getCharacters();

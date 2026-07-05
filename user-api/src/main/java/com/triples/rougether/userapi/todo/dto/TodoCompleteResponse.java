@@ -9,13 +9,13 @@ import java.time.Instant;
 public record TodoCompleteResponse(
         @Schema(description = "투두 ID", example = "1")
         Long id,
-        @Schema(description = "투두 상태")
+        @Schema(description = "투두 상태. 허용값: PENDING(대기), COMPLETED(완료). 완료 체크 직후에는 항상 COMPLETED", example = "COMPLETED")
         TodoStatus status,
         @Schema(description = "완료 시각(ISO-8601)", example = "2026-06-30T07:00:00Z")
         Instant completedAt,
-        @Schema(description = "보상 재화 종류")
+        @Schema(description = "보상 재화 종류. 허용값: COIN(루틴 실천 보상), DIAMOND(아이템 구매)", example = "COIN")
         CurrencyType rewardCurrencyType,
-        @Schema(description = "보상 금액", example = "5")
+        @Schema(description = "보상 금액. 투두 완료 보상은 코인 5 고정", example = "5")
         int rewardAmount
 ) {
 

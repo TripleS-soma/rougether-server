@@ -23,7 +23,9 @@ public class MyHouseController {
     }
 
     @Operation(summary = "내 집 목록 조회",
-            description = "로그인한 회원이 참여 중인 집 목록을 먼저 가입한 순서로 반환합니다.")
+            description = "로그인한 회원이 참여 중인 집 목록을 먼저 가입한 순서(가입 시각 오름차순)로 반환합니다. "
+                    + "활성(ACTIVE)으로 참여 중인 집만 포함되며, 탈퇴·강퇴한 집과 정리(삭제)된 집은 제외됩니다. "
+                    + "응답의 houseId 는 집 상세 조회 등 /api/v1/houses/{houseId} 경로에 사용합니다.")
     @GetMapping
     public MyHouseListResponse getMyHouses(@CurrentUser AuthUser user) {
         return houseQueryService.getMyHouses(user.id());

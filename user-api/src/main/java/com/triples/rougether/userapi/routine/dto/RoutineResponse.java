@@ -13,21 +13,21 @@ public record RoutineResponse(
         Long id,
         @Schema(description = "루틴 제목", example = "아침 운동")
         String title,
-        @Schema(description = "소속 카테고리 ID(미분류면 null)", example = "3")
+        @Schema(description = "소속 카테고리 ID(미분류면 null). 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id에 대응", example = "3")
         Long categoryId,
-        @Schema(description = "인증 방식")
+        @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형)", example = "CHECK")
         AuthType authType,
-        @Schema(description = "루틴 상태")
+        @Schema(description = "루틴 상태. 허용값: ACTIVE(진행 중), PAUSED(일시중지), ARCHIVED(보관)", example = "ACTIVE")
         RoutineStatus status,
-        @Schema(description = "반복 유형", example = "WEEKLY")
+        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정)", example = "WEEKLY")
         String repeatType,
-        @Schema(description = "반복 설정(WEEKLY일 때 요일)")
+        @Schema(description = "반복 설정. repeatType이 WEEKLY일 때 요일 목록")
         RepeatDays repeatDays,
         @Schema(description = "수행 예정 시각(HH:mm:ss)", example = "07:00:00")
         LocalTime scheduledTime,
-        @Schema(description = "시작일(ISO-8601)", example = "2026-07-01")
+        @Schema(description = "시작일(YYYY-MM-DD)", example = "2026-07-01")
         LocalDate startsOn,
-        @Schema(description = "종료일(ISO-8601)", example = "2026-12-31")
+        @Schema(description = "종료일(YYYY-MM-DD)", example = "2026-12-31")
         LocalDate endsOn
 ) {
 

@@ -25,10 +25,14 @@ public class MyItemController {
     }
 
     @Operation(summary = "인벤토리 조회",
-            description = "로그인한 회원이 보유한 아이템 목록을 최근 획득 순으로 반환합니다. categoryCode 로 필터링할 수 있습니다.")
+            description = "로그인한 회원이 보유한 아이템 목록을 최근 획득 순(acquiredAt 내림차순)으로 반환합니다. "
+                    + "상점 구매와 뽑기로 획득한 아이템이 모두 포함됩니다. "
+                    + "categoryCode 를 지정하면 해당 카테고리의 아이템만, 미지정(또는 빈 값) 시 전체를 반환합니다. "
+                    + "응답의 userItemId 는 방 슬롯 배치(PUT /api/v1/rooms/me/slots)의 userItemId 로 사용합니다.")
     @GetMapping
     public MyItemListResponse getMyItems(@CurrentUser AuthUser user,
-                                         @Parameter(description = "카테고리 코드 필터 (선택)")
+                                         @Parameter(description = "카테고리 코드 필터 (선택). "
+                                                 + "GET /api/v1/items (상점 아이템 목록) 응답의 categoryCode 값 (예: furniture)")
                                          @RequestParam(required = false) String categoryCode) {
         return shopQueryService.getMyItems(user.id(), categoryCode);
     }

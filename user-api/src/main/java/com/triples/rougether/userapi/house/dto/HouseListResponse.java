@@ -11,15 +11,15 @@ public record HouseListResponse(
         int page,
         @Schema(description = "페이지 크기", example = "20")
         int size,
-        @Schema(description = "전체 집 수", example = "42")
+        @Schema(description = "전체 집 수 (goalCode 필터 적용 시 필터된 결과 기준)", example = "42")
         long totalElements) {
 
     public record HouseSummary(
-            @Schema(description = "집 ID", example = "1")
+            @Schema(description = "집 ID. 집 참여(POST /api/v1/houses/{houseId}/join)·상세 조회 경로에 사용", example = "1")
             Long houseId,
             @Schema(description = "집 이름", example = "아침 루틴 하우스")
             String name,
-            @Schema(description = "커버 이미지 asset key", example = "house/1f9d1c2e.png")
+            @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/1f9d1c2e.png")
             String coverImageKey,
             @Schema(description = "현재 구성원 수", example = "3")
             int currentMemberCount,
@@ -42,9 +42,9 @@ public record HouseListResponse(
     }
 
     public record GoalSummary(
-            @Schema(description = "goal ID", example = "1")
+            @Schema(description = "goal ID. GET /api/v1/goals (목표 마스터 목록) 응답의 id 와 동일한 값", example = "1")
             Long goalId,
-            @Schema(description = "goal 코드", example = "morning_routine")
+            @Schema(description = "goal 코드. 집 탐색(GET /api/v1/houses)의 goalCode 필터 값으로 사용", example = "morning_routine")
             String code,
             @Schema(description = "goal 이름", example = "아침 루틴")
             String name) {
