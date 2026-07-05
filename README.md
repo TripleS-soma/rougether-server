@@ -4,7 +4,7 @@
 
 ## Tech Stack
 
-- Java 17
+- Java 25
 - Spring Boot 4.1
 - Gradle
 - Spring Web MVC
