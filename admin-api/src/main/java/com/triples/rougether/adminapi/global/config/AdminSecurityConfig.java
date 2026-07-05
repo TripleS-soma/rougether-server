@@ -25,8 +25,9 @@ public class AdminSecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                // 일괄 적재(catalog/슬롯 import)는 curl/스크립트로 호출 → CSRF 제외 (MVP, 인증은 유지).
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/admin/catalog/**", "/admin/items/slots/import"))
+                // 일괄 적재(catalog/슬롯 import)·재화 지급은 curl/스크립트로 호출 → CSRF 제외 (MVP, 인증은 유지).
+                .csrf(csrf -> csrf.ignoringRequestMatchers(
+                        "/admin/catalog/**", "/admin/items/slots/import", "/admin/users/*/wallets/grant"))
                 .formLogin(form -> form
                         .loginPage("/login")
                         .defaultSuccessUrl("/", true)
