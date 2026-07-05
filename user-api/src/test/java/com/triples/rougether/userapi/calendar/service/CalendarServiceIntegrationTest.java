@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +39,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 @Import(JpaConfig.class)
 class CalendarServiceIntegrationTest {
 
-    // 2026-06-29는 월요일(MON)
-    private static final LocalDate MONDAY = LocalDate.of(2026, 6, 29);
+    // 2026-06-29는 월요일(MON)이자 확정 과거 — 과거 경로(로그 기반) 검증용
+    private static final LocalDate PAST = LocalDate.of(2026, 6, 29);
+    // 오늘(KST) — 오늘·미래 경로(live 재계산) 검증용
+    private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
     @Autowired
     private RoutineRepository routineRepository;
@@ -64,42 +67,46 @@ class CalendarServiceIntegrationTest {
         userId = user.getId();
     }
 
+    // --- 오늘·미래: live 재계산 경로 ---
+
     @Test
-    void DAILY_루틴은_매일_대상이다() {
+    void 오늘은_DAILY_루틴이_로그_없이도_대상으로_노출된다() {
         persistRoutine("매일 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
 
-        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("매일 운동");
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("매일 운동");
     }
 
     @Test
-    void WEEKLY_루틴은_해당_요일만_대상이고_다른_요일은_제외된다() {
-        persistRoutine("월요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
-                "{\"daysOfWeek\":[\"MON\"]}", null, null, null, null);
-        persistRoutine("화요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
-                "{\"daysOfWeek\":[\"TUE\"]}", null, null, null, null);
+    void 오늘_WEEKLY_루틴은_해당_요일만_대상이고_다른_요일은_제외된다() {
+        String todayToken = weekdayToken(TODAY);
+        String otherToken = weekdayToken(TODAY.plusDays(1));
+        persistRoutine("오늘 요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"" + todayToken + "\"]}", null, null, null, null);
+        persistRoutine("다른 요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"" + otherToken + "\"]}", null, null, null, null);
 
-        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("월요일 루틴");
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("오늘 요일 루틴");
     }
 
     @Test
-    void 시작전이거나_종료후면_제외된다() {
+    void 오늘_기준_시작전이거나_종료후면_제외된다() {
         persistRoutine("아직 시작 안 함", RoutineStatus.ACTIVE, "DAILY", null, null,
-                MONDAY.plusDays(1), null, null);
+                TODAY.plusDays(1), null, null);
         persistRoutine("이미 종료됨", RoutineStatus.ACTIVE, "DAILY", null, null,
-                null, MONDAY.minusDays(1), null);
+                null, TODAY.minusDays(1), null);
         persistRoutine("기간 내", RoutineStatus.ACTIVE, "DAILY", null, null,
-                MONDAY.minusDays(3), MONDAY.plusDays(3), null);
+                TODAY.minusDays(3), TODAY.plusDays(3), null);
 
-        assertThat(routineTitles(service.day(userId, MONDAY))).containsExactly("기간 내");
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("기간 내");
     }
 
     @Test
-    void 그날_완료_log가_있으면_completed_true_없으면_false() {
+    void 오늘은_그날_완료_log가_있으면_completed_true_없으면_false() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        persistCompletedLog(done);
+        persistCompletedLog(done, TODAY);
 
-        List<TodayRoutineItem> routines = service.day(userId, MONDAY).categories().get(0).routines();
+        List<TodayRoutineItem> routines = service.day(userId, TODAY).categories().get(0).routines();
 
         assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
                 .extracting(TodayRoutineItem::completed).containsExactly(true);
@@ -108,39 +115,14 @@ class CalendarServiceIntegrationTest {
     }
 
     @Test
-    void 투두는_마감일이_그날인_것만_노출되고_지난_마감과_미래_마감은_제외된다() {
-        persistTodo("그날 마감", null, MONDAY);
-        persistTodo("지난 마감", null, MONDAY.minusDays(2));
-        persistTodo("미래 마감", null, MONDAY.plusDays(1));
-
-        assertThat(todoTitles(service.day(userId, MONDAY))).containsExactly("그날 마감");
-    }
-
-    @Test
-    void 카테고리별로_묶이고_미분류는_별도_그룹으로_맨_뒤에_온다() {
-        Category category = persistCategory("운동");
-        persistRoutine("분류 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, category);
-        persistRoutine("미분류 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        persistTodo("분류 투두", category, MONDAY);
-        persistTodo("미분류 투두", null, MONDAY);
-
-        var groups = service.day(userId, MONDAY).categories();
-
-        assertThat(groups).hasSize(2);
-        assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
-        assertThat(groups.get(1).categoryId()).isNull();
-        assertThat(groups.get(1).todos()).extracting(t -> t.title()).containsExactly("미분류 투두");
-    }
-
-    @Test
-    void summary는_그날_대상_기준_완료_미완료_진행률을_계산한다() {
+    void 오늘_summary는_그날_대상_기준_완료_미완료_진행률을_계산한다() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        persistCompletedLog(done);
-        persistCompletedTodo("완료 투두", null, MONDAY);
-        persistTodo("미완료 투두", null, MONDAY);
+        persistCompletedLog(done, TODAY);
+        persistCompletedTodo("완료 투두", null, TODAY);
+        persistTodo("미완료 투두", null, TODAY);
 
-        var summary = service.day(userId, MONDAY).summary();
+        var summary = service.day(userId, TODAY).summary();
 
         // 완료: 루틴1 + 투두1 = 2, 전체: 루틴2 + 투두2 = 4
         assertThat(summary.completedCount()).isEqualTo(2);
@@ -150,8 +132,7 @@ class CalendarServiceIntegrationTest {
 
     @Test
     void 미래_날짜도_조회할_수_있다() {
-        // 오늘(2026-07-05)보다 뒤인 날짜 — 날짜 제한 없이 그날 대상 루틴이 나와야 함
-        LocalDate future = LocalDate.now().plusYears(1);
+        LocalDate future = TODAY.plusYears(1);
         persistRoutine("미래 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
 
         CalendarDayResponse response = service.day(userId, future);
@@ -161,11 +142,36 @@ class CalendarServiceIntegrationTest {
     }
 
     @Test
-    void 투두의_완료_상태와_완료시각이_그대로_노출된다() {
-        persistCompletedTodo("완료 투두", null, MONDAY);
-        persistTodo("미완료 투두", null, MONDAY);
+    void 오늘_투두는_마감일이_그날인_것만_노출되고_지난_마감과_미래_마감은_제외된다() {
+        persistTodo("그날 마감", null, TODAY);
+        persistTodo("지난 마감", null, TODAY.minusDays(2));
+        persistTodo("미래 마감", null, TODAY.plusDays(1));
 
-        var todos = service.day(userId, MONDAY).categories().get(0).todos();
+        assertThat(todoTitles(service.day(userId, TODAY))).containsExactly("그날 마감");
+    }
+
+    @Test
+    void 오늘_카테고리별로_묶이고_미분류는_별도_그룹으로_맨_뒤에_온다() {
+        Category category = persistCategory("운동");
+        persistRoutine("분류 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, category);
+        persistRoutine("미분류 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistTodo("분류 투두", category, TODAY);
+        persistTodo("미분류 투두", null, TODAY);
+
+        var groups = service.day(userId, TODAY).categories();
+
+        assertThat(groups).hasSize(2);
+        assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
+        assertThat(groups.get(1).categoryId()).isNull();
+        assertThat(groups.get(1).todos()).extracting(t -> t.title()).containsExactly("미분류 투두");
+    }
+
+    @Test
+    void 오늘_투두의_완료_상태와_완료시각이_그대로_노출된다() {
+        persistCompletedTodo("완료 투두", null, TODAY);
+        persistTodo("미완료 투두", null, TODAY);
+
+        var todos = service.day(userId, TODAY).categories().get(0).todos();
 
         assertThat(todos).filteredOn(t -> t.title().equals("완료 투두"))
                 .allSatisfy(t -> {
@@ -184,13 +190,81 @@ class CalendarServiceIntegrationTest {
         User other = userRepository.save(User.signUp());
         routineRepository.save(Routine.create(other, null, "남의 루틴", AuthType.CHECK,
                 "DAILY", null, null, null, null));
-        todoRepository.save(Todo.create(other, null, "남의 투두", null, MONDAY));
+        todoRepository.save(Todo.create(other, null, "남의 투두", null, TODAY));
 
-        CalendarDayResponse response = service.day(userId, MONDAY);
+        CalendarDayResponse response = service.day(userId, TODAY);
 
         assertThat(response.categories()).isEmpty();
         assertThat(response.summary().completedCount()).isZero();
         assertThat(response.summary().remainingCount()).isZero();
+    }
+
+    // --- 과거: 완료 log 기반 소싱 경로 ---
+
+    @Test
+    void 과거는_완료_log가_있는_루틴만_노출되고_미완료_과거_루틴은_표시되지_않는다() {
+        Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        // DAILY라 그날 반복 대상이지만 log가 없으므로 과거에는 표시되지 않아야 함
+        persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistCompletedLog(done, PAST);
+
+        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+
+        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("완료 루틴");
+        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(true);
+    }
+
+    @Test
+    void 과거_로그가_삭제된_루틴_카테고리를_가리켜도_categoryId로_노출된다() {
+        Category category = persistCategory("삭제될 카테고리");
+        Long routineId = persistRoutine("삭제될 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, category);
+        persistCompletedLog(routineId, PAST);
+
+        // 루틴·카테고리를 soft-delete — 과거 로그는 여전히 이들을 가리킴
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        routine.softDelete(Instant.now());
+        routineRepository.save(routine);
+        category.softDelete(Instant.now());
+        categoryRepository.save(category);
+
+        var groups = service.day(userId, PAST).categories();
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
+        assertThat(groups.get(0).routines()).extracting(TodayRoutineItem::title)
+                .containsExactly("삭제될 루틴");
+        assertThat(groups.get(0).routines().get(0).completed()).isTrue();
+    }
+
+    @Test
+    void 과거_루틴은_기록_당시가_아니라_현재_루틴의_최신_title로_노출된다() {
+        Long routineId = persistRoutine("원래 제목", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        persistCompletedLog(routineId, PAST);
+
+        // 로그 이후 루틴 title 변경 — 과거 조회는 스냅숏이 아니라 현재값을 읽어야 함
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        routine.update("바뀐 제목", null, null, null, null, null, null);
+        routineRepository.save(routine);
+
+        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("바뀐 제목");
+    }
+
+    @Test
+    void 과거_summary는_완료_루틴과_그날_투두_기준으로_계산된다() {
+        Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        // log 없는 과거 루틴은 총계에서 제외됨
+        persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistCompletedLog(done, PAST);
+        persistCompletedTodo("완료 투두", null, PAST);
+        persistTodo("미완료 투두", null, PAST);
+
+        var summary = service.day(userId, PAST).summary();
+
+        // 노출 루틴 = 완료 1, 투두 = 총 2(완료 1) → 전체 3, 완료 2, 남은 1
+        assertThat(summary.completedCount()).isEqualTo(2);
+        assertThat(summary.remainingCount()).isEqualTo(1);
     }
 
     private List<String> routineTitles(CalendarDayResponse response) {
@@ -207,6 +281,11 @@ class CalendarServiceIntegrationTest {
                 .toList();
     }
 
+    // LocalDate의 요일을 저장 토큰(MON~SUN) 형태로
+    private String weekdayToken(LocalDate date) {
+        return date.getDayOfWeek().name().substring(0, 3);
+    }
+
     private Long persistRoutine(String title, RoutineStatus status, String repeatType,
                                 String repeatDays, LocalTime scheduledTime,
                                 LocalDate startsOn, LocalDate endsOn, Category category) {
@@ -218,9 +297,9 @@ class CalendarServiceIntegrationTest {
         return routineRepository.save(routine).getId();
     }
 
-    private void persistCompletedLog(Long routineId) {
+    private void persistCompletedLog(Long routineId, LocalDate date) {
         Routine routine = routineRepository.findById(routineId).orElseThrow();
-        routineLogRepository.save(RoutineLog.complete(routine, MONDAY, Instant.now(),
+        routineLogRepository.save(RoutineLog.complete(routine, date, Instant.now(),
                 CurrencyType.COIN, 10));
     }
 
