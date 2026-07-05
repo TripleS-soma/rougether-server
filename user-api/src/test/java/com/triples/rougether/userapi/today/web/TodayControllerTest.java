@@ -1,7 +1,6 @@
 package com.triples.rougether.userapi.today.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,7 +62,7 @@ class TodayControllerTest {
                                 TodoStatus.PENDING, null)))),
                 new TodaySummary(1, 1, 0.5),
                 new TodayStreak(5, 9, LocalDate.of(2026, 6, 29)));
-        when(todayService.today(eq(1L), any())).thenReturn(response);
+        when(todayService.today(1L)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/today"))
                 .andExpect(status().isOk())
@@ -78,19 +77,8 @@ class TodayControllerTest {
     }
 
     @Test
-    void date_쿼리를_서비스로_전달한다() throws Exception {
-        when(todayService.today(eq(1L), eq(LocalDate.of(2026, 7, 1))))
-                .thenReturn(new TodayResponse(LocalDate.of(2026, 7, 1), List.of(),
-                        new TodaySummary(0, 0, 0.0), new TodayStreak(0, 0, null)));
-
-        mockMvc.perform(get("/api/v1/today").param("date", "2026-07-01"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.date").value("2026-07-01"));
-    }
-
-    @Test
     void 빈_상태면_progressRate는_0이다() throws Exception {
-        when(todayService.today(eq(1L), any()))
+        when(todayService.today(1L))
                 .thenReturn(new TodayResponse(LocalDate.of(2026, 6, 29), List.of(),
                         new TodaySummary(0, 0, 0.0), new TodayStreak(0, 0, null)));
 

@@ -23,6 +23,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -206,9 +207,105 @@ class RoutineServiceIntegrationTest {
         assertThat(routineService.list(userId, null, null).items()).hasSize(2);
     }
 
+    @Test
+    void 스케줄_수정이고_경과분이면_새_버전으로_분기한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "WEEKLY",
+                        new RepeatDays(List.of("MON")), LocalTime.of(7, 0),
+                        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+        Long oldId = created.id();
+        backdateCreatedAt(oldId, 3);
+
+        RoutineResponse updated = routineService.update(userId, oldId,
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("TUE")),
+                        null, null, null));
+        em.flush();
+        em.clear();
+
+        // 응답은 새 버전(새 id) — 스케줄 변경 반영
+        assertThat(updated.id()).isNotEqualTo(oldId);
+        assertThat(updated.repeatDays().daysOfWeek()).containsExactly("TUE");
+
+        // 옛 버전: deleted_at 세팅, starts_on/ends_on·스케줄 불변
+        Routine old = routineRepository.findById(oldId).orElseThrow();
+        assertThat(old.getDeletedAt()).isNotNull();
+        assertThat(old.getStartsOn()).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(old.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+        assertThat(old.getRepeatDays()).contains("MON");
+
+        // 새 버전: origin 승계(옛 버전의 origin = oldId), 살아 있음
+        Routine neo = routineRepository.findById(updated.id()).orElseThrow();
+        assertThat(neo.getOriginRoutineId()).isEqualTo(oldId);
+        assertThat(neo.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void 오늘_생성분은_스케줄을_수정해도_제자리다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null));
+        em.flush();
+        em.clear();
+
+        assertThat(updated.id()).isEqualTo(created.id());
+        assertThat(updated.repeatType()).isEqualTo("WEEKLY");
+        assertThat(routineRepository.findById(created.id()).orElseThrow().getDeletedAt()).isNull();
+    }
+
+    @Test
+    void 제목만_수정이면_경과분이라도_제자리다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("원래 제목", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+        backdateCreatedAt(created.id(), 3);
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest("바뀐 제목", null, null, null, null, null, null, null));
+        em.flush();
+        em.clear();
+
+        assertThat(updated.id()).isEqualTo(created.id());
+        assertThat(updated.title()).isEqualTo("바뀐 제목");
+        assertThat(routineRepository.findById(created.id()).orElseThrow().getDeletedAt()).isNull();
+    }
+
+    @Test
+    void 분기해도_목록은_계보당_현재_버전_하나만_정렬_위치_그대로_노출한다() {
+        RoutineResponse a = routineService.create(userId,
+                new RoutineCreateRequest("A", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+        RoutineResponse b = routineService.create(userId,
+                new RoutineCreateRequest("B", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(8, 0), null, null));
+        backdateCreatedAt(a.id(), 3);
+
+        RoutineResponse a2 = routineService.update(userId, a.id(),
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null));
+        em.flush();
+        em.clear();
+
+        // 옛 A는 닫혀 제외, 새 A는 origin(=A의 id) 기준 정렬이라 여전히 B 앞. 계보당 하나만 노출
+        assertThat(routineService.list(userId, null, null).items())
+                .extracting(RoutineResponse::id).containsExactly(a2.id(), b.id());
+    }
+
     private Long persistCategory(Long ownerId, String name) {
         User owner = userRepository.findById(ownerId).orElseThrow();
         return categoryRepository.save(
                 Category.create(owner, name, null, null, 0, PrivacyScope.PRIVATE)).getId();
+    }
+
+    // created_at은 auditing이 now로 채우고 updatable=false라 JPA로 못 바꿈 → 네이티브로 N일 과거로 당김
+    private void backdateCreatedAt(Long routineId, int days) {
+        em.flush();
+        em.createNativeQuery(
+                "update routines set created_at = created_at - interval " + days
+                        + " day where id = " + routineId).executeUpdate();
+        em.clear();
     }
 }

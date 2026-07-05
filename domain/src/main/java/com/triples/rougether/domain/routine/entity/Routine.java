@@ -71,6 +71,9 @@ public class Routine extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "origin_routine_id")
+    private Long originRoutineId;
+
     private Routine(User user, Category category, String title, AuthType authType,
                     String repeatType, String repeatDays, LocalTime scheduledTime,
                     LocalDate startsOn, LocalDate endsOn) {
@@ -121,6 +124,30 @@ public class Routine extends BaseEntity {
 
     public void changeCategory(Category category) {
         this.category = category;
+    }
+
+    // 생성 저장 직후 origin을 자기 id로 지정함(계보 루트)
+    public void assignOriginToSelf() {
+        this.originRoutineId = this.id;
+    }
+
+    // 버전 분기용 복제. 인자가 null이면 이 버전 값을 유지(update와 같은 병합 규칙),
+    // status·origin은 이 버전에서 승계. created_at은 auditing이 now로 채움
+    public Routine copyAsNewVersion(Category category, String title, AuthType authType,
+                                    String repeatType, String repeatDays, LocalTime scheduledTime,
+                                    LocalDate startsOn, LocalDate endsOn) {
+        Routine copy = new Routine(this.user,
+                category != null ? category : this.category,
+                title != null && !title.isBlank() ? title : this.title,
+                authType != null ? authType : this.authType,
+                repeatType != null ? repeatType : this.repeatType,
+                repeatDays != null ? repeatDays : this.repeatDays,
+                scheduledTime != null ? scheduledTime : this.scheduledTime,
+                startsOn != null ? startsOn : this.startsOn,
+                endsOn != null ? endsOn : this.endsOn);
+        copy.status = this.status;
+        copy.originRoutineId = this.originRoutineId;
+        return copy;
     }
 
     public void softDelete(Instant deletedAt) {

@@ -20,7 +20,13 @@ import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.routine.dto.RepeatDays;
+import com.triples.rougether.userapi.routine.dto.RoutineResponse;
+import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
+import com.triples.rougether.userapi.routine.service.RoutineService;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -54,6 +60,9 @@ class CalendarServiceIntegrationTest {
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private CalendarService service;
     private User user;
@@ -199,18 +208,107 @@ class CalendarServiceIntegrationTest {
         assertThat(response.summary().remainingCount()).isZero();
     }
 
-    // --- 과거: 완료 log 기반 소싱 경로 ---
+    // --- 과거: 그날 유효했던 버전 재구성 경로 ---
 
     @Test
-    void 과거는_완료_log가_있는_루틴만_노출되고_미완료_과거_루틴은_표시되지_않는다() {
+    void 과거_그날_대상_버전은_로그가_없어도_노출되고_완료는_로그로_판정된다() {
+        // 두 루틴 모두 PAST 이전에 생성된 것으로 당겨 그날 유효하게 만듦
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        // DAILY라 그날 반복 대상이지만 log가 없으므로 과거에는 표시되지 않아야 함
-        persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        Long undone = persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        backdateCreatedAt(done, 20);
+        backdateCreatedAt(undone, 20);
         persistCompletedLog(done, PAST);
 
         List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
 
-        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("완료 루틴");
+        // 미완료(무로그)도 노출됨 — 그날 유효한 버전 + 반복 대상이므로
+        assertThat(routines).extracting(TodayRoutineItem::title)
+                .containsExactlyInAnyOrder("완료 루틴", "미완료 루틴");
+        assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
+                .extracting(TodayRoutineItem::completed).containsExactly(true);
+        assertThat(routines).filteredOn(r -> r.title().equals("미완료 루틴"))
+                .extracting(TodayRoutineItem::completed).containsExactly(false);
+    }
+
+    @Test
+    void 과거_생성_이전_날짜에는_노출되지_않는다() {
+        // 오늘 생성분(created_at=today) — PAST엔 아직 존재하지 않았으므로 노출 안 됨
+        persistRoutine("오늘 만든 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+
+        assertThat(service.day(userId, PAST).categories()).isEmpty();
+    }
+
+    @Test
+    void 과거_스케줄_수정_후에도_옛_버전_기준으로_재구성된다() {
+        // PAST(월요일) 이전에 생성된 WEEKLY MON 루틴
+        Long routineId = persistRoutine("주간 루틴", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"MON\"]}", null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+
+        // 스케줄을 TUE로 변경 → 새 버전으로 분기(옛 MON 버전은 닫힘)
+        RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
+                userRepository);
+        routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
+                "WEEKLY", new RepeatDays(List.of("TUE")), null, null, null));
+        em.flush();
+        em.clear();
+
+        // 과거(PAST=MON)는 옛 MON 버전으로 재구성 — 편집에 영향받지 않음
+        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("주간 루틴");
+    }
+
+    @Test
+    void 분기_경계에서_과거는_옛_버전_당일은_새_버전만_노출한다() {
+        // 오늘도 유효하도록 옛 버전은 오늘 요일 WEEKLY, PAST 이전에 생성된 것으로 당김
+        String todayToken = weekdayToken(TODAY);
+        Long routineId = persistRoutine("경계 루틴", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"" + todayToken + "\"]}", null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+
+        // 스케줄을 DAILY로 변경 → 분기(옛 WEEKLY 버전 닫힘, 새 DAILY 버전 생성)
+        RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
+                userRepository);
+        RoutineResponse neo = routineService.update(userId, routineId,
+                new RoutineUpdateRequest(null, null, null, "DAILY", null, null, null, null));
+        em.flush();
+        em.clear();
+
+        // 과거(옛 버전이 유효했던 요일): 옛 버전 하나만 — 새 버전은 생성 이전이라 제외(공백·겹침 없음)
+        LocalDate pastSameWeekday = TODAY.minusWeeks(2);
+        assertThat(routineTitles(service.day(userId, pastSameWeekday))).containsExactly("경계 루틴");
+
+        // 당일: 새 DAILY 버전 하나만 — 옛 버전은 닫혀 live 경로에서 제외
+        assertThat(service.day(userId, TODAY).categories().stream()
+                .flatMap(g -> g.routines().stream()))
+                .extracting(TodayRoutineItem::id)
+                .containsExactly(neo.id());
+    }
+
+    @Test
+    void 과거_삭제된_버전도_자기_유효기간_안에서는_노출된다() {
+        Long routineId = persistRoutine("삭제될 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+        // 오늘 soft-delete(deleted_at=today) — PAST 시점엔 아직 살아 있었음
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        routine.softDelete(Instant.now());
+        routineRepository.save(routine);
+        em.flush();
+        em.clear();
+
+        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("삭제될 루틴");
+    }
+
+    @Test
+    void 과거_완료로그만_있고_유효기간_밖이어도_로그로_노출된다() {
+        // created_at=today라 PAST엔 유효하지 않지만, PAST에 완료 로그가 있으면 union으로 노출
+        Long routineId = persistRoutine("나중에 만든 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        persistCompletedLog(routineId, PAST);
+
+        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+
+        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("나중에 만든 루틴");
         assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(true);
     }
 
@@ -316,5 +414,14 @@ class CalendarServiceIntegrationTest {
     private Category persistCategory(String name) {
         return categoryRepository.save(
                 Category.create(user, name, "#FFFFFF", null, 0, PrivacyScope.PRIVATE));
+    }
+
+    // created_at은 auditing이 now로 채우고 updatable=false라 JPA로 못 바꿈 → 네이티브로 N일 과거로 당김
+    private void backdateCreatedAt(Long routineId, int days) {
+        em.flush();
+        em.createNativeQuery(
+                "update routines set created_at = created_at - interval " + days
+                        + " day where id = " + routineId).executeUpdate();
+        em.clear();
     }
 }

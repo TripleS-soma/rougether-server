@@ -27,7 +27,9 @@ public record RoutineResponse(
         @Schema(description = "시작일(YYYY-MM-DD)", example = "2026-07-01")
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD)", example = "2026-12-31")
-        LocalDate endsOn
+        LocalDate endsOn,
+        @Schema(description = "버전 계보 루트 ID. 스케줄 수정으로 새 버전(id 변경)이 생겨도 계보 내 값은 불변 — 프론트 목록 key로 사용", example = "1")
+        Long originRoutineId
 ) {
 
     public static RoutineResponse from(Routine routine) {
@@ -41,7 +43,8 @@ public record RoutineResponse(
                 RepeatDays.fromJson(routine.getRepeatDays()),
                 routine.getScheduledTime(),
                 routine.getStartsOn(),
-                routine.getEndsOn()
+                routine.getEndsOn(),
+                routine.getOriginRoutineId()
         );
     }
 }
