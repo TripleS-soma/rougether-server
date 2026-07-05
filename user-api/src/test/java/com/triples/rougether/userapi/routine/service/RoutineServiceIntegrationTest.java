@@ -30,7 +30,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -171,6 +170,25 @@ class RoutineServiceIntegrationTest {
     }
 
     @Test
+    void 루틴_응답은_소속_카테고리를_categoryId로만_담는다() {
+        User owner = userRepository.findById(userId).orElseThrow();
+        Category category = categoryRepository.save(
+                Category.create(owner, "운동", "#FFAA00", "icon/run", 0, PrivacyScope.PRIVATE));
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("아침 운동", category.getId(), AuthType.CHECK,
+                        null, null, LocalTime.of(7, 0), null, null));
+        em.flush();
+        em.clear();
+
+        var items = routineService.list(userId, null, null).items();
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).categoryId()).isEqualTo(category.getId());
+
+        RoutineResponse single = routineService.get(userId, created.id());
+        assertThat(single.categoryId()).isEqualTo(category.getId());
+    }
+
+    @Test
     void 목록은_categoryId와_status로_필터링한다() {
         Long category = persistCategory(userId, "운동");
         RoutineResponse inCategory = routineService.create(userId,
@@ -179,30 +197,18 @@ class RoutineServiceIntegrationTest {
         routineService.create(userId,
                 new RoutineCreateRequest("미분류", null, AuthType.CHECK, null, null,
                         LocalTime.of(7, 0), null, null));
-        Long pausedId = persistPausedRoutine(userId, "일시중지");
 
         assertThat(routineService.list(userId, category, null).items())
                 .extracting(RoutineResponse::id).containsExactly(inCategory.id());
-        assertThat(routineService.list(userId, null, RoutineStatus.PAUSED).items())
-                .extracting(RoutineResponse::id).containsExactly(pausedId);
         assertThat(routineService.list(userId, null, RoutineStatus.ACTIVE).items()).hasSize(2);
         assertThat(routineService.list(userId, category, RoutineStatus.ACTIVE).items())
                 .extracting(RoutineResponse::id).containsExactly(inCategory.id());
-        assertThat(routineService.list(userId, category, RoutineStatus.PAUSED).items()).isEmpty();
-        assertThat(routineService.list(userId, null, null).items()).hasSize(3);
+        assertThat(routineService.list(userId, null, null).items()).hasSize(2);
     }
 
     private Long persistCategory(Long ownerId, String name) {
         User owner = userRepository.findById(ownerId).orElseThrow();
         return categoryRepository.save(
                 Category.create(owner, name, null, null, 0, PrivacyScope.PRIVATE)).getId();
-    }
-
-    private Long persistPausedRoutine(Long ownerId, String title) {
-        User owner = userRepository.findById(ownerId).orElseThrow();
-        Routine routine = Routine.create(owner, null, title, AuthType.CHECK, null, null,
-                LocalTime.of(9, 0), null, null);
-        ReflectionTestUtils.setField(routine, "status", RoutineStatus.PAUSED);
-        return routineRepository.save(routine).getId();
     }
 }

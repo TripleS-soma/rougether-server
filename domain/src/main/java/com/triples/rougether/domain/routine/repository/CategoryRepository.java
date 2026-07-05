@@ -11,6 +11,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     List<Category> findByUserIdAndDeletedAtIsNullOrderBySortOrderAsc(Long userId);
 
+    // includeDeleted=true 경로용: soft-deleted 포함 전체 목록
+    List<Category> findByUserIdOrderBySortOrderAsc(Long userId);
+
     Optional<Category> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
     // 카테고리가 없으면 null 반환

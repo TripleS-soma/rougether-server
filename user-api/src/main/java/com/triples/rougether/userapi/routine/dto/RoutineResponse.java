@@ -1,7 +1,6 @@
 package com.triples.rougether.userapi.routine.dto;
 
 import com.triples.rougether.domain.routine.entity.AuthType;
-import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,7 +16,7 @@ public record RoutineResponse(
         Long categoryId,
         @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형)", example = "CHECK")
         AuthType authType,
-        @Schema(description = "루틴 상태. 허용값: ACTIVE(진행 중), PAUSED(일시중지), ARCHIVED(보관)", example = "ACTIVE")
+        @Schema(description = "루틴 상태. 허용값: ACTIVE(진행 중)", example = "ACTIVE")
         RoutineStatus status,
         @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정)", example = "WEEKLY")
         String repeatType,
@@ -32,11 +31,10 @@ public record RoutineResponse(
 ) {
 
     public static RoutineResponse from(Routine routine) {
-        Category category = routine.getCategory();
         return new RoutineResponse(
                 routine.getId(),
                 routine.getTitle(),
-                category != null ? category.getId() : null,
+                routine.getCategory() != null ? routine.getCategory().getId() : null,
                 routine.getAuthType(),
                 routine.getStatus(),
                 routine.getRepeatType(),

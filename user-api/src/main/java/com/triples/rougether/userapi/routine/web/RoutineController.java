@@ -50,7 +50,7 @@ public class RoutineController {
             @CurrentUser AuthUser authUser,
             @Parameter(description = "카테고리 ID 필터. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값. 미지정 시 전체 카테고리")
             @RequestParam(required = false) Long categoryId,
-            @Parameter(description = "상태 필터. 허용값: ACTIVE(진행 중), PAUSED(일시중지), ARCHIVED(보관). 미지정 시 전체 상태")
+            @Parameter(description = "상태 필터. 허용값: ACTIVE(진행 중). 미지정 시 전체 상태")
             @RequestParam(required = false) RoutineStatus status) {
         return routineService.list(authUser.id(), categoryId, status);
     }
