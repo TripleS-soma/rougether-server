@@ -10,6 +10,8 @@ import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.GoogleTokenVerifier;
+import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
@@ -32,6 +34,8 @@ public class AuthService {
     private final RefreshTokenReuseGuard refreshTokenReuseGuard;
     private final KakaoApiClient kakaoApiClient;
     private final KakaoLoginHandler kakaoLoginHandler;
+    private final GoogleTokenVerifier googleTokenVerifier;
+    private final GoogleLoginHandler googleLoginHandler;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -67,6 +71,18 @@ public class AuthService {
             // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
             // 이제 승자가 만든 연동이 보여 로그인으로 전환됨.
             return kakaoLoginHandler.login(kakaoUser);
+        }
+    }
+
+    // 구글 로그인 오케스트레이션. 트랜잭션은 GoogleLoginHandler.login이 소유함(JWK 검증을 트랜잭션 밖에 둠).
+    public LoginResponse googleLogin(String idToken) {
+        // idToken 서명·iss·aud·exp 검증 후 sub·email 추출. 실패는 GoogleTokenVerifier가 401/502로 변환함.
+        GoogleUser googleUser = googleTokenVerifier.verify(idToken);
+        try {
+            return googleLoginHandler.login(googleUser);
+        } catch (DataIntegrityViolationException race) {
+            // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
+            return googleLoginHandler.login(googleUser);
         }
     }
 

@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.auth.web;
 import com.triples.rougether.userapi.auth.service.AuthService;
 
 import com.triples.rougether.userapi.auth.dto.DevLoginRequest;
+import com.triples.rougether.userapi.auth.dto.GoogleLoginRequest;
 import com.triples.rougether.userapi.auth.dto.KakaoLoginRequest;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.LogoutRequest;
@@ -40,6 +41,13 @@ public class AuthController {
     @PostMapping("/kakao")
     public LoginResponse kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
         return authService.kakaoLogin(request.accessToken());
+    }
+
+    @Operation(summary = "구글 로그인", description = "구글 id token으로 로그인합니다. 최초 로그인이면 회원을 자동 생성합니다.")
+    @SecurityRequirements
+    @PostMapping("/google")
+    public LoginResponse googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        return authService.googleLogin(request.idToken());
     }
 
     @Operation(summary = "토큰 재발급", description = "refresh token으로 access/refresh token을 재발급합니다.")

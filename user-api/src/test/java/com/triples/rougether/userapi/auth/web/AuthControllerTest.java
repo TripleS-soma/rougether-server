@@ -98,6 +98,52 @@ class AuthControllerTest {
     }
 
     @Test
+    void google_login_성공_응답_계약() throws Exception {
+        when(authService.googleLogin("google-id")).thenReturn(new LoginResponse(5L, "acc", "ref", true));
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"google-id\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(5))
+                .andExpect(jsonPath("$.accessToken").value("acc"))
+                .andExpect(jsonPath("$.refreshToken").value("ref"))
+                .andExpect(jsonPath("$.isNewUser").value(true));
+    }
+
+    @Test
+    void google_login_은_idToken_이_없으면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void google_login_은_구글_토큰이_무효면_401_과_code_를_준다() throws Exception {
+        when(authService.googleLogin("bad"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID));
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"bad\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_GOOGLE_TOKEN_INVALID"));
+    }
+
+    @Test
+    void google_login_은_구글_서버_오류면_502_와_code_를_준다() throws Exception {
+        when(authService.googleLogin("tok"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_UNAVAILABLE));
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"tok\"}"))
+                .andExpect(status().is(502))
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_GOOGLE_UNAVAILABLE"));
+    }
+
+    @Test
     void refresh_성공_응답_계약() throws Exception {
         when(authService.refresh("rt")).thenReturn(new TokenResponse("new-acc", "new-ref"));
 

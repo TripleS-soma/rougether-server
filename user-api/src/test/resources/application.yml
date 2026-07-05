@@ -14,3 +14,8 @@ jwt:
   secret: test-only-secret-hs256-needs-at-least-32-bytes-long-padding
   access-ttl: 30m
   refresh-ttl: 14d
+
+# 통합테스트는 GoogleTokenVerifier를 mock 하므로 실제 JWK 조회는 없음. certs-url은 빈 생성용(지연 조회).
+google:
+  allowed-client-ids:
+  certs-url: https://www.googleapis.com/oauth2/v3/certs

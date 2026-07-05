@@ -30,5 +30,8 @@ jwt:
 
 kakao:
   api-base-url: ${KAKAO_API_BASE_URL:https://kapi.kakao.com}
-  # 앱 ID는 비밀값이 아님(토큰 검증용 식별자). 환경별로 다른 카카오 앱을 쓸 수 있게 env로 덮어쓰기 허용.
   app-id: ${KAKAO_APP_ID:1501738}
+
+google:
+  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:}
+  certs-url: ${GOOGLE_CERTS_URL:https://www.googleapis.com/oauth2/v3/certs}
