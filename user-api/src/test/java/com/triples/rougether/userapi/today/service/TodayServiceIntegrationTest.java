@@ -162,11 +162,11 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
-    void date가_null이면_KST_오늘_기준으로_조회한다() {
+    void date가_없으면_KST_오늘_기준으로_조회한다() {
         // DAILY는 어떤 날이든 대상이라 오늘 기준 조회 경로를 결정적으로 검증함
         persistRoutine("매일 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
 
-        TodayResponse response = service.today(userId, null);
+        TodayResponse response = service.today(userId);
 
         assertThat(response.date()).isEqualTo(LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));
         assertThat(routineTitles(response)).containsExactly("매일 루틴");

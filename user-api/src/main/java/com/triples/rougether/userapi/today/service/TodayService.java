@@ -36,9 +36,13 @@ public class TodayService {
     private final DailyAgendaAssembler agendaAssembler;
 
     @Transactional(readOnly = true)
-    public TodayResponse today(Long userId, LocalDate date) {
-        LocalDate targetDate = date != null ? date : LocalDate.now(KST);
+    public TodayResponse today(Long userId) {
+        return today(userId, LocalDate.now(KST));
+    }
 
+    // 기준일을 받는 조회 — 요일·기간 판정을 결정적으로 검증하는 테스트에서만 직접 호출함
+    @Transactional(readOnly = true)
+    TodayResponse today(Long userId, LocalDate targetDate) {
         // ACTIVE 루틴 중 오늘 반복 대상만 추림(repeat·기간 판정은 in-app)
         List<Routine> routines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
