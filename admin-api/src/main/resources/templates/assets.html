@@ -53,6 +53,7 @@
         </div>
     </main>
 
+    <script th:src="@{/js/copy.js}"></script>
     <script th:inline="javascript">
         const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
 
@@ -135,9 +136,9 @@
             copyBtn.type = 'button';
             copyBtn.className = 'copy-btn asset-copy';
             copyBtn.textContent = 'key 복사';
-            copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(asset.key);
-                copyBtn.textContent = '복사됨';
+            copyBtn.addEventListener('click', async () => {
+                const ok = await copyText(asset.key);
+                copyBtn.textContent = ok ? '복사됨' : '복사 실패';
                 setTimeout(() => { copyBtn.textContent = 'key 복사'; }, 1200);
             });
 
