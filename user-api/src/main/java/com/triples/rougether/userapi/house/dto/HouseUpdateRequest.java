@@ -11,7 +11,7 @@ public record HouseUpdateRequest(
         @Size(min = 2, max = 30) String name,
         @Schema(description = "집 소개 (미지정 시 유지)", example = "저녁 루틴으로 바꿨어요")
         String description,
-        @Schema(description = "커버 이미지 asset key (미지정 시 유지)", example = "house/2a8e3f1b.png")
+        @Schema(description = "커버 이미지 asset key (미지정 시 유지). 어드민이 발급한 S3 asset key 로, 프론트는 CDN base URL 과 조합해 사용", example = "house/2a8e3f1b.png")
         @Size(max = 255) String coverImageKey,
         @Schema(description = "최대 구성원 수 (1~10, 현재 인원 미만 불가, 미지정 시 유지)", example = "6")
         @Min(1) @Max(10) Integer maxMembers) {

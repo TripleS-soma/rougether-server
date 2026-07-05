@@ -23,7 +23,11 @@ public class WalletController {
     }
 
     @Operation(summary = "내 재화 잔액 조회",
-            description = "로그인한 회원의 모든 재화(코인·다이아) 잔액을 반환합니다. 아직 발급되지 않은 지갑은 잔액 0으로 내려줍니다.")
+            description = "로그인한 회원의 모든 재화(코인·다이아) 잔액을 반환합니다. 아직 발급되지 않은 지갑은 잔액 0으로 내려줍니다. "
+                    + "코인(COIN)은 루틴 완료(+10)·투두 완료(+5)·뽑기 캐릭터 중복 전환(+200)으로 적립되고 "
+                    + "뽑기 실행(POST /api/v1/gacha/{id}/draw) 비용으로 사용합니다. "
+                    + "다이아(DIAMOND)는 뽑기 아이템 중복 전환(+30)으로 적립되고 "
+                    + "상점 아이템 구매(POST /api/v1/items/{itemId}/purchase)에 사용합니다.")
     @GetMapping
     public WalletListResponse getWallets(@CurrentUser AuthUser user) {
         return walletQueryService.getWallets(user.id());

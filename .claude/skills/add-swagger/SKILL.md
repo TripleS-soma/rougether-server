@@ -36,9 +36,31 @@ Rougether `user-api` 모듈의 컨트롤러와 DTO에 Swagger(springdoc-openapi)
   - `example`은 가능하면 채운다. 토큰/시각 등 예시가 무의미한 필드는 `example` 생략하고 `description`만.
 - 필드가 1개뿐인 **단순 래퍼 DTO**(예: `CategoryListResponse(List<...> items)`)는 `@Schema`를 생략한다.
 
+### 상세도 기준 — 명세서 없이 Swagger만 보고 구현 가능해야 한다
+
+프론트가 별도 명세 문서 없이 Swagger UI만 보고 화면을 구현할 수 있는 수준을 목표로 한다.
+설명을 쓸 때는 컨트롤러만 보지 말고 **서비스/엔티티 코드를 읽고 실제 동작을 확인**해서 쓴다.
+
+`@Operation` description에 포함할 것:
+
+- 권한·전제 조건은 **긍정문**으로: "집 소유자만 호출할 수 있습니다", "보유한 아이템만 배치할 수 있습니다"
+- 기본값·정렬·필터 동작: "미지정 시 오늘(KST) 기준", "sortOrder 오름차순으로 반환합니다"
+- 부수효과(재화 지급/회수, 상태 변화 등): "완료 시 코인 5를 지급합니다", "재발급 시 기존 코드는 즉시 무효화됩니다"
+- 요청 값의 출처 API: "goalIds는 목표 마스터 목록 조회(GET /api/v1/goals) 응답의 id를 사용합니다"
+
+`@Schema`/`@Parameter` description에 포함할 것:
+
+- **값의 출처**: ID/코드류는 "GET /api/v1/... 응답의 <필드> 값" 형태로 어느 API에서 얻는지 명시
+- **값의 용처**: 응답 필드가 다른 API 입력으로 쓰이면 "…API의 {id}로 사용" 형태로 명시
+- **제약**: 범위(1~10), 길이(2~30자), 개수(1~3개), 형식(YYYY-MM-DD, 8자 코드 등)
+- **enum 허용값 전체 나열 + 한국어 의미**: "COIN(코인 — 루틴 보상·뽑기), DIAMOND(다이아 — 상점 구매)"
+- **조건부 필수/의미**: "repeatType=WEEKLY일 때만 사용", "null이면 슬롯 비우기"
+- asset key 필드는 "CDN base URL과 조합해 이미지 URL로 사용" 안내
+
 ### 하지 않는 것
 
 - `@ApiResponse`는 붙이지 않는다.
+- 에러/예외 동작(HTTP 상태코드)은 쓰지 않는다. 전제 조건은 위처럼 긍정문으로만 쓴다.
 - 메서드별 `security` 재선언은 하지 않는다 (JWT는 `OpenApiConfig` 전역 설정).
 
 ## 작업 절차

@@ -15,20 +15,20 @@ public record HouseDetailResponse(
         String name,
         @Schema(description = "집 소개", example = "같이 아침 루틴 지켜요")
         String description,
-        @Schema(description = "커버 이미지 asset key", example = "house/1f9d1c2e.png")
+        @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/1f9d1c2e.png")
         String coverImageKey,
         @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
         Integer maxMembers,
         @Schema(description = "현재 구성원 수", example = "3")
         int currentMemberCount,
-        @Schema(description = "집 레벨", example = "0")
+        @Schema(description = "집 레벨 (생성 시 0에서 시작)", example = "0")
         int level,
-        @Schema(description = "성장 포인트", example = "120")
+        @Schema(description = "성장 포인트 (생성 시 0에서 시작)", example = "120")
         int growthPoints,
         List<GoalSummary> goals,
-        @Schema(description = "이 집에서 내 역할", example = "OWNER")
+        @Schema(description = "이 집에서 내 역할. OWNER(소유자 — 설정 수정·초대코드 재발급·강퇴·소유권 양도 가능), MEMBER(일반 구성원)", example = "OWNER")
         HouseMemberRole myRole,
-        @Schema(description = "초대코드 (소유자에게만 값, 그 외 null)", example = "ABCD2345")
+        @Schema(description = "초대코드 (소유자에게만 값, 그 외 null). 초대코드 참여(POST /api/v1/houses/join-by-code)와 미리보기(GET /api/v1/houses/by-code/{inviteCode})에 사용, 재발급은 POST /api/v1/houses/{houseId}/invite-code", example = "ABCD2345")
         String inviteCode,
         @Schema(description = "초대코드 만료 시각 (소유자에게만 값, 그 외 null)")
         Instant inviteExpiresAt) {

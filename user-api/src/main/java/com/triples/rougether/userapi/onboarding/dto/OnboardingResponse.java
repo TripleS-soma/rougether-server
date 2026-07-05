@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 public record OnboardingResponse(
+        @Schema(description = "선택한 목표 목록 — sortOrder 오름차순, 미선택이면 빈 배열")
         List<GoalSelection> goals,
         @Schema(description = "대표 목표 ID(없으면 null)", example = "1")
         Long primaryGoalId,

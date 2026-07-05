@@ -14,11 +14,11 @@ public record TodoResponse(
         String title,
         @Schema(description = "투두 설명", example = "우유, 계란 구매")
         String description,
-        @Schema(description = "소속 카테고리 ID(미분류면 null)", example = "3")
+        @Schema(description = "소속 카테고리 ID(미분류면 null). 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id에 대응", example = "3")
         Long categoryId,
-        @Schema(description = "마감일(ISO-8601)", example = "2026-07-01")
+        @Schema(description = "마감일(YYYY-MM-DD)", example = "2026-07-01")
         LocalDate dueDate,
-        @Schema(description = "투두 상태")
+        @Schema(description = "투두 상태. 허용값: PENDING(대기), COMPLETED(완료)", example = "PENDING")
         TodoStatus status,
         @Schema(description = "완료 시각(ISO-8601, 미완료면 null)", example = "2026-06-30T07:00:00Z")
         Instant completedAt

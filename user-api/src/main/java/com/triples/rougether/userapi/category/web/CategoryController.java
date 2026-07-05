@@ -31,13 +31,17 @@ public class CategoryController {
 
     private final CategoryService categoryService;
 
-    @Operation(summary = "내 카테고리 목록 조회", description = "로그인한 회원이 소유한 카테고리를 정렬 순서대로 반환합니다.")
+    @Operation(summary = "내 카테고리 목록 조회",
+            description = "로그인한 회원이 소유한 카테고리를 정렬 순서(sortOrder) 오름차순으로 반환합니다. 삭제한 카테고리는 포함하지 않습니다.")
     @GetMapping
     public CategoryListResponse list(@CurrentUser AuthUser authUser) {
         return categoryService.list(authUser.id());
     }
 
-    @Operation(summary = "카테고리 생성", description = "로그인한 회원의 새 카테고리를 생성합니다.")
+    @Operation(summary = "카테고리 생성",
+            description = "로그인한 회원의 새 카테고리를 생성합니다. "
+                    + "sortOrder를 지정하지 않으면 맨 뒤 순서(기존 최대 sortOrder + 1, 첫 카테고리는 0)가 부여되고, "
+                    + "visibility를 지정하지 않으면 PRIVATE로 생성됩니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CategoryResponse create(@CurrentUser AuthUser authUser,
@@ -45,19 +49,21 @@ public class CategoryController {
         return categoryService.create(authUser.id(), request);
     }
 
-    @Operation(summary = "카테고리 수정", description = "소유한 카테고리의 속성을 수정합니다.")
+    @Operation(summary = "카테고리 수정",
+            description = "소유한 카테고리의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, name은 공백이면 기존 값을 유지합니다.")
     @PutMapping("/{id}")
     public CategoryResponse update(@CurrentUser AuthUser authUser,
-                                   @Parameter(description = "카테고리 ID") @PathVariable Long id,
+                                   @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id,
                                    @Valid @RequestBody CategoryUpdateRequest request) {
         return categoryService.update(authUser.id(), id, request);
     }
 
-    @Operation(summary = "카테고리 삭제", description = "소유한 카테고리를 삭제합니다.")
+    @Operation(summary = "카테고리 삭제",
+            description = "소유한 카테고리를 삭제합니다. 해당 카테고리에 속해 있던 루틴·투두는 삭제되지 않고 미분류(categoryId=null)로 변경됩니다.")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser AuthUser authUser,
-                       @Parameter(description = "카테고리 ID") @PathVariable Long id) {
+                       @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id) {
         categoryService.delete(authUser.id(), id);
     }
 }

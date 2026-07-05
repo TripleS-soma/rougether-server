@@ -12,19 +12,19 @@ import java.time.LocalTime;
 public record RoutineCreateRequest(
         @Schema(description = "루틴 제목", example = "아침 운동")
         @NotBlank @Size(max = 160) String title,
-        @Schema(description = "소속 카테고리 ID(미지정이면 미분류)", example = "3")
+        @Schema(description = "소속 카테고리 ID(미지정이면 미분류). 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값", example = "3")
         Long categoryId,
-        @Schema(description = "인증 방식")
+        @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형)", example = "CHECK")
         @NotNull AuthType authType,
-        @Schema(description = "반복 유형(DAILY/WEEKLY)", example = "WEEKLY")
+        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정 — repeatDays 필요)", example = "WEEKLY")
         @NotBlank @Pattern(regexp = "DAILY|WEEKLY") String repeatType,
-        @Schema(description = "반복 설정(WEEKLY일 때 요일 지정)")
+        @Schema(description = "반복 설정. repeatType이 WEEKLY일 때만 요일 지정, DAILY면 생략")
         RepeatDays repeatDays,
-        @Schema(description = "수행 예정 시각(HH:mm:ss)", example = "07:00:00")
+        @Schema(description = "수행 예정 시각(HH:mm:ss). 루틴 목록·오늘 현황의 정렬 기준, 미지정 가능", example = "07:00:00")
         LocalTime scheduledTime,
-        @Schema(description = "시작일(ISO-8601)", example = "2026-07-01")
+        @Schema(description = "시작일(YYYY-MM-DD). 미지정이면 제한 없음. 오늘 현황은 시작일~종료일 범위의 루틴만 대상으로 봄", example = "2026-07-01")
         LocalDate startsOn,
-        @Schema(description = "종료일(ISO-8601)", example = "2026-12-31")
+        @Schema(description = "종료일(YYYY-MM-DD). 미지정이면 제한 없음", example = "2026-12-31")
         LocalDate endsOn
 ) {
 }

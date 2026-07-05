@@ -7,11 +7,11 @@ import java.util.List;
 public record CharacterListResponse(List<CharacterItem> items) {
 
     public record CharacterItem(
-            @Schema(description = "캐릭터 ID", example = "1") Long id,
+            @Schema(description = "캐릭터 ID — 대표 캐릭터 선택(PUT /api/v1/onboarding/character)의 characterId로 사용", example = "1") Long id,
             @Schema(description = "캐릭터 코드", example = "cat") String code,
             @Schema(description = "캐릭터 이름", example = "고양이") String name,
-            @Schema(description = "기본 에셋 key", example = "characters/cat.png") String baseAssetKey,
-            @Schema(description = "정렬 순서", example = "0") int sortOrder) {
+            @Schema(description = "기본 에셋 key — CDN base URL과 조합해 이미지 URL로 사용", example = "characters/cat.png") String baseAssetKey,
+            @Schema(description = "정렬 순서 — 목록은 이 값 오름차순으로 정렬됨", example = "0") int sortOrder) {
 
         public static CharacterItem of(Character character) {
             return new CharacterItem(
