@@ -10,9 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -39,6 +41,14 @@ public class GlobalExceptionHandler {
     // @RequestParam/@PathVariable 제약 위반(예: page 음수)은 본문 검증과 동일하게 400.
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ErrorResponse> handleParamValidation(HandlerMethodValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
+    }
+
+    // 필수 쿼리 파라미터 누락·타입 불일치(예: date 미전달, 잘못된 날짜 형식)는 클라이언트 잘못 → 400.
+    @ExceptionHandler({MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleBadRequestParam(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
     }
