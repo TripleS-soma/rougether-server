@@ -77,6 +77,12 @@ public class House extends BaseEntity {
         return house;
     }
 
+    // 초대코드 재발급 - 새 코드로 교체하면 기존 코드는 즉시 무효가 된다(invite_code 단일 컬럼).
+    public void updateInviteCode(String inviteCode, Instant inviteExpiresAt) {
+        this.inviteCode = inviteCode;
+        this.inviteExpiresAt = inviteExpiresAt;
+    }
+
     // 참여 확정 시 구성원 수 증가. 정원 검사와 같은 트랜잭션(행 락) 안에서 호출한다.
     public void increaseMemberCount() {
         this.currentMemberCount++;
