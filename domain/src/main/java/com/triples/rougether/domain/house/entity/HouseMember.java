@@ -71,6 +71,16 @@ public class HouseMember {
         return status == HouseMemberStatus.ACTIVE;
     }
 
+    // 강퇴 - KICKED 전환 + left_at 기록. 강퇴자는 재가입할 수 없다(참여 판정에서 차단).
+    public void kick() {
+        this.status = HouseMemberStatus.KICKED;
+        this.leftAt = Instant.now();
+    }
+
+    public boolean isKicked() {
+        return status == HouseMemberStatus.KICKED;
+    }
+
     // 탈퇴 - LEFT 전환 + left_at 기록. 기여 기록은 유지되고 재가입 시 reactivate 로 되돌린다.
     public void leave() {
         this.status = HouseMemberStatus.LEFT;

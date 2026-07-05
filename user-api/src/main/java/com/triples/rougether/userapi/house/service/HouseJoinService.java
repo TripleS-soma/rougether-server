@@ -55,13 +55,17 @@ public class HouseJoinService {
         return HouseJoinDetailResponse.of(member, house.getId(), userId);
     }
 
-    // 공용 참여 판정: 중복(active) -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
+    // 공용 참여 판정: 중복(active)/강퇴 이력 -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
     // 호출자는 house 를 행 락으로 조회한 상태여야 한다.
     private HouseMember join(House house, Long userId) {
         HouseMember existing = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
                 .orElse(null);
         if (existing != null && existing.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);
+        }
+        if (existing != null && existing.isKicked()) {
+            // 강퇴 이력은 재가입 불가 - LEFT 재활성화와 구분.
+            throw new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER);
         }
         if (house.isFull()) {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);

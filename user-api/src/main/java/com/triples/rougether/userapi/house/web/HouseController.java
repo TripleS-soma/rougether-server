@@ -131,6 +131,16 @@ public class HouseController {
         houseMemberCommandService.leave(user.id(), houseId);
     }
 
+    @Operation(summary = "구성원 강퇴",
+            description = "집 소유자가 구성원을 내보냅니다. 강퇴된 구성원은 이 집에 다시 참여할 수 없습니다.")
+    @DeleteMapping("/{houseId}/members/{membershipId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void kick(@CurrentUser AuthUser user,
+                     @Parameter(description = "집 ID") @PathVariable Long houseId,
+                     @Parameter(description = "강퇴할 구성원의 membership ID") @PathVariable Long membershipId) {
+        houseMemberCommandService.kick(user.id(), houseId, membershipId);
+    }
+
     @Operation(summary = "초대코드로 집 미리보기",
             description = "참여 전에 초대코드로 집 정보와 정원, 코드 만료 여부를 확인합니다.")
     @GetMapping("/by-code/{inviteCode}")
