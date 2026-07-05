@@ -70,4 +70,17 @@ public class HouseMember {
     public boolean isActive() {
         return status == HouseMemberStatus.ACTIVE;
     }
+
+    // 소유권 양도 - 반드시 기존 소유자 demote 와 한 트랜잭션으로 묶는다(소유자 2명 방지).
+    public void promoteToOwner() {
+        this.role = HouseMemberRole.OWNER;
+    }
+
+    public void demoteToMember() {
+        this.role = HouseMemberRole.MEMBER;
+    }
+
+    public boolean isOwner() {
+        return role == HouseMemberRole.OWNER;
+    }
 }

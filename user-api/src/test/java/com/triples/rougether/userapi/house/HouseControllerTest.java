@@ -22,9 +22,11 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
+import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.HouseController;
 import java.time.Instant;
@@ -51,6 +53,9 @@ class HouseControllerTest {
 
     @MockitoBean
     private HouseQueryService houseQueryService;
+
+    @MockitoBean
+    private HouseMemberCommandService houseMemberCommandService;
 
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
@@ -337,6 +342,44 @@ class HouseControllerTest {
         mockMvc.perform(post("/api/v1/houses/1/invite-code"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("HOUSE_NOT_OWNER"));
+    }
+
+    @Test
+    void 소유권_양도_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseMemberCommandService.transferOwnership(7L, 1L, 12L)).thenReturn(
+                new TransferOwnershipResponse(1L, 12L, 8L));
+
+        mockMvc.perform(post("/api/v1/houses/1/transfer-ownership")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMembershipId\": 12}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.newOwnerMembershipId").value(12))
+                .andExpect(jsonPath("$.newOwnerUserId").value(8));
+    }
+
+    @Test
+    void 잘못된_양도_대상은_400과_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseMemberCommandService.transferOwnership(7L, 1L, 99L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_TRANSFER_TARGET_INVALID));
+
+        mockMvc.perform(post("/api/v1/houses/1/transfer-ownership")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetMembershipId\": 99}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("HOUSE_TRANSFER_TARGET_INVALID"));
+    }
+
+    @Test
+    void 양도_대상_미지정은_400() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(post("/api/v1/houses/1/transfer-ownership")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

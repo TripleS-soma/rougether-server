@@ -77,6 +77,11 @@ public class House extends BaseEntity {
         return house;
     }
 
+    // 소유권 양도 - house_members 의 role 전환과 한 트랜잭션으로 묶는다.
+    public void changeOwner(User newOwner) {
+        this.owner = newOwner;
+    }
+
     // 초대코드 재발급 - 새 코드로 교체하면 기존 코드는 즉시 무효가 된다(invite_code 단일 컬럼).
     public void updateInviteCode(String inviteCode, Instant inviteExpiresAt) {
         this.inviteCode = inviteCode;

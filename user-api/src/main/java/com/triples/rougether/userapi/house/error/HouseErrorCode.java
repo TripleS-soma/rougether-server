@@ -8,6 +8,7 @@ public enum HouseErrorCode implements ErrorCode {
     HOUSE_NOT_FOUND("HOUSE_NOT_FOUND", "존재하지 않는 집입니다.", 404),
     HOUSE_NOT_MEMBER("HOUSE_NOT_MEMBER", "이 집의 구성원이 아닙니다.", 403),
     HOUSE_NOT_OWNER("HOUSE_NOT_OWNER", "집 소유자만 할 수 있습니다.", 403),
+    HOUSE_TRANSFER_TARGET_INVALID("HOUSE_TRANSFER_TARGET_INVALID", "양도 대상이 이 집의 다른 활성 구성원이 아닙니다.", 400),
     INVITE_CODE_INVALID("INVITE_CODE_INVALID", "유효하지 않은 초대코드입니다.", 404),
     INVITE_CODE_EXPIRED("INVITE_CODE_EXPIRED", "만료된 초대코드입니다.", 409),
     HOUSE_FULL("HOUSE_FULL", "집 정원이 가득 찼습니다.", 409),
