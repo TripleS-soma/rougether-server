@@ -51,4 +51,8 @@ public class User extends BaseEntity {
     public void recordLogin(Instant now) {
         this.lastLoginAt = now;
     }
+
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
 }
