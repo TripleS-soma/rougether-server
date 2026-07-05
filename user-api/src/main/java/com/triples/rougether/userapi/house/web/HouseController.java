@@ -12,8 +12,11 @@ import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
+import com.triples.rougether.userapi.house.dto.TransferOwnershipRequest;
+import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,12 +42,15 @@ public class HouseController {
     private final HouseCommandService houseCommandService;
     private final HouseJoinService houseJoinService;
     private final HouseQueryService houseQueryService;
+    private final HouseMemberCommandService houseMemberCommandService;
 
     public HouseController(HouseCommandService houseCommandService, HouseJoinService houseJoinService,
-                           HouseQueryService houseQueryService) {
+                           HouseQueryService houseQueryService,
+                           HouseMemberCommandService houseMemberCommandService) {
         this.houseCommandService = houseCommandService;
         this.houseJoinService = houseJoinService;
         this.houseQueryService = houseQueryService;
+        this.houseMemberCommandService = houseMemberCommandService;
     }
 
     @Operation(summary = "집 탐색 목록 조회",
@@ -104,6 +110,15 @@ public class HouseController {
     public InviteCodeResponse reissueInviteCode(@CurrentUser AuthUser user,
                                                 @Parameter(description = "집 ID") @PathVariable Long houseId) {
         return houseCommandService.reissueInviteCode(user.id(), houseId);
+    }
+
+    @Operation(summary = "소유권 양도",
+            description = "집 소유권을 다른 활성 구성원에게 넘깁니다. 기존 소유자는 일반 구성원이 됩니다.")
+    @PostMapping("/{houseId}/transfer-ownership")
+    public TransferOwnershipResponse transferOwnership(@CurrentUser AuthUser user,
+                                                       @Parameter(description = "집 ID") @PathVariable Long houseId,
+                                                       @Valid @RequestBody TransferOwnershipRequest request) {
+        return houseMemberCommandService.transferOwnership(user.id(), houseId, request.targetMembershipId());
     }
 
     @Operation(summary = "초대코드로 집 미리보기",
