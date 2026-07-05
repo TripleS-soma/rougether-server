@@ -403,6 +403,26 @@ class HouseControllerTest {
     }
 
     @Test
+    void 구성원_강퇴는_204를_내려준다() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(delete("/api/v1/houses/1/members/12"))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(houseMemberCommandService).kick(7L, 1L, 12L);
+    }
+
+    @Test
+    void 강퇴자의_재참여는_409와_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.join(7L, 1L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER));
+
+        mockMvc.perform(post("/api/v1/houses/1/join"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HOUSE_KICKED_MEMBER"));
+    }
+
+    @Test
     void 초대코드_미리보기_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.preview("ABCD2345")).thenReturn(

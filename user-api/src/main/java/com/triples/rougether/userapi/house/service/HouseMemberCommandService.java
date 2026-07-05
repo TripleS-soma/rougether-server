@@ -72,4 +72,28 @@ public class HouseMemberCommandService {
             house.softDelete();
         }
     }
+
+    // 강퇴 - 소유자 전용. KICKED 전환으로 재가입까지 차단한다. 알림 발송은 알림 도메인 의존(후속).
+    @Transactional
+    public void kick(Long userId, Long houseId, Long targetMembershipId) {
+        House house = houseRepository.findWithLockById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+
+        HouseMember requester = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .filter(HouseMember::isOwner)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER));
+        if (requester.getId().equals(targetMembershipId)) {
+            throw new BusinessException(HouseErrorCode.HOUSE_KICK_SELF);
+        }
+
+        HouseMember target = houseMemberRepository.findById(targetMembershipId)
+                .filter(HouseMember::isActive)
+                .filter(found -> found.getHouse().getId().equals(houseId))
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
+
+        target.kick();
+        house.decreaseMemberCount();
+    }
 }
