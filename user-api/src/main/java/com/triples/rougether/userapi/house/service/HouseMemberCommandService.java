@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
@@ -45,5 +46,30 @@ public class HouseMemberCommandService {
         house.changeOwner(target.getUser());
 
         return new TransferOwnershipResponse(houseId, target.getId(), target.getUser().getId());
+    }
+
+    // 집 탈퇴. 소유자는 다른 활성 구성원이 있으면 양도 선행, 마지막 1인이면 탈퇴와 함께 집을 정리한다.
+    // 참여(count 증가)와 대칭으로 house 행 락 아래에서 count 를 감소시킨다.
+    @Transactional
+    public void leave(Long userId, Long houseId) {
+        House house = houseRepository.findWithLockById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+
+        HouseMember me = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
+
+        long activeCount = houseMemberRepository.countByHouseIdAndStatus(houseId, HouseMemberStatus.ACTIVE);
+        if (me.isOwner() && activeCount > 1) {
+            throw new BusinessException(HouseErrorCode.HOUSE_OWNER_MUST_TRANSFER);
+        }
+
+        me.leave();
+        house.decreaseMemberCount();
+        if (activeCount == 1) {
+            // 마지막 구성원 - 빈 집이 탐색에 남지 않게 정리.
+            house.softDelete();
+        }
     }
 }
