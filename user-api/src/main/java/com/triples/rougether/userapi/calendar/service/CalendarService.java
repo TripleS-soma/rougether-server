@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.calendar.service;
 
 import com.triples.rougether.domain.routine.entity.Routine;
+import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
@@ -13,6 +14,7 @@ import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,7 +45,7 @@ public class CalendarService {
     private CalendarDayResponse liveDay(Long userId, LocalDate date) {
         // ACTIVE 루틴 중 그날 반복 대상만 추림
         List<Routine> routines = routineRepository
-                .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
@@ -59,23 +61,33 @@ public class CalendarService {
         return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
     }
 
-    // 과거: 그날 COMPLETED 루틴 log에서만 루틴을 소싱함(미완료 과거 루틴은 표시 안 함).
-    // log가 가리키는 루틴은 soft-deleted여도 현재값(title·categoryId·scheduledTime)으로 읽음
+    // 과거: 그날 유효했던 버전을 재구성함.
     private CalendarDayResponse pastDay(Long userId, LocalDate date) {
-        // 완료 log → 루틴(중복 완료는 guard로 막혀 있으나 방어적으로 distinct)
+        // ① 그날 유효한 버전(닫힌·삭제 버전 포함) 중 반복 대상
+        List<Routine> targeted = routineRepository.findEffectiveOnDay(userId, date).stream()
+                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                .toList();
+
+        // ② 그날 완료 로그가 가리키는 루틴
         List<Routine> completedRoutines = routineLogRepository
                 .findCompletedWithRoutineForDay(userId, date, RoutineLogStatus.COMPLETED)
                 .stream()
-                .map(log -> log.getRoutine())
-                .distinct()
+                .map(RoutineLog::getRoutine)
                 .toList();
-
-        // 과거에 노출되는 루틴은 전부 완료된 것뿐 — completed 집합은 곧 노출 루틴 전체
         Set<Long> completedRoutineIds = completedRoutines.stream()
                 .map(Routine::getId)
                 .collect(Collectors.toSet());
 
-        return assemble(date, completedRoutines, completedRoutineIds, todosOn(userId, date));
+        // ① ∪ ②
+        List<Routine> routines = new ArrayList<>(targeted);
+        Set<Long> seen = targeted.stream().map(Routine::getId).collect(Collectors.toSet());
+        for (Routine completed : completedRoutines) {
+            if (seen.add(completed.getId())) {
+                routines.add(completed);
+            }
+        }
+
+        return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
     }
 
     // 마감일이 정확히 그날인 투두만

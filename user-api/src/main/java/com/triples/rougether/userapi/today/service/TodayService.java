@@ -45,7 +45,7 @@ public class TodayService {
     TodayResponse today(Long userId, LocalDate targetDate) {
         // ACTIVE 루틴 중 오늘 반복 대상만 추림(repeat·기간 판정은 in-app)
         List<Routine> routines = routineRepository
-                .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))

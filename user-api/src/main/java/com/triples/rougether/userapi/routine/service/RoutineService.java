@@ -15,6 +15,8 @@ import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RoutineService {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RoutineRepository routineRepository;
     private final CategoryRepository categoryRepository;
@@ -33,19 +37,19 @@ public class RoutineService {
         List<Routine> routines;
         if (categoryId != null && status != null) {
             routines = routineRepository
-                    .findByUserIdAndCategoryIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                    .findByUserIdAndCategoryIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                             userId, categoryId, status);
         } else if (categoryId != null) {
             routines = routineRepository
-                    .findByUserIdAndCategoryIdAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                    .findByUserIdAndCategoryIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                             userId, categoryId);
         } else if (status != null) {
             routines = routineRepository
-                    .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(
+                    .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                             userId, status);
         } else {
             routines = routineRepository
-                    .findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscIdAsc(userId);
+                    .findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(userId);
         }
         return new RoutineListResponse(routines.stream().map(RoutineResponse::from).toList());
     }
@@ -64,20 +68,59 @@ public class RoutineService {
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
                 request.startsOn(), request.endsOn());
-        return RoutineResponse.from(routineRepository.save(routine));
+        Routine saved = routineRepository.save(routine);
+        // 계보 루트를 자기 id로 지정(dirty → 트랜잭션 커밋 시 반영)
+        saved.assignOriginToSelf();
+        return RoutineResponse.from(saved);
     }
 
     @Transactional
     public RoutineResponse update(Long userId, Long routineId, RoutineUpdateRequest request) {
         Routine routine = findOwned(userId, routineId);
-        if (request.categoryId() != null) {
-            routine.changeCategory(findOwnedCategory(userId, request.categoryId()));
-        }
+        Category category = request.categoryId() != null
+                ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+
+        // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
+        // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
+        if (isScheduleChanged(routine, request, repeatDays) && hasElapsedDay(routine)) {
+            Routine newVersion = routine.copyAsNewVersion(category, request.title(),
+                    request.authType(), request.repeatType(), repeatDays,
+                    request.scheduledTime(), request.startsOn(), request.endsOn());
+            routine.softDelete(Instant.now());
+            return RoutineResponse.from(routineRepository.save(newVersion));
+        }
+
+        // 제자리 수정(제목·카테고리·시각·인증 변경, 또는 오늘 생성분의 스케줄 변경) — 과거에도 반영됨
+        if (category != null) {
+            routine.changeCategory(category);
+        }
         routine.update(request.title(), request.authType(), request.repeatType(),
                 repeatDays, request.scheduledTime(), request.startsOn(),
                 request.endsOn());
         return RoutineResponse.from(routine);
+    }
+
+    // 반복 스케줄 필드(repeat_type·repeat_days·starts_on·ends_on) 중 하나라도 현재값과 달라졌는지.
+    // request는 부분수정이라 non-null인 필드만 비교(제공 안 한 필드는 변경 아님)
+    private boolean isScheduleChanged(Routine routine, RoutineUpdateRequest request, String repeatDays) {
+        if (request.repeatType() != null
+                && !request.repeatType().equals(routine.getRepeatType())) {
+            return true;
+        }
+        if (repeatDays != null && !repeatDays.equals(routine.getRepeatDays())) {
+            return true;
+        }
+        if (request.startsOn() != null && !request.startsOn().equals(routine.getStartsOn())) {
+            return true;
+        }
+        return request.endsOn() != null && !request.endsOn().equals(routine.getEndsOn());
+    }
+
+    // 이 버전이 오늘 이전에 생성됐는지
+    private boolean hasElapsedDay(Routine routine) {
+        LocalDate createdDate = LocalDate.ofInstant(routine.getCreatedAt(), KST);
+        return createdDate.isBefore(LocalDate.now(KST));
     }
 
     @Transactional
