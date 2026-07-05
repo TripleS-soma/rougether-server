@@ -21,6 +21,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
@@ -313,6 +314,29 @@ class HouseControllerTest {
         mockMvc.perform(get("/api/v1/houses/1/members"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
+    }
+
+    @Test
+    void 초대코드_재발급_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseCommandService.reissueInviteCode(7L, 1L)).thenReturn(
+                new InviteCodeResponse("WXYZ6789", Instant.parse("2026-07-11T00:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/invite-code"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inviteCode").value("WXYZ6789"))
+                .andExpect(jsonPath("$.inviteExpiresAt").exists());
+    }
+
+    @Test
+    void 소유자가_아닌_재발급은_403과_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseCommandService.reissueInviteCode(7L, 1L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER));
+
+        mockMvc.perform(post("/api/v1/houses/1/invite-code"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_OWNER"));
     }
 
     @Test

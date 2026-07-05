@@ -11,6 +11,7 @@ import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
@@ -95,6 +96,14 @@ public class HouseController {
     public HouseJoinDetailResponse join(@CurrentUser AuthUser user,
                                         @Parameter(description = "참여할 집 ID") @PathVariable Long houseId) {
         return houseJoinService.join(user.id(), houseId);
+    }
+
+    @Operation(summary = "초대코드 재발급",
+            description = "집 소유자가 초대코드를 새로 발급합니다. 기존 코드는 즉시 사용할 수 없게 됩니다.")
+    @PostMapping("/{houseId}/invite-code")
+    public InviteCodeResponse reissueInviteCode(@CurrentUser AuthUser user,
+                                                @Parameter(description = "집 ID") @PathVariable Long houseId) {
+        return houseCommandService.reissueInviteCode(user.id(), houseId);
     }
 
     @Operation(summary = "초대코드로 집 미리보기",

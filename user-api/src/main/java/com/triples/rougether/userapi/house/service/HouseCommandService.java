@@ -14,6 +14,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
+import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
@@ -68,5 +69,24 @@ public class HouseCommandService {
         houseGoalRepository.saveAll(goals.stream().map(goal -> HouseGoal.create(house, goal)).toList());
 
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
+    }
+
+    // 초대코드 재발급 - 소유자 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
+    @Transactional
+    public InviteCodeResponse reissueInviteCode(Long userId, Long houseId) {
+        House house = houseRepository.findById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        boolean isOwner = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .map(member -> member.getRole() == HouseMemberRole.OWNER)
+                .orElse(false);
+        if (!isOwner) {
+            // 구성원 여부를 노출하지 않도록 비구성원/일반 구성원 모두 같은 코드로 거부.
+            throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
+        }
+
+        house.updateInviteCode(inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL));
+        return new InviteCodeResponse(house.getInviteCode(), house.getInviteExpiresAt());
     }
 }
