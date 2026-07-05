@@ -5,6 +5,8 @@ import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.shop.dto.ItemListResponse;
 import com.triples.rougether.userapi.shop.dto.ItemResponse;
+import com.triples.rougether.userapi.shop.dto.MyItemListResponse;
+import com.triples.rougether.userapi.shop.dto.MyItemListResponse.MyItemSummary;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -38,5 +40,15 @@ public class ShopQueryService {
                 .toList();
 
         return new ItemListResponse(responses);
+    }
+
+    // 인벤토리(보유 아이템) - 최근 획득 먼저, categoryCode 선택 필터.
+    @Transactional(readOnly = true)
+    public MyItemListResponse getMyItems(Long userId, String categoryCode) {
+        String filter = (categoryCode == null || categoryCode.isBlank()) ? null : categoryCode;
+        List<MyItemSummary> items = userItemRepository.findInventoryByUserId(userId, filter).stream()
+                .map(MyItemSummary::of)
+                .toList();
+        return new MyItemListResponse(items);
     }
 }
