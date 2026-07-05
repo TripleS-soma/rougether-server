@@ -77,6 +77,14 @@ public class House extends BaseEntity {
         return house;
     }
 
+    // 미션 달성 보상 - 성장 포인트 적립과 함께 레벨을 재계산한다(레벨당 100pt 선형, 팀 확정).
+    private static final int GROWTH_POINTS_PER_LEVEL = 100;
+
+    public void addGrowthPoints(int points) {
+        this.growthPoints += points;
+        this.level = this.growthPoints / GROWTH_POINTS_PER_LEVEL;
+    }
+
     // 설정 부분 수정 - null 필드는 변경하지 않는다. maxMembers 하향 검증은 서비스가 담당.
     public void updateSettings(String name, String description, String coverImageKey, Integer maxMembers) {
         if (name != null) {
