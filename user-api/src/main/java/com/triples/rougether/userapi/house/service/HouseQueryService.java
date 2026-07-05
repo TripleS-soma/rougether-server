@@ -11,6 +11,8 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
+import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberListResponse.MemberSummary;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
@@ -48,11 +50,33 @@ public class HouseQueryService {
         HouseMember me = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
+        // NOTE: house 를 응답에 써야 해서 requireActiveMember 로 합치지 않고 유지.
 
         List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
         return HouseDetailResponse.of(house, me.getRole(), goals);
+    }
+
+    // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
+    @Transactional(readOnly = true)
+    public HouseMemberListResponse getMembers(Long userId, Long houseId) {
+        requireActiveMember(userId, houseId);
+        List<MemberSummary> items = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE).stream()
+                .map(MemberSummary::of)
+                .toList();
+        return new HouseMemberListResponse(items);
+    }
+
+    // 집 존재(삭제 제외) + 내 ACTIVE membership 확인. 상세/구성원 목록 공용 guard.
+    private HouseMember requireActiveMember(Long userId, Long houseId) {
+        houseRepository.findById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        return houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
 
     // 내가 속한(ACTIVE) 집 목록 - 먼저 가입한 집 먼저. 삭제된 집 제외.

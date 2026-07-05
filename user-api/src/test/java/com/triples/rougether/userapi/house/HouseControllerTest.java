@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
@@ -283,6 +284,33 @@ class HouseControllerTest {
                 .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
         mockMvc.perform(get("/api/v1/houses/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
+    }
+
+    @Test
+    void 구성원_목록_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseQueryService.getMembers(7L, 1L)).thenReturn(new HouseMemberListResponse(java.util.List.of(
+                new HouseMemberListResponse.MemberSummary(10L, 7L, "진형", HouseMemberRole.OWNER,
+                        HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T00:00:00Z")))));
+
+        mockMvc.perform(get("/api/v1/houses/1/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].membershipId").value(10))
+                .andExpect(jsonPath("$.items[0].userId").value(7))
+                .andExpect(jsonPath("$.items[0].nickname").value("진형"))
+                .andExpect(jsonPath("$.items[0].role").value("OWNER"))
+                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"));
+    }
+
+    @Test
+    void 비구성원_구성원_목록_조회는_403과_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseQueryService.getMembers(7L, 1L))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
+
+        mockMvc.perform(get("/api/v1/houses/1/members"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
     }
