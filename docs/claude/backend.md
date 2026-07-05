@@ -4,7 +4,7 @@
 
 ## 기술 스택
 
-- Java 17 (Gradle toolchain, foojay auto-provision)
+- Java 25 (Gradle toolchain, foojay auto-provision)
 - Spring Boot 4.1
 - Gradle 멀티모듈
 - Spring Web MVC

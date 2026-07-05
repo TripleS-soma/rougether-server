@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:17-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 
 WORKDIR /workspace
 
@@ -18,7 +18,7 @@ COPY . .
 RUN chmod +x ./gradlew \
     && ./gradlew --no-daemon ":${APP_MODULE}:bootJar"
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 
 ARG APP_MODULE=user-api
 

@@ -5,7 +5,7 @@
 초기 구현 기준:
 
 - Spring Boot 4.1
-- Java 17
+- Java 25
 - MySQL + Flyway
 - API prefix `/api/v1`
 - Flyway 기반 migration
