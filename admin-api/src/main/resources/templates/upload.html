@@ -78,6 +78,7 @@
         </div>
     </main>
 
+    <script th:src="@{/js/copy.js}"></script>
     <script th:inline="javascript">
         const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
@@ -159,10 +160,10 @@
             errorBox.hidden = false;
         }
 
-        document.getElementById('copy-btn').addEventListener('click', () => {
-            navigator.clipboard.writeText(document.getElementById('result-key').textContent);
+        document.getElementById('copy-btn').addEventListener('click', async () => {
+            const ok = await copyText(document.getElementById('result-key').textContent);
             const btn = document.getElementById('copy-btn');
-            btn.textContent = '복사됨';
+            btn.textContent = ok ? '복사됨' : '복사 실패';
             setTimeout(() => { btn.textContent = '복사'; }, 1200);
         });
     </script>
