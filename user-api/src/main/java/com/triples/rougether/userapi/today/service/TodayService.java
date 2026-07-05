@@ -54,9 +54,8 @@ public class TodayService {
                 .map(log -> log.getRoutine().getId())
                 .collect(Collectors.toSet());
 
-        // 오늘까지 마감(overdue 포함) 투두
-        List<Todo> todos = todoRepository
-                .findByUserIdAndDueDateLessThanEqualAndDeletedAtIsNull(userId, targetDate);
+        // 마감일이 정확히 오늘인 투두만(overdue·밀린 투두 제외 — calendar와 동일)
+        List<Todo> todos = todoRepository.findOwnedWithFilters(userId, null, null, targetDate);
 
         List<TodayCategoryGroup> categories = agendaAssembler.groupByCategory(routines, completedRoutineIds, todos);
         TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todos);

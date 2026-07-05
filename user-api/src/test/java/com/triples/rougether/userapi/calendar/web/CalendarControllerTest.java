@@ -75,6 +75,24 @@ class CalendarControllerTest {
     }
 
     @Test
+    void 과거_날짜도_동일한_계약으로_반환한다() throws Exception {
+        // 과거는 완료 log 기반이라 노출 루틴은 모두 completed=true, categoryId는 삭제된 카테고리를 가리킬 수 있음
+        CalendarDayResponse response = new CalendarDayResponse(LocalDate.of(2026, 6, 29),
+                List.of(new TodayCategoryGroup(99L,
+                        List.of(new TodayRoutineItem(10L, "삭제된 루틴", LocalTime.of(7, 0),
+                                AuthType.CHECK, true)),
+                        List.of())),
+                new TodaySummary(1, 0, 1.0));
+        when(calendarService.day(eq(1L), eq(LocalDate.of(2026, 6, 29)))).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/calendar").param("date", "2026-06-29"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categories[0].categoryId").value(99))
+                .andExpect(jsonPath("$.categories[0].routines[0].completed").value(true))
+                .andExpect(jsonPath("$.summary.progressRate").value(1.0));
+    }
+
+    @Test
     void date_파라미터가_없으면_400() throws Exception {
         mockMvc.perform(get("/api/v1/calendar"))
                 .andExpect(status().isBadRequest());

@@ -109,13 +109,13 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
-    void 오늘까지_마감인_투두는_노출되고_미래_마감은_제외된다() {
+    void 마감일이_정확히_오늘인_투두만_노출되고_지난_마감과_미래_마감은_제외된다() {
         persistTodo("오늘 마감", null, MONDAY);
         persistTodo("지난 마감", null, MONDAY.minusDays(2));
         persistTodo("미래 마감", null, MONDAY.plusDays(1));
 
         assertThat(todoTitles(service.today(userId, MONDAY)))
-                .containsExactlyInAnyOrder("오늘 마감", "지난 마감");
+                .containsExactly("오늘 마감");
     }
 
     @Test

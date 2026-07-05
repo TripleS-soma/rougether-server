@@ -14,9 +14,6 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     // 소유권 guard 단건: 타인 소유·미존재·삭제됨 모두 empty
     Optional<Todo> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
-    // 오늘 현황용: 오늘까지 마감(overdue 포함) 투두
-    List<Todo> findByUserIdAndDueDateLessThanEqualAndDeletedAtIsNull(Long userId, LocalDate dueDate);
-
     // categoryId/status/dueDate는 null이면 해당 조건 무시(동적 필터). dueDate는 오늘 현황용으로도 재사용함
     @Query("""
             select t from Todo t
