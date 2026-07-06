@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-// 단체 미션 - 목록/생성/상세/기여(임시)/보상. 전부 해당 집의 ACTIVE 구성원 전용.
+// 단체 미션 - 목록/생성/상세/기여(수행 체크)/보상. 전부 해당 집의 ACTIVE 구성원 전용.
 @Tag(name = "HouseMission", description = "공동집 단체 미션 관련 API")
 @RestController
 @RequestMapping("/api/v1/houses/{houseId}/missions")
@@ -69,8 +69,9 @@ public class HouseMissionController {
         return houseMissionService.getMission(user.id(), houseId, missionId);
     }
 
-    @Operation(summary = "단체 미션 기여 (임시)",
-            description = "미션 진행 수치에 본인 기여 +1 을 반영합니다. 루틴 완료 이벤트 연동 전까지 사용하는 임시 API 입니다. "
+    @Operation(summary = "단체 미션 수행 체크 (기여)",
+            description = "오늘 이 미션을 수행했다고 체크해 진행 수치에 본인 기여 +1 을 반영합니다. "
+                    + "공동 미션은 구성원이 미션 자체를 직접 수행 체크하는 방식이며 개인 루틴 완료와는 무관합니다. "
                     + "해당 집의 ACTIVE 구성원만, KST(Asia/Seoul) 기준 하루 1회만 기여할 수 있으며 "
                     + "진행 중(ACTIVE)이고 미션 기간 내일 때만 가능합니다. "
                     + "이미 오늘 기여했으면 409 HOUSE_MISSION_ALREADY_CONTRIBUTED 를 반환합니다.")

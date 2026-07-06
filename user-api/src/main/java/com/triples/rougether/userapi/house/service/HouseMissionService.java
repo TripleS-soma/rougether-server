@@ -27,7 +27,7 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 단체 미션 - 생성(소유자)/목록·상세(구성원)/기여(임시, 하루 1회)/보상(claim, 성장 포인트 +100).
+// 단체 미션 - 생성(소유자)/목록·상세(구성원)/기여(수행 체크, 하루 1회)/보상(claim, 성장 포인트 +100).
 @Service
 public class HouseMissionService {
 
@@ -98,7 +98,7 @@ public class HouseMissionService {
         return HouseMissionResponse.of(mission, currentValue, myContribution);
     }
 
-    // 임시 기여 API - 본인 +1, KST 하루 1회. 루틴 완료 이벤트 연동 전까지의 수동 기여 수단.
+    // 미션 수행 체크(기여) - 본인 +1, KST 하루 1회. 구성원이 공동 미션 자체를 직접 수행 체크한다 (모델 확정 2026-07-05).
     @Transactional
     public HouseMissionContributeResponse contribute(Long userId, Long houseId, Long missionId) {
         requireHouse(houseId);

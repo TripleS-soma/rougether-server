@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.house.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-// POST /api/v1/houses/{houseId}/missions/{missionId}/contribute 응답. 임시 기여 API.
+// POST /api/v1/houses/{houseId}/missions/{missionId}/contribute 응답. 미션 수행 체크(기여) 결과.
 public record HouseMissionContributeResponse(
         @Schema(description = "미션 ID", example = "3")
         Long missionId,
