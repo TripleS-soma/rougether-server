@@ -52,4 +52,14 @@ public class RoomGuestbook {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    // 방명록 작성 - 같은 집 구성원 여부 검증은 서비스가 담당한다.
+    public static RoomGuestbook write(User roomOwner, House house, User author, String content) {
+        RoomGuestbook guestbook = new RoomGuestbook();
+        guestbook.roomOwner = roomOwner;
+        guestbook.house = house;
+        guestbook.author = author;
+        guestbook.content = content;
+        return guestbook;
+    }
 }
