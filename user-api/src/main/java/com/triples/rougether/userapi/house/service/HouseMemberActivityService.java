@@ -9,6 +9,7 @@ import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse.CompletionSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -41,17 +42,20 @@ public class HouseMemberActivityService {
     private final RoomQueryService roomQueryService;
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
+    private final DailyAgendaAssembler agendaAssembler;
 
     public HouseMemberActivityService(HouseRepository houseRepository,
                                       HouseMemberRepository houseMemberRepository,
                                       RoomQueryService roomQueryService,
                                       RoutineRepository routineRepository,
-                                      RoutineLogRepository routineLogRepository) {
+                                      RoutineLogRepository routineLogRepository,
+                                      DailyAgendaAssembler agendaAssembler) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.roomQueryService = roomQueryService;
         this.routineRepository = routineRepository;
         this.routineLogRepository = routineLogRepository;
+        this.agendaAssembler = agendaAssembler;
     }
 
     // 멤버 방 조회 - 내 방(GET /rooms/me)과 같은 응답 형태. 방 미생성이면 ROOM_NOT_FOUND(404).
@@ -61,13 +65,17 @@ public class HouseMemberActivityService {
         return roomQueryService.getRoomOf(memberUserId);
     }
 
-    // 멤버 활성 루틴 목록 - 공개 범위 통과분만.
+    // 멤버 루틴 목록 - 그날(기본 오늘 KST) 반복 대상이면서 공개 범위를 통과한 것만.
+    // 대상 판정(isRoutineTargetOn)은 오늘 현황·캘린더와 동일 규칙.
     @Transactional(readOnly = true)
-    public RoutineListResponse getMemberRoutines(Long userId, Long houseId, Long memberUserId) {
+    public RoutineListResponse getMemberRoutines(Long userId, Long houseId, Long memberUserId,
+                                                 LocalDate date) {
         requireSameHouseMembers(userId, memberUserId, houseId);
+        LocalDate targetDate = date != null ? date : LocalDate.now(KST);
         return new RoutineListResponse(routineRepository
                 .findVisibleByUserIdAndStatus(memberUserId, RoutineStatus.ACTIVE, HOUSE_VISIBLE_SCOPES)
                 .stream()
+                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
                 .map(RoutineResponse::from)
                 .toList());
     }

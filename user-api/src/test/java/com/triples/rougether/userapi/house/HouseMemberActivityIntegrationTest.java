@@ -28,11 +28,13 @@ import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -134,7 +136,7 @@ class HouseMemberActivityIntegrationTest {
         User stranger = userRepository.save(User.signUp("activity-stranger@rougether.dev"));
 
         assertThatThrownBy(() -> activityService.getMemberRoutines(
-                stranger.getId(), f.house().getId(), f.target().getId()))
+                stranger.getId(), f.house().getId(), f.target().getId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
 
@@ -144,7 +146,7 @@ class HouseMemberActivityIntegrationTest {
         User outsider = userRepository.save(User.signUp("activity-outsider@rougether.dev"));
 
         assertThatThrownBy(() -> activityService.getMemberRoutines(
-                f.viewer().getId(), f.house().getId(), outsider.getId()))
+                f.viewer().getId(), f.house().getId(), outsider.getId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
     }
 
@@ -169,10 +171,34 @@ class HouseMemberActivityIntegrationTest {
         saveRoutine(f.target(), null, "미분류 루틴");
 
         RoutineListResponse response = activityService.getMemberRoutines(
-                f.viewer().getId(), f.house().getId(), f.target().getId());
+                f.viewer().getId(), f.house().getId(), f.target().getId(), null);
 
         assertThat(response.items()).extracting("title")
                 .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴");
+    }
+
+    @Test
+    void 루틴은_그날_반복_대상만_보인다() {
+        Fixture f = fixture();
+        LocalDate monday = LocalDate.of(2026, 7, 6); // 월요일
+        Category category = categoryRepository.save(Category.create(
+                f.target(), "요일 카테고리", null, null, 0, PrivacyScope.HOUSE));
+        routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
+                AuthType.CHECK, "DAILY", null, null, null, null)).assignOriginToSelf();
+        routineRepository.save(Routine.create(f.target(), category, "월요일 루틴",
+                AuthType.CHECK, "WEEKLY", new RepeatDays(List.of("MON")).toJson(),
+                null, null, null)).assignOriginToSelf();
+        routineRepository.save(Routine.create(f.target(), category, "화요일 루틴",
+                AuthType.CHECK, "WEEKLY", new RepeatDays(List.of("TUE")).toJson(),
+                null, null, null)).assignOriginToSelf();
+        routineRepository.save(Routine.create(f.target(), category, "종료된 루틴",
+                AuthType.CHECK, "DAILY", null, null, null, monday.minusDays(1))).assignOriginToSelf();
+
+        RoutineListResponse response = activityService.getMemberRoutines(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), monday);
+
+        assertThat(response.items()).extracting("title")
+                .containsExactlyInAnyOrder("매일 루틴", "월요일 루틴");
     }
 
     // --- 완료 내역 ---
