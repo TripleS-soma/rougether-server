@@ -6,7 +6,9 @@ public enum RoomErrorCode implements ErrorCode {
 
     INVALID_SLOT_TYPE("ROOM_INVALID_SLOT_TYPE", "유효하지 않은 슬롯 타입입니다.", 400),
     DUPLICATE_SLOT_TYPE("ROOM_DUPLICATE_SLOT_TYPE", "같은 슬롯을 한 요청에 중복 지정할 수 없습니다.", 400),
-    ITEM_NOT_OWNED("ROOM_ITEM_NOT_OWNED", "소유하지 않은 아이템은 배치할 수 없습니다.", 403);
+    ITEM_NOT_OWNED("ROOM_ITEM_NOT_OWNED", "소유하지 않은 아이템은 배치할 수 없습니다.", 403),
+    // 타인 방 조회 전용. 내 방(GET /rooms/me)은 lazy 생성이라 이 에러가 나지 않는다
+    ROOM_NOT_FOUND("ROOM_NOT_FOUND", "아직 방을 만들지 않은 회원입니다.", 404);
 
     private final String code;
     private final String message;
