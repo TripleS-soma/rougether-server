@@ -1,0 +1,250 @@
+package com.triples.rougether.userapi.house;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.common.error.ErrorCode;
+import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.room.entity.PersonalRoom;
+import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.domain.routine.entity.Category;
+import com.triples.rougether.domain.routine.entity.PrivacyScope;
+import com.triples.rougether.domain.routine.entity.Routine;
+import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
+import com.triples.rougether.userapi.room.dto.RoomResponse;
+import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
+
+// 집 멤버 활동 열람(방/루틴/완료 내역) 회귀. 같은 집 guard + 카테고리 공개 범위 필터 + 기간 필터를 실제 DB 로 검증.
+@SpringBootTest
+@Transactional
+class HouseMemberActivityIntegrationTest {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    @Autowired private HouseMemberActivityService activityService;
+    @Autowired private UserRepository userRepository;
+    @Autowired private HouseRepository houseRepository;
+    @Autowired private HouseMemberRepository houseMemberRepository;
+    @Autowired private PersonalRoomRepository personalRoomRepository;
+    @Autowired private CategoryRepository categoryRepository;
+    @Autowired private RoutineRepository routineRepository;
+    @Autowired private RoutineLogRepository routineLogRepository;
+
+    private record Fixture(User viewer, User target, House house) {
+    }
+
+    private Fixture fixture() {
+        User viewer = userRepository.save(User.signUp("activity-viewer@rougether.dev"));
+        User target = userRepository.save(User.signUp("activity-target@rougether.dev"));
+        House house = houseRepository.save(House.create(
+                viewer, "활동 하우스", null, null, 4, "ACT12345", Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(house, viewer, HouseMemberRole.OWNER));
+        houseMemberRepository.save(HouseMember.create(house, target, HouseMemberRole.MEMBER));
+        house.increaseMemberCount();
+        return new Fixture(viewer, target, house);
+    }
+
+    private Routine routineIn(User owner, PrivacyScope visibility, String title) {
+        Category category = categoryRepository.save(Category.create(
+                owner, title + " 카테고리", null, null, 0, visibility));
+        return saveRoutine(owner, category, title);
+    }
+
+    private Routine saveRoutine(User owner, Category category, String title) {
+        Routine saved = routineRepository.save(Routine.create(
+                owner, category, title, AuthType.CHECK, "DAILY", null, null, null, null));
+        saved.assignOriginToSelf();
+        return saved;
+    }
+
+    private void completeOn(Routine routine, LocalDate date) {
+        routineLogRepository.save(RoutineLog.complete(
+                routine, date, date.atStartOfDay(KST).toInstant(), CurrencyType.COIN, 10));
+    }
+
+    private static ErrorCode errorCodeOf(Throwable e) {
+        return ((BusinessException) e).getErrorCode();
+    }
+
+    // --- 방 ---
+
+    @Test
+    void 같은_집_멤버의_방을_조회한다() {
+        Fixture f = fixture();
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+
+        RoomResponse response = activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.target().getId());
+
+        assertThat(response.roomUserId()).isEqualTo(f.target().getId());
+        assertThat(response.growthLevel()).isZero();
+        assertThat(response.slots()).isEmpty();
+    }
+
+    @Test
+    void 본인도_같은_API_로_방을_조회할_수_있다() {
+        Fixture f = fixture();
+        personalRoomRepository.save(PersonalRoom.create(f.viewer()));
+
+        RoomResponse response = activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.viewer().getId());
+
+        assertThat(response.roomUserId()).isEqualTo(f.viewer().getId());
+    }
+
+    @Test
+    void 대상이_방을_아직_만들지_않았으면_404() {
+        Fixture f = fixture();
+
+        assertThatThrownBy(() -> activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.target().getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(RoomErrorCode.ROOM_NOT_FOUND));
+    }
+
+    // --- guard ---
+
+    @Test
+    void 요청자가_집_멤버가_아니면_403() {
+        Fixture f = fixture();
+        User stranger = userRepository.save(User.signUp("activity-stranger@rougether.dev"));
+
+        assertThatThrownBy(() -> activityService.getMemberRoutines(
+                stranger.getId(), f.house().getId(), f.target().getId()))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
+    }
+
+    @Test
+    void 조회_대상이_집_멤버가_아니면_404() {
+        Fixture f = fixture();
+        User outsider = userRepository.save(User.signUp("activity-outsider@rougether.dev"));
+
+        assertThatThrownBy(() -> activityService.getMemberRoutines(
+                f.viewer().getId(), f.house().getId(), outsider.getId()))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
+    }
+
+    @Test
+    void 없는_집이면_404() {
+        Fixture f = fixture();
+
+        assertThatThrownBy(() -> activityService.getMemberRoom(
+                f.viewer().getId(), 999999L, f.target().getId()))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
+    }
+
+    // --- 루틴 공개 범위 ---
+
+    @Test
+    void 루틴은_HOUSE_또는_PUBLIC_카테고리만_보인다() {
+        Fixture f = fixture();
+        routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴");
+        routineIn(f.target(), PrivacyScope.FRIENDS, "친한친구 루틴");
+        routineIn(f.target(), PrivacyScope.HOUSE, "집 공개 루틴");
+        routineIn(f.target(), PrivacyScope.PUBLIC, "전체 공개 루틴");
+        saveRoutine(f.target(), null, "미분류 루틴");
+
+        RoutineListResponse response = activityService.getMemberRoutines(
+                f.viewer().getId(), f.house().getId(), f.target().getId());
+
+        assertThat(response.items()).extracting("title")
+                .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴");
+    }
+
+    // --- 완료 내역 ---
+
+    @Test
+    void 완료_내역은_기간과_공개_범위로_필터링된다() {
+        Fixture f = fixture();
+        LocalDate today = LocalDate.now(KST);
+        Routine visible = routineIn(f.target(), PrivacyScope.HOUSE, "집 공개 루틴");
+        Routine hidden = routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴");
+        completeOn(visible, today);
+        completeOn(visible, today.minusDays(3));
+        completeOn(visible, today.minusDays(20)); // 기본 14일 창 밖
+        completeOn(hidden, today);                // 공개 범위 밖
+
+        HouseMemberRoutineCompletionListResponse response = activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), null, null);
+
+        assertThat(response.to()).isEqualTo(today);
+        assertThat(response.from()).isEqualTo(today.minusDays(13));
+        assertThat(response.items()).extracting("routineDate")
+                .containsExactly(today, today.minusDays(3)); // 최신 날짜 먼저
+        assertThat(response.items()).allSatisfy(item ->
+                assertThat(item.title()).isEqualTo("집 공개 루틴"));
+    }
+
+    @Test
+    void 완료_내역은_지정한_from_to_구간만_반환한다() {
+        Fixture f = fixture();
+        LocalDate today = LocalDate.now(KST);
+        Routine visible = routineIn(f.target(), PrivacyScope.PUBLIC, "전체 공개 루틴");
+        completeOn(visible, today);
+        completeOn(visible, today.minusDays(20));
+        completeOn(visible, today.minusDays(40));
+
+        HouseMemberRoutineCompletionListResponse response = activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(),
+                today.minusDays(30), today.minusDays(10));
+
+        assertThat(response.items()).extracting("routineDate")
+                .containsExactly(today.minusDays(20));
+    }
+
+    @Test
+    void 완료_내역_기간은_하루짜리와_92일짜리까지_허용된다() {
+        Fixture f = fixture();
+        LocalDate today = LocalDate.now(KST);
+        Routine visible = routineIn(f.target(), PrivacyScope.HOUSE, "집 공개 루틴");
+        completeOn(visible, today);
+
+        // from=to (하루)
+        assertThat(activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), today, today)
+                .items()).hasSize(1);
+        // 정확히 92일 창 (from = to-91)
+        assertThat(activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), today.minusDays(91), today)
+                .items()).hasSize(1);
+    }
+
+    @Test
+    void 완료_내역_기간이_뒤집히거나_92일을_넘으면_400() {
+        Fixture f = fixture();
+        LocalDate today = LocalDate.now(KST);
+
+        assertThatThrownBy(() -> activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), today, today.minusDays(1)))
+                .satisfies(e -> assertThat(errorCodeOf(e))
+                        .isEqualTo(HouseErrorCode.HOUSE_ACTIVITY_PERIOD_INVALID));
+        assertThatThrownBy(() -> activityService.getMemberRoutineCompletions(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), today.minusDays(92), today))
+                .satisfies(e -> assertThat(errorCodeOf(e))
+                        .isEqualTo(HouseErrorCode.HOUSE_ACTIVITY_PERIOD_INVALID));
+    }
+}

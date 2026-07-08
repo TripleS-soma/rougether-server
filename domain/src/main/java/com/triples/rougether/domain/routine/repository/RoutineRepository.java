@@ -1,5 +1,6 @@
 package com.triples.rougether.domain.routine.repository;
 
+import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import java.time.Instant;
@@ -46,4 +47,16 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "and (r.deletedAt is null or r.deletedAt >= :dayEndExclusive)")
     List<Routine> findEffectiveBefore(@Param("userId") Long userId,
                                       @Param("dayEndExclusive") Instant dayEndExclusive);
+
+    // 타인(집 멤버) 열람용: 카테고리 공개 범위가 허용된 루틴만.
+    // 미분류(category null) 루틴은 공개 범위를 정할 수 없어 inner join 으로 자연 제외됨(비공개 취급)
+    @Query("select r from Routine r "
+            + "join fetch r.category c "
+            + "where r.user.id = :userId and r.status = :status "
+            + "and r.deletedAt is null and c.deletedAt is null "
+            + "and c.visibility in :visibilities "
+            + "order by r.scheduledTime asc, r.originRoutineId asc")
+    List<Routine> findVisibleByUserIdAndStatus(@Param("userId") Long userId,
+                                               @Param("status") RoutineStatus status,
+                                               @Param("visibilities") List<PrivacyScope> visibilities);
 }
