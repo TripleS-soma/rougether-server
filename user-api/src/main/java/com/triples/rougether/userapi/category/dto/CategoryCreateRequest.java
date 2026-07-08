@@ -15,7 +15,7 @@ public record CategoryCreateRequest(
         @Size(max = 100) String iconKey,
         @Schema(description = "정렬 순서(0 이상, 작을수록 먼저). 미지정 시 맨 뒤 순서(기존 최대값+1, 첫 카테고리는 0) 자동 부여", example = "0")
         @Min(0) Integer sortOrder,
-        @Schema(description = "공개 범위. 허용값: PRIVATE(나만 보기), HOUSE(집 구성원 공개). 미지정 시 PRIVATE", example = "PRIVATE")
+        @Schema(description = "공개 범위. 허용값: PRIVATE(비공개), FRIENDS(친한친구), HOUSE(집), PUBLIC(공개). 미지정 시 PRIVATE", example = "PRIVATE")
         PrivacyScope visibility
 ) {
 }

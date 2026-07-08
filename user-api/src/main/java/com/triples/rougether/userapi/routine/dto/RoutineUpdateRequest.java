@@ -18,11 +18,11 @@ public record RoutineUpdateRequest(
         @Pattern(regexp = "DAILY|WEEKLY") String repeatType,
         @Schema(description = "반복 설정. repeatType이 WEEKLY일 때 요일 지정. 미지정(null)이면 기존 값 유지")
         RepeatDays repeatDays,
-        @Schema(description = "수행 예정 시각(HH:mm:ss). 미지정(null)이면 기존 값 유지", example = "07:00:00")
+        @Schema(description = "수행 예정 시각(HH:mm:ss). null이면 해제합니다.", example = "07:00:00")
         LocalTime scheduledTime,
         @Schema(description = "시작일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지", example = "2026-07-01")
         LocalDate startsOn,
-        @Schema(description = "종료일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지", example = "2026-12-31")
+        @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다.", example = "2026-12-31")
         LocalDate endsOn
 ) {
 }

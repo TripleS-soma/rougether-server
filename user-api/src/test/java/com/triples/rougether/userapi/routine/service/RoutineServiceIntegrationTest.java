@@ -135,7 +135,7 @@ class RoutineServiceIntegrationTest {
     }
 
     @Test
-    void 수정은_null_필드를_건드리지_않고_categoryId는_변경한다() {
+    void 수정은_authType_repeatType_null은_유지하고_categoryId는_변경한다() {
         Long firstCategory = persistCategory(userId, "운동");
         Long secondCategory = persistCategory(userId, "공부");
         RoutineResponse created = routineService.create(userId,
@@ -143,13 +143,27 @@ class RoutineServiceIntegrationTest {
                         "DAILY", null, LocalTime.of(8, 0), null, null));
 
         RoutineResponse updated = routineService.update(userId, created.id(),
-                new RoutineUpdateRequest("변경됨", secondCategory, null, null, null, null, null, null));
+                new RoutineUpdateRequest("변경됨", secondCategory, null, null, null,
+                        LocalTime.of(8, 0), null, null));
 
         assertThat(updated.title()).isEqualTo("변경됨");
         assertThat(updated.categoryId()).isEqualTo(secondCategory);
         assertThat(updated.authType()).isEqualTo(AuthType.CHECK);
         assertThat(updated.repeatType()).isEqualTo("DAILY");
         assertThat(updated.scheduledTime()).isEqualTo(LocalTime.of(8, 0));
+    }
+
+    @Test
+    void scheduledTime과_endsOn에_null을_보내면_해제된다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest("운동", null, null, null, null, null, null, null));
+
+        assertThat(updated.scheduledTime()).isNull();
+        assertThat(updated.endsOn()).isNull();
     }
 
     @Test

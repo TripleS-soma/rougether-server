@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -102,7 +103,8 @@ public class RoutineService {
     }
 
     // 반복 스케줄 필드(repeat_type·repeat_days·starts_on·ends_on) 중 하나라도 현재값과 달라졌는지.
-    // request는 부분수정이라 non-null인 필드만 비교(제공 안 한 필드는 변경 아님)
+    // repeat_type·repeat_days·starts_on은 부분수정이라 제공한 필드만 비교하고,
+    // ends_on은 null=해제라 항상 현재값과 비교(해제도 변경으로 침)
     private boolean isScheduleChanged(Routine routine, RoutineUpdateRequest request, String repeatDays) {
         if (request.repeatType() != null
                 && !request.repeatType().equals(routine.getRepeatType())) {
@@ -114,7 +116,7 @@ public class RoutineService {
         if (request.startsOn() != null && !request.startsOn().equals(routine.getStartsOn())) {
             return true;
         }
-        return request.endsOn() != null && !request.endsOn().equals(routine.getEndsOn());
+        return !Objects.equals(request.endsOn(), routine.getEndsOn());
     }
 
     // 이 버전이 오늘 이전에 생성됐는지

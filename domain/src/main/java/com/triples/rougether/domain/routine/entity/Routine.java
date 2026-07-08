@@ -96,6 +96,8 @@ public class Routine extends BaseEntity {
                 scheduledTime, startsOn, endsOn);
     }
 
+    // scheduledTime·endsOn은 해제(null) 반영을 위해 호출자가 유효값을 확정해 넘기며 무조건 대입함.
+    // 나머지 필드는 null이면 기존 값 유지(부분수정)
     public void update(String title, AuthType authType, String repeatType, String repeatDays,
                        LocalTime scheduledTime, LocalDate startsOn, LocalDate endsOn) {
         // title은 NOT NULL 업무필수라 공백이면 덮어쓰지 않음
@@ -111,15 +113,11 @@ public class Routine extends BaseEntity {
         if (repeatDays != null) {
             this.repeatDays = repeatDays;
         }
-        if (scheduledTime != null) {
-            this.scheduledTime = scheduledTime;
-        }
+        this.scheduledTime = scheduledTime;
         if (startsOn != null) {
             this.startsOn = startsOn;
         }
-        if (endsOn != null) {
-            this.endsOn = endsOn;
-        }
+        this.endsOn = endsOn;
     }
 
     public void changeCategory(Category category) {
@@ -132,6 +130,7 @@ public class Routine extends BaseEntity {
     }
 
     // 버전 분기용 복제. 인자가 null이면 이 버전 값을 유지(update와 같은 병합 규칙),
+    // 단 scheduledTime·endsOn은 호출자가 확정한 유효값(해제 시 null 포함)을 그대로 씀.
     // status·origin은 이 버전에서 승계. created_at은 auditing이 now로 채움
     public Routine copyAsNewVersion(Category category, String title, AuthType authType,
                                     String repeatType, String repeatDays, LocalTime scheduledTime,
@@ -142,9 +141,9 @@ public class Routine extends BaseEntity {
                 authType != null ? authType : this.authType,
                 repeatType != null ? repeatType : this.repeatType,
                 repeatDays != null ? repeatDays : this.repeatDays,
-                scheduledTime != null ? scheduledTime : this.scheduledTime,
+                scheduledTime,
                 startsOn != null ? startsOn : this.startsOn,
-                endsOn != null ? endsOn : this.endsOn);
+                endsOn);
         copy.status = this.status;
         copy.originRoutineId = this.originRoutineId;
         return copy;
