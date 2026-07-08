@@ -119,6 +119,7 @@ body {
     font-weight: 500;
 }
 .alert-error { background: var(--danger-soft); color: var(--danger); }
+.alert-ok { background: var(--success-soft); color: var(--success); }
 .alert-success { background: var(--success-soft); color: var(--success); }
 
 .auth-footer {

@@ -14,6 +14,9 @@ public interface UserWalletRepository extends JpaRepository<UserWallet, Long> {
 
     List<UserWallet> findByUserId(Long userId);
 
+    // 어드민 유저 목록의 잔액 표시용 일괄 조회 (N+1 회피).
+    List<UserWallet> findByUserIdIn(java.util.Collection<Long> userIds);
+
     Optional<UserWallet> findByUserIdAndCurrencyType(Long userId, CurrencyType currencyType);
 
     // 재화 차감/전환 경로 전용 — 행 락으로 동시 요청의 이중 차감·잔액 유실을 막는다.
