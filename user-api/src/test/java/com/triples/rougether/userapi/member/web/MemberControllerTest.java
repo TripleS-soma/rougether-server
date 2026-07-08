@@ -45,7 +45,7 @@ class MemberControllerTest {
     @Test
     void 내_정보는_온보딩_요약을_포함해_응답한다() throws Exception {
         when(memberService.getMe(1L)).thenReturn(new MeResponse(
-                1L, "루티니", null, new OnboardingSummary(true, 3L, 5L)));
+                1L, "루티니", null, null, new OnboardingSummary(true, 3L, 5L)));
 
         mockMvc.perform(get("/api/v1/me"))
                 .andExpect(status().isOk())

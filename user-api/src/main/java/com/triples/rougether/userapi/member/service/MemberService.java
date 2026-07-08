@@ -32,6 +32,9 @@ public class MemberService {
     public MeResponse updateMe(Long userId, MemberUpdateRequest request) {
         User user = findUser(userId);
         user.changeNickname(request.nickname().trim());
+        if (request.bio() != null) {
+            user.changeBio(request.bio().trim());
+        }
         return toMeResponse(user);
     }
 
@@ -44,7 +47,7 @@ public class MemberService {
         OffsetDateTime lastLoginAt = user.getLastLoginAt() == null
                 ? null
                 : user.getLastLoginAt().atZone(KST).toOffsetDateTime();
-        return new MeResponse(user.getId(), user.getNickname(), lastLoginAt,
+        return new MeResponse(user.getId(), user.getNickname(), user.getBio(), lastLoginAt,
                 onboardingQueryService.getSummary(user.getId()));
     }
 }
