@@ -1,0 +1,61 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude review
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            이 PR을 리뷰해 주세요. 리뷰 코멘트는 한국어로 작성하되,
+            API path, JSON field, class name, package name, command는 기존 표기를 유지합니다.
+
+            리뷰 전에 CLAUDE.md와 docs/claude/backend.md를 읽고,
+            변경된 도메인이 있으면 docs/claude/domains/ 아래 해당 문서도 참고하세요.
+
+            중점 확인 사항:
+            1. 정확성 — 로직 오류, 엣지 케이스, null 처리, 트랜잭션 경계
+            2. 보안 — 인가(guard) 누락, 소유권 검증, 입력 검증, 민감정보 로깅
+            3. 프로젝트 규칙 — CLAUDE.md 및 docs/claude/ 문서와의 불일치, spec repo 계약 위반 가능성
+            4. 성능 — N+1 쿼리, 불필요한 조회, 인덱스가 필요한 쿼리
+
+            리뷰 방식:
+            - 구체적인 이슈는 해당 라인에 인라인 코멘트로 남기세요.
+            - 각 코멘트 앞에 심각도를 표시하세요: 🔴 (머지 전 수정 필요) / 🟡 (사소한 개선)
+            - 🟡 코멘트는 최대 5개까지만 남기고, 나머지는 요약에 개수로만 언급하세요.
+            - 마지막에 top-level 코멘트로 전체 요약을 남기세요. 첫 줄에 "🔴 N건 / 🟡 N건" 형태로 집계를 적으세요.
+            - 스타일/포맷팅 등 CI가 이미 잡는 항목은 지적하지 마세요.
+            - 문제가 없으면 "문제 없음"이라고 간단히 남기고 끝내세요. 억지로 지적거리를 만들지 마세요.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --max-turns 30
