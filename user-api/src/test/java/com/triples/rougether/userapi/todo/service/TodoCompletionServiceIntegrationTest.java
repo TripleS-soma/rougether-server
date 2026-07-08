@@ -11,7 +11,9 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
@@ -44,6 +46,8 @@ class TodoCompletionServiceIntegrationTest {
     private UserRepository userRepository;
     @Autowired
     private UserWalletRepository userWalletRepository;
+    @Autowired
+    private RoutineLogRepository routineLogRepository;
 
     private TodoService service;
     private Long userId;
@@ -51,8 +55,10 @@ class TodoCompletionServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
+                todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository);
+                userWalletRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         todoId = service.create(userId, new TodoCreateRequest("장보기", null, null, null)).id();

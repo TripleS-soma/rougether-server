@@ -12,6 +12,7 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.dto.TodoListResponse;
@@ -39,6 +40,7 @@ public class TodoService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
+    private final DailyRewardService dailyRewardService;
 
     @Transactional(readOnly = true)
     public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
@@ -86,10 +88,15 @@ public class TodoService {
             throw new BusinessException(TodoErrorCode.TODO_ALREADY_COMPLETED);
         }
 
-        todo.complete(REWARD_CURRENCY, REWARD_AMOUNT, Instant.now());
+        LocalDate today = LocalDate.now(KST);
+        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+
+        todo.complete(REWARD_CURRENCY, reward, Instant.now());
 
         UserWallet wallet = findWallet(userId);
-        wallet.add(REWARD_AMOUNT);
+        if (reward > 0) {
+            wallet.add(reward);
+        }
 
         return TodoCompleteResponse.from(todo);
     }

@@ -16,6 +16,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -37,6 +38,7 @@ public class RoutineLogService {
     private final RoutineLogRepository routineLogRepository;
     private final UserWalletRepository userWalletRepository;
     private final StreakRepository streakRepository;
+    private final DailyRewardService dailyRewardService;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함
     @Transactional
@@ -59,11 +61,15 @@ public class RoutineLogService {
         boolean firstToday = routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
 
+        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
-                routine, routineDate, Instant.now(), REWARD_CURRENCY, REWARD_AMOUNT));
+                routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
 
         UserWallet wallet = findWallet(userId);
-        wallet.add(REWARD_AMOUNT);
+        if (reward > 0) {
+            wallet.add(reward);
+        }
 
         Streak streak = updateStreakOnComplete(routine, today, firstToday);
         return RoutineLogResponse.from(log, streak);
