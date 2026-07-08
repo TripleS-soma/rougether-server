@@ -63,7 +63,12 @@ class HouseMemberActivityIntegrationTest {
     @Autowired private TodoRepository todoRepository;
     @PersistenceContext private EntityManager em;
 
-    private record Fixture(User viewer, User target, House house) {
+    private record Fixture(User viewer, User target, House house,
+                           HouseMember viewerMembership, HouseMember targetMembership) {
+
+        Long targetMembershipId() {
+            return targetMembership.getId();
+        }
     }
 
     private Fixture fixture() {
@@ -71,10 +76,12 @@ class HouseMemberActivityIntegrationTest {
         User target = userRepository.save(User.signUp("activity-target@rougether.dev"));
         House house = houseRepository.save(House.create(
                 viewer, "활동 하우스", null, null, 4, "ACT12345", Instant.now().plus(Duration.ofDays(7))));
-        houseMemberRepository.save(HouseMember.create(house, viewer, HouseMemberRole.OWNER));
-        houseMemberRepository.save(HouseMember.create(house, target, HouseMemberRole.MEMBER));
+        HouseMember viewerMembership = houseMemberRepository.save(
+                HouseMember.create(house, viewer, HouseMemberRole.OWNER));
+        HouseMember targetMembership = houseMemberRepository.save(
+                HouseMember.create(house, target, HouseMemberRole.MEMBER));
         house.increaseMemberCount();
-        return new Fixture(viewer, target, house);
+        return new Fixture(viewer, target, house, viewerMembership, targetMembership);
     }
 
     private Routine routineIn(User owner, PrivacyScope visibility, String title) {
@@ -107,7 +114,7 @@ class HouseMemberActivityIntegrationTest {
         personalRoomRepository.save(PersonalRoom.create(f.target()));
 
         RoomResponse response = activityService.getMemberRoom(
-                f.viewer().getId(), f.house().getId(), f.target().getId());
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId());
 
         assertThat(response.roomUserId()).isEqualTo(f.target().getId());
         assertThat(response.growthLevel()).isZero();
@@ -120,7 +127,7 @@ class HouseMemberActivityIntegrationTest {
         personalRoomRepository.save(PersonalRoom.create(f.viewer()));
 
         RoomResponse response = activityService.getMemberRoom(
-                f.viewer().getId(), f.house().getId(), f.viewer().getId());
+                f.viewer().getId(), f.house().getId(), f.viewerMembership().getId());
 
         assertThat(response.roomUserId()).isEqualTo(f.viewer().getId());
     }
@@ -130,7 +137,7 @@ class HouseMemberActivityIntegrationTest {
         Fixture f = fixture();
 
         assertThatThrownBy(() -> activityService.getMemberRoom(
-                f.viewer().getId(), f.house().getId(), f.target().getId()))
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId()))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(RoomErrorCode.ROOM_NOT_FOUND));
     }
@@ -143,17 +150,25 @@ class HouseMemberActivityIntegrationTest {
         User stranger = userRepository.save(User.signUp("activity-stranger@rougether.dev"));
 
         assertThatThrownBy(() -> activityService.getMemberDay(
-                stranger.getId(), f.house().getId(), f.target().getId(), null))
+                stranger.getId(), f.house().getId(), f.targetMembershipId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
 
     @Test
-    void 조회_대상이_집_멤버가_아니면_404() {
+    void 조회_대상_membership_이_없거나_다른_집이면_404() {
         Fixture f = fixture();
+        // 다른 집의 membership 을 이 집 경로로 조회하는 우회 시도
         User outsider = userRepository.save(User.signUp("activity-outsider@rougether.dev"));
+        House otherHouse = houseRepository.save(House.create(
+                outsider, "다른 하우스", null, null, 4, "OTH12345", Instant.now().plus(Duration.ofDays(7))));
+        HouseMember otherMembership = houseMemberRepository.save(
+                HouseMember.create(otherHouse, outsider, HouseMemberRole.OWNER));
 
         assertThatThrownBy(() -> activityService.getMemberDay(
-                f.viewer().getId(), f.house().getId(), outsider.getId(), null))
+                f.viewer().getId(), f.house().getId(), 999999L, null))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
+        assertThatThrownBy(() -> activityService.getMemberDay(
+                f.viewer().getId(), f.house().getId(), otherMembership.getId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
     }
 
@@ -162,7 +177,7 @@ class HouseMemberActivityIntegrationTest {
         Fixture f = fixture();
 
         assertThatThrownBy(() -> activityService.getMemberRoom(
-                f.viewer().getId(), 999999L, f.target().getId()))
+                f.viewer().getId(), 999999L, f.targetMembershipId()))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
     }
 
@@ -178,7 +193,7 @@ class HouseMemberActivityIntegrationTest {
         saveRoutine(f.target(), null, "미분류 루틴");
 
         HouseMemberDayResponse response = activityService.getMemberDay(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), null);
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);
 
         assertThat(response.routines()).extracting("title")
                 .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴");
@@ -211,7 +226,7 @@ class HouseMemberActivityIntegrationTest {
         }
 
         HouseMemberDayResponse response = activityService.getMemberDay(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), monday);
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), monday);
 
         assertThat(response.date()).isEqualTo(monday);
         assertThat(response.routines()).extracting("title", "completed")
@@ -239,7 +254,7 @@ class HouseMemberActivityIntegrationTest {
         backdateCreatedAt(hidden.getId(), 2);
 
         HouseMemberDayResponse response = activityService.getMemberDay(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), yesterday);
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), yesterday);
 
         assertThat(response.routines()).extracting("title", "completed")
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("옛 버전 루틴", true));
@@ -272,7 +287,7 @@ class HouseMemberActivityIntegrationTest {
         todoRepository.save(Todo.create(f.target(), null, "미분류 투두", null, today));
 
         HouseMemberDayResponse response = activityService.getMemberDay(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), null);
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);
 
         assertThat(response.todos()).extracting("title", "status")
                 .containsExactlyInAnyOrder(
@@ -294,7 +309,7 @@ class HouseMemberActivityIntegrationTest {
         completeOn(hidden, today);                // 공개 범위 밖
 
         HouseMemberRoutineCompletionListResponse response = activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), null, null);
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null, null);
 
         assertThat(response.to()).isEqualTo(today);
         assertThat(response.from()).isEqualTo(today.minusDays(13));
@@ -314,7 +329,7 @@ class HouseMemberActivityIntegrationTest {
         completeOn(visible, today.minusDays(40));
 
         HouseMemberRoutineCompletionListResponse response = activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(),
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(),
                 today.minusDays(30), today.minusDays(10));
 
         assertThat(response.items()).extracting("routineDate")
@@ -330,11 +345,11 @@ class HouseMemberActivityIntegrationTest {
 
         // from=to (하루)
         assertThat(activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), today, today)
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), today, today)
                 .items()).hasSize(1);
         // 정확히 92일 창 (from = to-91)
         assertThat(activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), today.minusDays(91), today)
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), today.minusDays(91), today)
                 .items()).hasSize(1);
     }
 
@@ -344,11 +359,11 @@ class HouseMemberActivityIntegrationTest {
         LocalDate today = LocalDate.now(KST);
 
         assertThatThrownBy(() -> activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), today, today.minusDays(1)))
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), today, today.minusDays(1)))
                 .satisfies(e -> assertThat(errorCodeOf(e))
                         .isEqualTo(HouseErrorCode.HOUSE_ACTIVITY_PERIOD_INVALID));
         assertThatThrownBy(() -> activityService.getMemberRoutineCompletions(
-                f.viewer().getId(), f.house().getId(), f.target().getId(), today.minusDays(92), today))
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), today.minusDays(92), today))
                 .satisfies(e -> assertThat(errorCodeOf(e))
                         .isEqualTo(HouseErrorCode.HOUSE_ACTIVITY_PERIOD_INVALID));
     }

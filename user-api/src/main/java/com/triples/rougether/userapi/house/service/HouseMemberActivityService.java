@@ -72,8 +72,8 @@ public class HouseMemberActivityService {
 
     // 멤버 방 조회 - 내 방(GET /rooms/me)과 같은 응답 형태. 방 미생성이면 ROOM_NOT_FOUND(404).
     @Transactional(readOnly = true)
-    public RoomResponse getMemberRoom(Long userId, Long houseId, Long memberUserId) {
-        requireSameHouseMembers(userId, memberUserId, houseId);
+    public RoomResponse getMemberRoom(Long userId, Long houseId, Long membershipId) {
+        Long memberUserId = requireSameHouseMember(userId, houseId, membershipId);
         return roomQueryService.getRoomOf(memberUserId);
     }
 
@@ -81,8 +81,8 @@ public class HouseMemberActivityService {
     // 공개 범위를 통과한 것만. 대상·완료 판정과 과거 날짜의 버전 재구성은 오늘 현황·캘린더와 동일 규칙.
     @Transactional(readOnly = true)
     public HouseMemberDayResponse getMemberDay(Long userId, Long houseId,
-                                               Long memberUserId, LocalDate date) {
-        requireSameHouseMembers(userId, memberUserId, houseId);
+                                               Long membershipId, LocalDate date) {
+        Long memberUserId = requireSameHouseMember(userId, houseId, membershipId);
         LocalDate targetDate = date != null ? date : LocalDate.now(KST);
 
         List<MemberRoutineItem> routines = targetDate.isBefore(LocalDate.now(KST))
@@ -159,8 +159,8 @@ public class HouseMemberActivityService {
     // 멤버 루틴 완료 내역 - 기간 필터(기본 최근 14일, 최대 92일), 공개 범위 통과분만.
     @Transactional(readOnly = true)
     public HouseMemberRoutineCompletionListResponse getMemberRoutineCompletions(
-            Long userId, Long houseId, Long memberUserId, LocalDate from, LocalDate to) {
-        requireSameHouseMembers(userId, memberUserId, houseId);
+            Long userId, Long houseId, Long membershipId, LocalDate from, LocalDate to) {
+        Long memberUserId = requireSameHouseMember(userId, houseId, membershipId);
 
         LocalDate resolvedTo = to != null ? to : LocalDate.now(KST);
         LocalDate resolvedFrom = from != null ? from : resolvedTo.minusDays(DEFAULT_PERIOD_DAYS - 1);
@@ -178,16 +178,19 @@ public class HouseMemberActivityService {
         return new HouseMemberRoutineCompletionListResponse(resolvedFrom, resolvedTo, items);
     }
 
-    // 집 존재(삭제 제외) + 요청자·조회 대상 모두 그 집 ACTIVE 구성원인지 확인 (방명록과 동일 guard 정책)
-    private void requireSameHouseMembers(Long userId, Long memberUserId, Long houseId) {
+    // 집 존재(삭제 제외) + 요청자 ACTIVE 구성원 + 대상 membership 이 그 집의 ACTIVE 구성원인지 확인.
+    // 경로 식별자는 spec(domains/house/api.md)에 따라 membershipId — 검증 후 대상 userId 를 반환한다.
+    private Long requireSameHouseMember(Long userId, Long houseId, Long membershipId) {
         houseRepository.findById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
-        houseMemberRepository.findByHouseIdAndUserId(houseId, memberUserId)
+        HouseMember target = houseMemberRepository.findById(membershipId)
+                .filter(member -> member.getHouse().getId().equals(houseId))
                 .filter(HouseMember::isActive)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
+        return target.getUser().getId();
     }
 }

@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 // 같은 집 멤버 활동 열람 - 방/그날 현황(루틴+투두)/완료 내역. 요청자·대상 모두 그 집의 ACTIVE 구성원이어야 한다(본인도 조회 가능).
 @Tag(name = "House Member Activity", description = "같은 집 멤버의 방·그날 현황(루틴+투두)·완료 내역 열람 API")
 @RestController
-@RequestMapping("/api/v1/houses/{houseId}/members/{memberUserId}")
+@RequestMapping("/api/v1/houses/{houseId}/members/{membershipId}")
 public class HouseMemberActivityController {
 
     private final HouseMemberActivityService houseMemberActivityService;
@@ -31,7 +31,7 @@ public class HouseMemberActivityController {
 
     @Operation(summary = "집 멤버 방 조회",
             description = "같은 집 멤버의 방을 조회합니다. 요청자와 조회 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 하며, "
-                    + "본인(memberUserId=내 userId)도 조회할 수 있습니다. "
+                    + "본인(내 membershipId)도 조회할 수 있습니다. "
                     + "응답 형태는 내 방 조회(GET /api/v1/rooms/me)와 동일합니다 — 방 성장 레벨, 착용 캐릭터, "
                     + "벽지/바닥/배경(surface)·가구(positioned) 슬롯별 배치와 아이템 assetKey, 스트릭이 내려갑니다. "
                     + "대상 회원이 아직 방을 만들지 않았으면(내 방 화면 미방문) 404(ROOM_NOT_FOUND)를 반환합니다.")
@@ -39,9 +39,9 @@ public class HouseMemberActivityController {
     public RoomResponse getMemberRoom(
             @CurrentUser AuthUser user,
             @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
-            @Parameter(description = "조회 대상 회원 ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 userId 값")
-            @PathVariable Long memberUserId) {
-        return houseMemberActivityService.getMemberRoom(user.id(), houseId, memberUserId);
+            @Parameter(description = "조회 대상 구성원의 membership ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 membershipId 값")
+            @PathVariable Long membershipId) {
+        return houseMemberActivityService.getMemberRoom(user.id(), houseId, membershipId);
     }
 
     @Operation(summary = "집 멤버 그날 현황 조회 (루틴 + 투두, 완료 여부 포함)",
@@ -57,11 +57,11 @@ public class HouseMemberActivityController {
     public HouseMemberDayResponse getMemberDay(
             @CurrentUser AuthUser user,
             @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
-            @Parameter(description = "조회 대상 회원 ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 userId 값")
-            @PathVariable Long memberUserId,
+            @Parameter(description = "조회 대상 구성원의 membership ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 membershipId 값")
+            @PathVariable Long membershipId,
             @Parameter(description = "기준 날짜(YYYY-MM-DD). 그날 반복 대상 루틴·그날 마감 투두만 반환. 미지정 시 오늘(KST)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return houseMemberActivityService.getMemberDay(user.id(), houseId, memberUserId, date);
+        return houseMemberActivityService.getMemberDay(user.id(), houseId, membershipId, date);
     }
 
     @Operation(summary = "집 멤버 루틴 완료 내역 조회",
@@ -76,12 +76,12 @@ public class HouseMemberActivityController {
     public HouseMemberRoutineCompletionListResponse getMemberRoutineCompletions(
             @CurrentUser AuthUser user,
             @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
-            @Parameter(description = "조회 대상 회원 ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 userId 값")
-            @PathVariable Long memberUserId,
+            @Parameter(description = "조회 대상 구성원의 membership ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 membershipId 값")
+            @PathVariable Long membershipId,
             @Parameter(description = "조회 시작일(YYYY-MM-DD). 미지정 시 to 기준 최근 14일")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @Parameter(description = "조회 종료일(YYYY-MM-DD). 미지정 시 오늘(KST)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return houseMemberActivityService.getMemberRoutineCompletions(user.id(), houseId, memberUserId, from, to);
+        return houseMemberActivityService.getMemberRoutineCompletions(user.id(), houseId, membershipId, from, to);
     }
 }
