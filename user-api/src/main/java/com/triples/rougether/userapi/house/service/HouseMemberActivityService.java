@@ -9,9 +9,11 @@ import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
-import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
-import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse.MemberRoutineItem;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse.MemberRoutineItem;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse.MemberTodoItem;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse.CompletionSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -44,6 +46,7 @@ public class HouseMemberActivityService {
     private final RoomQueryService roomQueryService;
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
+    private final TodoRepository todoRepository;
     private final DailyAgendaAssembler agendaAssembler;
 
     public HouseMemberActivityService(HouseRepository houseRepository,
@@ -51,12 +54,14 @@ public class HouseMemberActivityService {
                                       RoomQueryService roomQueryService,
                                       RoutineRepository routineRepository,
                                       RoutineLogRepository routineLogRepository,
+                                      TodoRepository todoRepository,
                                       DailyAgendaAssembler agendaAssembler) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.roomQueryService = roomQueryService;
         this.routineRepository = routineRepository;
         this.routineLogRepository = routineLogRepository;
+        this.todoRepository = todoRepository;
         this.agendaAssembler = agendaAssembler;
     }
 
@@ -67,11 +72,11 @@ public class HouseMemberActivityService {
         return roomQueryService.getRoomOf(memberUserId);
     }
 
-    // 멤버 루틴 목록 - 그날(기본 오늘 KST) 반복 대상이면서 공개 범위를 통과한 것만, 완료 여부 포함.
-    // 대상 판정(isRoutineTargetOn)·완료 판정(그날 완료 log)은 오늘 현황·캘린더와 동일 규칙.
+    // 멤버 그날 현황 - 그날(기본 오늘 KST) 반복 대상 루틴(완료 여부 포함) + 그날 마감 투두.
+    // 공개 범위를 통과한 것만. 대상·완료 판정은 오늘 현황·캘린더와 동일 규칙.
     @Transactional(readOnly = true)
-    public HouseMemberDayRoutineListResponse getMemberRoutines(Long userId, Long houseId,
-                                                               Long memberUserId, LocalDate date) {
+    public HouseMemberDayResponse getMemberDay(Long userId, Long houseId,
+                                               Long memberUserId, LocalDate date) {
         requireSameHouseMembers(userId, memberUserId, houseId);
         LocalDate targetDate = date != null ? date : LocalDate.now(KST);
 
@@ -82,13 +87,20 @@ public class HouseMemberActivityService {
                 .map(log -> log.getRoutine().getId())
                 .collect(Collectors.toSet());
 
-        List<MemberRoutineItem> items = routineRepository
+        List<MemberRoutineItem> routines = routineRepository
                 .findVisibleByUserIdAndStatus(memberUserId, RoutineStatus.ACTIVE, HOUSE_VISIBLE_SCOPES)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
                 .map(routine -> MemberRoutineItem.of(routine, completedRoutineIds.contains(routine.getId())))
                 .toList();
-        return new HouseMemberDayRoutineListResponse(targetDate, items);
+
+        List<MemberTodoItem> todos = todoRepository
+                .findVisibleDueOn(memberUserId, targetDate, HOUSE_VISIBLE_SCOPES)
+                .stream()
+                .map(MemberTodoItem::of)
+                .toList();
+
+        return new HouseMemberDayResponse(targetDate, routines, todos);
     }
 
     // 멤버 루틴 완료 내역 - 기간 필터(기본 최근 14일, 최대 92일), 공개 범위 통과분만.

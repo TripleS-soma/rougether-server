@@ -19,11 +19,14 @@ import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
-import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
@@ -55,6 +58,7 @@ class HouseMemberActivityIntegrationTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private RoutineRepository routineRepository;
     @Autowired private RoutineLogRepository routineLogRepository;
+    @Autowired private TodoRepository todoRepository;
 
     private record Fixture(User viewer, User target, House house) {
     }
@@ -135,7 +139,7 @@ class HouseMemberActivityIntegrationTest {
         Fixture f = fixture();
         User stranger = userRepository.save(User.signUp("activity-stranger@rougether.dev"));
 
-        assertThatThrownBy(() -> activityService.getMemberRoutines(
+        assertThatThrownBy(() -> activityService.getMemberDay(
                 stranger.getId(), f.house().getId(), f.target().getId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
@@ -145,7 +149,7 @@ class HouseMemberActivityIntegrationTest {
         Fixture f = fixture();
         User outsider = userRepository.save(User.signUp("activity-outsider@rougether.dev"));
 
-        assertThatThrownBy(() -> activityService.getMemberRoutines(
+        assertThatThrownBy(() -> activityService.getMemberDay(
                 f.viewer().getId(), f.house().getId(), outsider.getId(), null))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
     }
@@ -170,10 +174,10 @@ class HouseMemberActivityIntegrationTest {
         routineIn(f.target(), PrivacyScope.PUBLIC, "전체 공개 루틴");
         saveRoutine(f.target(), null, "미분류 루틴");
 
-        HouseMemberDayRoutineListResponse response = activityService.getMemberRoutines(
+        HouseMemberDayResponse response = activityService.getMemberDay(
                 f.viewer().getId(), f.house().getId(), f.target().getId(), null);
 
-        assertThat(response.items()).extracting("title")
+        assertThat(response.routines()).extracting("title")
                 .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴");
     }
 
@@ -196,14 +200,40 @@ class HouseMemberActivityIntegrationTest {
                 AuthType.CHECK, "DAILY", null, null, null, monday.minusDays(1))).assignOriginToSelf();
         completeOn(daily, monday);
 
-        HouseMemberDayRoutineListResponse response = activityService.getMemberRoutines(
+        HouseMemberDayResponse response = activityService.getMemberDay(
                 f.viewer().getId(), f.house().getId(), f.target().getId(), monday);
 
         assertThat(response.date()).isEqualTo(monday);
-        assertThat(response.items()).extracting("title", "completed")
+        assertThat(response.routines()).extracting("title", "completed")
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple("매일 루틴", true),
                         org.assertj.core.groups.Tuple.tuple("월요일 루틴", false));
+    }
+
+    // --- 투두 ---
+
+    @Test
+    void 투두는_그날_마감분만_공개_범위로_필터링되어_보인다() {
+        Fixture f = fixture();
+        LocalDate today = LocalDate.now(KST);
+        Category open = categoryRepository.save(Category.create(
+                f.target(), "공개 카테고리", null, null, 0, PrivacyScope.HOUSE));
+        Category closed = categoryRepository.save(Category.create(
+                f.target(), "비공개 카테고리", null, null, 0, PrivacyScope.PRIVATE));
+        Todo done = todoRepository.save(Todo.create(f.target(), open, "완료한 투두", null, today));
+        done.complete(CurrencyType.COIN, 10, Instant.now());
+        todoRepository.save(Todo.create(f.target(), open, "남은 투두", null, today));
+        todoRepository.save(Todo.create(f.target(), open, "내일 투두", null, today.plusDays(1)));
+        todoRepository.save(Todo.create(f.target(), closed, "비공개 투두", null, today));
+        todoRepository.save(Todo.create(f.target(), null, "미분류 투두", null, today));
+
+        HouseMemberDayResponse response = activityService.getMemberDay(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), null);
+
+        assertThat(response.todos()).extracting("title", "status")
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("완료한 투두", TodoStatus.COMPLETED),
+                        org.assertj.core.groups.Tuple.tuple("남은 투두", TodoStatus.PENDING));
     }
 
     // --- 완료 내역 ---

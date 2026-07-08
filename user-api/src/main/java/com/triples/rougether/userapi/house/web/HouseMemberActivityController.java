@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.house.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
-import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// 같은 집 멤버 활동 열람 - 방/루틴/완료 내역. 요청자·대상 모두 그 집의 ACTIVE 구성원이어야 한다(본인도 조회 가능).
-@Tag(name = "House Member Activity", description = "같은 집 멤버의 방·루틴·완료 내역 열람 API")
+// 같은 집 멤버 활동 열람 - 방/그날 현황(루틴+투두)/완료 내역. 요청자·대상 모두 그 집의 ACTIVE 구성원이어야 한다(본인도 조회 가능).
+@Tag(name = "House Member Activity", description = "같은 집 멤버의 방·그날 현황(루틴+투두)·완료 내역 열람 API")
 @RestController
 @RequestMapping("/api/v1/houses/{houseId}/members/{memberUserId}")
 public class HouseMemberActivityController {
@@ -44,23 +44,24 @@ public class HouseMemberActivityController {
         return houseMemberActivityService.getMemberRoom(user.id(), houseId, memberUserId);
     }
 
-    @Operation(summary = "집 멤버 루틴 목록 조회 (그날 대상 + 완료 여부)",
-            description = "같은 집 멤버의 루틴 중 그날(date, 미지정 시 오늘 KST) 반복 대상인 진행 중(ACTIVE) 루틴을 "
-                    + "각 항목의 완료 여부(completed)와 함께 반환합니다. "
+    @Operation(summary = "집 멤버 그날 현황 조회 (루틴 + 투두, 완료 여부 포함)",
+            description = "같은 집 멤버의 그날(date, 미지정 시 오늘 KST) 현황을 반환합니다 — 그날 반복 대상인 진행 중(ACTIVE) "
+                    + "루틴(완료 여부 completed 포함)과 그날 마감(dueDate=date) 투두(status/completedAt 포함). "
                     + "반복 대상·완료 판정은 오늘 현황(GET /api/v1/today)·캘린더와 동일 규칙이고, "
                     + "요청자와 조회 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 합니다. "
-                    + "수행 예정 시각 오름차순으로 정렬되며, 카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 "
-                    + "루틴만 내려가고 PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음) 루틴은 제외됩니다. "
-                    + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 화면에는 GET /api/v1/today 또는 GET /api/v1/routines 를 사용하세요.")
-    @GetMapping("/routines")
-    public HouseMemberDayRoutineListResponse getMemberRoutines(
+                    + "루틴은 수행 예정 시각 오름차순, 투두는 id 오름차순으로 정렬됩니다. "
+                    + "카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 루틴·투두만 내려가고, "
+                    + "PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음)는 제외됩니다. "
+                    + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 화면에는 GET /api/v1/today 를 사용하세요.")
+    @GetMapping("/day")
+    public HouseMemberDayResponse getMemberDay(
             @CurrentUser AuthUser user,
             @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
             @Parameter(description = "조회 대상 회원 ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 userId 값")
             @PathVariable Long memberUserId,
-            @Parameter(description = "기준 날짜(YYYY-MM-DD). 그날 반복 대상 루틴만 반환. 미지정 시 오늘(KST)")
+            @Parameter(description = "기준 날짜(YYYY-MM-DD). 그날 반복 대상 루틴·그날 마감 투두만 반환. 미지정 시 오늘(KST)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return houseMemberActivityService.getMemberRoutines(user.id(), houseId, memberUserId, date);
+        return houseMemberActivityService.getMemberDay(user.id(), houseId, memberUserId, date);
     }
 
     @Operation(summary = "집 멤버 루틴 완료 내역 조회",
