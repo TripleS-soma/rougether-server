@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.routine.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -176,6 +178,19 @@ class RoutineControllerTest {
                         .content("{\"title\":\"x\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROUTINE_NOT_FOUND"));
+    }
+
+    @Test
+    void scheduledTime과_endsOn에_null을_보내면_null로_바인딩된다() throws Exception {
+        mockMvc.perform(put("/api/v1/routines/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"x\",\"scheduledTime\":null,\"endsOn\":null}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<RoutineUpdateRequest> captor = ArgumentCaptor.forClass(RoutineUpdateRequest.class);
+        verify(routineService).update(eq(1L), eq(7L), captor.capture());
+        assertThat(captor.getValue().scheduledTime()).isNull();
+        assertThat(captor.getValue().endsOn()).isNull();
     }
 
     @Test
