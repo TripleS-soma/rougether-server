@@ -25,6 +25,9 @@ public class User extends BaseEntity {
     @Column(name = "nickname", length = 30)
     private String nickname;
 
+    @Column(name = "bio", length = 100)
+    private String bio;
+
     @Column(name = "email", length = 255)
     private String email;
 
@@ -54,5 +57,9 @@ public class User extends BaseEntity {
 
     public void changeNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public void changeBio(String bio) {
+        this.bio = bio;
     }
 }
