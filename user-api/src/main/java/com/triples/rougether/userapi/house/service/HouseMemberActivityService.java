@@ -10,17 +10,19 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse.MemberRoutineItem;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse.CompletionSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
-import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
-import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,19 +67,28 @@ public class HouseMemberActivityService {
         return roomQueryService.getRoomOf(memberUserId);
     }
 
-    // 멤버 루틴 목록 - 그날(기본 오늘 KST) 반복 대상이면서 공개 범위를 통과한 것만.
-    // 대상 판정(isRoutineTargetOn)은 오늘 현황·캘린더와 동일 규칙.
+    // 멤버 루틴 목록 - 그날(기본 오늘 KST) 반복 대상이면서 공개 범위를 통과한 것만, 완료 여부 포함.
+    // 대상 판정(isRoutineTargetOn)·완료 판정(그날 완료 log)은 오늘 현황·캘린더와 동일 규칙.
     @Transactional(readOnly = true)
-    public RoutineListResponse getMemberRoutines(Long userId, Long houseId, Long memberUserId,
-                                                 LocalDate date) {
+    public HouseMemberDayRoutineListResponse getMemberRoutines(Long userId, Long houseId,
+                                                               Long memberUserId, LocalDate date) {
         requireSameHouseMembers(userId, memberUserId, houseId);
         LocalDate targetDate = date != null ? date : LocalDate.now(KST);
-        return new RoutineListResponse(routineRepository
+
+        Set<Long> completedRoutineIds = routineLogRepository
+                .findByRoutine_UserIdAndRoutineDateAndStatus(
+                        memberUserId, targetDate, RoutineLogStatus.COMPLETED)
+                .stream()
+                .map(log -> log.getRoutine().getId())
+                .collect(Collectors.toSet());
+
+        List<MemberRoutineItem> items = routineRepository
                 .findVisibleByUserIdAndStatus(memberUserId, RoutineStatus.ACTIVE, HOUSE_VISIBLE_SCOPES)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
-                .map(RoutineResponse::from)
-                .toList());
+                .map(routine -> MemberRoutineItem.of(routine, completedRoutineIds.contains(routine.getId())))
+                .toList();
+        return new HouseMemberDayRoutineListResponse(targetDate, items);
     }
 
     // 멤버 루틴 완료 내역 - 기간 필터(기본 최근 14일, 최대 92일), 공개 범위 통과분만.

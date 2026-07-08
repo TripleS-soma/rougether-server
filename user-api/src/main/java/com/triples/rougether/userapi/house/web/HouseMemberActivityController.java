@@ -2,10 +2,10 @@ package com.triples.rougether.userapi.house.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
-import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,16 +44,16 @@ public class HouseMemberActivityController {
         return houseMemberActivityService.getMemberRoom(user.id(), houseId, memberUserId);
     }
 
-    @Operation(summary = "집 멤버 루틴 목록 조회 (그날 대상)",
-            description = "같은 집 멤버의 루틴 중 그날(date, 미지정 시 오늘 KST) 반복 대상인 진행 중(ACTIVE) 루틴만 반환합니다. "
-                    + "반복 대상 판정(DAILY/WEEKLY 요일, 시작·종료일)은 오늘 현황(GET /api/v1/today)·캘린더와 동일 규칙입니다. "
+    @Operation(summary = "집 멤버 루틴 목록 조회 (그날 대상 + 완료 여부)",
+            description = "같은 집 멤버의 루틴 중 그날(date, 미지정 시 오늘 KST) 반복 대상인 진행 중(ACTIVE) 루틴을 "
+                    + "각 항목의 완료 여부(completed)와 함께 반환합니다. "
+                    + "반복 대상·완료 판정은 오늘 현황(GET /api/v1/today)·캘린더와 동일 규칙이고, "
                     + "요청자와 조회 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 합니다. "
-                    + "응답 형태는 내 루틴 목록(GET /api/v1/routines)과 동일하며 수행 예정 시각 오름차순으로 정렬됩니다. "
-                    + "카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 루틴만 내려가고, "
-                    + "PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음) 루틴은 제외됩니다. "
-                    + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 전체 루틴은 GET /api/v1/routines 를 사용하세요.")
+                    + "수행 예정 시각 오름차순으로 정렬되며, 카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 "
+                    + "루틴만 내려가고 PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음) 루틴은 제외됩니다. "
+                    + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 화면에는 GET /api/v1/today 또는 GET /api/v1/routines 를 사용하세요.")
     @GetMapping("/routines")
-    public RoutineListResponse getMemberRoutines(
+    public HouseMemberDayRoutineListResponse getMemberRoutines(
             @CurrentUser AuthUser user,
             @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
             @Parameter(description = "조회 대상 회원 ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 userId 값")

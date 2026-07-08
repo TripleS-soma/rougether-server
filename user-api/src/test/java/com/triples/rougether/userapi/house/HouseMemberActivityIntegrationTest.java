@@ -23,13 +23,13 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayRoutineListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
-import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -170,7 +170,7 @@ class HouseMemberActivityIntegrationTest {
         routineIn(f.target(), PrivacyScope.PUBLIC, "전체 공개 루틴");
         saveRoutine(f.target(), null, "미분류 루틴");
 
-        RoutineListResponse response = activityService.getMemberRoutines(
+        HouseMemberDayRoutineListResponse response = activityService.getMemberRoutines(
                 f.viewer().getId(), f.house().getId(), f.target().getId(), null);
 
         assertThat(response.items()).extracting("title")
@@ -178,13 +178,14 @@ class HouseMemberActivityIntegrationTest {
     }
 
     @Test
-    void 루틴은_그날_반복_대상만_보인다() {
+    void 루틴은_그날_반복_대상만_완료_여부와_함께_보인다() {
         Fixture f = fixture();
         LocalDate monday = LocalDate.of(2026, 7, 6); // 월요일
         Category category = categoryRepository.save(Category.create(
                 f.target(), "요일 카테고리", null, null, 0, PrivacyScope.HOUSE));
-        routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
-                AuthType.CHECK, "DAILY", null, null, null, null)).assignOriginToSelf();
+        Routine daily = routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
+                AuthType.CHECK, "DAILY", null, null, null, null));
+        daily.assignOriginToSelf();
         routineRepository.save(Routine.create(f.target(), category, "월요일 루틴",
                 AuthType.CHECK, "WEEKLY", new RepeatDays(List.of("MON")).toJson(),
                 null, null, null)).assignOriginToSelf();
@@ -193,12 +194,16 @@ class HouseMemberActivityIntegrationTest {
                 null, null, null)).assignOriginToSelf();
         routineRepository.save(Routine.create(f.target(), category, "종료된 루틴",
                 AuthType.CHECK, "DAILY", null, null, null, monday.minusDays(1))).assignOriginToSelf();
+        completeOn(daily, monday);
 
-        RoutineListResponse response = activityService.getMemberRoutines(
+        HouseMemberDayRoutineListResponse response = activityService.getMemberRoutines(
                 f.viewer().getId(), f.house().getId(), f.target().getId(), monday);
 
-        assertThat(response.items()).extracting("title")
-                .containsExactlyInAnyOrder("매일 루틴", "월요일 루틴");
+        assertThat(response.date()).isEqualTo(monday);
+        assertThat(response.items()).extracting("title", "completed")
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("매일 루틴", true),
+                        org.assertj.core.groups.Tuple.tuple("월요일 루틴", false));
     }
 
     // --- 완료 내역 ---
