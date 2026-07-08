@@ -33,6 +33,8 @@ import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -59,6 +61,7 @@ class HouseMemberActivityIntegrationTest {
     @Autowired private RoutineRepository routineRepository;
     @Autowired private RoutineLogRepository routineLogRepository;
     @Autowired private TodoRepository todoRepository;
+    @PersistenceContext private EntityManager em;
 
     private record Fixture(User viewer, User target, House house) {
     }
@@ -190,15 +193,22 @@ class HouseMemberActivityIntegrationTest {
         Routine daily = routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
                 AuthType.CHECK, "DAILY", null, null, null, null));
         daily.assignOriginToSelf();
-        routineRepository.save(Routine.create(f.target(), category, "월요일 루틴",
+        Routine mon = routineRepository.save(Routine.create(f.target(), category, "월요일 루틴",
                 AuthType.CHECK, "WEEKLY", new RepeatDays(List.of("MON")).toJson(),
-                null, null, null)).assignOriginToSelf();
-        routineRepository.save(Routine.create(f.target(), category, "화요일 루틴",
+                null, null, null));
+        mon.assignOriginToSelf();
+        Routine tue = routineRepository.save(Routine.create(f.target(), category, "화요일 루틴",
                 AuthType.CHECK, "WEEKLY", new RepeatDays(List.of("TUE")).toJson(),
-                null, null, null)).assignOriginToSelf();
-        routineRepository.save(Routine.create(f.target(), category, "종료된 루틴",
-                AuthType.CHECK, "DAILY", null, null, null, monday.minusDays(1))).assignOriginToSelf();
+                null, null, null));
+        tue.assignOriginToSelf();
+        Routine ended = routineRepository.save(Routine.create(f.target(), category, "종료된 루틴",
+                AuthType.CHECK, "DAILY", null, null, null, monday.minusDays(1)));
+        ended.assignOriginToSelf();
         completeOn(daily, monday);
+        // 기준일(과거)에 이미 존재했던 루틴들로 만들기 위해 생성일을 당김
+        for (Routine routine : List.of(daily, mon, tue, ended)) {
+            backdateCreatedAt(routine.getId(), 10);
+        }
 
         HouseMemberDayResponse response = activityService.getMemberDay(
                 f.viewer().getId(), f.house().getId(), f.target().getId(), monday);
@@ -208,6 +218,40 @@ class HouseMemberActivityIntegrationTest {
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple("매일 루틴", true),
                         org.assertj.core.groups.Tuple.tuple("월요일 루틴", false));
+    }
+
+    @Test
+    void 과거_날짜는_그날_유효했던_버전으로_재구성되고_완료가_정확하다() {
+        Fixture f = fixture();
+        LocalDate yesterday = LocalDate.now(KST).minusDays(1);
+        Category open = categoryRepository.save(Category.create(
+                f.target(), "공개 카테고리", null, null, 0, PrivacyScope.HOUSE));
+        // ① 옛 버전: 이틀 전 생성 → 어제 완료 → 오늘 닫힘(스케줄 수정으로 버전 분기 상황)
+        Routine oldVersion = saveRoutine(f.target(), open, "옛 버전 루틴");
+        completeOn(oldVersion, yesterday);
+        oldVersion.softDelete(Instant.now());
+        backdateCreatedAt(oldVersion.getId(), 2);
+        // ② 오늘 만든 루틴 — 어제 화면에는 없어야 함
+        saveRoutine(f.target(), open, "오늘 만든 루틴");
+        // ③ 비공개 옛 루틴 — 어제 완료 log 가 있어도 공개 범위로 제외
+        Routine hidden = routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴");
+        completeOn(hidden, yesterday);
+        backdateCreatedAt(hidden.getId(), 2);
+
+        HouseMemberDayResponse response = activityService.getMemberDay(
+                f.viewer().getId(), f.house().getId(), f.target().getId(), yesterday);
+
+        assertThat(response.routines()).extracting("title", "completed")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("옛 버전 루틴", true));
+    }
+
+    // created_at 은 auditing 이 now 로 채우고 updatable=false 라 JPA 로 못 바꿈 → 네이티브로 과거로 당김
+    private void backdateCreatedAt(Long routineId, int days) {
+        em.flush();
+        em.createNativeQuery(
+                "update routines set created_at = created_at - interval " + days
+                        + " day where id = " + routineId).executeUpdate();
+        em.clear();
     }
 
     // --- 투두 ---
