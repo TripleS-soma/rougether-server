@@ -94,10 +94,12 @@ public class RoutineController {
     }
 
     @Operation(summary = "루틴 완료 체크",
-            description = "당일 루틴을 완료 처리합니다. 코인 10을 지급하고 스트릭을 갱신합니다. "
-                    + "완료는 오늘(KST 기준)만 가능하며, 같은 루틴은 하루에 한 번만 완료할 수 있습니다. "
-                    + "스트릭은 그날의 첫 완료(루틴 종류 무관)에만 갱신됩니다 — 어제가 성공일이면 currentCount가 1 증가하고, 아니면 1부터 다시 시작합니다. "
-                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 갱신된 스트릭 요약이 포함됩니다.")
+            description = "루틴을 완료 처리합니다. 오늘(KST 기준) 이전 날짜만 완료할 수 있으며 과거 날짜도 허용됩니다. "
+                    + "코인 10은 오늘 완료에만 지급하며(일일 상한 4건 적용), 과거 날짜 완료는 0코인입니다. "
+                    + "같은 루틴은 같은 날짜에 한 번만 완료할 수 있습니다. "
+                    + "스트릭은 오늘의 첫 완료(루틴 종류 무관)에만 갱신됩니다 — 어제가 성공일이면 currentCount가 1 증가하고, 아니면 1부터 다시 시작합니다. "
+                    + "과거 날짜 완료는 스트릭에 반영하지 않고 기존 스트릭 요약을 그대로 반환합니다. "
+                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 스트릭 요약이 포함됩니다.")
     @PostMapping("/{id}/logs")
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineLogResponse complete(
@@ -109,15 +111,16 @@ public class RoutineController {
     }
 
     @Operation(summary = "루틴 완료 취소",
-            description = "당일 완료 기록을 취소합니다. 지급한 코인 10을 회수하고(잔액이 부족해도 그대로 차감) 완료 기록을 삭제합니다. "
-                    + "date에는 화면에서 보고 있는 날짜를 보내며, 오늘(KST 기준) 완료만 취소할 수 있습니다. "
-                    + "취소 후 그날 완료한 루틴이 하나도 남지 않으면 스트릭을 롤백합니다(currentCount 1 감소, longestCount는 유지). "
-                    + "다른 루틴의 완료가 남아 있으면 스트릭은 유지되며, 응답으로 반영된 최종 스트릭 요약을 반환합니다.")
+            description = "완료 기록을 취소합니다. 오늘(KST 기준) 이전 날짜의 완료만 취소할 수 있으며 과거 완료도 취소할 수 있습니다. "
+                    + "실제 지급했던 코인만 회수하며(과거 완료는 0코인이라 환불 없음, 잔액이 부족해도 그대로 차감) 완료 기록을 삭제합니다. "
+                    + "date에는 화면에서 보고 있는 날짜를 보냅니다. "
+                    + "오늘 완료 취소 후 오늘 완료한 루틴이 하나도 남지 않으면 스트릭을 롤백합니다(currentCount 1 감소, longestCount는 유지). "
+                    + "과거 완료 취소는 스트릭을 변경하지 않으며, 응답으로 반영된 최종 스트릭 요약을 반환합니다.")
     @DeleteMapping("/{id}/logs")
     public StreakSummaryResponse cancelLog(
             @CurrentUser AuthUser authUser,
             @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id,
-            @Parameter(description = "취소할 완료의 날짜(YYYY-MM-DD). 화면에서 보고 있는 날짜를 그대로 전달. 오늘(KST 기준) 날짜만 취소 가능")
+            @Parameter(description = "취소할 완료의 날짜(YYYY-MM-DD). 화면에서 보고 있는 날짜를 그대로 전달. 오늘(KST 기준) 이전 날짜만 사용")
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return routineLogService.cancel(authUser.id(), id, date);
     }

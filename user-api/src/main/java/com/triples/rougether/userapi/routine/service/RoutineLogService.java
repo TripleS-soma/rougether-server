@@ -50,10 +50,11 @@ public class RoutineLogService {
 
         LocalDate today = LocalDate.now(KST);
         LocalDate routineDate = request.routineDate() != null ? request.routineDate() : today;
-        // MVP: 완료는 오늘만 허용(미래·과거 모두 거부)
-        if (!routineDate.equals(today)) {
+        // 과거 완료는 허용, 미래만 거부. 단 코인·스트릭은 당일 완료에만 반응함
+        if (routineDate.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.INVALID_ROUTINE_DATE);
         }
+        boolean isToday = routineDate.equals(today);
         // 앱 레이어 중복 완료 guard(DB unique와 이중 방어)
         if (routineLogRepository.existsByRoutineIdAndRoutineDateAndStatus(
                 routineId, routineDate, RoutineLogStatus.COMPLETED)) {
@@ -61,10 +62,11 @@ public class RoutineLogService {
         }
 
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
-        boolean firstToday = routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
+        boolean firstToday = isToday && routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
 
-        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+        // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
+        int reward = isToday && dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
                 routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
@@ -73,7 +75,9 @@ public class RoutineLogService {
             wallet.add(reward);
         }
 
-        Streak streak = updateStreakOnComplete(routine, today, firstToday);
+        Streak streak = isToday
+                ? updateStreakOnComplete(routine, today, firstToday)
+                : streakRepository.findByUserId(userId).orElse(null);
         return RoutineLogResponse.from(log, streak);
     }
 
@@ -84,12 +88,12 @@ public class RoutineLogService {
         findOwnedRoutine(userId, routineId); // 소유권 guard(타인·미존재·삭제 → ROUTINE_NOT_FOUND)
 
         LocalDate today = LocalDate.now(KST);
-        // 당일 완료만 취소 가능 — 과거 날짜를 보내면 오늘 걸 취소하는 게 아니라 거부함
-        if (!date.equals(today)) {
+        // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
+        if (date.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
         }
         RoutineLog log = routineLogRepository
-                .findByRoutineIdAndRoutineDateAndStatus(routineId, today, RoutineLogStatus.COMPLETED)
+                .findByRoutineIdAndRoutineDateAndStatus(routineId, date, RoutineLogStatus.COMPLETED)
                 .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
 
         UserWallet wallet = findWalletForUpdate(userId);
@@ -99,7 +103,10 @@ public class RoutineLogService {
         routineLogRepository.delete(log);
         routineLogRepository.flush(); // 아래 count가 삭제를 반영해야 함
 
-        Streak streak = rollbackStreakOnCancel(userId, today);
+        // 스트릭은 당일 완료 취소에만 반응함(과거 완료는 애초에 스트릭에 반영되지 않음)
+        Streak streak = date.equals(today)
+                ? rollbackStreakOnCancel(userId, today)
+                : streakRepository.findByUserId(userId).orElse(null);
         return streak != null
                 ? StreakSummaryResponse.from(streak)
                 : new StreakSummaryResponse(0, 0, null);
