@@ -55,4 +55,13 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate,
             @Param("visibilities") List<PrivacyScope> visibilities);
+
+    // 일일 보상 상한: 오늘 지급된 완료 건수(reward_amount > 0)
+    @Query("select count(l) from RoutineLog l "
+            + "where l.routine.user.id = :userId and l.routineDate = :routineDate "
+            + "and l.status = :status and l.rewardAmount > 0")
+    long countByRoutine_UserIdAndRoutineDateAndStatusAndRewardAmountGreaterThan(
+            @Param("userId") Long userId,
+            @Param("routineDate") LocalDate routineDate,
+            @Param("status") RoutineLogStatus status);
 }

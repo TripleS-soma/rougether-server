@@ -16,6 +16,8 @@ import com.triples.rougether.domain.routine.entity.StreakStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
@@ -51,6 +53,8 @@ class RoutineCancelServiceIntegrationTest {
     private StreakRepository streakRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TodoRepository todoRepository;
 
     private RoutineLogService service;
     private Long userId;
@@ -58,8 +62,10 @@ class RoutineCancelServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
+                todoRepository);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository);
+                userWalletRepository, streakRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user);
