@@ -1,0 +1,24 @@
+name: API 변경 머지 알림
+
+# PR 본문에 "🔔 API 변경" 섹션이 있는 PR이 머지되면 프론트 담당을 댓글로 멘션한다.
+# 본문 섹션은 정본(멘션 없음), 알림은 머지 시점 이 댓글 한 번만 — 규칙 정본은 CONTRIBUTING.md §4 "API 변경 섹션".
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  notify:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.body, '🔔 API 변경')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: 프론트 담당 멘션 댓글
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "@evan7484 API 변경이 포함된 PR이 머지됐습니다. 본문의 **🔔 API 변경** 섹션을 확인해 주세요."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
