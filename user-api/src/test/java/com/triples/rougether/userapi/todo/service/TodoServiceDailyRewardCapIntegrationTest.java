@@ -123,6 +123,29 @@ class TodoServiceDailyRewardCapIntegrationTest {
         assertThat(walletBalance()).isEqualTo(20);
     }
 
+    @Test
+    void 지급된_완료_투두를_삭제해도_지급_슬롯이_복구되지_않는다() {
+        // 4건 완료 (상한 소진)
+        Long[] todoIds = new Long[4];
+        for (int i = 0; i < 4; i++) {
+            todoIds[i] = todoService.create(userId,
+                    new TodoCreateRequest("투두 " + i, null, null, null)).id();
+            todoService.complete(userId, todoIds[i]);
+        }
+        assertThat(walletBalance()).isEqualTo(20);
+
+        // 지급된 완료 투두 삭제 — soft delete만 되고 코인은 회수되지 않음
+        todoService.delete(userId, todoIds[3]);
+        assertThat(walletBalance()).isEqualTo(20);
+
+        // 새 투두 완료해도 슬롯이 복구되지 않아 0 지급
+        Long newTodoId = todoService.create(userId,
+                new TodoCreateRequest("투두 new", null, null, null)).id();
+        TodoCompleteResponse newResponse = todoService.complete(userId, newTodoId);
+        assertThat(newResponse.rewardAmount()).isEqualTo(0);
+        assertThat(walletBalance()).isEqualTo(20);
+    }
+
     private void persistWallet(User user, int balance) {
         UserWallet wallet = BeanUtils.instantiateClass(UserWallet.class);
         ReflectionTestUtils.setField(wallet, "user", user);

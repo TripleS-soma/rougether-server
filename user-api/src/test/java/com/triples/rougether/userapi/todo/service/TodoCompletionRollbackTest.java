@@ -60,9 +60,9 @@ class TodoCompletionRollbackTest {
         todoId = persistTodo(user);
         walletId = persistWallet(user, 0);
 
-        // 지갑 조회 단계에서 터뜨림(todo.complete()는 이미 메모리에 반영된 뒤)
+        // 지갑 락 조회 단계에서 터뜨림 — 트랜잭션 전체가 롤백되어 상태·코인 불변이어야 함
         doThrow(new RuntimeException("지갑 조회 실패"))
-                .when(userWalletRepository).findByUserIdAndCurrencyType(any(), any());
+                .when(userWalletRepository).findWithLockByUserIdAndCurrencyType(any(), any());
 
         assertThatThrownBy(() -> service.complete(userId, todoId))
                 .isInstanceOf(RuntimeException.class);
@@ -80,7 +80,7 @@ class TodoCompletionRollbackTest {
         walletId = persistWallet(user, 5);
 
         doThrow(new RuntimeException("지갑 조회 실패"))
-                .when(userWalletRepository).findByUserIdAndCurrencyType(any(), any());
+                .when(userWalletRepository).findWithLockByUserIdAndCurrencyType(any(), any());
 
         assertThatThrownBy(() -> service.cancelComplete(userId, todoId))
                 .isInstanceOf(RuntimeException.class);
