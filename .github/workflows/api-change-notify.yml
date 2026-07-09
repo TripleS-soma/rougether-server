@@ -9,7 +9,7 @@ on:
 
 jobs:
   notify:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.body, '🔔 API 변경')
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.body, '## 🔔 API 변경')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
