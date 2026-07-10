@@ -61,7 +61,9 @@ class TodoCompletionServiceIntegrationTest {
                 userWalletRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
-        todoId = service.create(userId, new TodoCreateRequest("장보기", null, null, null)).id();
+        // 코인은 dueDate가 오늘인 완료에만 지급되므로 기본 픽스처는 오늘 마감으로 만듦
+        todoId = service.create(userId,
+                new TodoCreateRequest("장보기", null, null, LocalDate.now(KST))).id();
         persistWallet(user, 0);
     }
 
@@ -74,6 +76,42 @@ class TodoCompletionServiceIntegrationTest {
         assertThat(response.rewardCurrencyType()).isEqualTo(CurrencyType.COIN);
         assertThat(response.rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(5);
+    }
+
+    @Test
+    void 마감일이_지난_투두_완료는_코인0_지갑불변() {
+        Long pastDue = service.create(userId, new TodoCreateRequest("밀린 일", null, null,
+                LocalDate.now(KST).minusDays(3))).id();
+
+        TodoCompleteResponse response = service.complete(userId, pastDue);
+
+        assertThat(response.status()).isEqualTo(TodoStatus.COMPLETED);
+        assertThat(response.rewardAmount()).isZero();
+        assertThat(walletBalance()).isZero();
+    }
+
+    @Test
+    void 마감일이_미래인_투두_완료는_TODO_FUTURE_NOT_COMPLETABLE() {
+        Long futureDue = service.create(userId, new TodoCreateRequest("내일 일", null, null,
+                LocalDate.now(KST).plusDays(1))).id();
+
+        assertThatThrownBy(() -> service.complete(userId, futureDue))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(TodoErrorCode.TODO_FUTURE_NOT_COMPLETABLE);
+        assertThat(todoRepository.findById(futureDue).orElseThrow().getStatus())
+                .isEqualTo(TodoStatus.PENDING);
+    }
+
+    @Test
+    void 마감일이_없는_투두_완료는_허용되고_코인0() {
+        Long noDue = service.create(userId, new TodoCreateRequest("무기한", null, null, null)).id();
+
+        TodoCompleteResponse response = service.complete(userId, noDue);
+
+        assertThat(response.status()).isEqualTo(TodoStatus.COMPLETED);
+        assertThat(response.rewardAmount()).isZero();
+        assertThat(walletBalance()).isZero();
     }
 
     @Test

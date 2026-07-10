@@ -92,7 +92,14 @@ public class TodoService {
         }
 
         LocalDate today = LocalDate.now(KST);
-        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+        LocalDate dueDate = todo.getDueDate();
+        // 마감일이 미래인 투두는 완료 불가. dueDate null은 없는 전제이나 방어적으로 미래 아님으로 취급함
+        if (dueDate != null && dueDate.isAfter(today)) {
+            throw new BusinessException(TodoErrorCode.TODO_FUTURE_NOT_COMPLETABLE);
+        }
+        // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
+        int reward = today.equals(dueDate) && dailyRewardService.canReward(userId, today)
+                ? REWARD_AMOUNT : 0;
 
         todo.complete(REWARD_CURRENCY, reward, Instant.now());
 
