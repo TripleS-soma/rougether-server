@@ -43,7 +43,6 @@ from __future__ import annotations
 import mimetypes
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +83,7 @@ mcp = FastMCP("rougether-admin-asset")
 
 _session: requests.Session | None = None
 _s3_client = None
+_ssm_client = None
 
 
 def _s3():
@@ -93,16 +93,22 @@ def _s3():
     return _s3_client
 
 
+def _ssm():
+    global _ssm_client
+    if _ssm_client is None:
+        _ssm_client = boto3.client("ssm", region_name=AWS_REGION)
+    return _ssm_client
+
+
 def _admin_password() -> str:
     password = os.environ.get("ADMIN_PASSWORD")
     if password:
         return password
-    completed = subprocess.run(
-        ["aws", "ssm", "get-parameter", "--name", ADMIN_PASSWORD_SSM_PARAM,
-         "--with-decryption", "--query", "Parameter.Value", "--output", "text",
-         "--region", AWS_REGION],
-        check=True, text=True, capture_output=True)
-    return completed.stdout.strip()
+    response = _ssm().get_parameter(Name=ADMIN_PASSWORD_SSM_PARAM, WithDecryption=True)
+    value = response.get("Parameter", {}).get("Value")
+    if not value:
+        raise RuntimeError(f"SSM 파라미터에 비밀번호 값이 없습니다: {ADMIN_PASSWORD_SSM_PARAM}")
+    return value
 
 
 def _login() -> requests.Session:
@@ -226,8 +232,33 @@ def import_catalog(themes: list[dict[str, Any]] | None = None,
     중복 생성은 없지만, 가격·이름 등 기존 항목의 변경은 이 툴로 할 수 없다.
     """
     payload = {"themes": themes or [], "characters": characters or [], "items": items or []}
-    missing = [item["assetKey"] for item in payload["items"]
-               if item.get("assetKey") and not _object_exists(item["assetKey"])]
+
+    asset_references = [
+        (f"characters[{index}].baseAssetKey", "characters", character.get("baseAssetKey"))
+        for index, character in enumerate(payload["characters"])
+    ] + [
+        (f"items[{index}].assetKey", "items", item.get("assetKey"))
+        for index, item in enumerate(payload["items"])
+    ]
+    invalid = []
+    asset_keys = []
+    for field, expected_kind, asset_key in asset_references:
+        if not isinstance(asset_key, str) or not asset_key:
+            invalid.append(f"{field}: 비어 있거나 문자열이 아닙니다")
+            continue
+        error = _validate_asset_key(asset_key)
+        if error:
+            invalid.append(f"{field}: {error}")
+            continue
+        if not asset_key.startswith(f"{expected_kind}/"):
+            invalid.append(f"{field}: {expected_kind}/ 로 시작해야 합니다")
+            continue
+        asset_keys.append(asset_key)
+    if invalid:
+        return {"ok": False, "error": f"올바르지 않은 카탈로그 에셋 key: {invalid}"}
+
+    unique_asset_keys = list(dict.fromkeys(asset_keys))
+    missing = [asset_key for asset_key in unique_asset_keys if not _object_exists(asset_key)]
     if missing:
         return {"ok": False,
                 "error": f"S3 에 없는 assetKey 가 포함돼 있습니다 (먼저 upload_asset 실행): {missing}"}
