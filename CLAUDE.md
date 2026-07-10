@@ -14,11 +14,9 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 
 ## 팀 역할 / 도메인 담당
 
-| 담당 | 범위 |
-| --- | --- |
-| 장진형 | 백엔드 — 방 · 집 · 뽑기 · 상점 도메인, 보상·미션 로직, 인프라, AI(LLM·비전) |
-| 임채영 | 백엔드 — 루틴 · 투두 · 회원 도메인, DB 설계, 알림 |
-| 최준서 | 프론트엔드 — React Native, UI/UX, 2D 화면 |
+- 장진형 (백엔드) — 방 · 집 · 뽑기 · 상점 도메인, 보상·미션 로직, 인프라, AI(LLM·비전)
+- 임채영 (백엔드) — 루틴 · 투두 · 회원 도메인, DB 설계, 알림
+- 최준서 (프론트엔드) — React Native, UI/UX, 2D 화면
 
 다른 담당자의 도메인 계약은 임의로 확정하지 않고, 필요한 값은 dependency 또는 open question으로 표시합니다.
 
@@ -26,17 +24,16 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 
 작업 성격에 따라 아래 문서를 읽고 시작합니다.
 
-| 작업 성격 | 문서 |
-| --- | --- |
-| 백엔드 공통 규칙, 모듈 구조, 실행/테스트, migration | [docs/claude/backend.md](docs/claude/backend.md) |
-| 프론트 연동 기준, 응답 형태, 이미지 로딩 | [docs/claude/frontend.md](docs/claude/frontend.md) |
-| 방/공동집 API | [docs/claude/domains/room-house.md](docs/claude/domains/room-house.md) |
-| 루틴/투두 API 의존성 | [docs/claude/domains/routine-todo.md](docs/claude/domains/routine-todo.md) |
-| 에셋, 이미지, CDN/object key | [docs/claude/domains/assets.md](docs/claude/domains/assets.md) |
+- 백엔드 공통 규칙, 모듈 구조, 실행/테스트, migration → [docs/claude/backend.md](docs/claude/backend.md)
+- 프론트 연동 기준, 응답 형태, 이미지 로딩 → [docs/claude/frontend.md](docs/claude/frontend.md)
+- 방/공동집 API → [docs/claude/domains/room-house.md](docs/claude/domains/room-house.md)
+- 루틴/투두 API 의존성 → [docs/claude/domains/routine-todo.md](docs/claude/domains/routine-todo.md)
+- 에셋, 이미지, CDN/object key → [docs/claude/domains/assets.md](docs/claude/domains/assets.md)
 
 ## 공통 작업 규칙
 
 - 문서는 한국어로 작성합니다. 단, API path, JSON field, class name, package name, command는 기존 표기를 유지합니다.
+- AI 에이전트가 읽고 판단 근거로 삼는 하네스 문서(CLAUDE.md, docs/claude/*, 에이전트·스킬·리뷰 봇 프롬프트)는 테이블로 작성하지 않습니다. 테이블은 셀 단위 요약을 강제해 조건·예외·맥락이 잘려나가므로, 계층 불릿이나 항목당 산문 단락으로 풀어씁니다. 기존 문서의 테이블은 해당 문서를 수정할 일이 생길 때 점진 전환합니다.
 - 사용자 확인 전에는 API 초안이나 기획 문서를 PR로 올리지 않습니다.
 - 인증 구현이 뒤로 밀렸더라도 `userId`, `ownerUserId`, `houseId`, `roomUserId`, `membershipId` 같은 소유권 식별자는 유지합니다.
 - DB에는 전체 CDN URL보다 asset key(`*_key`: `asset_key`, `cover_image_key`, `storage_key`)와 metadata를 저장하는 방향을 우선합니다.
