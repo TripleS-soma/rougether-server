@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rougether-admin-asset": {
+      "command": "uv",
+      "args": [
+        "run", "--python", "3.12",
+        "--with", "mcp", "--with", "requests", "--with", "boto3",
+        "python", "tools/admin-asset-mcp/server.py"
+      ]
+    }
+  }
+}
