@@ -24,6 +24,8 @@ The domain spec source of truth is the sibling spec repository supplied in the p
 
 If implementation and spec disagree, report it as `spec_drift` or `api_contract` and say "spec 확인 필요" unless the bug is independently obvious from code.
 
+Evidence rule for spec claims: any `spec_drift` or `api_contract` finding that cites the spec MUST quote the actual evidence from the spec repository checkout — the file path plus the relevant line(s) copied verbatim (e.g. quoting the endpoint line from `domains/house/api.md`), and the spec commit SHA from `git -C <spec-dir> rev-parse --short HEAD`. If you cannot locate and quote the exact spec line, do not report `spec_drift`; reviewers cannot distinguish an uncited spec claim from a hallucination. The same applies in reverse: before claiming something is absent from the spec, search the spec checkout and state which files you checked.
+
 ## Review Priority
 
 Focus on serious, actionable issues. Avoid style-only comments.
