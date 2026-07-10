@@ -13,22 +13,20 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
 
 실행 (Python >= 3.10 필요, uv 가 의존성을 처리):
 
-    uv run --python 3.12 --with mcp --with requests --with boto3 \
+    uv run --python 3.12 --with 'mcp==1.28.*' --with 'requests==2.34.*' --with 'boto3==1.43.*' \
         python tools/admin-asset-mcp/server.py
 
-MCP 클라이언트 등록 예 (Claude Code / Codex CLI 공통 개념):
-
-    command: uv
-    args: [run, --python, "3.12", --with, mcp, --with, requests, --with, boto3,
-           python, /경로/rougether-server/tools/admin-asset-mcp/server.py]
+MCP 클라이언트 등록은 저장소 루트의 .mcp.json 참고 (Codex CLI 는 ~/.codex/config.toml 에 동일 command/args).
 
 환경변수:
 
-- ADMIN_BASE_URL  (기본 http://43.203.209.107:8081 — dev 어드민)
-- ADMIN_USERNAME  (기본 admin)
-- ADMIN_PASSWORD  (미설정 시 SSM /rougether-dev/admin/seed-password 에서 조회)
-- ASSET_BUCKET    (기본 rougether-assets)
-- AWS_REGION      (기본 ap-northeast-2)
+- ADMIN_BASE_URL   (기본 http://localhost:8081. 원격 http URL 은 비밀번호가 평문 전송되므로
+                    ADMIN_ALLOW_HTTP=1 을 함께 명시해야만 허용 — dev 어드민이 TLS 없는 동안의 의식적 opt-in)
+- ADMIN_ALLOW_HTTP (원격 http 허용 opt-in. localhost/https 에는 불필요)
+- ADMIN_USERNAME   (기본 admin)
+- ADMIN_PASSWORD   (미설정 시 SSM /rougether-dev/admin/seed-password 에서 조회)
+- ASSET_BUCKET     (기본 rougether-assets)
+- AWS_REGION       (기본 ap-northeast-2)
 
 안전장치:
 
@@ -51,8 +49,19 @@ import boto3
 import requests
 from mcp.server.fastmcp import FastMCP
 
-ADMIN_BASE_URL = os.environ.get("ADMIN_BASE_URL", "http://43.203.209.107:8081").rstrip("/")
+ADMIN_BASE_URL = os.environ.get("ADMIN_BASE_URL", "http://localhost:8081").rstrip("/")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+
+
+def _require_transport_safety() -> None:
+    # 원격 http 는 비밀번호 평문 전송 — dev 어드민에 TLS 가 없는 동안 명시적 opt-in 만 허용
+    from urllib.parse import urlparse
+    parsed = urlparse(ADMIN_BASE_URL)
+    is_local = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+    if parsed.scheme == "http" and not is_local and os.environ.get("ADMIN_ALLOW_HTTP") != "1":
+        raise RuntimeError(
+            f"원격 http URL({ADMIN_BASE_URL})은 어드민 비밀번호가 평문 전송됩니다. "
+            "의도한 것이면 ADMIN_ALLOW_HTTP=1 을 함께 설정하세요.")
 ADMIN_PASSWORD_SSM_PARAM = "/rougether-dev/admin/seed-password"
 ASSET_BUCKET = os.environ.get("ASSET_BUCKET", "rougether-assets")
 AWS_REGION = os.environ.get("AWS_REGION", "ap-northeast-2")
@@ -95,6 +104,7 @@ def _admin_password() -> str:
 
 
 def _login() -> requests.Session:
+    _require_transport_safety()
     session = requests.Session()
     login_page = session.get(f"{ADMIN_BASE_URL}/login", timeout=10)
     login_page.raise_for_status()
@@ -122,6 +132,9 @@ def _admin_request(method: str, path: str, **kwargs) -> requests.Response:
         _session = _login()
         response = _session.request(method, f"{ADMIN_BASE_URL}{path}", timeout=30,
                                     allow_redirects=False, **kwargs)
+    # 재로그인 후에도 redirect/거부면 raise_for_status(3xx 미포함)에 안 걸리므로 명시적으로 실패 처리
+    if response.status_code in (301, 302, 401, 403):
+        raise RuntimeError(f"어드민 인증이 유지되지 않습니다 (status {response.status_code}, path {path})")
     response.raise_for_status()
     return response
 
