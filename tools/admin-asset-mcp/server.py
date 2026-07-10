@@ -53,6 +53,7 @@ from typing import Any
 
 import boto3
 import requests
+from botocore.exceptions import ClientError
 from mcp.server.fastmcp import FastMCP
 from PIL import Image, UnidentifiedImageError
 
@@ -169,7 +170,7 @@ def _object_exists(asset_key: str) -> bool:
     try:
         _s3().head_object(Bucket=ASSET_BUCKET, Key=asset_key)
         return True
-    except _s3().exceptions.ClientError as error:
+    except ClientError as error:
         if error.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
             return False
         raise
@@ -206,7 +207,8 @@ def _validate_image_bytes(data: bytes, expected_content_type: str) -> str:
                 image.verify()
                 format_name = image.format or ""
                 actual_content_type = ALLOWED_IMAGE_FORMATS.get(format_name)
-    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombWarning) as error:
+    except (UnidentifiedImageError, OSError, SyntaxError,
+            Image.DecompressionBombWarning, Image.DecompressionBombError) as error:
         return f"유효한 이미지 파일이 아닙니다: {error}"
     if actual_content_type is None:
         return f"지원하지 않는 이미지 형식입니다: {format_name}"
