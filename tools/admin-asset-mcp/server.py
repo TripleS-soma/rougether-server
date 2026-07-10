@@ -17,9 +17,9 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
         --with 'pillow==12.3.*' \
         python tools/admin-asset-mcp/server.py
 
-MCP 클라이언트 등록은 저장소 루트의 .mcp.json 참고 (Codex CLI 는 ~/.codex/config.toml 에 동일 command/args).
-저장소 기본 설정은 localhost 를 향한다. dev 어드민(원격 http)을 쓰려면 개인 로컬 설정에서만
-ADMIN_BASE_URL 과 ADMIN_ALLOW_HTTP=1 을 넣는다 — repo 커밋 설정으로 평문 전송을 기본화하지 않는다.
+MCP 클라이언트에는 개인 로컬 설정으로만 등록한다. 저장소 설정이 현재 체크아웃의 코드를
+AWS·어드민 권한으로 자동 실행하지 않도록 repo 공용 MCP 설정은 두지 않는다. dev 어드민
+(원격 http)을 쓰려면 개인 설정에서만 ADMIN_BASE_URL 과 ADMIN_ALLOW_HTTP=1 을 넣는다.
 
 환경변수:
 
