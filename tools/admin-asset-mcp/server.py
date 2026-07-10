@@ -14,6 +14,7 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
 실행 (Python >= 3.10 필요, uv 가 의존성을 처리):
 
     uv run --python 3.12 --with 'mcp==1.28.*' --with 'requests==2.34.*' --with 'boto3==1.43.*' \
+        --with 'pillow==12.3.*' \
         python tools/admin-asset-mcp/server.py
 
 MCP 클라이언트 등록은 저장소 루트의 .mcp.json 참고 (Codex CLI 는 ~/.codex/config.toml 에 동일 command/args).
@@ -29,6 +30,8 @@ ADMIN_BASE_URL 과 ADMIN_ALLOW_HTTP=1 을 넣는다 — repo 커밋 설정으로
 - ADMIN_PASSWORD   (미설정 시 SSM /rougether-dev/admin/seed-password 에서 조회)
 - ASSET_BUCKET     (기본 rougether-assets)
 - AWS_REGION       (기본 ap-northeast-2)
+- ASSET_ALLOWED_ROOTS (업로드를 허용할 로컬 디렉터리 목록. OS path 구분자로 연결하며,
+                       기본값은 MCP 프로세스의 현재 작업 디렉터리)
 
 안전장치:
 
@@ -43,12 +46,15 @@ from __future__ import annotations
 import mimetypes
 import os
 import re
+import warnings
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import boto3
 import requests
 from mcp.server.fastmcp import FastMCP
+from PIL import Image, UnidentifiedImageError
 
 ADMIN_BASE_URL = os.environ.get("ADMIN_BASE_URL", "http://localhost:8081").rstrip("/")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
@@ -70,6 +76,7 @@ AWS_REGION = os.environ.get("AWS_REGION", "ap-northeast-2")
 # 서버(AssetKinds.ALLOWED)와 동일한 kind prefix 집합
 ALLOWED_KINDS = {"characters", "categories", "themes", "items", "house"}
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_IMAGE_FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
 ASSET_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9\-_/.]*$")
 # user-api RoomSlots 와 동일한 positioned 슬롯 집합
 ALLOWED_SLOTS = {
@@ -172,6 +179,43 @@ def _public_url(asset_key: str) -> str:
     return f"https://{ASSET_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{asset_key}"
 
 
+def _allowed_asset_roots() -> list[Path]:
+    configured = os.environ.get("ASSET_ALLOWED_ROOTS")
+    values = configured.split(os.pathsep) if configured else [str(Path.cwd())]
+    return [Path(value.strip()).expanduser().resolve() for value in values if value.strip()]
+
+
+def _resolve_upload_path(file_path: str) -> tuple[Path | None, str]:
+    try:
+        path = Path(file_path).expanduser().resolve(strict=True)
+    except (FileNotFoundError, OSError) as error:
+        return None, f"파일을 확인할 수 없습니다: {error}"
+    if not path.is_file():
+        return None, f"파일이 아닙니다: {path}"
+    if not any(path == root or root in path.parents for root in _allowed_asset_roots()):
+        return None, f"허용된 업로드 디렉터리 밖의 파일입니다: {path}"
+    return path, ""
+
+
+def _validate_image_bytes(data: bytes, expected_content_type: str) -> str:
+    format_name = ""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data)) as image:
+                image.verify()
+                format_name = image.format or ""
+                actual_content_type = ALLOWED_IMAGE_FORMATS.get(format_name)
+    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombWarning) as error:
+        return f"유효한 이미지 파일이 아닙니다: {error}"
+    if actual_content_type is None:
+        return f"지원하지 않는 이미지 형식입니다: {format_name}"
+    if actual_content_type != expected_content_type:
+        return (f"파일 내용 형식({actual_content_type})과 asset_key 확장자 형식"
+                f"({expected_content_type})이 다릅니다")
+    return ""
+
+
 @mcp.tool()
 def upload_asset(file_path: str, asset_key: str, overwrite: bool = False) -> dict[str, Any]:
     """로컬 이미지 파일을 에셋 S3 버킷에 지정한 key 로 업로드한다.
@@ -186,23 +230,27 @@ def upload_asset(file_path: str, asset_key: str, overwrite: bool = False) -> dic
     error = _validate_asset_key(asset_key)
     if error:
         return {"ok": False, "error": error}
-    path = Path(file_path).expanduser()
-    if not path.is_file():
-        return {"ok": False, "error": f"파일이 없습니다: {path}"}
+    path, error = _resolve_upload_path(file_path)
+    if error or path is None:
+        return {"ok": False, "error": error}
     if path.stat().st_size > 10 * 1024 * 1024:
         return {"ok": False, "error": "이미지 크기는 10MB 이하만 허용합니다 (admin-api 와 동일 정책)"}
+    data = path.read_bytes()
     content_type = mimetypes.guess_type(asset_key)[0]
     if content_type not in ("image/png", "image/jpeg", "image/webp"):
         return {"ok": False, "error": f"지원하지 않는 이미지 형식: {content_type}"}
+    error = _validate_image_bytes(data, content_type)
+    if error:
+        return {"ok": False, "error": error}
     if not overwrite and _object_exists(asset_key):
         return {"ok": False,
                 "error": f"이미 존재하는 key 입니다: {asset_key}. 기존 에셋을 교체하려면 overwrite=True 를 명시하세요.",
                 "existingUrl": _public_url(asset_key)}
 
     _s3().put_object(Bucket=ASSET_BUCKET, Key=asset_key,
-                     Body=path.read_bytes(), ContentType=content_type)
+                     Body=data, ContentType=content_type)
     return {"ok": True, "assetKey": asset_key, "url": _public_url(asset_key),
-            "sizeBytes": path.stat().st_size, "overwritten": overwrite}
+            "sizeBytes": len(data), "overwritten": overwrite}
 
 
 @mcp.tool()

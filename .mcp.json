@@ -5,6 +5,7 @@
       "args": [
         "run", "--python", "3.12",
         "--with", "mcp==1.28.*", "--with", "requests==2.34.*", "--with", "boto3==1.43.*",
+        "--with", "pillow==12.3.*",
         "python", "tools/admin-asset-mcp/server.py"
       ]
     }
