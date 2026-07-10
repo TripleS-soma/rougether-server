@@ -74,7 +74,11 @@ def main() -> int:
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="gpt-5.6-sol")
-    parser.add_argument("--reasoning-effort", default="high")
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("low", "medium", "high", "xhigh"),
+        default="high",
+    )
     parser.add_argument("--timeout-seconds", type=int, default=1500)
     args = parser.parse_args()
 
