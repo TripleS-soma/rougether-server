@@ -17,6 +17,8 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
         python tools/admin-asset-mcp/server.py
 
 MCP 클라이언트 등록은 저장소 루트의 .mcp.json 참고 (Codex CLI 는 ~/.codex/config.toml 에 동일 command/args).
+저장소 기본 설정은 localhost 를 향한다. dev 어드민(원격 http)을 쓰려면 개인 로컬 설정에서만
+ADMIN_BASE_URL 과 ADMIN_ALLOW_HTTP=1 을 넣는다 — repo 커밋 설정으로 평문 전송을 기본화하지 않는다.
 
 환경변수:
 
@@ -220,7 +222,8 @@ def import_catalog(themes: list[dict[str, Any]] | None = None,
                  name, priceAmount(null=뽑기 전용), assetKey, limited, active}
 
     assetKey 는 먼저 upload_asset 으로 올린 key 를 그대로 사용한다.
-    같은 code/assetKey 재적재는 UPDATE 로 처리되므로 재실행해도 안전하다.
+    이미 존재하는 code/assetKey 는 건너뛴다(skip — 기존 값이 수정되지 않음). 재실행해도
+    중복 생성은 없지만, 가격·이름 등 기존 항목의 변경은 이 툴로 할 수 없다.
     """
     payload = {"themes": themes or [], "characters": characters or [], "items": items or []}
     missing = [item["assetKey"] for item in payload["items"]
