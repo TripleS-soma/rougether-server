@@ -73,7 +73,12 @@ def main() -> int:
     parser.add_argument("--schema", required=True)
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--model", default="gpt-5.5")
+    parser.add_argument("--model", default="gpt-5.6-sol")
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("low", "medium", "high", "xhigh"),
+        default="high",
+    )
     parser.add_argument("--timeout-seconds", type=int, default=1500)
     args = parser.parse_args()
 
@@ -112,6 +117,8 @@ and targeted file reads to review only this PR's changes. Return only JSON match
         "--ephemeral",
         "--ignore-user-config",
         "--ignore-rules",
+        "-c",
+        f'model_reasoning_effort="{args.reasoning_effort}"',
         "--model",
         args.model,
         "--add-dir",
