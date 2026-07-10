@@ -12,6 +12,7 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.dto.TodoListResponse;
@@ -39,6 +40,7 @@ public class TodoService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
+    private final DailyRewardService dailyRewardService;
 
     @Transactional(readOnly = true)
     public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
@@ -81,15 +83,22 @@ public class TodoService {
     // 완료: todos + user_wallets 2개 테이블을 한 트랜잭션으로 변경함(재화 정합성)
     @Transactional
     public TodoCompleteResponse complete(Long userId, Long todoId) {
+        // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
+        // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
+        UserWallet wallet = findWalletForUpdate(userId);
         Todo todo = findOwned(userId, todoId);
         if (todo.getStatus() == TodoStatus.COMPLETED) {
             throw new BusinessException(TodoErrorCode.TODO_ALREADY_COMPLETED);
         }
 
-        todo.complete(REWARD_CURRENCY, REWARD_AMOUNT, Instant.now());
+        LocalDate today = LocalDate.now(KST);
+        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
 
-        UserWallet wallet = findWallet(userId);
-        wallet.add(REWARD_AMOUNT);
+        todo.complete(REWARD_CURRENCY, reward, Instant.now());
+
+        if (reward > 0) {
+            wallet.add(reward);
+        }
 
         return TodoCompleteResponse.from(todo);
     }
@@ -107,7 +116,7 @@ public class TodoService {
             throw new BusinessException(TodoErrorCode.TODO_NOT_CANCELABLE);
         }
 
-        UserWallet wallet = findWallet(userId);
+        UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(todo.getRewardAmount());
 
@@ -125,8 +134,8 @@ public class TodoService {
                 .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
     }
 
-    private UserWallet findWallet(Long userId) {
-        return userWalletRepository.findByUserIdAndCurrencyType(userId, REWARD_CURRENCY)
+    private UserWallet findWalletForUpdate(Long userId) {
+        return userWalletRepository.findWithLockByUserIdAndCurrencyType(userId, REWARD_CURRENCY)
                 .orElseThrow(() -> new BusinessException(TodoErrorCode.WALLET_NOT_FOUND));
     }
 }

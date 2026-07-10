@@ -15,7 +15,7 @@ public record TodoCompleteResponse(
         Instant completedAt,
         @Schema(description = "보상 재화 종류. 허용값: COIN(루틴 실천 보상), DIAMOND(아이템 구매)", example = "COIN")
         CurrencyType rewardCurrencyType,
-        @Schema(description = "보상 금액. 투두 완료 보상은 코인 5 고정", example = "5")
+        @Schema(description = "보상 금액. 투두 완료는 코인 5이나, 일일 상한(4건)에 도달하면 0 지급", example = "5")
         int rewardAmount
 ) {
 

@@ -16,6 +16,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -37,10 +38,14 @@ public class RoutineLogService {
     private final RoutineLogRepository routineLogRepository;
     private final UserWalletRepository userWalletRepository;
     private final StreakRepository streakRepository;
+    private final DailyRewardService dailyRewardService;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함
     @Transactional
     public RoutineLogResponse complete(Long userId, Long routineId, RoutineLogCreateRequest request) {
+        // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
+        // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
+        UserWallet wallet = findWalletForUpdate(userId);
         Routine routine = findOwnedRoutine(userId, routineId);
 
         LocalDate today = LocalDate.now(KST);
@@ -59,11 +64,14 @@ public class RoutineLogService {
         boolean firstToday = routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
 
-        RoutineLog log = routineLogRepository.save(RoutineLog.complete(
-                routine, routineDate, Instant.now(), REWARD_CURRENCY, REWARD_AMOUNT));
+        int reward = dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
 
-        UserWallet wallet = findWallet(userId);
-        wallet.add(REWARD_AMOUNT);
+        RoutineLog log = routineLogRepository.save(RoutineLog.complete(
+                routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
+
+        if (reward > 0) {
+            wallet.add(reward);
+        }
 
         Streak streak = updateStreakOnComplete(routine, today, firstToday);
         return RoutineLogResponse.from(log, streak);
@@ -84,7 +92,7 @@ public class RoutineLogService {
                 .findByRoutineIdAndRoutineDateAndStatus(routineId, today, RoutineLogStatus.COMPLETED)
                 .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
 
-        UserWallet wallet = findWallet(userId);
+        UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
 
@@ -129,8 +137,8 @@ public class RoutineLogService {
                 .orElseThrow(() -> new BusinessException(RoutineErrorCode.ROUTINE_NOT_FOUND));
     }
 
-    private UserWallet findWallet(Long userId) {
-        return userWalletRepository.findByUserIdAndCurrencyType(userId, REWARD_CURRENCY)
+    private UserWallet findWalletForUpdate(Long userId) {
+        return userWalletRepository.findWithLockByUserIdAndCurrencyType(userId, REWARD_CURRENCY)
                 .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.WALLET_NOT_FOUND));
     }
 }
