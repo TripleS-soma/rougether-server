@@ -186,13 +186,6 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
-variable "firebase_credentials_json" {
-  description = "Firebase service account JSON content for FCM push. Leave null (default) and seed the real value once after apply via `aws ssm put-parameter --overwrite` — never put real credentials in tfvars/state."
-  type        = string
-  default     = null
-  sensitive   = true
-}
-
 variable "tags" {
   description = "Extra tags applied to all supported resources."
   type        = map(string)

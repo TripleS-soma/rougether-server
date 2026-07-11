@@ -9,7 +9,6 @@ locals {
   db_password_param         = "/${local.name}/db/password"
   admin_seed_password_param = "/${local.name}/admin/seed-password"
   jwt_secret_param          = "/${local.name}/jwt/secret"
-  firebase_credentials_param = "/${local.name}/firebase/credentials-json"
   ecr_registry_server       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
   github_oidc_url           = "https://token.actions.githubusercontent.com"
 }
@@ -95,23 +94,6 @@ resource "aws_ssm_parameter" "jwt_secret" {
   description = "Rougether user-api JWT secret"
   type        = "SecureString"
   value       = local.jwt_secret_value
-  tags        = local.tags
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
-# firebase 서비스 계정 JSON은 terraform이 생성 못 하는 외부 secret(Firebase Console에서 발급).
-# apply 시엔 placeholder("{}")로 만들고, 실제 값은 apply 후 1회만 CLI로 채운다:
-#   aws ssm put-parameter --name <firebase_credentials_param> --type SecureString \
-#     --value "$(cat firebase-adminsdk.json)" --overwrite --region ap-northeast-2
-# ignore_changes로 이후 apply가 그 값을 placeholder로 되돌리지 않는다.
-resource "aws_ssm_parameter" "firebase_credentials" {
-  name        = local.firebase_credentials_param
-  description = "Rougether FCM firebase service account JSON"
-  type        = "SecureString"
-  value       = var.firebase_credentials_json == null ? "{}" : var.firebase_credentials_json
   tags        = local.tags
 
   lifecycle {
@@ -331,8 +313,7 @@ resource "aws_iam_role_policy" "app" {
           [
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
-            aws_ssm_parameter.jwt_secret.arn,
-            aws_ssm_parameter.firebase_credentials.arn
+            aws_ssm_parameter.jwt_secret.arn
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
@@ -534,7 +515,6 @@ resource "aws_instance" "app" {
     admin_seed_enabled        = tostring(var.admin_seed_enabled)
     admin_seed_username       = var.admin_seed_username
     admin_seed_password_param = aws_ssm_parameter.admin_seed_password.name
-    firebase_credentials_param = aws_ssm_parameter.firebase_credentials.name
     asset_bucket_name         = var.asset_bucket_name
     asset_region              = var.asset_region
     asset_public_base_url     = var.asset_public_base_url

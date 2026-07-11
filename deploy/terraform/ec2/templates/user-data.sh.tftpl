@@ -35,13 +35,13 @@ JWT_SECRET=$JWT_SECRET
 FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json
 EOF
 
-# firebase 서비스 계정 JSON은 다른 secret들과 동일하게 SSM Parameter Store에서 자동으로 가져온다.
-# 실제 값은 apply 후 1회 `aws ssm put-parameter --overwrite`로 채워야 하며(README 참고),
-# 채우기 전엔 placeholder("{}")가 내려와 user-api가 기동 시 명확히 실패한다(조용한 발송 누락 방지).
-aws ssm get-parameter --name '${firebase_credentials_param}' --with-decryption \
-  --query 'Parameter.Value' --output text --region '${aws_region}' \
-  > "$ENV_DIR/firebase-adminsdk.json"
-chmod 600 "$ENV_DIR/firebase-adminsdk.json"
+# firebase 서비스 계정 JSON은 secret이라 user-data가 못 만듦 — 인스턴스 생성 후 수동 업로드 필요.
+# (빈 placeholder를 만들어 두는 이유: 파일이 없으면 아래 docker -v 마운트가 그 경로에 디렉토리를 만들어버림.
+#  빈 파일이면 앱이 기동 시 명확히 실패하므로 키 미업로드가 바로 드러남.)
+if [ ! -f "$ENV_DIR/firebase-adminsdk.json" ]; then
+  touch "$ENV_DIR/firebase-adminsdk.json"
+  chmod 600 "$ENV_DIR/firebase-adminsdk.json"
+fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
