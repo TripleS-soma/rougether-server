@@ -40,6 +40,14 @@ write_units() {
   mkdir -p "$ENV_DIR"
   chmod 700 "$ENV_DIR"
 
+  # firebase 서비스 계정 키는 코드로 배포되지 않고 서버에 별도로 올려둠(secret).
+  # 파일이 없으면 아래 docker -v 마운트가 그 경로에 빈 디렉토리를 만들어버리므로
+  # 빈 placeholder를 미리 만들어 마운트 소스가 항상 "파일"이 되게 함.
+  if [ ! -f "$ENV_DIR/firebase-adminsdk.json" ]; then
+    touch "$ENV_DIR/firebase-adminsdk.json"
+    chmod 600 "$ENV_DIR/firebase-adminsdk.json"
+  fi
+
   cat > "$USER_DEPLOY_ENV" <<EOF
 ROUGETHER_USER_API_IMAGE=$user_image
 EOF
@@ -62,7 +70,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_USER_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
