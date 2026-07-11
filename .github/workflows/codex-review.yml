@@ -156,6 +156,19 @@ jobs:
           command -v codex >/dev/null
           codex --version
 
+      - name: Collect maintainer decisions
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.bot-token.outputs.token }}
+          REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
+        run: |
+          set -euo pipefail
+          python3 trusted/.github/review-bot/review_state.py \
+            --repo "${{ github.repository }}" \
+            --pr-number "$REVIEW_PR_NUMBER" \
+            --output "$REVIEW_STATE"
+
       - name: Run Codex review
         if: steps.pr.outputs.skip != 'true'
         env:
@@ -163,6 +176,7 @@ jobs:
           REVIEW_BASE_REF: origin/${{ steps.pr.outputs.base_ref }}
           REVIEW_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           REVIEW_SPEC_DIR: ${{ github.workspace }}/rougether-spec
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
           REVIEW_OUT: ${{ github.workspace }}/findings.json
         run: |
           set -euo pipefail
@@ -176,6 +190,7 @@ jobs:
             --pr-number "$REVIEW_PR_NUMBER" \
             --schema trusted/.github/review-bot/findings.schema.json \
             --prompt trusted/.github/review-bot/review-prompt.md \
+            --review-state "$REVIEW_STATE" \
             --output "$REVIEW_OUT"
 
       - name: Post review
@@ -184,6 +199,7 @@ jobs:
           GH_TOKEN: ${{ steps.bot-token.outputs.token }}
           REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
           REVIEW_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
           REVIEW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -192,4 +208,5 @@ jobs:
             --pr-number "$REVIEW_PR_NUMBER" \
             --head-sha "$REVIEW_HEAD_SHA" \
             --findings findings.json \
+            --review-state "$REVIEW_STATE" \
             --run-url "$REVIEW_RUN_URL"

@@ -9,10 +9,11 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+from review_state import decided_finding_keys, finding_key, load_review_state
 
 
 BOT_PREFIX = "rougether-reviewer"
@@ -164,7 +165,11 @@ def _already_reviewed_head(repo: str, pr_number: str, head_sha: str) -> bool:
     return _reviewed_head_from_reviews(reviews, head_sha)
 
 
-def _format_comment(finding: dict[str, Any], fingerprint: str) -> str:
+def _format_comment(
+    finding: dict[str, Any],
+    fingerprint: str,
+    stable_key: str,
+) -> str:
     severity = str(finding.get("severity") or "suggestion")
     label = {
         "blocking": "Blocking",
@@ -179,7 +184,10 @@ def _format_comment(finding: dict[str, Any], fingerprint: str) -> str:
         f"**{label}: {title}**\n\n"
         f"{body}\n\n"
         f"_category: `{category}`, confidence: `{confidence}`_\n\n"
-        f"<!-- {BOT_PREFIX}:fingerprint:{fingerprint} -->"
+        "_공개 debate는 이 스레드에서 진행합니다. 메인테이너 판정: "
+        "`/reviewer accept` 또는 `/reviewer dismiss`_\n\n"
+        f"<!-- {BOT_PREFIX}:fingerprint:{fingerprint} -->\n"
+        f"<!-- {BOT_PREFIX}:finding-key:{stable_key} -->"
     )
 
 
@@ -187,6 +195,7 @@ def _format_summary(
     payload: dict[str, Any],
     inline_count: int,
     fallback: list[dict[str, Any]],
+    decided_skip_count: int,
     run_url: str | None,
     head_sha: str,
 ) -> str:
@@ -202,6 +211,7 @@ def _format_summary(
         "",
         f"- inline comments: {inline_count}",
         f"- summary-only findings: {len(fallback)}",
+        f"- maintainer-decided findings skipped: {decided_skip_count}",
     ]
     if run_url:
         lines.append(f"- run: {run_url}")
@@ -224,10 +234,13 @@ def main() -> int:
     parser.add_argument("--pr-number", required=True)
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--findings", required=True)
+    parser.add_argument("--review-state", default="")
     parser.add_argument("--run-url", default="")
     parser.add_argument("--max-inline", type=int, default=15)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--files-json", default="", help="Local fixture for PR files API rows")
+    parser.add_argument(
+        "--files-json", default="", help="Local fixture for PR files API rows"
+    )
     parser.add_argument(
         "--existing-comments-json",
         default="",
@@ -241,6 +254,8 @@ def main() -> int:
     args = parser.parse_args()
 
     payload = _load_findings(Path(args.findings))
+    review_state = load_review_state(args.review_state)
+    decided = decided_finding_keys(review_state)
     existing_reviews = _load_rows(args.existing_reviews_json)
     if (
         _reviewed_head_from_reviews(existing_reviews, args.head_sha)
@@ -264,9 +279,14 @@ def main() -> int:
 
     comments: list[dict[str, Any]] = []
     fallback: list[dict[str, Any]] = []
+    decided_skip_count = 0
 
     for finding in payload.get("findings", []):
         if not isinstance(finding, dict):
+            continue
+        stable_key = finding_key(finding)
+        if stable_key in decided:
+            decided_skip_count += 1
             continue
         fingerprint = _fingerprint(finding)
         if fingerprint in existing:
@@ -286,7 +306,7 @@ def main() -> int:
                     "path": path,
                     "line": line,
                     "side": side,
-                    "body": _format_comment(finding, fingerprint),
+                    "body": _format_comment(finding, fingerprint, stable_key),
                 }
             )
         else:
@@ -296,6 +316,7 @@ def main() -> int:
         payload=payload,
         inline_count=len(comments),
         fallback=fallback,
+        decided_skip_count=decided_skip_count,
         run_url=args.run_url or None,
         head_sha=args.head_sha,
     )
