@@ -139,6 +139,38 @@ aws ssm get-parameter \
   --region ap-northeast-2
 ```
 
+## Firebase 서비스 계정 키
+
+FCM 발송에 쓰는 firebase 서비스 계정 JSON은 다른 secret(DB 비밀번호, JWT secret 등)과 동일하게
+SSM Parameter Store(SecureString)에 저장하고, user-data가 인스턴스 부팅 시 자동으로 가져옵니다.
+Terraform이 이 값을 직접 생성할 순 없으므로(Firebase Console에서 발급받는 외부 secret), `apply` 후
+**한 번만** 실제 값을 채워주면 이후 인스턴스가 몇 번을 재생성돼도 자동으로 적용됩니다.
+
+```bash
+PARAM="$(terraform output -raw firebase_credentials_parameter)"
+aws ssm put-parameter \
+  --name "$PARAM" \
+  --type SecureString \
+  --value "$(cat ~/.rougether/secrets/firebase-adminsdk.json)" \
+  --overwrite \
+  --region ap-northeast-2
+```
+
+값을 채우기 전까지는 placeholder(`{}`)가 내려가서 user-api가 기동 시 명확히 실패합니다
+(조용한 발송 누락 대신 기동 실패로 드러나게 하는 의도된 동작). 채운 뒤 이미 떠 있는 인스턴스에
+반영하려면:
+
+```bash
+$(terraform output -raw ssm_session_command)
+# 세션 안에서
+sudo aws ssm get-parameter --name "$PARAM" --with-decryption --query 'Parameter.Value' \
+  --output text --region ap-northeast-2 > /etc/rougether/firebase-adminsdk.json
+sudo chmod 600 /etc/rougether/firebase-adminsdk.json
+sudo systemctl restart rougether-user-api
+```
+
+키를 로테이트할 때도 같은 `put-parameter --overwrite` + 위 재적용 절차만 반복하면 됩니다.
+
 ## Health Checks
 
 ```bash

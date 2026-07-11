@@ -57,3 +57,8 @@ output "admin_seed_password_parameter" {
   description = "SSM parameter name containing the initial admin password."
   value       = aws_ssm_parameter.admin_seed_password.name
 }
+
+output "firebase_credentials_parameter" {
+  description = "SSM parameter name holding the FCM firebase service account JSON. Seed the real value with `aws ssm put-parameter --overwrite`."
+  value       = aws_ssm_parameter.firebase_credentials.name
+}
