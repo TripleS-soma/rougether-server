@@ -20,10 +20,19 @@ dependencies {
 	// 구글 id_token(RS256) 검증: JWK 조회·캐싱 + 서명·exp 검증(NimbusJwtDecoder)
 	implementation 'org.springframework.security:spring-security-oauth2-jose'
 
+	// FCM 발송(firebase-admin). firebase.credentials-path 설정 여부로 초기화(FirebaseConfig 참고)
+	implementation 'com.google.firebase:firebase-admin:9.10.0'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.testcontainers:testcontainers-mysql'
+}
+
+// 셸/CI에 FIREBASE_CREDENTIALS_PATH가 남아 있어도 테스트는 항상 FCM stub으로 고정함
+// (env var가 relaxed binding으로 firebase.credentials-path에 매칭돼 실제 sender가 뜨는 것 차단)
+tasks.named('test') {
+	environment 'FIREBASE_CREDENTIALS_PATH', ''
 }
