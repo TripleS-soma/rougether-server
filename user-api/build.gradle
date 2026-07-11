@@ -20,6 +20,9 @@ dependencies {
 	// 구글 id_token(RS256) 검증: JWK 조회·캐싱 + 서명·exp 검증(NimbusJwtDecoder)
 	implementation 'org.springframework.security:spring-security-oauth2-jose'
 
+	// FCM 발송(firebase-admin). prod 프로필에서만 초기화(FirebaseConfig 참고)
+	implementation 'com.google.firebase:firebase-admin:9.10.0'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
