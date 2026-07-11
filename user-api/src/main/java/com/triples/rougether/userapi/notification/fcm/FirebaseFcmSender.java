@@ -23,6 +23,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FirebaseFcmSender implements FcmSender {
 
+    // Firebase MulticastMessage는 호출당 토큰을 최대 500개까지만 허용함(초과 시 addAllTokens에서 IllegalArgumentException).
+    private static final int MULTICAST_MAX_TOKENS = 500;
+
     private final FirebaseApp firebaseApp;
 
     @Override
@@ -31,6 +34,14 @@ public class FirebaseFcmSender implements FcmSender {
             return List.of();
         }
 
+        List<String> invalidTokens = new ArrayList<>();
+        for (List<String> chunk : partition(tokens, MULTICAST_MAX_TOKENS)) {
+            invalidTokens.addAll(sendChunk(chunk, title, body));
+        }
+        return invalidTokens;
+    }
+
+    private List<String> sendChunk(List<String> tokens, String title, String body) {
         MulticastMessage message = MulticastMessage.builder()
                 .addAllTokens(tokens)
                 .setNotification(Notification.builder().setTitle(title).setBody(body).build())
@@ -57,5 +68,13 @@ public class FirebaseFcmSender implements FcmSender {
             }
         }
         return invalidTokens;
+    }
+
+    static List<List<String>> partition(List<String> tokens, int size) {
+        List<List<String>> chunks = new ArrayList<>();
+        for (int i = 0; i < tokens.size(); i += size) {
+            chunks.add(tokens.subList(i, Math.min(i + size, tokens.size())));
+        }
+        return chunks;
     }
 }

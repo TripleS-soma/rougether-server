@@ -2,18 +2,21 @@ package com.triples.rougether.userapi.notification.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
-import com.triples.rougether.userapi.notification.dto.DeviceTokenDeleteRequest;
 import com.triples.rougether.userapi.notification.dto.DeviceTokenRegisterRequest;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,7 +43,8 @@ public class DeviceTokenController {
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser AuthUser user,
-                       @Valid @RequestBody DeviceTokenDeleteRequest request) {
-        deviceTokenService.delete(user.id(), request.token());
+                       @Parameter(description = "삭제할 FCM 디바이스 토큰")
+                       @RequestParam @NotBlank @Size(max = 255) String token) {
+        deviceTokenService.delete(user.id(), token);
     }
 }
