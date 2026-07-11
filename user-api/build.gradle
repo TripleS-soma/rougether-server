@@ -30,3 +30,9 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.testcontainers:testcontainers-mysql'
 }
+
+// 셸/CI에 FIREBASE_CREDENTIALS_PATH가 남아 있어도 테스트는 항상 FCM stub으로 고정함
+// (env var가 relaxed binding으로 firebase.credentials-path에 매칭돼 실제 sender가 뜨는 것 차단)
+tasks.named('test') {
+	environment 'FIREBASE_CREDENTIALS_PATH', ''
+}

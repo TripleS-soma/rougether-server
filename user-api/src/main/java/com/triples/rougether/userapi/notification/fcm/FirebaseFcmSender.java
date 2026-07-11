@@ -12,12 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
-// firebase 서비스 계정 JSON이 실제로 주입되는 prod에서만 활성화됨(FirebaseConfig도 동일 프로필 조건).
+// firebase.credentials-path가 설정된 환경에서만 활성화됨(FirebaseConfig와 동일 조건 → FirebaseApp 빈 주입 보장).
+// 프로필 무관 — 로컬도 자격증명을 주입하면 실제 FCM 발송으로 동작함.
 @Slf4j
-@Profile("prod")
+@ConditionalOnExpression("'${firebase.credentials-path:}' != ''")
 @Component
 @RequiredArgsConstructor
 public class FirebaseFcmSender implements FcmSender {
