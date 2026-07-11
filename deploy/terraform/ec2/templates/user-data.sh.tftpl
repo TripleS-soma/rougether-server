@@ -32,16 +32,7 @@ DB_URL=${db_url}
 DB_USERNAME=${db_username}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
-FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json
 EOF
-
-# firebase 서비스 계정 JSON은 secret이라 user-data가 못 만듦 — 인스턴스 생성 후 수동 업로드 필요.
-# (빈 placeholder를 만들어 두는 이유: 파일이 없으면 아래 docker -v 마운트가 그 경로에 디렉토리를 만들어버림.
-#  빈 파일이면 앱이 기동 시 명확히 실패하므로 키 미업로드가 바로 드러남.)
-if [ ! -f "$ENV_DIR/firebase-adminsdk.json" ]; then
-  touch "$ENV_DIR/firebase-adminsdk.json"
-  chmod 600 "$ENV_DIR/firebase-adminsdk.json"
-fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
@@ -98,7 +89,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
