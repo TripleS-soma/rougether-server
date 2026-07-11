@@ -7,15 +7,13 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
-// firebase.credentials-path 미설정 환경용 발송 stub(FirebaseFcmSender와 상호 배타 조건).
-// 자격증명 없이 부팅 가능해야 하므로 실제 발송을 하지 않음.
+// firebase.credentials-path 미설정 환경용 발송 stub
+// 살제 발송X
 @Slf4j
 @ConditionalOnExpression("'${firebase.credentials-path:}' == ''")
 @Component
 public class StubFcmSender implements FcmSender {
 
-    // prod에서 stub이 선택됐다는 건 FIREBASE_CREDENTIALS_PATH가 빈 값으로 주입됐다는 뜻 —
-    // 조용한 발송 누락 대신 기동 실패로 드러냄(unset은 @Value 해석 실패로 이미 fail-fast).
     public StubFcmSender(Environment environment) {
         if (environment.acceptsProfiles(Profiles.of("prod"))) {
             throw new IllegalStateException(

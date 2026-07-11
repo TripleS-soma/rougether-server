@@ -27,8 +27,12 @@ public class NotificationService {
     private final ApplicationEventPublisher eventPublisher;
 
     public void send(Long userId, NotificationType type, String title, String body) {
+        send(userId, type, title, body, null);
+    }
+
+    public void send(Long userId, NotificationType type, String title, String body, Long refId) {
         User user = userRepository.getReferenceById(userId);
-        notificationRepository.save(Notification.create(user, type, title, body, null));
+        notificationRepository.save(Notification.create(user, type, title, body, refId));
 
         eventPublisher.publishEvent(new NotificationCreatedEvent(userId, title, body));
     }
