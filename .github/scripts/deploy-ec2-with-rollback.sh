@@ -48,6 +48,12 @@ write_units() {
     chmod 600 "$ENV_DIR/firebase-adminsdk.json"
   fi
 
+  # terraform이 lifecycle.ignore_changes=[user_data]라 user-data.sh.tftpl 갱신이
+  # 기존 인스턴스에 재적용되지 않음 — 배포마다 이 스크립트가 직접 멱등하게 보장.
+  if [ -f "$ENV_DIR/user-api.env" ] && ! grep -q '^FIREBASE_CREDENTIALS_PATH=' "$ENV_DIR/user-api.env"; then
+    echo "FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json" >> "$ENV_DIR/user-api.env"
+  fi
+
   cat > "$USER_DEPLOY_ENV" <<EOF
 ROUGETHER_USER_API_IMAGE=$user_image
 EOF

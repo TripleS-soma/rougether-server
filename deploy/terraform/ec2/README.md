@@ -173,6 +173,28 @@ sudo docker logs -f rougether-admin-api
 sudo tail -f /var/log/rougether-user-data.log
 ```
 
+## Firebase Push Credentials
+
+`user-api` reads the Firebase service account JSON from `/etc/rougether/firebase-adminsdk.json`
+on the EC2 host, bind-mounted read-only into the container. The file itself is a secret and is
+never provisioned by Terraform or the deploy script — upload it once per instance over SSM:
+
+```bash
+$(terraform output -raw ssm_session_command)
+sudo tee /etc/rougether/firebase-adminsdk.json > /dev/null <<'JSON'
+{ ... service account json ... }
+JSON
+sudo chmod 600 /etc/rougether/firebase-adminsdk.json
+sudo systemctl restart rougether-user-api
+```
+
+Always overwrite in place (`tee`/`cat >`, not upload-to-temp-then-`mv`). Docker's bind mount binds
+to the file's inode at container start; a `mv`/rename-based replacement swaps the inode, so an
+already-running container keeps reading the old (possibly empty placeholder) file until it is
+restarted. If the file is missing or empty, `user-api` falls back to a no-op FCM stub instead of
+failing — a redeploy or restart alone will not surface a missing key, so confirm push notifications
+actually arrive after rotating this file.
+
 ## Destroy
 
 This stack defaults to `db_skip_final_snapshot = true` for low-friction dev teardown.
