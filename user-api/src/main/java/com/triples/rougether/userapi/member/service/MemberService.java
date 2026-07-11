@@ -8,8 +8,6 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MemberService {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
     private final OnboardingQueryService onboardingQueryService;
@@ -44,10 +40,7 @@ public class MemberService {
     }
 
     private MeResponse toMeResponse(User user) {
-        OffsetDateTime lastLoginAt = user.getLastLoginAt() == null
-                ? null
-                : user.getLastLoginAt().atZone(KST).toOffsetDateTime();
-        return new MeResponse(user.getId(), user.getNickname(), user.getBio(), lastLoginAt,
+        return new MeResponse(user.getId(), user.getNickname(), user.getBio(), user.getLastLoginAt(),
                 onboardingQueryService.getSummary(user.getId()));
     }
 }
