@@ -1,6 +1,8 @@
 package com.triples.rougether.domain.notification.repository;
 
 import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                                         Pageable pageable);
 
     Optional<Notification> findByIdAndUserId(Long id, Long userId);
+
+    // 리마인드 중복 발송 방지: 같은 유저·타입·ref_id로 [from, to) 구간(오늘 KST)에 발송된 알림 존재 여부
+    @Query("select (count(n) > 0) from Notification n "
+            + "where n.user.id = :userId and n.type = :type and n.refId = :refId "
+            + "and n.createdAt >= :from and n.createdAt < :to")
+    boolean existsByUserAndTypeAndRefIdSentBetween(@Param("userId") Long userId,
+                                                   @Param("type") NotificationType type,
+                                                   @Param("refId") Long refId,
+                                                   @Param("from") Instant from,
+                                                   @Param("to") Instant to);
 
     // 전체 읽음 - 안 읽은 알림만 bulk update
     @Modifying

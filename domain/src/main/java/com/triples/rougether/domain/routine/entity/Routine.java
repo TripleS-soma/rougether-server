@@ -84,7 +84,7 @@ public class Routine extends BaseEntity {
         this.status = RoutineStatus.ACTIVE;
         this.repeatType = repeatType;
         this.repeatDays = repeatDays;
-        this.scheduledTime = scheduledTime;
+        this.scheduledTime = scheduledTime == null ? null : scheduledTime.withSecond(0).withNano(0);
         this.startsOn = startsOn;
         this.endsOn = endsOn;
     }
@@ -113,7 +113,7 @@ public class Routine extends BaseEntity {
         if (repeatDays != null) {
             this.repeatDays = repeatDays;
         }
-        this.scheduledTime = scheduledTime;
+        this.scheduledTime = scheduledTime == null ? null : scheduledTime.withSecond(0).withNano(0);
         if (startsOn != null) {
             this.startsOn = startsOn;
         }

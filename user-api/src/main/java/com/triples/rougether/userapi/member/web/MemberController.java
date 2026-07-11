@@ -24,7 +24,7 @@ public class MemberController {
 
     private final MemberService memberService;
 
-    @Operation(summary = "내 정보 조회", description = "로그인한 회원의 기본 정보와 온보딩 진행 요약을 반환합니다. onboarding.completed로 온보딩 화면 진입 여부를 판단할 수 있습니다. lastLoginAt은 KST(+09:00) 기준으로 반환합니다.")
+    @Operation(summary = "내 정보 조회", description = "로그인한 회원의 기본 정보와 온보딩 진행 요약을 반환합니다. onboarding.completed로 온보딩 화면 진입 여부를 판단할 수 있습니다. lastLoginAt은 UTC(Z) 기준으로 반환합니다.")
     @GetMapping
     public MeResponse me(@CurrentUser AuthUser authUser) {
         return memberService.getMe(authUser.id());

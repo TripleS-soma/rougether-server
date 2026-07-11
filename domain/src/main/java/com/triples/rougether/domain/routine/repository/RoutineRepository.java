@@ -5,6 +5,7 @@ import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,9 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
     // 카테고리 삭제 차단 검사용: status 무관 살아있는 루틴 존재 여부
     boolean existsByCategoryIdAndDeletedAtIsNull(Long categoryId);
+
+    // 리마인드 스케줄러: 지정 분에 예약된 살아있는 ACTIVE 루틴. 반복규칙·완료·중복발송은 호출측이 걸러냄
+    List<Routine> findByStatusAndScheduledTimeAndDeletedAtIsNull(RoutineStatus status, LocalTime scheduledTime);
 
     List<Routine> findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(Long userId);
 
