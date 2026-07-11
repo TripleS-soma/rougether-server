@@ -52,4 +52,32 @@ class UserDeviceTokenRepositoryTest {
                 UserDeviceToken.register(other, "dup-token", DevicePlatform.ANDROID, Instant.now())))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    void upsert는_없으면_새로_등록한다() {
+        User user = userRepository.save(User.signUp());
+        Instant now = Instant.now();
+
+        userDeviceTokenRepository.upsert(user.getId(), "new-token", "IOS", now);
+
+        UserDeviceToken found = userDeviceTokenRepository.findByToken("new-token").orElseThrow();
+        assertThat(found.getUser().getId()).isEqualTo(user.getId());
+        assertThat(found.getPlatform()).isEqualTo(DevicePlatform.IOS);
+    }
+
+    @Test
+    void upsert는_같은_token이_있으면_소유자와_플랫폼을_덮어쓴다() {
+        User owner = userRepository.save(User.signUp());
+        User newOwner = userRepository.save(User.signUp());
+        userDeviceTokenRepository.saveAndFlush(
+                UserDeviceToken.register(owner, "existing-token", DevicePlatform.IOS, Instant.now()));
+
+        userDeviceTokenRepository.upsert(newOwner.getId(), "existing-token", "ANDROID", Instant.now());
+
+        UserDeviceToken found = userDeviceTokenRepository.findByToken("existing-token").orElseThrow();
+        assertThat(found.getUser().getId()).isEqualTo(newOwner.getId());
+        assertThat(found.getPlatform()).isEqualTo(DevicePlatform.ANDROID);
+        // 같은 token으로 row 하나만 유지됨 (INSERT ... ON DUPLICATE KEY UPDATE)
+        assertThat(userDeviceTokenRepository.findAllByUserId(owner.getId())).isEmpty();
+    }
 }

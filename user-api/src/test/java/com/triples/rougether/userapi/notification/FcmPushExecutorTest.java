@@ -10,6 +10,7 @@ import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.fcm.FcmSender;
+import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class FcmPushExecutorTest {
 
     @Mock private UserDeviceTokenRepository userDeviceTokenRepository;
+    @Mock private DeviceTokenService deviceTokenService;
     @Mock private FcmSender fcmSender;
     @InjectMocks private FcmPushExecutor fcmPushExecutor;
 
@@ -31,7 +33,7 @@ class FcmPushExecutorTest {
     }
 
     @Test
-    void 사용자_토큰_전체로_멀티캐스트_발송하고_무효_토큰을_삭제한다() {
+    void 사용자_토큰_전체로_멀티캐스트_발송하고_무효_토큰_삭제를_DeviceTokenService에_위임한다() {
         List<UserDeviceToken> tokens = List.of(tokenOf("token-1"), tokenOf("token-2"));
         when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(tokens);
         when(fcmSender.send(List.of("token-1", "token-2"), "제목", "본문"))
@@ -39,7 +41,7 @@ class FcmPushExecutorTest {
 
         fcmPushExecutor.push(1L, "제목", "본문");
 
-        verify(userDeviceTokenRepository).deleteAllByTokenIn(List.of("token-2"));
+        verify(deviceTokenService).deleteAllByToken(List.of("token-2"));
     }
 
     @Test
@@ -49,7 +51,7 @@ class FcmPushExecutorTest {
         fcmPushExecutor.push(1L, "제목", "본문");
 
         verify(fcmSender, never()).send(any(), any(), any());
-        verify(userDeviceTokenRepository, never()).deleteAllByTokenIn(any());
+        verify(deviceTokenService, never()).deleteAllByToken(any());
     }
 
     @Test
@@ -60,6 +62,6 @@ class FcmPushExecutorTest {
 
         fcmPushExecutor.push(1L, "제목", "본문");
 
-        verify(userDeviceTokenRepository, never()).deleteAllByTokenIn(any());
+        verify(deviceTokenService, never()).deleteAllByToken(any());
     }
 }

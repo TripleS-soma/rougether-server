@@ -56,13 +56,6 @@ public class UserDeviceToken extends BaseCreatedEntity {
         return new UserDeviceToken(user, token, platform, now);
     }
 
-    // 같은 token 재등록(멱등) 또는 다른 user가 등록한 token 소유자 이전(기기 재로그인) 공용 처리
-    public void reassign(User user, DevicePlatform platform, Instant now) {
-        this.user = user;
-        this.platform = platform;
-        this.updatedAt = now;
-    }
-
     public boolean isOwnedBy(Long userId) {
         return this.user.getId().equals(userId);
     }
