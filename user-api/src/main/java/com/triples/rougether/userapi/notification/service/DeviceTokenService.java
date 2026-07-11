@@ -2,7 +2,6 @@ package com.triples.rougether.userapi.notification.service;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
-import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.userapi.notification.error.DeviceTokenErrorCode;
 import java.time.Instant;
@@ -23,14 +22,13 @@ public class DeviceTokenService {
     }
 
     public void delete(Long userId, String token) {
-        UserDeviceToken deviceToken = userDeviceTokenRepository.findByToken(token)
-                .filter(dt -> dt.isOwnedBy(userId))
-                .orElseThrow(() -> new BusinessException(DeviceTokenErrorCode.DEVICE_TOKEN_NOT_FOUND));
-
-        userDeviceTokenRepository.delete(deviceToken);
+        int deleted = userDeviceTokenRepository.deleteByTokenAndUserId(token, userId);
+        if (deleted == 0) {
+            throw new BusinessException(DeviceTokenErrorCode.DEVICE_TOKEN_NOT_FOUND);
+        }
     }
 
-    public void deleteAllByToken(List<String> tokens) {
-        userDeviceTokenRepository.deleteAllByTokenIn(tokens);
+    public void deleteAllByToken(Long userId, List<String> tokens) {
+        userDeviceTokenRepository.deleteAllByTokenInAndUserId(tokens, userId);
     }
 }

@@ -41,7 +41,7 @@ class FcmPushExecutorTest {
 
         fcmPushExecutor.push(1L, "제목", "본문");
 
-        verify(deviceTokenService).deleteAllByToken(List.of("token-2"));
+        verify(deviceTokenService).deleteAllByToken(1L, List.of("token-2"));
     }
 
     @Test
@@ -51,7 +51,7 @@ class FcmPushExecutorTest {
         fcmPushExecutor.push(1L, "제목", "본문");
 
         verify(fcmSender, never()).send(any(), any(), any());
-        verify(deviceTokenService, never()).deleteAllByToken(any());
+        verify(deviceTokenService, never()).deleteAllByToken(any(), any());
     }
 
     @Test
@@ -62,6 +62,6 @@ class FcmPushExecutorTest {
 
         fcmPushExecutor.push(1L, "제목", "본문");
 
-        verify(deviceTokenService, never()).deleteAllByToken(any());
+        verify(deviceTokenService, never()).deleteAllByToken(any(), any());
     }
 }

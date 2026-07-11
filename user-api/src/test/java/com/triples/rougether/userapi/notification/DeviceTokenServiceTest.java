@@ -4,22 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
-import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.userapi.notification.error.DeviceTokenErrorCode;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,12 +27,6 @@ class DeviceTokenServiceTest {
 
     @Mock private UserDeviceTokenRepository userDeviceTokenRepository;
     @InjectMocks private DeviceTokenService deviceTokenService;
-
-    private User userWithId(Long id) {
-        User user = mock(User.class);
-        lenient().when(user.getId()).thenReturn(id);
-        return user;
-    }
 
     @Test
     void 등록은_DB_upsert로_원자적으로_처리된다() {
@@ -59,41 +48,31 @@ class DeviceTokenServiceTest {
         verify(userDeviceTokenRepository).upsert(eq(2L), eq("token-a"), eq("ANDROID"), any());
     }
 
+    // 삭제는 findByToken 후 PK delete가 아니라, 소유권 조건이 포함된 단일 DELETE 한 방으로 끝나야 함.
+    // (조회~삭제 사이 upsert 소유권 이전 경합 방지 — 실제 원자성은 UserDeviceTokenRepositoryTest에서 검증)
     @Test
-    void 본인_토큰을_삭제한다() {
-        User user = userWithId(1L);
-        UserDeviceToken existing = UserDeviceToken.register(user, "token-a", DevicePlatform.IOS, Instant.EPOCH);
-        when(userDeviceTokenRepository.findByToken("token-a")).thenReturn(Optional.of(existing));
+    void 본인_토큰을_소유권_조건이_포함된_단일_DELETE로_삭제한다() {
+        when(userDeviceTokenRepository.deleteByTokenAndUserId("token-a", 1L)).thenReturn(1);
 
         deviceTokenService.delete(1L, "token-a");
 
-        verify(userDeviceTokenRepository).delete(existing);
+        verify(userDeviceTokenRepository).deleteByTokenAndUserId("token-a", 1L);
+        verify(userDeviceTokenRepository, never()).findByToken(any());
     }
 
     @Test
-    void 타인_토큰_삭제는_거부한다() {
-        User owner = userWithId(1L);
-        UserDeviceToken existing = UserDeviceToken.register(owner, "token-a", DevicePlatform.IOS, Instant.EPOCH);
-        when(userDeviceTokenRepository.findByToken("token-a")).thenReturn(Optional.of(existing));
+    void 삭제된_행이_없으면_NOT_FOUND를_던진다() {
+        when(userDeviceTokenRepository.deleteByTokenAndUserId("token-a", 2L)).thenReturn(0);
 
         assertThatThrownBy(() -> deviceTokenService.delete(2L, "token-a"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(DeviceTokenErrorCode.DEVICE_TOKEN_NOT_FOUND));
-        verify(userDeviceTokenRepository, never()).delete(any());
     }
 
     @Test
-    void 존재하지_않는_토큰_삭제는_거부한다() {
-        when(userDeviceTokenRepository.findByToken("missing")).thenReturn(Optional.empty());
+    void 무효_토큰_목록을_발송_대상_사용자_스코프로_bulk_삭제한다() {
+        deviceTokenService.deleteAllByToken(1L, List.of("token-a", "token-b"));
 
-        assertThatThrownBy(() -> deviceTokenService.delete(1L, "missing"))
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(DeviceTokenErrorCode.DEVICE_TOKEN_NOT_FOUND));
-    }
-
-    @Test
-    void 무효_토큰_목록을_bulk_삭제한다() {
-        deviceTokenService.deleteAllByToken(List.of("token-a", "token-b"));
-
-        verify(userDeviceTokenRepository).deleteAllByTokenIn(List.of("token-a", "token-b"));
+        verify(userDeviceTokenRepository).deleteAllByTokenInAndUserId(List.of("token-a", "token-b"), 1L);
     }
 }

@@ -29,7 +29,7 @@ public class FcmPushExecutor {
 
         List<String> invalidTokens = fcmSender.send(tokens, title, body);
         if (!invalidTokens.isEmpty()) {
-            deviceTokenService.deleteAllByToken(invalidTokens);
+            deviceTokenService.deleteAllByToken(userId, invalidTokens);
         }
     }
 }

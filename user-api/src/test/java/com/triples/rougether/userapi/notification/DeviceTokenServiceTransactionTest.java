@@ -42,7 +42,7 @@ class DeviceTokenServiceTransactionTest {
         TestTransaction.flagForCommit();
         TestTransaction.end();
 
-        deviceTokenService.deleteAllByToken(List.of("invalid-token"));
+        deviceTokenService.deleteAllByToken(user.getId(), List.of("invalid-token"));
 
         assertThat(userDeviceTokenRepository.findByToken("invalid-token")).isEmpty();
 

@@ -55,8 +55,4 @@ public class UserDeviceToken extends BaseCreatedEntity {
     public static UserDeviceToken register(User user, String token, DevicePlatform platform, Instant now) {
         return new UserDeviceToken(user, token, platform, now);
     }
-
-    public boolean isOwnedBy(Long userId) {
-        return this.user.getId().equals(userId);
-    }
 }

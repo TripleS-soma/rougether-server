@@ -10,6 +10,7 @@ import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,5 +80,54 @@ class UserDeviceTokenRepositoryTest {
         assertThat(found.getPlatform()).isEqualTo(DevicePlatform.ANDROID);
         // 같은 token으로 row 하나만 유지됨 (INSERT ... ON DUPLICATE KEY UPDATE)
         assertThat(userDeviceTokenRepository.findAllByUserId(owner.getId())).isEmpty();
+    }
+
+    @Test
+    void deleteByTokenAndUserId는_본인_소유_토큰만_삭제하고_영향_행_수를_반환한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.saveAndFlush(
+                UserDeviceToken.register(user, "own-token", DevicePlatform.IOS, Instant.now()));
+
+        int deleted = userDeviceTokenRepository.deleteByTokenAndUserId("own-token", user.getId());
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(userDeviceTokenRepository.findByToken("own-token")).isEmpty();
+    }
+
+    // 경합 재현: A의 로그아웃 삭제가 조회를 마친 사이 B의 upsert가 같은 행의 소유권을 가져간 상황.
+    // 소유권 조건이 삭제문에 포함되어 있으므로 A의 삭제는 0행 — B의 토큰이 지워지지 않아야 함.
+    @Test
+    void deleteByTokenAndUserId는_소유권이_이전된_토큰을_지우지_않는다() {
+        User oldOwner = userRepository.save(User.signUp());
+        User newOwner = userRepository.save(User.signUp());
+        userDeviceTokenRepository.saveAndFlush(
+                UserDeviceToken.register(oldOwner, "shared-token", DevicePlatform.IOS, Instant.now()));
+        userDeviceTokenRepository.upsert(newOwner.getId(), "shared-token", "ANDROID", Instant.now());
+
+        int deleted = userDeviceTokenRepository.deleteByTokenAndUserId("shared-token", oldOwner.getId());
+
+        assertThat(deleted).isZero();
+        UserDeviceToken survived = userDeviceTokenRepository.findByToken("shared-token").orElseThrow();
+        assertThat(survived.getUser().getId()).isEqualTo(newOwner.getId());
+    }
+
+    // FCM 무효 토큰 정리도 같은 경합에 노출됨: 발송~응답 사이 upsert로 소유권이 이전된 token은
+    // 새 소유자의 유효 토큰이므로, 발송 시점 소유자 스코프의 bulk 삭제가 지우지 않아야 함.
+    @Test
+    void deleteAllByTokenInAndUserId는_본인_소유_토큰만_지우고_소유권_이전된_토큰은_남긴다() {
+        User sender = userRepository.save(User.signUp());
+        User newOwner = userRepository.save(User.signUp());
+        userDeviceTokenRepository.saveAndFlush(
+                UserDeviceToken.register(sender, "stale-token", DevicePlatform.IOS, Instant.now()));
+        userDeviceTokenRepository.saveAndFlush(
+                UserDeviceToken.register(sender, "transferred-token", DevicePlatform.IOS, Instant.now()));
+        userDeviceTokenRepository.upsert(newOwner.getId(), "transferred-token", "ANDROID", Instant.now());
+
+        userDeviceTokenRepository.deleteAllByTokenInAndUserId(
+                List.of("stale-token", "transferred-token"), sender.getId());
+
+        assertThat(userDeviceTokenRepository.findByToken("stale-token")).isEmpty();
+        UserDeviceToken survived = userDeviceTokenRepository.findByToken("transferred-token").orElseThrow();
+        assertThat(survived.getUser().getId()).isEqualTo(newOwner.getId());
     }
 }
