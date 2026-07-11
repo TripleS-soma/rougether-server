@@ -1,7 +1,9 @@
 package com.triples.rougether.userapi.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -60,5 +62,16 @@ class NotificationServiceTest {
         notificationService.onNotificationCreated(new NotificationCreatedEvent(1L, "제목", "본문"));
 
         verify(fcmPushExecutor).push(1L, "제목", "본문");
+    }
+
+    // push 제출이 실패해도(예: 비동기 큐 포화로 TaskRejectedException) AFTER_COMMIT 리스너 밖으로
+    // 예외가 새면 안 됨 — 이미 끝난 트랜잭션 커밋 경로를 타고 원래 요청까지 실패로 되돌아간다.
+    @Test
+    void push_제출이_실패해도_리스너는_예외를_전파하지_않는다() {
+        doThrow(new org.springframework.core.task.TaskRejectedException("queue full"))
+                .when(fcmPushExecutor).push(1L, "제목", "본문");
+
+        assertThatCode(() -> notificationService.onNotificationCreated(new NotificationCreatedEvent(1L, "제목", "본문")))
+                .doesNotThrowAnyException();
     }
 }

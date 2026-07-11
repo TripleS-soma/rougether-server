@@ -7,6 +7,7 @@ import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -31,11 +33,17 @@ public class NotificationService {
         eventPublisher.publishEvent(new NotificationCreatedEvent(userId, title, body));
     }
 
-    // 트랜잭션 커밋 이후에 알림 수신
+    // 트랜잭션 커밋 이후에 알림 수신.
+    // AFTER_COMMIT 리스너가 예외를 던지면 이미 끝난 커밋 처리 경로를 타고 원래 요청까지 되던져진다
+    // (DB 저장은 성공했는데 요청은 실패로 응답되는 모순) — push는 원래도 best-effort라 여기서 삼킨다.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void onNotificationCreated(NotificationCreatedEvent event) {
-        fcmPushExecutor.push(event.userId(), event.title(), event.body());
+        try {
+            fcmPushExecutor.push(event.userId(), event.title(), event.body());
+        } catch (Exception e) {
+            log.warn("알림 push 제출 실패 - userId={}", event.userId(), e);
+        }
     }
 
     public record NotificationCreatedEvent(Long userId, String title, String body) {
