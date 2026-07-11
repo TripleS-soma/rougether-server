@@ -61,4 +61,8 @@ public class Notification extends BaseCreatedEntity {
     public static Notification create(User user, NotificationType type, String title, String body, Long refId) {
         return new Notification(user, type, title, body, refId);
     }
+
+    public void markRead() {
+        this.isRead = true;
+    }
 }
