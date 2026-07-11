@@ -7,8 +7,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
-// firebase.credentials-path 미설정 환경용 발송 stub
-// 살제 발송X
+// firebase.credentials-path 미설정 환경용 발송 stub(FirebaseFcmSender와 상호 배타 조건).
+// 자격증명 없이 부팅 가능해야 하므로 실제 발송을 하지 않음.
 @Slf4j
 @ConditionalOnExpression("'${firebase.credentials-path:}' == ''")
 @Component
