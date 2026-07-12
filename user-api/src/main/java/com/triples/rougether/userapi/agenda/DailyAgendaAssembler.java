@@ -1,7 +1,6 @@
 package com.triples.rougether.userapi.agenda;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.triples.rougether.domain.routine.RoutineRecurrence;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.Todo;
@@ -23,28 +22,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class DailyAgendaAssembler {
 
-    // repeat_days JSON 파싱 전용. user-api 컨텍스트에 ObjectMapper 빈이 없어 자체 인스턴스 사용함
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     // starts_on~ends_on 범위 안이고 repeat 규칙이 date에 맞으면 대상
     public boolean isRoutineTargetOn(Routine routine, LocalDate date) {
-        if (routine.getStartsOn() != null && date.isBefore(routine.getStartsOn())) {
-            return false;
-        }
-        if (routine.getEndsOn() != null && date.isAfter(routine.getEndsOn())) {
-            return false;
-        }
-        String repeatType = routine.getRepeatType();
-        if (repeatType == null) {
-            return false;
-        }
-        if ("DAILY".equalsIgnoreCase(repeatType)) {
-            return true;
-        }
-        if ("WEEKLY".equalsIgnoreCase(repeatType)) {
-            return matchesWeekday(routine.getRepeatDays(), date);
-        }
-        return false;
+        return RoutineRecurrence.isTargetOn(routine, date);
     }
 
     // 카테고리별 묶음. 미분류(category=null)는 categoryId=null 그룹으로 분리, 맨 뒤로 둠
@@ -85,29 +65,6 @@ public class DailyAgendaAssembler {
         int remainingCount = total - completedCount;
         double progressRate = total == 0 ? 0.0 : (double) completedCount / total;
         return new TodaySummary(completedCount, remainingCount, progressRate);
-    }
-
-    // repeat_days JSON의 daysOfWeek에 date의 요일(MON~SUN)이 포함되는지
-    private boolean matchesWeekday(String repeatDays, LocalDate date) {
-        if (repeatDays == null || repeatDays.isBlank()) {
-            return false;
-        }
-        // MONDAY → MON (저장 토큰과 동일 형태)
-        String token = date.getDayOfWeek().name().substring(0, 3);
-        try {
-            JsonNode days = OBJECT_MAPPER.readTree(repeatDays).get("daysOfWeek");
-            if (days == null || !days.isArray()) {
-                return false;
-            }
-            for (JsonNode day : days) {
-                if (token.equalsIgnoreCase(day.asText())) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            return false;
-        }
     }
 
     // 미분류(category=null)면 null. 연관은 lazy id 접근이라 초기화 없이 FK만 읽음
