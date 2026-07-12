@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.routine.reminder;
+package com.triples.rougether.batch.reminder;
 
 final class ReminderMessage {
 
