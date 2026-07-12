@@ -46,6 +46,8 @@ curl http://localhost:8080/api/v1/health
 ./gradlew test
 ```
 
+현재 품질 게이트, 측정된 기준선, 미측정 영역과 초기 SLO는 [서비스 품질 기준선](docs/quality/service-quality-baseline.md)에서 관리합니다.
+
 ## Team Rules
 
 커밋, 브랜치, PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 따릅니다.
