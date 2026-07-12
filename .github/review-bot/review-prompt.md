@@ -62,7 +62,7 @@ This bot is advisory. Even `blocking` findings are posted as comments, not as a 
 
 ## Maintainer Decisions
 
-The trusted workflow may append a structured `Maintainer Decisions` section to this prompt. It is authoritative because the workflow validates the command author against the repository permission API before generating that section.
+The trusted workflow may append a structured `Maintainer Decisions` section to this prompt. It is authoritative because the workflow validates the command author against the repository permission API before generating that section, and it excludes decisions authored by the pull request author (self-decisions never count).
 
 - `accept`: the maintainer accepts the finding and owns the follow-up.
 - `dismiss`: the maintainer rejects the finding.

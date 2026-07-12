@@ -119,6 +119,39 @@ class MaintainerDecisionTest(unittest.TestCase):
             ],
         )
 
+    def test_pr_author_self_decision_is_ignored(self) -> None:
+        key = "a" * 24
+        comments = [
+            _root_comment(10, key),
+            _reply(11, 10, "pr-author", "/reviewer dismiss", "2026-07-11T00:01:00Z"),
+        ]
+
+        state = review_state.build_review_state(
+            comments,
+            {"pr-author": "write"},
+            pr_author="PR-Author",
+        )
+
+        self.assertEqual(state["decisions"], [])
+
+    def test_other_maintainer_decision_still_counts_with_author_filter(self) -> None:
+        key = "a" * 24
+        comments = [
+            _root_comment(10, key),
+            _reply(11, 10, "pr-author", "/reviewer dismiss", "2026-07-11T00:01:00Z"),
+            _reply(12, 10, "maintainer", "/reviewer accept", "2026-07-11T00:02:00Z"),
+        ]
+
+        state = review_state.build_review_state(
+            comments,
+            {"pr-author": "write", "maintainer": "maintain"},
+            pr_author="pr-author",
+        )
+
+        self.assertEqual(len(state["decisions"]), 1)
+        self.assertEqual(state["decisions"][0]["verdict"], "accept")
+        self.assertEqual(state["decisions"][0]["by"], "maintainer")
+
     def test_latest_valid_decision_wins(self) -> None:
         key = "b" * 24
         comments = [

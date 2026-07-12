@@ -101,6 +101,7 @@ def _comment_sort_key(comment: dict[str, Any]) -> tuple[str, int]:
 def build_review_state(
     comments: list[dict[str, Any]],
     permissions: dict[str, str],
+    pr_author: str = "",
 ) -> dict[str, Any]:
     roots: dict[str, dict[str, Any]] = {}
     for comment in comments:
@@ -121,12 +122,17 @@ def build_review_state(
 
     decisions: dict[str, dict[str, Any]] = {}
     ordered = sorted(comments, key=_comment_sort_key)
+    author = pr_author.strip().casefold()
     for comment in ordered:
         root = roots.get(str(comment.get("in_reply_to_id") or ""))
         verdict = _decision_command(comment.get("body"))
         login = _login(comment)
         permission = str(permissions.get(login) or "").casefold()
         if not root or not verdict or permission not in WRITE_PERMISSIONS:
+            continue
+        # 리뷰 대상 PR 작성자는 write 권한자일 수밖에 없으므로(비-fork PR 전제),
+        # 판정자 == 작성자인 셀프 판정은 제3자 판정이 아니라서 인정하지 않는다.
+        if author and login.casefold() == author:
             continue
         key = str(root["finding_key"])
         decisions[key] = {
@@ -214,6 +220,7 @@ def main() -> int:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--pr-number", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--pr-author", default="")
     parser.add_argument("--comments-json", default="")
     parser.add_argument("--permissions-json", default="")
     args = parser.parse_args()
@@ -233,9 +240,18 @@ def main() -> int:
     if not isinstance(permissions, dict):
         raise RuntimeError("permissions input must be an object")
 
+    pr_author = args.pr_author
+    if not pr_author and not args.comments_json:
+        # 워크플로가 --pr-author 를 빼먹어도 셀프 판정 필터가 조용히 꺼지지 않도록
+        # 네트워크 모드에서는 PR 작성자를 직접 조회한다.
+        payload = _gh_json([f"repos/{args.repo}/pulls/{args.pr_number}"])
+        if isinstance(payload, dict) and isinstance(payload.get("user"), dict):
+            pr_author = str(payload["user"].get("login") or "")
+
     state = build_review_state(
         [item for item in comments if isinstance(item, dict)],
         {str(key): str(value) for key, value in permissions.items()},
+        pr_author=pr_author,
     )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

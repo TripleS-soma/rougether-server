@@ -66,6 +66,7 @@ jobs:
             python3 review-control/.github/review-bot/review_state.py \
               --repo "${{ github.repository }}" \
               --pr-number "${{ github.event.pull_request.number }}" \
+              --pr-author "${{ github.event.pull_request.user.login }}" \
               --output "$REVIEW_STATE"
           else
             # Bootstrap only: the collector is unavailable until this change reaches base.

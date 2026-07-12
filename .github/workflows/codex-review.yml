@@ -90,6 +90,7 @@ jobs:
             echo "base_sha=$(json_field base.sha)"
             echo "head_sha=$(json_field head.sha)"
             echo "head_repo=$head_repo"
+            echo "author=$(json_field user.login)"
             echo "skip=$skip"
             echo "skip_reason=$skip_reason"
           } >> "$GITHUB_OUTPUT"
@@ -164,10 +165,16 @@ jobs:
           REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
         run: |
           set -euo pipefail
-          python3 trusted/.github/review-bot/review_state.py \
-            --repo "${{ github.repository }}" \
-            --pr-number "$REVIEW_PR_NUMBER" \
-            --output "$REVIEW_STATE"
+          if [ -f trusted/.github/review-bot/review_state.py ]; then
+            python3 trusted/.github/review-bot/review_state.py \
+              --repo "${{ github.repository }}" \
+              --pr-number "$REVIEW_PR_NUMBER" \
+              --pr-author "${{ steps.pr.outputs.author }}" \
+              --output "$REVIEW_STATE"
+          else
+            # Bootstrap only: trusted(base) checkout 에 collector 가 들어오기 전까지의 폴백.
+            printf '%s\n' '{"version":1,"decisions":[]}' > "$REVIEW_STATE"
+          fi
 
       - name: Run Codex review
         if: steps.pr.outputs.skip != 'true'
