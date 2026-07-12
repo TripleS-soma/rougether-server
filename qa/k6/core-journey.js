@@ -106,8 +106,7 @@ function recordStatus(response, expectedStatus, endpoint) {
   });
   businessFailures.add(!ok, { endpoint });
   if (!ok && loggedFailures < 5) {
-    const body = response.body ? String(response.body).slice(0, 300) : '<empty>';
-    console.error(`${endpoint} failed: status=${response.status}, body=${body}`);
+    console.error(`${endpoint} failed: status=${response.status}`);
     loggedFailures += 1;
   }
   return ok;

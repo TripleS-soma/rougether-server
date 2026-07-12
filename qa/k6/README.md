@@ -16,7 +16,7 @@
 
 ## 실행
 
-필수 도구는 Docker Desktop, `curl`, k6다. macOS에서는 `brew install k6`로 설치할 수 있다.
+필수 도구는 Docker Desktop, `curl`, `lsof`, k6다. macOS에서는 `brew install k6`로 설치할 수 있다.
 
 ```bash
 ./qa/k6/run-local.sh smoke
