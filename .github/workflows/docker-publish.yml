@@ -19,6 +19,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::478572912668:role/rougether-dev-github-actions-deploy
   ECR_REPOSITORY_PREFIX: rougether-dev
   IMAGE_TAG: dev
+  FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
 
 jobs:
   test:
@@ -139,6 +140,7 @@ jobs:
               -e "s|__USER_IMAGE__|${user_image}|g" \
               -e "s|__ADMIN_IMAGE__|${admin_image}|g" \
               -e "s|__DEPLOYED_SHA__|${GITHUB_SHA}|g" \
+              -e "s|__FIREBASE_PARAMETER_NAME__|${FIREBASE_CREDENTIALS_PARAMETER}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
           script="$(printf "bash -se <<'ROUGETHER_DEPLOY_SCRIPT'\n%s\nROUGETHER_DEPLOY_SCRIPT\n" "$deploy_script")"

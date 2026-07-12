@@ -57,3 +57,8 @@ output "admin_seed_password_parameter" {
   description = "SSM parameter name containing the initial admin password."
   value       = aws_ssm_parameter.admin_seed_password.name
 }
+
+output "firebase_credentials_parameter" {
+  description = "SSM parameter name containing the Firebase service account JSON."
+  value       = local.firebase_credentials_param
+}
