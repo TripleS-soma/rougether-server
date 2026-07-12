@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.notification.fcm;
+package com.triples.rougether.infra.fcm;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.BatchResponse;
@@ -15,8 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
-// firebase.credentials-path가 설정된 환경에서만 활성화됨(FirebaseConfig와 동일 조건 → FirebaseApp 빈 주입 보장).
-// 프로필 무관 — 로컬도 자격증명을 주입하면 실제 FCM 발송으로 동작함.
 @Slf4j
 @ConditionalOnExpression("'${firebase.credentials-path:}' != ''")
 @Component

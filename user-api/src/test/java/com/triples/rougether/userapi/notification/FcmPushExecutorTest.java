@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
+import com.triples.rougether.infra.fcm.FcmSender;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
-import com.triples.rougether.userapi.notification.fcm.FcmSender;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import java.util.List;
 import org.junit.jupiter.api.Test;

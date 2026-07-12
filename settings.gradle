@@ -6,5 +6,6 @@ rootProject.name = 'rougether-server'
 
 include 'common'
 include 'domain'
+include 'infra:fcm'
 include 'user-api'
 include 'admin-api'
