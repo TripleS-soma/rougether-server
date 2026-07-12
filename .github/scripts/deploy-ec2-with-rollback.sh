@@ -235,8 +235,13 @@ rollback() {
 
   echo "deploy failed; attempting rollback"
 
-  restore_firebase_credentials
-  ensure_user_runtime_env
+  if ! restore_firebase_credentials; then
+    echo "Firebase credential restore failed; continuing image rollback" >&2
+  fi
+
+  if ! ensure_user_runtime_env; then
+    echo "Firebase runtime env restore failed; continuing image rollback" >&2
+  fi
 
   if [ -z "$rollback_user_image" ] || [ -z "$rollback_admin_image" ]; then
     cleanup_firebase_credentials_backup
