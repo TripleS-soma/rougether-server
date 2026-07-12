@@ -202,10 +202,35 @@ test_restore_failure_is_propagated_and_backup_is_kept() {
   echo "ok - restore failure is propagated and backup is kept"
 }
 
+test_capture_rollback_images_preserves_new_deploy_sha() {
+  reset_scenario "deploy-state"
+  DEPLOYED_SHA="new-deploy-sha"
+  cat > "$STATE_FILE" <<'EOF'
+USER_API_IMAGE=old-user-image
+ADMIN_API_IMAGE=old-admin-image
+DEPLOYED_SHA=old-deploy-sha
+EOF
+
+  capture_rollback_images
+
+  if [ "$rollback_user_image" != "old-user-image" ] || [ "$rollback_admin_image" != "old-admin-image" ]; then
+    echo "not ok - rollback images must be read from deploy state" >&2
+    return 1
+  fi
+
+  if [ "$DEPLOYED_SHA" != "new-deploy-sha" ]; then
+    echo "not ok - previous deploy state must not overwrite the new deploy SHA" >&2
+    return 1
+  fi
+
+  echo "ok - rollback state preserves the new deploy SHA"
+}
+
 test_ssm_failure_keeps_existing_credentials
 test_invalid_ssm_json_keeps_existing_credentials
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
+test_capture_rollback_images_preserves_new_deploy_sha
 
 echo "deployment script tests passed"
