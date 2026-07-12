@@ -151,6 +151,10 @@ Firebase Console에서 받은 파일은 전용 스크립트로 등록합니다. 
 이미 있으면 새 버전으로 교체합니다. 스크립트는 서비스 계정 필수 필드와 SSM Standard의 4KB 제한을
 확인하며 키 값은 출력하지 않습니다.
 
+신규 스택은 가능하면 `terraform apply` 전에 키를 먼저 등록합니다. SSM 조회가 일시적으로 실패해도
+인스턴스 전체 부트스트랩은 계속되며, 기존 정상 키가 있으면 유지하고 없으면 user-api가
+`StubFcmSender`로 기동합니다. 다음 배포에서 다시 SSM 조회를 시도합니다.
+
 ```bash
 deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
@@ -158,7 +162,8 @@ deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 이후 GitHub Actions 배포는 매번 SecureString을 다시 읽어
 `/etc/rougether/firebase-adminsdk.json`에 권한 `600`으로 원자적으로 교체하고,
 user-api 컨테이너에 read-only로 마운트합니다. 키를 교체할 때도 같은 스크립트를 실행한 뒤
-배포 workflow를 다시 실행하면 됩니다.
+배포 workflow를 다시 실행하면 됩니다. 새 키 때문에 health check가 실패하면 이미지와 함께 이전 키도
+복원합니다.
 
 파라미터 이름을 바꾼 환경에서는 업로드와 workflow의 값을 함께 맞춥니다.
 

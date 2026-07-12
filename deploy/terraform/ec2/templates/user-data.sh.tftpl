@@ -28,6 +28,27 @@ DB_PASSWORD="$(aws ssm get-parameter --name '${db_password_param}' --with-decryp
 JWT_SECRET="$(aws ssm get-parameter --name '${jwt_secret_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 ADMIN_SEED_PASSWORD="$(aws ssm get-parameter --name '${admin_seed_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 
+firebase_credentials_valid() {
+  local credentials_file="$1"
+
+  [ -f "$credentials_file" ] || return 1
+
+  python3 - "$credentials_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as credentials_file:
+        credentials = json.load(credentials_file)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+required = ("project_id", "private_key", "client_email")
+if credentials.get("type") != "service_account" or any(not credentials.get(key) for key in required):
+    raise SystemExit(1)
+PY
+}
+
 write_firebase_credentials() {
   local temporary_file
   temporary_file="$(mktemp "$ENV_DIR/.firebase-adminsdk.json.XXXXXX")"
@@ -38,18 +59,7 @@ write_firebase_credentials() {
     return 1
   fi
 
-  if ! python3 - "$temporary_file" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as credentials_file:
-    credentials = json.load(credentials_file)
-
-required = ("project_id", "private_key", "client_email")
-if credentials.get("type") != "service_account" or any(not credentials.get(key) for key in required):
-    raise SystemExit("invalid Firebase service account JSON")
-PY
-  then
+  if ! firebase_credentials_valid "$temporary_file"; then
     rm -f "$temporary_file"
     return 1
   fi
@@ -59,7 +69,18 @@ PY
   mv -f "$temporary_file" "$FIREBASE_CREDENTIALS_FILE"
 }
 
-write_firebase_credentials
+firebase_mount_option=""
+if write_firebase_credentials; then
+  echo "Firebase credentials refreshed from SSM"
+elif firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  echo "Firebase credentials unavailable in SSM; keeping the current credentials" >&2
+else
+  echo "Firebase credentials unavailable; user-api will start with the FCM stub" >&2
+fi
+
+if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
+fi
 
 cat > "$ENV_DIR/user-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
@@ -68,8 +89,11 @@ DB_URL=${db_url}
 DB_USERNAME=${db_username}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
-FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json
 EOF
+
+if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/user-api.env"
+fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
@@ -126,12 +150,14 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env __FIREBASE_MOUNT_OPTION__ -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
 
 cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
 [Unit]
