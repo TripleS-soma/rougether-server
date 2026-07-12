@@ -6,14 +6,70 @@ REGISTRY="__REGISTRY__"
 NEW_USER_IMAGE="__USER_IMAGE__"
 NEW_ADMIN_IMAGE="__ADMIN_IMAGE__"
 DEPLOYED_SHA="__DEPLOYED_SHA__"
+FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
 
 ENV_DIR="/etc/rougether"
 STATE_FILE="$ENV_DIR/deploy-state.env"
 USER_DEPLOY_ENV="$ENV_DIR/user-api.deploy.env"
 ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
+USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
+FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
+
+umask 077
 
 rollback_user_image=""
 rollback_admin_image=""
+
+refresh_firebase_credentials() {
+  local temporary_file
+
+  mkdir -p "$ENV_DIR"
+  chmod 700 "$ENV_DIR"
+  temporary_file="$(mktemp "$ENV_DIR/.firebase-adminsdk.json.XXXXXX")"
+
+  if ! aws ssm get-parameter --name "$FIREBASE_PARAMETER_NAME" --with-decryption \
+    --query 'Parameter.Value' --output text --region "$AWS_REGION" > "$temporary_file"; then
+    rm -f "$temporary_file"
+    echo "failed to fetch Firebase credentials from SSM" >&2
+    return 1
+  fi
+
+  if ! python3 - "$temporary_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as credentials_file:
+    credentials = json.load(credentials_file)
+
+required = ("project_id", "private_key", "client_email")
+if credentials.get("type") != "service_account" or any(not credentials.get(key) for key in required):
+    raise SystemExit("invalid Firebase service account JSON")
+PY
+  then
+    rm -f "$temporary_file"
+    return 1
+  fi
+
+  chmod 600 "$temporary_file"
+  chown root:root "$temporary_file"
+  mv -f "$temporary_file" "$FIREBASE_CREDENTIALS_FILE"
+  echo "Firebase credentials refreshed from SSM"
+}
+
+ensure_user_runtime_env() {
+  if [ ! -f "$USER_RUNTIME_ENV" ]; then
+    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+
+  if grep -q '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV"; then
+    sed -i 's|^FIREBASE_CREDENTIALS_PATH=.*$|FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json|' "$USER_RUNTIME_ENV"
+  else
+    printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$USER_RUNTIME_ENV"
+  fi
+
+  chmod 600 "$USER_RUNTIME_ENV"
+}
 
 wait_health() {
   local name="$1"
@@ -62,7 +118,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_USER_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
@@ -143,6 +199,9 @@ rollback() {
   echo "rollback completed"
   exit "$exit_code"
 }
+
+refresh_firebase_credentials
+ensure_user_runtime_env
 
 trap rollback ERR
 

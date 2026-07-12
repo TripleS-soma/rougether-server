@@ -33,6 +33,7 @@ Edit `terraform.tfvars`:
 - Override image and registry variables only when deploying from another registry.
 
 Do not commit `terraform.tfvars` or Terraform state.
+Firebase 서비스 계정 JSON도 `terraform.tfvars`에 넣지 않습니다. 실제 값은 아래 전용 스크립트로 SSM에 직접 등록합니다.
 
 ## Build Images
 
@@ -137,6 +138,34 @@ aws ssm get-parameter \
   --query 'Parameter.Value' \
   --output text \
   --region ap-northeast-2
+```
+
+## Firebase 서비스 계정 키
+
+Firebase SecureString은 Terraform state 밖에서 관리하고, Terraform은
+`/${project_name}-${environment}/firebase/credentials-json`의 정확한 ARN에 대한 EC2 조회 권한만
+관리합니다. `aws_ssm_parameter` 리소스로 선언하면 refresh 때 복호화된 값이 state에 들어갈 수 있으므로
+실제 JSON을 Terraform 변수나 리소스로 전달하지 않습니다.
+
+Firebase Console에서 받은 파일은 전용 스크립트로 등록합니다. 파라미터가 없으면 생성하고,
+이미 있으면 새 버전으로 교체합니다. 스크립트는 서비스 계정 필수 필드와 SSM Standard의 4KB 제한을
+확인하며 키 값은 출력하지 않습니다.
+
+```bash
+deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
+```
+
+이후 GitHub Actions 배포는 매번 SecureString을 다시 읽어
+`/etc/rougether/firebase-adminsdk.json`에 권한 `600`으로 원자적으로 교체하고,
+user-api 컨테이너에 read-only로 마운트합니다. 키를 교체할 때도 같은 스크립트를 실행한 뒤
+배포 workflow를 다시 실행하면 됩니다.
+
+파라미터 이름을 바꾼 환경에서는 업로드와 workflow의 값을 함께 맞춥니다.
+
+```bash
+FIREBASE_CREDENTIALS_PARAMETER=/rougether-staging/firebase/credentials-json \
+ENVIRONMENT_TAG=staging \
+  deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
 
 ## Health Checks

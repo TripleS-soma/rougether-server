@@ -9,8 +9,10 @@ locals {
   db_password_param         = "/${local.name}/db/password"
   admin_seed_password_param = "/${local.name}/admin/seed-password"
   jwt_secret_param          = "/${local.name}/jwt/secret"
-  ecr_registry_server       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url           = "https://token.actions.githubusercontent.com"
+  # 값은 deploy/scripts/put-firebase-credentials.sh가 관리해 Terraform state 유입을 막는다.
+  firebase_credentials_param = "/${local.name}/firebase/credentials-json"
+  ecr_registry_server        = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url            = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -265,8 +267,8 @@ resource "aws_db_instance" "mysql" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   # 직접 접속 CIDR 이 있으면 공개(접근은 위 SG 규칙으로 IP 제한), 없으면 비공개(SSM 터널만).
-  publicly_accessible    = length(var.db_direct_access_cidrs) > 0
-  multi_az               = false
+  publicly_accessible = length(var.db_direct_access_cidrs) > 0
+  multi_az            = false
 
   backup_retention_period = var.db_backup_retention_period
   deletion_protection     = var.db_deletion_protection
@@ -313,7 +315,8 @@ resource "aws_iam_role_policy" "app" {
           [
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
-            aws_ssm_parameter.jwt_secret.arn
+            aws_ssm_parameter.jwt_secret.arn,
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
@@ -502,22 +505,23 @@ resource "aws_instance" "app" {
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    aws_region                = var.aws_region
-    user_api_image            = local.user_api_image_value
-    admin_api_image           = local.admin_api_image_value
-    registry_server           = local.container_registry_server_value
-    registry_username         = var.container_registry_username == null ? "" : var.container_registry_username
-    registry_password_param   = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
-    db_url                    = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
-    db_username               = var.db_username
-    db_password_param         = aws_ssm_parameter.db_password.name
-    jwt_secret_param          = aws_ssm_parameter.jwt_secret.name
-    admin_seed_enabled        = tostring(var.admin_seed_enabled)
-    admin_seed_username       = var.admin_seed_username
-    admin_seed_password_param = aws_ssm_parameter.admin_seed_password.name
-    asset_bucket_name         = var.asset_bucket_name
-    asset_region              = var.asset_region
-    asset_public_base_url     = var.asset_public_base_url
+    aws_region                 = var.aws_region
+    user_api_image             = local.user_api_image_value
+    admin_api_image            = local.admin_api_image_value
+    registry_server            = local.container_registry_server_value
+    registry_username          = var.container_registry_username == null ? "" : var.container_registry_username
+    registry_password_param    = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
+    db_url                     = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+    db_username                = var.db_username
+    db_password_param          = aws_ssm_parameter.db_password.name
+    jwt_secret_param           = aws_ssm_parameter.jwt_secret.name
+    admin_seed_enabled         = tostring(var.admin_seed_enabled)
+    admin_seed_username        = var.admin_seed_username
+    admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
+    firebase_credentials_param = local.firebase_credentials_param
+    asset_bucket_name          = var.asset_bucket_name
+    asset_region               = var.asset_region
+    asset_public_base_url      = var.asset_public_base_url
   })
 
   depends_on = [
