@@ -275,7 +275,9 @@ capture_rollback_images
 backup_firebase_credentials
 refresh_firebase_credentials
 if ! ensure_user_runtime_env; then
-  restore_firebase_credentials
+  if ! restore_firebase_credentials; then
+    echo "Firebase credential restore failed; preserving backup before exit" >&2
+  fi
   cleanup_firebase_credentials_backup
   exit 1
 fi
