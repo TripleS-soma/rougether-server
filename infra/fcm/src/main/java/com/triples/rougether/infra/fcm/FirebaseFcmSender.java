@@ -27,19 +27,22 @@ public class FirebaseFcmSender implements FcmSender {
     private final FirebaseApp firebaseApp;
 
     @Override
-    public List<String> send(List<String> tokens, String title, String body) {
+    public FcmSendResult send(List<String> tokens, String title, String body) {
         if (tokens.isEmpty()) {
-            return List.of();
+            return FcmSendResult.empty();
         }
 
+        int successCount = 0;
         List<String> invalidTokens = new ArrayList<>();
         for (List<String> chunk : partition(tokens, MULTICAST_MAX_TOKENS)) {
-            invalidTokens.addAll(sendChunk(chunk, title, body));
+            FcmSendResult chunkResult = sendChunk(chunk, title, body);
+            successCount += chunkResult.successCount();
+            invalidTokens.addAll(chunkResult.invalidTokens());
         }
-        return invalidTokens;
+        return new FcmSendResult(successCount, invalidTokens);
     }
 
-    private List<String> sendChunk(List<String> tokens, String title, String body) {
+    private FcmSendResult sendChunk(List<String> tokens, String title, String body) {
         MulticastMessage message = MulticastMessage.builder()
                 .addAllTokens(tokens)
                 .setNotification(Notification.builder().setTitle(title).setBody(body).build())
@@ -49,15 +52,19 @@ public class FirebaseFcmSender implements FcmSender {
         try {
             batchResponse = FirebaseMessaging.getInstance(firebaseApp).sendEachForMulticast(message);
         } catch (FirebaseMessagingException e) {
+            // 배치 전체 실패(인증·쿼터·네트워크 등) - 개별 토큰 성패를 알 수 없으므로 전부 실패로 집계하고
+            // 무효 토큰 여부는 판단할 수 없으니 삭제 대상에는 포함하지 않는다.
             log.warn("FCM 멀티캐스트 발송 실패", e);
-            return List.of();
+            return FcmSendResult.empty();
         }
 
+        int successCount = 0;
         List<String> invalidTokens = new ArrayList<>();
         List<SendResponse> responses = batchResponse.getResponses();
         for (int i = 0; i < responses.size(); i++) {
             SendResponse response = responses.get(i);
             if (response.isSuccessful()) {
+                successCount++;
                 continue;
             }
             MessagingErrorCode errorCode = response.getException().getMessagingErrorCode();
@@ -65,7 +72,7 @@ public class FirebaseFcmSender implements FcmSender {
                 invalidTokens.add(tokens.get(i));
             }
         }
-        return invalidTokens;
+        return new FcmSendResult(successCount, invalidTokens);
     }
 
     static List<List<String>> partition(List<String> tokens, int size) {

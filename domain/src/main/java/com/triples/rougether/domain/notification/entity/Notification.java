@@ -49,6 +49,10 @@ public class Notification extends BaseCreatedEntity {
     @Column(name = "is_read", nullable = false)
     private boolean isRead;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "push_status", length = 20, nullable = false)
+    private PushStatus pushStatus;
+
     private Notification(User user, NotificationType type, String title, String body, Long refId) {
         this.user = user;
         this.type = type;
@@ -56,6 +60,7 @@ public class Notification extends BaseCreatedEntity {
         this.body = body;
         this.refId = refId;
         this.isRead = false;
+        this.pushStatus = PushStatus.PENDING;
     }
 
     public static Notification create(User user, NotificationType type, String title, String body, Long refId) {
@@ -64,5 +69,13 @@ public class Notification extends BaseCreatedEntity {
 
     public void markRead() {
         this.isRead = true;
+    }
+
+    public void markPushSent() {
+        this.pushStatus = PushStatus.SENT;
+    }
+
+    public void markPushFailed() {
+        this.pushStatus = PushStatus.FAILED;
     }
 }

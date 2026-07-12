@@ -21,8 +21,8 @@ public class StubFcmSender implements FcmSender {
     }
 
     @Override
-    public List<String> send(List<String> tokens, String title, String body) {
+    public FcmSendResult send(List<String> tokens, String title, String body) {
         log.debug("[stub] FCM 발송 생략 - tokens={}, title={}", tokens.size(), title);
-        return List.of();
+        return FcmSendResult.empty();
     }
 }

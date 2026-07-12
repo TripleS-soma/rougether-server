@@ -4,5 +4,5 @@ import java.util.List;
 
 public interface FcmSender {
 
-    List<String> send(List<String> tokens, String title, String body);
+    FcmSendResult send(List<String> tokens, String title, String body);
 }

@@ -32,9 +32,9 @@ public class NotificationService {
 
     public void send(Long userId, NotificationType type, String title, String body, Long refId) {
         User user = userRepository.getReferenceById(userId);
-        notificationRepository.save(Notification.create(user, type, title, body, refId));
+        Notification notification = notificationRepository.save(Notification.create(user, type, title, body, refId));
 
-        eventPublisher.publishEvent(new NotificationCreatedEvent(userId, title, body));
+        eventPublisher.publishEvent(new NotificationCreatedEvent(notification.getId(), userId, title, body));
     }
 
     // 트랜잭션 커밋 이후에 알림 수신.
@@ -44,12 +44,12 @@ public class NotificationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void onNotificationCreated(NotificationCreatedEvent event) {
         try {
-            fcmPushExecutor.push(event.userId(), event.title(), event.body());
+            fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());
         } catch (Exception e) {
             log.warn("알림 push 제출 실패 - userId={}", event.userId(), e);
         }
     }
 
-    public record NotificationCreatedEvent(Long userId, String title, String body) {
+    public record NotificationCreatedEvent(Long notificationId, Long userId, String title, String body) {
     }
 }

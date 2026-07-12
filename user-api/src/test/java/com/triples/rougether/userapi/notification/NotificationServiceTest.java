@@ -38,6 +38,9 @@ class NotificationServiceTest {
     void send_시_알림_내역을_저장하고_커밋후발송_이벤트를_발행한다() {
         User user = mock(User.class);
         when(userRepository.getReferenceById(1L)).thenReturn(user);
+        Notification savedNotification = mock(Notification.class);
+        when(savedNotification.getId()).thenReturn(100L);
+        when(notificationRepository.save(any())).thenReturn(savedNotification);
 
         notificationService.send(1L, NotificationType.HOUSE_KICK, "제목", "본문");
 
@@ -51,17 +54,17 @@ class NotificationServiceTest {
 
         ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isEqualTo(new NotificationCreatedEvent(1L, "제목", "본문"));
+        assertThat(eventCaptor.getValue()).isEqualTo(new NotificationCreatedEvent(100L, 1L, "제목", "본문"));
 
         // push는 커밋 이후 리스너(onNotificationCreated)에서만 나가야 함 — send() 안에서 바로 호출되면 안 됨.
-        verify(fcmPushExecutor, never()).push(any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
     }
 
     @Test
     void 커밋후_이벤트를_받으면_push를_호출한다() {
-        notificationService.onNotificationCreated(new NotificationCreatedEvent(1L, "제목", "본문"));
+        notificationService.onNotificationCreated(new NotificationCreatedEvent(100L, 1L, "제목", "본문"));
 
-        verify(fcmPushExecutor).push(1L, "제목", "본문");
+        verify(fcmPushExecutor).push(100L, 1L, "제목", "본문");
     }
 
     // push 제출이 실패해도(예: 비동기 큐 포화로 TaskRejectedException) AFTER_COMMIT 리스너 밖으로
@@ -69,9 +72,10 @@ class NotificationServiceTest {
     @Test
     void push_제출이_실패해도_리스너는_예외를_전파하지_않는다() {
         doThrow(new org.springframework.core.task.TaskRejectedException("queue full"))
-                .when(fcmPushExecutor).push(1L, "제목", "본문");
+                .when(fcmPushExecutor).push(100L, 1L, "제목", "본문");
 
-        assertThatCode(() -> notificationService.onNotificationCreated(new NotificationCreatedEvent(1L, "제목", "본문")))
+        assertThatCode(() -> notificationService.onNotificationCreated(
+                new NotificationCreatedEvent(100L, 1L, "제목", "본문")))
                 .doesNotThrowAnyException();
     }
 }
