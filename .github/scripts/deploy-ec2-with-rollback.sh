@@ -9,6 +9,7 @@ DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
 
 ENV_DIR="/etc/rougether"
+SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
 STATE_FILE="$ENV_DIR/deploy-state.env"
 USER_DEPLOY_ENV="$ENV_DIR/user-api.deploy.env"
 ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
@@ -107,22 +108,25 @@ refresh_firebase_credentials() {
 }
 
 ensure_user_runtime_env() {
+  local temporary_env
+
   if [ ! -f "$USER_RUNTIME_ENV" ]; then
     echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
     return 1
   fi
 
-  if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
-    if grep -q '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV"; then
-      sed -i 's|^FIREBASE_CREDENTIALS_PATH=.*$|FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json|' "$USER_RUNTIME_ENV"
-    else
-      printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$USER_RUNTIME_ENV"
-    fi
-  else
-    sed -i '/^FIREBASE_CREDENTIALS_PATH=/d' "$USER_RUNTIME_ENV"
+  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
+  if ! awk '!/^FIREBASE_CREDENTIALS_PATH=/' "$USER_RUNTIME_ENV" > "$temporary_env"; then
+    rm -f "$temporary_env"
+    return 1
   fi
 
-  chmod 600 "$USER_RUNTIME_ENV"
+  if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+    printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$temporary_env"
+  fi
+
+  chmod 600 "$temporary_env" || return 1
+  mv -f "$temporary_env" "$USER_RUNTIME_ENV" || return 1
 }
 
 wait_health() {
@@ -147,12 +151,15 @@ write_units() {
   local user_image="$1"
   local admin_image="$2"
   local firebase_mount_option=""
+  local user_service_file="$SYSTEMD_DIR/rougether-user-api.service"
+  local admin_service_file="$SYSTEMD_DIR/rougether-admin-api.service"
 
   if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
     firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
   fi
 
   mkdir -p "$ENV_DIR"
+  mkdir -p "$SYSTEMD_DIR"
   chmod 700 "$ENV_DIR"
 
   cat > "$USER_DEPLOY_ENV" <<EOF
@@ -165,7 +172,7 @@ EOF
 
   chmod 600 "$USER_DEPLOY_ENV" "$ADMIN_DEPLOY_ENV"
 
-  cat > /etc/systemd/system/rougether-user-api.service <<'EOF'
+  cat > "$user_service_file" <<EOF
 [Unit]
 Description=Rougether user-api container
 After=docker.service network-online.target
@@ -177,16 +184,14 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env __FIREBASE_MOUNT_OPTION__ -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_USER_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env $firebase_mount_option -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_USER_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-user-api
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
-
-  cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
+  cat > "$admin_service_file" <<'EOF'
 [Unit]
 Description=Rougether admin-api container
 After=docker.service network-online.target rougether-user-api.service
