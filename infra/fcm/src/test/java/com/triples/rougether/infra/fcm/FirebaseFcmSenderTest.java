@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.notification.fcm;
+package com.triples.rougether.infra.fcm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

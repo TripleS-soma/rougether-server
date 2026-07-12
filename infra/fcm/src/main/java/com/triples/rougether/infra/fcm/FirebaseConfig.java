@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.global.config;
+package com.triples.rougether.infra.fcm;
 
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;

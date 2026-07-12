@@ -68,6 +68,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.items[0].notificationId").value(12))
                 .andExpect(jsonPath("$.items[0].type").value("ROUTINE_REMINDER"))
                 .andExpect(jsonPath("$.items[0].isRead").value(false))
+                .andExpect(jsonPath("$.items[0].pushStatus").doesNotExist())
                 .andExpect(jsonPath("$.nextCursor").value(12))
                 .andExpect(jsonPath("$.hasNext").value(true));
     }
