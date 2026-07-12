@@ -51,6 +51,15 @@ backup_firebase_credentials() {
 }
 
 cleanup_firebase_credentials_backup() {
+  if [ "$firebase_credentials_replaced" = true ]; then
+    if [ -n "$firebase_credentials_backup" ]; then
+      echo "Firebase credential rollback is incomplete; keeping backup at $firebase_credentials_backup" >&2
+    else
+      echo "Firebase credential rollback is incomplete; no previous credential backup exists" >&2
+    fi
+    return 0
+  fi
+
   if [ -n "$firebase_credentials_backup" ]; then
     rm -f "$firebase_credentials_backup"
     firebase_credentials_backup=""
@@ -61,10 +70,10 @@ restore_firebase_credentials() {
   [ "$firebase_credentials_replaced" = true ] || return 0
 
   if [ -n "$firebase_credentials_backup" ] && [ -f "$firebase_credentials_backup" ]; then
-    mv -f "$firebase_credentials_backup" "$FIREBASE_CREDENTIALS_FILE"
+    mv -f "$firebase_credentials_backup" "$FIREBASE_CREDENTIALS_FILE" || return 1
     firebase_credentials_backup=""
   else
-    rm -f "$FIREBASE_CREDENTIALS_FILE"
+    rm -f "$FIREBASE_CREDENTIALS_FILE" || return 1
   fi
 
   firebase_credentials_replaced=false
