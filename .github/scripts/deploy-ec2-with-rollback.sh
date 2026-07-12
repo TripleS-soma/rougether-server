@@ -216,10 +216,16 @@ EOF
 
 capture_rollback_images() {
   if [ -f "$STATE_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$STATE_FILE"
-    rollback_user_image="${USER_API_IMAGE:-}"
-    rollback_admin_image="${ADMIN_API_IMAGE:-}"
+    while IFS='=' read -r key value; do
+      case "$key" in
+        USER_API_IMAGE)
+          rollback_user_image="$value"
+          ;;
+        ADMIN_API_IMAGE)
+          rollback_admin_image="$value"
+          ;;
+      esac
+    done < "$STATE_FILE"
   fi
 
   if [ -z "$rollback_user_image" ]; then
