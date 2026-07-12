@@ -40,7 +40,7 @@ out/
 .env
 .claude/settings.local.json
 .claude/commands/commit.md
-**/firebase-adminsdk*.json
+**/*firebase-adminsdk*.json
 
 ### Terraform ###
 **/.terraform/
