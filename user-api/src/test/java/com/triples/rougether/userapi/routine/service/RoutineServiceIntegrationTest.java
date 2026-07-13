@@ -308,6 +308,70 @@ class RoutineServiceIntegrationTest {
                 .extracting(RoutineResponse::id).containsExactly(a2.id(), b.id());
     }
 
+    @Test
+    void BIWEEKLY_등록_시_startsOn이_있으면_성공한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of("MON")), null, LocalDate.of(2026, 7, 13), null));
+
+        assertThat(created.repeatType()).isEqualTo("BIWEEKLY");
+        assertThat(created.startsOn()).isEqualTo(LocalDate.of(2026, 7, 13));
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_startsOn이_없으면_BIWEEKLY_REQUIRES_STARTS_ON() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of("MON")), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+    }
+
+    @Test
+    void MONTHLY_YEARLY_등록이_정상_동작한다() {
+        RoutineResponse monthly = routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        new RepeatDays(null, 15, null, null), null, null, null));
+        RoutineResponse yearly = routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 7, 12), null, null, null));
+
+        assertThat(monthly.repeatType()).isEqualTo("MONTHLY");
+        assertThat(monthly.repeatDays().dayOfMonth()).isEqualTo(15);
+        assertThat(yearly.repeatType()).isEqualTo("YEARLY");
+        assertThat(yearly.repeatDays().month()).isEqualTo(7);
+        assertThat(yearly.repeatDays().day()).isEqualTo(12);
+    }
+
+    @Test
+    void 수정으로_repeatType이_BIWEEKLY로_바뀌는데_startsOn이_결과적으로_없으면_실패한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+
+        assertThatThrownBy(() -> routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "BIWEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+    }
+
+    @Test
+    void 수정으로_repeatType이_BIWEEKLY로_바뀌어도_기존_startsOn이_있으면_성공한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), LocalDate.of(2026, 7, 13), null));
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "BIWEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null));
+
+        assertThat(updated.repeatType()).isEqualTo("BIWEEKLY");
+        assertThat(updated.startsOn()).isEqualTo(LocalDate.of(2026, 7, 13));
+    }
+
     private Long persistCategory(Long ownerId, String name) {
         User owner = userRepository.findById(ownerId).orElseThrow();
         return categoryRepository.save(

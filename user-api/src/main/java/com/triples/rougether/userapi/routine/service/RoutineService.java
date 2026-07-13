@@ -66,6 +66,7 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+        validateBiweeklyRequiresStartsOn(request.repeatType(), request.startsOn());
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
                 request.startsOn(), request.endsOn());
@@ -81,6 +82,12 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+
+        String effectiveRepeatType = request.repeatType() != null
+                ? request.repeatType() : routine.getRepeatType();
+        LocalDate effectiveStartsOn = request.startsOn() != null
+                ? request.startsOn() : routine.getStartsOn();
+        validateBiweeklyRequiresStartsOn(effectiveRepeatType, effectiveStartsOn);
 
         // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
         // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
@@ -117,6 +124,13 @@ public class RoutineService {
             return true;
         }
         return !Objects.equals(request.endsOn(), routine.getEndsOn());
+    }
+
+    // BIWEEKLY는 startsOn이 속한 주를 1주차 기준으로 삼으므로 startsOn 없이는 판정 불가
+    private void validateBiweeklyRequiresStartsOn(String repeatType, LocalDate startsOn) {
+        if ("BIWEEKLY".equalsIgnoreCase(repeatType) && startsOn == null) {
+            throw new BusinessException(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+        }
     }
 
     // 이 버전이 오늘 이전에 생성됐는지
