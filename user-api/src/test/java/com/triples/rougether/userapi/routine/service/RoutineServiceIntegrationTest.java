@@ -345,6 +345,60 @@ class RoutineServiceIntegrationTest {
     }
 
     @Test
+    void MONTHLY_등록_시_dayOfMonth가_없으면_MONTHLY_REQUIRES_DAY_OF_MONTH() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        null, null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
+    void MONTHLY_등록_시_dayOfMonth가_범위를_벗어나면_MONTHLY_REQUIRES_DAY_OF_MONTH() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        new RepeatDays(null, 0, null, null), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
+    void YEARLY_등록_시_month나_day가_없으면_YEARLY_REQUIRES_MONTH_AND_DAY() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 7, null), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+    }
+
+    @Test
+    void YEARLY_등록_시_month가_범위를_벗어나면_YEARLY_REQUIRES_MONTH_AND_DAY() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 13, 12), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+    }
+
+    @Test
+    void 수정으로_repeatType이_MONTHLY로_바뀌는데_dayOfMonth가_결과적으로_없으면_실패한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+
+        assertThatThrownBy(() -> routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "MONTHLY", null,
+                        null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
     void 수정으로_repeatType이_BIWEEKLY로_바뀌는데_startsOn이_결과적으로_없으면_실패한다() {
         RoutineResponse created = routineService.create(userId,
                 new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,

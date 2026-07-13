@@ -9,6 +9,7 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
@@ -66,7 +67,7 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
-        validateBiweeklyRequiresStartsOn(request.repeatType(), request.startsOn());
+        validateRepeatSchedule(request.repeatType(), request.startsOn(), request.repeatDays());
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
                 request.startsOn(), request.endsOn());
@@ -87,7 +88,9 @@ public class RoutineService {
                 ? request.repeatType() : routine.getRepeatType();
         LocalDate effectiveStartsOn = request.startsOn() != null
                 ? request.startsOn() : routine.getStartsOn();
-        validateBiweeklyRequiresStartsOn(effectiveRepeatType, effectiveStartsOn);
+        RepeatDays effectiveRepeatDays = request.repeatDays() != null
+                ? request.repeatDays() : RepeatDays.fromJson(routine.getRepeatDays());
+        validateRepeatSchedule(effectiveRepeatType, effectiveStartsOn, effectiveRepeatDays);
 
         // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
         // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
@@ -126,10 +129,23 @@ public class RoutineService {
         return !Objects.equals(request.endsOn(), routine.getEndsOn());
     }
 
-    // BIWEEKLY는 startsOn이 속한 주를 1주차 기준으로 삼으므로 startsOn 없이는 판정 불가
-    private void validateBiweeklyRequiresStartsOn(String repeatType, LocalDate startsOn) {
+    // 유형별 필수 서브필드가 없으면 어느 날짜에도 매칭되지 않는 "죽은" 루틴이 생성되므로 여기서 막음
+    private void validateRepeatSchedule(String repeatType, LocalDate startsOn, RepeatDays repeatDays) {
         if ("BIWEEKLY".equalsIgnoreCase(repeatType) && startsOn == null) {
             throw new BusinessException(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+        }
+        if ("MONTHLY".equalsIgnoreCase(repeatType)) {
+            Integer dayOfMonth = repeatDays != null ? repeatDays.dayOfMonth() : null;
+            if (dayOfMonth == null || dayOfMonth < 1 || dayOfMonth > 31) {
+                throw new BusinessException(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+            }
+        }
+        if ("YEARLY".equalsIgnoreCase(repeatType)) {
+            Integer month = repeatDays != null ? repeatDays.month() : null;
+            Integer day = repeatDays != null ? repeatDays.day() : null;
+            if (month == null || day == null || month < 1 || month > 12 || day < 1 || day > 31) {
+                throw new BusinessException(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+            }
         }
     }
 
