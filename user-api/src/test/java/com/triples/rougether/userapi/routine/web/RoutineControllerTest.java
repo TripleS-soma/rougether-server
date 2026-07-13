@@ -159,6 +159,31 @@ class RoutineControllerTest {
     }
 
     @Test
+    void repeatType이_허용값이_아니면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"물 마시기\",\"authType\":\"CHECK\",\"repeatType\":\"HOURLY\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("repeatType"));
+    }
+
+    @Test
+    void repeatType이_BIWEEKLY_MONTHLY_YEARLY면_201로_등록된다() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(new RoutineResponse(6L, "격주 운동", null, AuthType.CHECK,
+                        RoutineStatus.ACTIVE, "BIWEEKLY", new RepeatDays(List.of("MON")),
+                        null, LocalDate.of(2026, 7, 13), null, 6L));
+
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"격주 운동\",\"authType\":\"CHECK\",\"repeatType\":\"BIWEEKLY\","
+                                + "\"repeatDays\":{\"daysOfWeek\":[\"MON\"]},\"startsOn\":\"2026-07-13\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.repeatType").value("BIWEEKLY"));
+    }
+
+    @Test
     void 없는_루틴_조회는_404와_ROUTINE_NOT_FOUND를_응답한다() throws Exception {
         when(routineService.get(eq(1L), eq(99L)))
                 .thenThrow(new BusinessException(RoutineErrorCode.ROUTINE_NOT_FOUND));

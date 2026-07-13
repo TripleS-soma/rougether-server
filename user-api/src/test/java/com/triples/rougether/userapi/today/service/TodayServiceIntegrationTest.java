@@ -86,6 +86,36 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
+    void BIWEEKLY_루틴은_starts_on_기준_2주_간격의_해당_요일만_노출된다() {
+        persistRoutine("이번주 격주", RoutineStatus.ACTIVE, "BIWEEKLY",
+                "{\"daysOfWeek\":[\"MON\"]}", null, MONDAY, null, null);
+        persistRoutine("지난주_시작_격주", RoutineStatus.ACTIVE, "BIWEEKLY",
+                "{\"daysOfWeek\":[\"MON\"]}", null, MONDAY.minusDays(7), null, null);
+
+        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("이번주 격주");
+    }
+
+    @Test
+    void MONTHLY_루틴은_dayOfMonth가_일치하는_날만_노출된다() {
+        persistRoutine("이달 29일", RoutineStatus.ACTIVE, "MONTHLY",
+                "{\"dayOfMonth\":29}", null, null, null, null);
+        persistRoutine("이달 30일", RoutineStatus.ACTIVE, "MONTHLY",
+                "{\"dayOfMonth\":30}", null, null, null, null);
+
+        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("이달 29일");
+    }
+
+    @Test
+    void YEARLY_루틴은_month_day가_일치하는_날만_노출된다() {
+        persistRoutine("생일", RoutineStatus.ACTIVE, "YEARLY",
+                "{\"month\":6,\"day\":29}", null, null, null, null);
+        persistRoutine("다른날", RoutineStatus.ACTIVE, "YEARLY",
+                "{\"month\":6,\"day\":28}", null, null, null, null);
+
+        assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("생일");
+    }
+
+    @Test
     void 시작전이거나_종료후면_제외된다() {
         persistRoutine("아직 시작 안 함", RoutineStatus.ACTIVE, "DAILY", null, null,
                 MONDAY.plusDays(1), null, null);
