@@ -65,7 +65,8 @@ public class RoutineController {
     @Operation(summary = "루틴 등록",
             description = "로그인한 회원의 새 루틴을 등록합니다. 상태는 ACTIVE로 시작합니다. "
                     + "categoryId를 지정하지 않으면 미분류로 등록되며, 소유한 카테고리만 지정할 수 있습니다. "
-                    + "repeatType이 WEEKLY이면 repeatDays.daysOfWeek로 반복 요일을 지정합니다(DAILY면 repeatDays 생략).")
+                    + "repeatType이 WEEKLY/BIWEEKLY이면 repeatDays.daysOfWeek로 반복 요일을 지정하고(BIWEEKLY는 startsOn 필수), "
+                    + "MONTHLY면 repeatDays.dayOfMonth, YEARLY면 repeatDays.month/day를 지정합니다(DAILY면 repeatDays 생략).")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineResponse create(@CurrentUser AuthUser authUser,
@@ -76,7 +77,8 @@ public class RoutineController {
     @Operation(summary = "루틴 수정",
             description = "소유한 루틴의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, title은 공백이면 기존 값을 유지합니다. "
                     + "categoryId를 지정하면 소유한 해당 카테고리로 이동합니다(null이면 기존 카테고리 유지). "
-                    + "repeatType을 WEEKLY로 변경할 때는 repeatDays를 함께 전달해야 요일 기준으로 반복됩니다.")
+                    + "repeatType을 WEEKLY/BIWEEKLY로 변경할 때는 repeatDays를 함께 전달해야 요일 기준으로 반복되고, "
+                    + "MONTHLY/YEARLY로 변경할 때는 각각 dayOfMonth 또는 month/day를 함께 전달해야 합니다.")
     @PutMapping("/{id}")
     public RoutineResponse update(@CurrentUser AuthUser authUser,
                                   @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id,

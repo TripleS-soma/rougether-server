@@ -1,11 +1,16 @@
 package com.triples.rougether.userapi.routine.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 // 반복 설정. API는 객체로 주고받고, 엔티티에는 JSON 문자열로 저장함(repeat_days JSON 컬럼)
+// null 필드는 직렬화에서 제외함(NON_NULL) — 안 그러면 레거시 WEEKLY 저장값({"daysOfWeek":[...]})과
+// 새로 직렬화된 값({"daysOfWeek":[...],"dayOfMonth":null,...})의 문자열이 달라져
+// RoutineService.isScheduleChanged가 동일 스케줄 수정도 변경으로 오인함
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record RepeatDays(
         @Schema(description = "반복 요일 목록. repeatType이 WEEKLY 또는 BIWEEKLY일 때 사용. "
                 + "허용값: MON(월), TUE(화), WED(수), THU(목), FRI(금), SAT(토), SUN(일). "
