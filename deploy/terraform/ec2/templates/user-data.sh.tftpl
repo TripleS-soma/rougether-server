@@ -158,6 +158,14 @@ ${admin_api_unit}
 EOF
 %{ endif ~}
 
+# baked AMI 에 유닛이 실제로 구워졌는지 확인 — 잘못된 AMI 로 떴을 때 set -e 로 조용히 죽는 대신 원인을 남긴다
+for unit in rougether-user-api rougether-admin-api; do
+  if [ ! -f "/etc/systemd/system/$unit.service" ]; then
+    echo "ERROR: /etc/systemd/system/$unit.service 가 없습니다 — rougether-base AMI 가 아니거나 베이크가 누락됐습니다 (deploy/packer/README.md 참고)" >&2
+    exit 1
+  fi
+done
+
 sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
 
 systemctl daemon-reload

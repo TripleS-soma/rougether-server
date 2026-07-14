@@ -6,7 +6,7 @@
 - 부팅 시 처리하는 것 — SSM 시크릿 → env 파일, Firebase 자격증명, ECR 로그인, 이미지 pull, 서비스 enable/start
 - 굽지 않는 것 — 시크릿 전부(AMI 스냅샷에 남으면 안 됨), 앱 이미지(태그가 배포마다 바뀜)
 
-유닛 파일 사본은 현재 세 곳에 존재합니다 — 유닛을 수정할 때는 셋을 함께 갱신해야 합니다.
+유닛 파일 사본은 현재 두 곳에 존재합니다 — 유닛을 수정할 때는 둘을 함께 갱신해야 합니다.
 
 - `files/*.service` (이 디렉터리) — packer 가 AMI 에 굽고, terraform 순정 AMI 폴백(user-data)도 같은 파일을 주입받는다.
 - `.github/scripts/deploy-ec2-with-rollback.sh` 의 `write_units()` — GitHub Actions 배포가 **매 배포마다** 자체 인라인 사본으로 유닛을 덮어쓴다. 즉 구운 유닛은 첫 배포까지만 유효하고, 여기만 빼먹으면 유닛 변경이 다음 배포에서 소리 없이 되돌아간다.
