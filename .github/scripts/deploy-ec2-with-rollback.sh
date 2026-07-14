@@ -133,14 +133,16 @@ wait_health() {
   local name="$1"
   local url="$2"
 
-  for i in $(seq 1 80); do
+  # 3초 간격 × 160회 = 최대 480초. 간격을 짧게 둬서 기동 완료를 빨리 감지한다
+  # (기존 10초 간격은 서비스당 평균 ~5초씩 대기 낭비).
+  for i in $(seq 1 160); do
     if curl -fsS "$url"; then
       echo "$name health check passed"
       return 0
     fi
 
-    echo "waiting for $name health check ($i/80)"
-    sleep 10
+    echo "waiting for $name health check ($i/160)"
+    sleep 3
   done
 
   echo "$name health check failed" >&2
@@ -271,10 +273,10 @@ rollback() {
 
   write_units "$rollback_user_image" "$rollback_admin_image"
 
-  systemctl restart rougether-user-api
+  # 두 서비스를 병렬 기동 후 순서대로 health 확인 — 순차 기동(user healthy 후 admin 시작)이면
+  # 부팅 시간이 직렬로 더해진다. 두 컨테이너는 포트·상태가 독립이라 동시 기동에 제약이 없다.
+  systemctl restart rougether-user-api rougether-admin-api
   wait_health user-api http://127.0.0.1:8080/api/v1/health
-
-  systemctl restart rougether-admin-api
   wait_health admin-api http://127.0.0.1:8081/admin/health
 
   cleanup_firebase_credentials_backup
@@ -301,10 +303,10 @@ docker pull "$NEW_ADMIN_IMAGE"
 
 write_units "$NEW_USER_IMAGE" "$NEW_ADMIN_IMAGE"
 
-systemctl restart rougether-user-api
+# 병렬 기동 후 순서대로 health 확인 (rollback 경로와 동일 원칙) —
+# user-api health 를 기다리는 동안 admin-api 가 함께 부팅되므로 두 번째 대기는 짧다
+systemctl restart rougether-user-api rougether-admin-api
 wait_health user-api http://127.0.0.1:8080/api/v1/health
-
-systemctl restart rougether-admin-api
 wait_health admin-api http://127.0.0.1:8081/admin/health
 
 cat > "$STATE_FILE" <<EOF
