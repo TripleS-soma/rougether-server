@@ -43,6 +43,29 @@ data "aws_ami" "al2023" {
   }
 }
 
+# half-baked 베이스 AMI (deploy/packer/rougether-base.pkr.hcl 로 빌드).
+# use_baked_ami=false 면 조회 자체를 생략해, AMI 를 아직 굽지 않은 환경에서도 plan 이 깨지지 않는다.
+data "aws_ami" "rougether_base" {
+  count       = var.use_baked_ami ? 1 : 0
+  most_recent = true
+  owners      = ["self"]
+
+  filter {
+    name   = "name"
+    values = [var.baked_ami_name_pattern]
+  }
+
+  # packer 빌드 진행 중(pending)인 AMI 를 집어 -replace 도중 RunInstances 가 실패하는 레이스 방지
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+locals {
+  instance_ami_id = var.use_baked_ami ? data.aws_ami.rougether_base[0].id : data.aws_ami.al2023.id
+}
+
 resource "random_password" "db" {
   length  = 32
   special = false
@@ -478,7 +501,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
 }
 
 resource "aws_instance" "app" {
-  ami                         = data.aws_ami.al2023.id
+  ami                         = local.instance_ami_id
   instance_type               = var.instance_type
   subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.ec2.id]
@@ -522,6 +545,10 @@ resource "aws_instance" "app" {
     asset_bucket_name          = var.asset_bucket_name
     asset_region               = var.asset_region
     asset_public_base_url      = var.asset_public_base_url
+    use_baked_ami              = var.use_baked_ami
+    # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
+    user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))
+    admin_api_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api.service"))
   })
 
   depends_on = [
