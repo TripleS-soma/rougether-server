@@ -1,0 +1,86 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateTaggedTemporaryKeyPair",
+      "Effect": "Allow",
+      "Action": "ec2:CreateKeyPair",
+      "Resource": "arn:aws:ec2:ap-northeast-2:478572912668:key-pair/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Project": "rougether",
+          "aws:RequestTag/ManagedBy": "packer"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": ["Project", "ManagedBy", "Name"]
+        }
+      }
+    },
+    {
+      "Sid": "DeleteTaggedTemporaryKeyPair",
+      "Effect": "Allow",
+      "Action": "ec2:DeleteKeyPair",
+      "Resource": "arn:aws:ec2:ap-northeast-2:478572912668:key-pair/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "rougether",
+          "aws:ResourceTag/ManagedBy": "packer"
+        }
+      }
+    },
+    {
+      "Sid": "CreateImageFromTaggedBuildInstance",
+      "Effect": "Allow",
+      "Action": "ec2:CreateImage",
+      "Resource": "arn:aws:ec2:ap-northeast-2:478572912668:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "rougether",
+          "aws:ResourceTag/ManagedBy": "packer"
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedImageArtifacts",
+      "Effect": "Allow",
+      "Action": "ec2:CreateImage",
+      "Resource": [
+        "arn:aws:ec2:ap-northeast-2::image/*",
+        "arn:aws:ec2:ap-northeast-2::snapshot/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Project": "rougether",
+          "aws:RequestTag/ManagedBy": "packer"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": ["Project", "ManagedBy", "Name"]
+        }
+      }
+    },
+    {
+      "Sid": "DeregisterTaggedImage",
+      "Effect": "Allow",
+      "Action": "ec2:DeregisterImage",
+      "Resource": "arn:aws:ec2:ap-northeast-2::image/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "rougether",
+          "aws:ResourceTag/ManagedBy": "packer"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteTaggedSnapshot",
+      "Effect": "Allow",
+      "Action": "ec2:DeleteSnapshot",
+      "Resource": "arn:aws:ec2:ap-northeast-2::snapshot/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "rougether",
+          "aws:ResourceTag/ManagedBy": "packer"
+        }
+      }
+    }
+  ]
+}
