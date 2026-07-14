@@ -47,6 +47,13 @@ variable "build_ssh_cidrs" {
 
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
+
+  # IAM cleanup 권한이 이 태그를 조건으로 제한된다. run_tags 에 넣어야 임시
+  # key pair/security group/instance와 CreateImage 결과 AMI·snapshot에 생성 시점부터 붙는다.
+  packer_resource_tags = {
+    Project   = "rougether"
+    ManagedBy = "packer"
+  }
 }
 
 source "amazon-ebs" "al2023" {
@@ -56,6 +63,10 @@ source "amazon-ebs" "al2023" {
   ami_name      = "${var.ami_name_prefix}-${local.timestamp}"
 
   temporary_security_group_source_cidrs = var.build_ssh_cidrs
+
+  run_tags = merge(local.packer_resource_tags, {
+    Name = "${var.ami_name_prefix}-build-${local.timestamp}"
+  })
 
   source_ami_filter {
     filters = {
@@ -67,12 +78,14 @@ source "amazon-ebs" "al2023" {
     most_recent = true
   }
 
-  tags = {
-    Name      = "${var.ami_name_prefix}-${local.timestamp}"
-    Project   = "rougether"
-    ManagedBy = "packer"
-    BaseAMI   = "{{ .SourceAMIName }}"
-  }
+  tags = merge(local.packer_resource_tags, {
+    Name    = "${var.ami_name_prefix}-${local.timestamp}"
+    BaseAMI = "{{ .SourceAMIName }}"
+  })
+
+  snapshot_tags = merge(local.packer_resource_tags, {
+    Name = "${var.ami_name_prefix}-${local.timestamp}"
+  })
 }
 
 build {
