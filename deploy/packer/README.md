@@ -15,7 +15,30 @@
 
 ## 빌드
 
-packer 와 AWS 자격증명(EC2/AMI 생성 권한)이 필요합니다.
+packer 와 AWS 자격증명(EC2/AMI 생성 권한)이 필요합니다. Terraform 배포 권한만으로는
+AMI 베이크에 필요한 이미지·스냅샷·볼륨·임시 키페어 작업이 허용되지 않을 수 있습니다.
+
+현재 `TripleS` 사용자는 고객 관리형 정책 `RougetherPackerBake` 로 아래 권한을 받습니다.
+사용자 인라인 정책은 총 2,048바이트 한도가 있으므로 기존 Terraform 정책이 한도에
+가까우면 별도 고객 관리형 정책으로 생성해 연결합니다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "PackerBake",
+    "Effect": "Allow",
+    "Action": [
+      "ec2:CreateKeyPair", "ec2:DeleteKeyPair",
+      "ec2:CreateImage", "ec2:RegisterImage", "ec2:DeregisterImage", "ec2:CopyImage",
+      "ec2:CreateSnapshot", "ec2:DeleteSnapshot",
+      "ec2:ModifyImageAttribute", "ec2:ModifySnapshotAttribute",
+      "ec2:CreateVolume", "ec2:DeleteVolume", "ec2:AttachVolume", "ec2:DetachVolume"
+    ],
+    "Resource": "*"
+  }]
+}
+```
 
 ```bash
 cd deploy/packer

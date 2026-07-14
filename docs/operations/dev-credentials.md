@@ -12,7 +12,7 @@
 
 ## Admin
 
-- Admin URL: `http://43.203.209.107:8081/`
+- Admin URL: `http://3.35.167.122:8081/`
 - Username: `admin`
 - Password SSM parameter: `/rougether-dev/admin/seed-password`
 
@@ -35,7 +35,7 @@ aws ssm get-parameter \
 - Username: `rougether`
 - Password SSM parameter: `/rougether-dev/db/password`
 - RDS endpoint: `rougether-dev-mysql.cvkuqa4iyrq2.ap-northeast-2.rds.amazonaws.com:3306`
-- Current EC2 instance id: `i-08b3fb7120a871cc4`
+- Current EC2 instance id: `i-0708a9ee0aba5d8ec`
 
 DB password 조회:
 
@@ -52,7 +52,7 @@ aws ssm get-parameter \
 
 ```bash
 aws ssm start-session \
-  --target i-08b3fb7120a871cc4 \
+  --target i-0708a9ee0aba5d8ec \
   --region ap-northeast-2 \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
   --parameters '{"host":["rougether-dev-mysql.cvkuqa4iyrq2.ap-northeast-2.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3308"]}'
