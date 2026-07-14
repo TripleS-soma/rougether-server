@@ -206,12 +206,42 @@ jobs:
       # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
       # 끝난 뒤에만 실행 — 배포 실패로 롤백된 이미지가 :dev 로 남는 것을 막는다.
       # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
+      # 승격은 repo 별 순차라 중간 실패 시 두 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
+      # 기존 digest 를 먼저 저장해 두고, 실패하면 둘 다 이전 쌍으로 복원해 혼합 버전 부팅을 막는다.
       - name: Promote deployed images to :dev
         shell: bash
         run: |
           set -euo pipefail
+
+          registry="${{ steps.ecr.outputs.registry }}"
+          declare -A previous_digest
+
+          for repo in user-api admin-api; do
+            previous_digest[$repo]="$(
+              aws ecr describe-images \
+                --repository-name "${ECR_REPOSITORY_PREFIX}/${repo}" \
+                --image-ids imageTag="${IMAGE_TAG}" \
+                --query 'imageDetails[0].imageDigest' \
+                --output text 2>/dev/null || echo ""
+            )"
+          done
+
+          restore_previous_dev_tags() {
+            echo "promotion failed; restoring previous :${IMAGE_TAG} tag pair" >&2
+            for repo in user-api admin-api; do
+              digest="${previous_digest[$repo]}"
+              if [ -n "$digest" ] && [ "$digest" != "None" ]; then
+                docker buildx imagetools create \
+                  --tag "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
+                  "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}@${digest}" || true
+              fi
+            done
+          }
+          trap restore_previous_dev_tags ERR
+
           for repo in user-api admin-api; do
             docker buildx imagetools create \
-              --tag "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
-              "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${GITHUB_SHA}"
+              --tag "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
+              "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${GITHUB_SHA}"
           done
+          trap - ERR
