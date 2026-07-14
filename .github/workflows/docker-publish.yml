@@ -216,26 +216,45 @@ jobs:
           registry="${{ steps.ecr.outputs.registry }}"
           declare -A previous_digest
 
+          # 기존 digest 조회 — "태그 없음"(ABSENT)과 "조회 실패"를 구분한다.
+          # 조회 실패는 아직 아무것도 바뀌지 않은 지금 중단하는 게 안전하다 —
+          # 빈 값으로 삼키면 부분 승격 실패 시 복원을 건너뛰어 혼합 쌍이 남는다.
           for repo in user-api admin-api; do
-            previous_digest[$repo]="$(
+            if output="$(
               aws ecr describe-images \
                 --repository-name "${ECR_REPOSITORY_PREFIX}/${repo}" \
                 --image-ids imageTag="${IMAGE_TAG}" \
                 --query 'imageDetails[0].imageDigest' \
-                --output text 2>/dev/null || echo ""
-            )"
+                --output text 2>&1
+            )"; then
+              previous_digest[$repo]="$output"
+            elif grep -q "ImageNotFoundException" <<< "$output"; then
+              previous_digest[$repo]="ABSENT"
+            else
+              echo "failed to look up current :${IMAGE_TAG} digest for ${repo}: ${output}" >&2
+              exit 1
+            fi
           done
 
           restore_previous_dev_tags() {
             echo "promotion failed; restoring previous :${IMAGE_TAG} tag pair" >&2
+            local restore_failed=false
             for repo in user-api admin-api; do
               digest="${previous_digest[$repo]}"
-              if [ -n "$digest" ] && [ "$digest" != "None" ]; then
+              if [ "$digest" = "ABSENT" ]; then
+                # 원래 태그가 없던 repo 는 새로 붙은 태그를 떼어 원상복구
+                aws ecr batch-delete-image \
+                  --repository-name "${ECR_REPOSITORY_PREFIX}/${repo}" \
+                  --image-ids imageTag="${IMAGE_TAG}" > /dev/null || restore_failed=true
+              else
                 docker buildx imagetools create \
                   --tag "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
-                  "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}@${digest}" || true
+                  "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}@${digest}" || restore_failed=true
               fi
             done
+            if [ "$restore_failed" = true ]; then
+              echo "WARNING: :${IMAGE_TAG} restore incomplete — verify tag pair manually before any instance replace" >&2
+            fi
           }
           trap restore_previous_dev_tags ERR
 

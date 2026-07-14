@@ -492,6 +492,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability",
+          # BatchDeleteImage 는 :dev 승격 실패 보상(원래 태그가 없던 repo 의 태그 제거)에만 쓰인다
+          "ecr:BatchDeleteImage",
           "ecr:BatchGetImage",
           "ecr:CompleteLayerUpload",
           "ecr:DescribeImages",
