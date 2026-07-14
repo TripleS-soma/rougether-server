@@ -221,7 +221,10 @@ test_rollback_restarts_both_services_in_parallel_then_checks_health() {
 
   local exit_code=0
   (false || rollback) > /dev/null 2>&1 || exit_code="$?"
-  unset -f systemctl curl
+  # unset -f 는 상단의 base mock 까지 지워버린다 — 이후 테스트가 실제 systemctl 을
+  # 호출하지 않도록 base mock 으로 되돌린다 (curl 은 base mock 이 없어 제거)
+  systemctl() { return 0; }
+  unset -f curl
 
   if [ "$exit_code" -ne 1 ]; then
     echo "not ok - rollback must exit with the original failure code (got $exit_code)" >&2
@@ -260,7 +263,9 @@ test_rollback_health_failure_is_reported_and_propagated() {
   local exit_code=0
   # 데드라인을 1초로 줄여 실패 루프를 빠르게 소진시킨다 (sleep 은 mock)
   (false || ROUGETHER_HEALTH_TIMEOUT_SECONDS=1 rollback) > "$output_log" 2>&1 || exit_code="$?"
-  unset -f systemctl curl sleep
+  # base mock 복원 (위 테스트와 동일한 이유)
+  systemctl() { return 0; }
+  unset -f curl sleep
 
   if [ "$exit_code" -eq 0 ]; then
     echo "not ok - admin health failure during rollback must propagate a non-zero exit" >&2

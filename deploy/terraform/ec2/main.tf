@@ -152,18 +152,35 @@ resource "aws_ecr_lifecycle_policy" "user_api" {
   repository = aws_ecr_repository.user_api.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # :dev 는 부트스트랩(user-data)이 pull 하는 태그 — 태그 무관 보존 한도에 밀려
+        # 만료되지 않게 우선 규칙으로 보호한다 (dev 태그는 항상 1개라 만료 조건에 걸리지 않음)
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
@@ -171,18 +188,35 @@ resource "aws_ecr_lifecycle_policy" "admin_api" {
   repository = aws_ecr_repository.admin_api.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # :dev 는 부트스트랩(user-data)이 pull 하는 태그 — 태그 무관 보존 한도에 밀려
+        # 만료되지 않게 우선 규칙으로 보호한다 (dev 태그는 항상 1개라 만료 조건에 걸리지 않음)
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
