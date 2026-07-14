@@ -133,15 +133,16 @@ wait_health() {
   local name="$1"
   local url="$2"
 
-  # 3초 간격 × 160회 = 최대 480초. 간격을 짧게 둬서 기동 완료를 빨리 감지한다
-  # (기존 10초 간격은 서비스당 평균 ~5초씩 대기 낭비).
-  for i in $(seq 1 160); do
-    if curl -fsS "$url"; then
+  # 3초 간격 × 267회 ≈ 최대 800초 (기존 10초×80회와 동일 한도 유지, 감지 간격만 단축 —
+  # 기존 10초 간격은 서비스당 평균 ~5초씩 대기 낭비). curl 자체가 hang 하면 간격 예산이
+  # 깨지므로 connect/전체 타임아웃을 명시한다.
+  for i in $(seq 1 267); do
+    if curl -fsS --connect-timeout 2 --max-time 5 "$url"; then
       echo "$name health check passed"
       return 0
     fi
 
-    echo "waiting for $name health check ($i/160)"
+    echo "waiting for $name health check ($i/267)"
     sleep 3
   done
 

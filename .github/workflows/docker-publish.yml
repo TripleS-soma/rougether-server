@@ -107,18 +107,6 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 검증 통과분으로 승격.
-      # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
-      - name: Promote tested images to :dev
-        shell: bash
-        run: |
-          set -euo pipefail
-          for repo in user-api admin-api; do
-            docker buildx imagetools create \
-              --tag "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
-              "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${GITHUB_SHA}"
-          done
-
       - name: Discover running EC2 instance
         id: ec2
         shell: bash
@@ -211,3 +199,19 @@ jobs:
           public_ip="${{ steps.ec2.outputs.public_ip }}"
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8080/api/v1/health"
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8081/admin/health"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
+      # 끝난 뒤에만 실행 — 배포 실패로 롤백된 이미지가 :dev 로 남는 것을 막는다.
+      # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
+      - name: Promote deployed images to :dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in user-api admin-api; do
+            docker buildx imagetools create \
+              --tag "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
+              "${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_PREFIX}/${repo}:${GITHUB_SHA}"
+          done

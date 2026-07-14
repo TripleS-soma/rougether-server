@@ -202,6 +202,71 @@ test_restore_failure_is_propagated_and_backup_is_kept() {
   echo "ok - restore failure is propagated and backup is kept"
 }
 
+test_rollback_restarts_both_services_in_parallel_then_checks_health() {
+  reset_scenario "parallel-restart"
+  rollback_user_image="old-user-image"
+  rollback_admin_image="old-admin-image"
+  local call_log="$ENV_DIR/calls.log"
+
+  # systemctl 호출과 health 확인 순서를 기록해 병렬 재시작 계약을 검증한다
+  systemctl() {
+    echo "systemctl $*" >> "$call_log"
+    return 0
+  }
+  curl() {
+    # 마지막 인자가 URL — health 성공 시나리오
+    echo "curl ${*: -1}" >> "$call_log"
+    return 0
+  }
+
+  local exit_code=0
+  (false || rollback) > /dev/null 2>&1 || exit_code="$?"
+  unset -f systemctl curl
+
+  if [ "$exit_code" -ne 1 ]; then
+    echo "not ok - rollback must exit with the original failure code (got $exit_code)" >&2
+    return 1
+  fi
+  assert_contains '^systemctl restart rougether-user-api rougether-admin-api$' "$call_log" \
+    "rollback must restart both services in one parallel transaction"
+  if [ "$(grep -c '^systemctl restart' "$call_log")" -ne 1 ]; then
+    echo "not ok - rollback must not restart services sequentially" >&2
+    return 1
+  fi
+  if ! grep -A2 'restart rougether-user-api rougether-admin-api' "$call_log" \
+      | tail -2 | paste -sd' ' - | grep -q '8080/api/v1/health.*8081/admin/health'; then
+    echo "not ok - health checks must run after restart, user-api first" >&2
+    return 1
+  fi
+  echo "ok - rollback restarts both services in parallel, then checks health in order"
+}
+
+test_rollback_health_failure_propagates_nonzero_exit() {
+  reset_scenario "health-failure"
+  rollback_user_image="old-user-image"
+  rollback_admin_image="old-admin-image"
+
+  systemctl() { return 0; }
+  # admin-api health 만 계속 실패 — user 성공 후 admin 실패가 전파되는지 확인
+  curl() {
+    case "${*: -1}" in
+      *8081*) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+  sleep() { :; }
+
+  local exit_code=0
+  (false || rollback) > /dev/null 2>&1 || exit_code="$?"
+  unset -f systemctl curl sleep
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - admin health failure during rollback must propagate a non-zero exit" >&2
+    return 1
+  fi
+  echo "ok - rollback health failure propagates a non-zero exit"
+}
+
 test_capture_rollback_images_preserves_new_deploy_sha() {
   reset_scenario "deploy-state"
   DEPLOYED_SHA="new-deploy-sha"
@@ -231,6 +296,8 @@ test_invalid_ssm_json_keeps_existing_credentials
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
+test_rollback_restarts_both_services_in_parallel_then_checks_health
+test_rollback_health_failure_propagates_nonzero_exit
 test_capture_rollback_images_preserves_new_deploy_sha
 
 echo "deployment script tests passed"
