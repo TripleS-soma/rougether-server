@@ -241,13 +241,14 @@ test_rollback_restarts_both_services_in_parallel_then_checks_health() {
   echo "ok - rollback restarts both services in parallel, then checks health in order"
 }
 
-test_rollback_health_failure_propagates_nonzero_exit() {
+test_rollback_health_failure_is_reported_and_propagated() {
   reset_scenario "health-failure"
   rollback_user_image="old-user-image"
   rollback_admin_image="old-admin-image"
+  local output_log="$ENV_DIR/output.log"
 
   systemctl() { return 0; }
-  # admin-api health 만 계속 실패 — user 성공 후 admin 실패가 전파되는지 확인
+  # admin-api health 만 계속 실패 — user 성공 후 admin 실패가 보고·전파되는지 확인
   curl() {
     case "${*: -1}" in
       *8081*) return 1 ;;
@@ -257,14 +258,23 @@ test_rollback_health_failure_propagates_nonzero_exit() {
   sleep() { :; }
 
   local exit_code=0
-  (false || rollback) > /dev/null 2>&1 || exit_code="$?"
+  # 데드라인을 1초로 줄여 실패 루프를 빠르게 소진시킨다 (sleep 은 mock)
+  (false || ROUGETHER_HEALTH_TIMEOUT_SECONDS=1 rollback) > "$output_log" 2>&1 || exit_code="$?"
   unset -f systemctl curl sleep
 
   if [ "$exit_code" -eq 0 ]; then
     echo "not ok - admin health failure during rollback must propagate a non-zero exit" >&2
     return 1
   fi
-  echo "ok - rollback health failure propagates a non-zero exit"
+  # exit code 는 원래 실패 코드로 고정이므로, 제어 흐름은 출력으로 검증한다:
+  # 실패가 집계되어 'health checks failed' 경고가 나가고 성공 메시지는 나가지 않아야 한다
+  assert_contains 'rollback finished but health checks failed' "$output_log" \
+    "admin health failure must be reported after rollback"
+  assert_not_contains 'rollback completed' "$output_log" \
+    "failed rollback must not claim success"
+  assert_contains 'user-api health check passed' "$output_log" \
+    "user-api health must still be checked and pass"
+  echo "ok - rollback health failure is reported and propagated"
 }
 
 test_capture_rollback_images_preserves_new_deploy_sha() {
@@ -297,7 +307,7 @@ test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
 test_rollback_restarts_both_services_in_parallel_then_checks_health
-test_rollback_health_failure_propagates_nonzero_exit
+test_rollback_health_failure_is_reported_and_propagated
 test_capture_rollback_images_preserves_new_deploy_sha
 
 echo "deployment script tests passed"

@@ -133,16 +133,22 @@ wait_health() {
   local name="$1"
   local url="$2"
 
-  # 3초 간격 × 267회 ≈ 최대 800초 (기존 10초×80회와 동일 한도 유지, 감지 간격만 단축 —
-  # 기존 10초 간격은 서비스당 평균 ~5초씩 대기 낭비). curl 자체가 hang 하면 간격 예산이
-  # 깨지므로 connect/전체 타임아웃을 명시한다.
-  for i in $(seq 1 267); do
+  # wall-clock 데드라인 — 횟수 기반은 실패당 최대 8초(curl 5초 + sleep 3초)씩 늘어나
+  # 워크플로의 SSM 감시 한도(120×10초=1,200초)를 넘길 수 있다. 총 대기를 시계 기준으로 못박아
+  # 최악(배포 2회 + 롤백 2회 대기)에도 4×240=960초로 감시 한도 안에 들어오게 한다.
+  # 240초는 실측 부팅(~30초)의 8배 여유. 테스트에서 단축할 수 있게 env 로만 조절 가능.
+  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-240}"
+  local deadline=$(( SECONDS + timeout_seconds ))
+  local attempt=0
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    attempt=$(( attempt + 1 ))
     if curl -fsS --connect-timeout 2 --max-time 5 "$url"; then
       echo "$name health check passed"
       return 0
     fi
 
-    echo "waiting for $name health check ($i/267)"
+    echo "waiting for $name health check (attempt $attempt, $(( deadline - SECONDS ))s left)"
     sleep 3
   done
 
@@ -276,12 +282,19 @@ rollback() {
 
   # 두 서비스를 병렬 기동 후 순서대로 health 확인 — 순차 기동(user healthy 후 admin 시작)이면
   # 부팅 시간이 직렬로 더해진다. 두 컨테이너는 포트·상태가 독립이라 동시 기동에 제약이 없다.
+  # health 실패를 명시적으로 집계한다 — 트랩/errexit 문맥에 따라 중단 여부가 달라지지 않게 하고,
+  # 실패해도 백업 정리·원래 실패 코드 전파는 항상 수행한다.
   systemctl restart rougether-user-api rougether-admin-api
-  wait_health user-api http://127.0.0.1:8080/api/v1/health
-  wait_health admin-api http://127.0.0.1:8081/admin/health
+  local rollback_health_ok=true
+  wait_health user-api http://127.0.0.1:8080/api/v1/health || rollback_health_ok=false
+  wait_health admin-api http://127.0.0.1:8081/admin/health || rollback_health_ok=false
 
   cleanup_firebase_credentials_backup
-  echo "rollback completed"
+  if [ "$rollback_health_ok" = true ]; then
+    echo "rollback completed"
+  else
+    echo "rollback finished but health checks failed" >&2
+  fi
   exit "$exit_code"
 }
 
