@@ -563,6 +563,46 @@ class RoutineServiceIntegrationTest {
         assertThat(updated.startsOn()).isEqualTo(startsOn);
     }
 
+    @Test
+    void 시작일_미지정_상태로_종료일에_과거를_보내면_STARTS_ON_AFTER_ENDS_ON() {
+        LocalDate yesterday = LocalDate.now(KST).minusDays(1);
+
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, yesterday)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_AFTER_ENDS_ON);
+    }
+
+    @Test
+    void 시작일이_종료일보다_늦으면_STARTS_ON_AFTER_ENDS_ON() {
+        LocalDate startsOn = LocalDate.now(KST).plusDays(10);
+        LocalDate endsOn = LocalDate.now(KST).plusDays(5);
+
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), startsOn, endsOn)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_AFTER_ENDS_ON);
+    }
+
+    @Test
+    void 수정으로_종료일을_기존_시작일보다_앞으로_당기면_STARTS_ON_AFTER_ENDS_ON() {
+        LocalDate startsOn = LocalDate.now(KST).plusDays(10);
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), startsOn, null));
+        LocalDate earlierEndsOn = LocalDate.now(KST).plusDays(5);
+
+        assertThatThrownBy(() -> routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, null, null, null, null, earlierEndsOn)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_AFTER_ENDS_ON);
+    }
+
     private Long persistCategory(Long ownerId, String name) {
         User owner = userRepository.findById(ownerId).orElseThrow();
         return categoryRepository.save(

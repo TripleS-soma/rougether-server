@@ -28,7 +28,7 @@ public record RoutineCreateRequest(
         LocalTime scheduledTime,
         @Schema(description = "시작일(YYYY-MM-DD). 미지정이면 생성일(오늘)로 지정됨. 오늘 이전 과거일은 불가. 오늘 현황은 시작일~종료일 범위의 루틴만 대상으로 봄", example = "2026-07-01")
         LocalDate startsOn,
-        @Schema(description = "종료일(YYYY-MM-DD). 미지정이면 제한 없음", example = "2026-12-31")
+        @Schema(description = "종료일(YYYY-MM-DD). 미지정이면 제한 없음. 시작일보다 앞설 수 없음", example = "2026-12-31")
         LocalDate endsOn
 ) {
 }

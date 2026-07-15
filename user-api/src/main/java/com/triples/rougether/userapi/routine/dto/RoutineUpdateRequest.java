@@ -26,7 +26,7 @@ public record RoutineUpdateRequest(
         LocalTime scheduledTime,
         @Schema(description = "시작일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지. 지정 시 오늘 이전 과거일은 불가", example = "2026-07-01")
         LocalDate startsOn,
-        @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다.", example = "2026-12-31")
+        @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다. 지정 시 시작일보다 앞설 수 없음", example = "2026-12-31")
         LocalDate endsOn
 ) {
 }
