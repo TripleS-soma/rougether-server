@@ -54,6 +54,8 @@ reset_scenario() {
   ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
   BATCH_DEPLOY_ENV="$ENV_DIR/batch.deploy.env"
   USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
+  ADMIN_RUNTIME_ENV="$ENV_DIR/admin-api.env"
+  BATCH_RUNTIME_ENV="$ENV_DIR/batch.env"
   FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
   rollback_user_image=""
   rollback_admin_image=""
@@ -143,6 +145,7 @@ test_first_deploy_without_credentials_uses_stub() {
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
   assert_contains '127.0.0.1:8082:8082' "$SYSTEMD_DIR/rougether-batch.service" "batch must bind health port to localhost only"
   assert_not_contains 'rougether-user-api.service' "$SYSTEMD_DIR/rougether-batch.service" "batch must not depend on user-api"
+  assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-batch.service" "missing credentials must omit batch bind mount"
   echo "ok - first deploy without credentials uses stub"
 }
 
@@ -156,8 +159,11 @@ test_new_credentials_are_restored_with_runtime_wiring() {
   backup_firebase_credentials
   refresh_firebase_credentials
   ensure_user_runtime_env
+  ensure_batch_runtime_env
   write_units "new-user-image" "new-admin-image" "new-batch-image"
   assert_contains '"project_id":"new"' "$FIREBASE_CREDENTIALS_FILE" "new credentials must be installed before restart"
+  assert_contains 'firebase-adminsdk.json:ro' "$SYSTEMD_DIR/rougether-batch.service" "valid credentials must mount into batch"
+  assert_contains '^FIREBASE_CREDENTIALS_PATH=' "$BATCH_RUNTIME_ENV" "valid credentials must wire batch runtime env"
 
   restore_firebase_credentials
   ensure_user_runtime_env
@@ -231,11 +237,70 @@ EOF
   echo "ok - rollback state preserves the new deploy SHA"
 }
 
+test_batch_env_is_bootstrapped_from_user_runtime_env() {
+  reset_scenario "batch-env-bootstrap"
+  cat > "$USER_RUNTIME_ENV" <<'EOF'
+SPRING_PROFILES_ACTIVE=mysql
+SERVER_PORT=8080
+DB_URL=jdbc:mysql://db.example.invalid:3306/rougether
+DB_USERNAME=rougether
+DB_PASSWORD=fake-db-password
+JWT_SECRET=fake-jwt-secret
+EOF
+  chmod 600 "$USER_RUNTIME_ENV"
+
+  ensure_batch_runtime_env
+
+  assert_contains '^SERVER_PORT=8082$' "$BATCH_RUNTIME_ENV" "batch.env must bind port 8082"
+  assert_contains '^DB_URL=jdbc:mysql://db.example.invalid:3306/rougether$' "$BATCH_RUNTIME_ENV" "batch.env must copy DB_URL"
+  assert_contains '^DB_USERNAME=rougether$' "$BATCH_RUNTIME_ENV" "batch.env must copy DB_USERNAME"
+  assert_contains '^DB_PASSWORD=fake-db-password$' "$BATCH_RUNTIME_ENV" "batch.env must copy DB_PASSWORD"
+  assert_not_contains '^JWT_SECRET=' "$BATCH_RUNTIME_ENV" "batch.env must not leak unrelated settings"
+  assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$BATCH_RUNTIME_ENV" "no credentials must omit batch firebase path"
+  echo "ok - batch.env is bootstrapped from user runtime env"
+}
+
+test_batch_env_wires_firebase_when_credentials_present() {
+  reset_scenario "batch-env-firebase"
+  cat > "$USER_RUNTIME_ENV" <<'EOF'
+SPRING_PROFILES_ACTIVE=mysql
+DB_URL=jdbc:mysql://db.example.invalid:3306/rougether
+DB_USERNAME=rougether
+DB_PASSWORD=fake-db-password
+EOF
+  chmod 600 "$USER_RUNTIME_ENV"
+  write_credentials "$FIREBASE_CREDENTIALS_FILE" "batch"
+
+  ensure_batch_runtime_env
+  assert_contains '^FIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json$' "$BATCH_RUNTIME_ENV" "valid credentials must wire batch firebase path"
+
+  # 자격증명이 사라지면 다음 배포에서 경로가 제거되어야 한다(재조정 멱등성).
+  rm -f "$FIREBASE_CREDENTIALS_FILE"
+  ensure_batch_runtime_env
+  assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$BATCH_RUNTIME_ENV" "removed credentials must drop batch firebase path"
+  assert_contains '^DB_URL=' "$BATCH_RUNTIME_ENV" "reconcile must preserve DB settings"
+  echo "ok - batch.env firebase path tracks credential validity"
+}
+
+test_batch_env_bootstrap_is_idempotent() {
+  reset_scenario "batch-env-idempotent"
+  printf 'SPRING_PROFILES_ACTIVE=mysql\nSERVER_PORT=8082\nDB_PASSWORD=existing\n' > "$BATCH_RUNTIME_ENV"
+  chmod 600 "$BATCH_RUNTIME_ENV"
+
+  ensure_batch_runtime_env
+
+  assert_contains '^DB_PASSWORD=existing$' "$BATCH_RUNTIME_ENV" "existing batch.env must be preserved"
+  echo "ok - batch.env bootstrap leaves existing file untouched"
+}
+
 test_ssm_failure_keeps_existing_credentials
 test_invalid_ssm_json_keeps_existing_credentials
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
 test_capture_rollback_images_preserves_new_deploy_sha
+test_batch_env_is_bootstrapped_from_user_runtime_env
+test_batch_env_bootstrap_is_idempotent
+test_batch_env_wires_firebase_when_credentials_present
 
 echo "deployment script tests passed"

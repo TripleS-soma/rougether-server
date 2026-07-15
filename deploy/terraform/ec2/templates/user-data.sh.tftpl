@@ -115,7 +115,7 @@ ASSET_PUBLIC_BASE_URL=${asset_public_base_url}
 EOF
 
 # batch: 루틴 리마인드 발송 전용. 외부 접근 없이 localhost 헬스체크(8082)만 노출한다.
-# firebase 자격증명은 후속(비차단)으로 반영 예정 — 그 전까지는 FCM stub 으로 동작한다.
+# firebase 자격증명이 있으면 user-api 와 동일하게 마운트해 실제 FCM 을 발송하고, 없으면 stub 으로 동작한다.
 cat > "$ENV_DIR/batch.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
 SERVER_PORT=8082
@@ -123,6 +123,10 @@ DB_URL=${db_url}
 DB_USERNAME=${db_username}
 DB_PASSWORD=$DB_PASSWORD
 EOF
+
+if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/batch.env"
+fi
 
 chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env" "$ENV_DIR/batch.env"
 
@@ -187,6 +191,7 @@ for unit in rougether-user-api rougether-admin-api rougether-batch; do
 done
 
 sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
+sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-batch.service
 
 systemctl daemon-reload
 systemctl enable rougether-user-api rougether-admin-api rougether-batch

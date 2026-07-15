@@ -9,7 +9,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/batch.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-batch
-ExecStart=/usr/bin/docker run --rm --name rougether-batch --env-file /etc/rougether/batch.env -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_BATCH_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-batch --env-file /etc/rougether/batch.env __FIREBASE_MOUNT_OPTION__ -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_BATCH_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-batch
 
 [Install]

@@ -44,6 +44,28 @@ Terraform creates these private ECR repositories:
 - `rougether-dev/admin-api`
 - `rougether-dev/batch`
 
+### batch 롤아웃 순서 (기존 환경)
+
+batch 컨테이너를 처음 도입할 때는 **Terraform 을 먼저 적용한 뒤** main push workflow 를
+활성화해야 한다. `docker-publish.yml` 은 main push 시 곧바로 `rougether-dev/batch` 로 이미지를
+push 하는데, 그 저장소와 GitHub Actions 배포 role 의 push 권한은 이 스택의 Terraform 으로만
+생성되기 때문이다. 선적용하지 않으면 첫 workflow 가 `RepositoryNotFound` 또는 `AccessDenied` 로
+실패한다.
+
+```bash
+# 1) batch ECR 레포·lifecycle·IAM 권한을 먼저 만든다 (기존 인스턴스 재생성 없이 안전)
+terraform apply \
+  -target=aws_ecr_repository.batch \
+  -target=aws_ecr_lifecycle_policy.batch \
+  -target=aws_iam_role_policy.app \
+  -target=aws_iam_role_policy.github_actions_deploy
+# 2) 이후 main push 배포가 batch 이미지를 push·배포한다.
+```
+
+기존 인스턴스는 `user_data` 변경이 무시되므로 `batch.env` 가 없다. 배포 스크립트
+(`deploy-ec2-with-rollback.sh`)가 최초 배포 시 `user-api.env` 의 DB 접속을 복사해 `batch.env` 를
+자동 생성하므로 인스턴스 재생성은 필요 없다.
+
 PRs into `main` or `feat/admin-assets` run `.github/workflows/pr-gate.yml`:
 
 1. run `./gradlew test`
@@ -161,8 +183,10 @@ Firebase Console에서 받은 파일은 전용 스크립트로 등록합니다. 
 확인하며 키 값은 출력하지 않습니다.
 
 신규 스택은 가능하면 `terraform apply` 전에 키를 먼저 등록합니다. SSM 조회가 일시적으로 실패해도
-인스턴스 전체 부트스트랩은 계속되며, 기존 정상 키가 있으면 유지하고 없으면 user-api가
-`StubFcmSender`로 기동합니다. 다음 배포에서 다시 SSM 조회를 시도합니다.
+인스턴스 전체 부트스트랩은 계속되며, 기존 정상 키가 있으면 유지하고 없으면 user-api·batch가
+`StubFcmSender`로 기동합니다. 다음 배포에서 다시 SSM 조회를 시도합니다. batch(루틴 리마인드
+발송)는 키가 없으면 푸시를 보내지 못하고 알림을 `FAILED`로 기록하므로, 리마인드를 실제 발송하려면
+키 등록이 필요합니다.
 
 ```bash
 deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
@@ -170,7 +194,8 @@ deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 
 이후 GitHub Actions 배포는 매번 SecureString을 다시 읽어
 `/etc/rougether/firebase-adminsdk.json`에 권한 `600`으로 원자적으로 교체하고,
-user-api 컨테이너에 read-only로 마운트합니다. 키를 교체할 때도 같은 스크립트를 실행한 뒤
+user-api·batch 컨테이너에 read-only로 마운트합니다(키 유효성에 맞춰 각 `*.env`의
+`FIREBASE_CREDENTIALS_PATH`도 매 배포 재조정). 키를 교체할 때도 같은 스크립트를 실행한 뒤
 배포 workflow를 다시 실행하면 됩니다. 새 키 때문에 health check가 실패하면 이미지와 함께 이전 키도
 복원합니다.
 

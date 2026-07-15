@@ -16,6 +16,8 @@ USER_DEPLOY_ENV="$ENV_DIR/user-api.deploy.env"
 ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
 BATCH_DEPLOY_ENV="$ENV_DIR/batch.deploy.env"
 USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
+ADMIN_RUNTIME_ENV="$ENV_DIR/admin-api.env"
+BATCH_RUNTIME_ENV="$ENV_DIR/batch.env"
 FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
 
 umask 077
@@ -132,6 +134,67 @@ ensure_user_runtime_env() {
   mv -f "$temporary_env" "$USER_RUNTIME_ENV" || return 1
 }
 
+bootstrap_batch_runtime_env() {
+  # batch 유닛은 /etc/rougether/batch.env 를 요구한다. 이 파일은 user-data 부트스트랩에서만
+  # 생성되는데, aws_instance.app 이 user_data 변경을 무시하므로 batch 도입 전에 뜬 기존 인스턴스에는
+  # 없다. 같은 DB 접속을 쓰는 user-api.env(없으면 admin-api.env)에서 DB_* 를 복사해 한 번 생성한다.
+  # (firebase 경로는 아래 ensure_batch_runtime_env 가 자격증명 유효성에 맞춰 매 배포 재조정한다.)
+  [ -f "$BATCH_RUNTIME_ENV" ] && return 0
+
+  local source_env="$USER_RUNTIME_ENV"
+  if [ ! -f "$source_env" ]; then
+    source_env="$ADMIN_RUNTIME_ENV"
+  fi
+  if [ ! -f "$source_env" ]; then
+    echo "cannot bootstrap batch.env: no source runtime env found" >&2
+    return 1
+  fi
+
+  local db_lines
+  db_lines="$(grep -E '^(DB_URL|DB_USERNAME|DB_PASSWORD)=' "$source_env" || true)"
+  if [ -z "$db_lines" ]; then
+    echo "cannot bootstrap batch.env: DB settings missing in $source_env" >&2
+    return 1
+  fi
+
+  mkdir -p "$ENV_DIR"
+  chmod 700 "$ENV_DIR"
+
+  local temporary_env
+  temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"
+  {
+    echo "SPRING_PROFILES_ACTIVE=mysql"
+    echo "SERVER_PORT=8082"
+    printf '%s\n' "$db_lines"
+  } > "$temporary_env"
+
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"
+  echo "bootstrapped $BATCH_RUNTIME_ENV from $source_env"
+}
+
+ensure_batch_runtime_env() {
+  # 없으면 먼저 부트스트랩한 뒤, firebase 자격증명 유효성에 맞춰 FIREBASE_CREDENTIALS_PATH 를
+  # 매 배포 재조정한다(user-api 의 ensure_user_runtime_env 와 동일한 규칙).
+  if ! bootstrap_batch_runtime_env; then
+    return 1
+  fi
+
+  local temporary_env
+  temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"
+  if ! awk '!/^FIREBASE_CREDENTIALS_PATH=/' "$BATCH_RUNTIME_ENV" > "$temporary_env"; then
+    rm -f "$temporary_env"
+    return 1
+  fi
+
+  if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+    printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$temporary_env"
+  fi
+
+  chmod 600 "$temporary_env" || return 1
+  mv -f "$temporary_env" "$BATCH_RUNTIME_ENV" || return 1
+}
+
 wait_health() {
   local name="$1"
   local url="$2"
@@ -220,8 +283,9 @@ WantedBy=multi-user.target
 EOF
 
   # batch 는 user-api/admin-api 에 의존하지 않는 독립 유닛이다(리마인드 발송을 다른 배포가 끊지 않도록).
-  # 외부 접근 없이 localhost:8082 헬스체크만 노출한다.
-  cat > "$batch_service_file" <<'EOF'
+  # 외부 접근 없이 localhost:8082 헬스체크만 노출한다. firebase 자격증명이 있으면 user-api 와
+  # 동일하게 마운트해 실제 FCM 을 발송한다(<<EOF 로 $firebase_mount_option 을 배포 시점에 굽는다).
+  cat > "$batch_service_file" <<EOF
 [Unit]
 Description=Rougether batch container
 After=docker.service network-online.target
@@ -233,7 +297,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/batch.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-batch
-ExecStart=/usr/bin/docker run --rm --name rougether-batch --env-file /etc/rougether/batch.env -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_BATCH_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-batch --env-file /etc/rougether/batch.env $firebase_mount_option -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_BATCH_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-batch
 
 [Install]
@@ -324,7 +388,8 @@ rollback() {
   # batch 는 독립 유닛이라 롤백 실패가 user-api/admin-api 복구를 가리지 않게 best-effort 로 처리한다.
   # restart/health 어느 쪽이 실패해도 set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
   if [ -n "$rollback_batch_image" ]; then
-    if ! systemctl restart rougether-batch \
+    if ! ensure_batch_runtime_env \
+      || ! systemctl restart rougether-batch \
       || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
       echo "batch rollback failed; user-api/admin-api rollback is unaffected" >&2
     fi
@@ -361,6 +426,7 @@ wait_health user-api http://127.0.0.1:8080/api/v1/health
 systemctl restart rougether-admin-api
 wait_health admin-api http://127.0.0.1:8081/admin/health
 
+ensure_batch_runtime_env
 systemctl restart rougether-batch
 wait_health batch http://127.0.0.1:8082/actuator/health
 
