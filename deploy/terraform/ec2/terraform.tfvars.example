@@ -30,3 +30,7 @@ admin_seed_username = "admin"
 # jwt_secret = "replace-with-at-least-32-random-bytes"
 # 로컬 IDE 에서 RDS 3306 직접 접속을 허용할 개인 IP (선택, 비우면 SSM 터널만)
 db_direct_access_cidrs  = []
+
+# half-baked 베이스 AMI (deploy/packer 로 먼저 빌드한 뒤 true 로 전환).
+# 인스턴스 lifecycle 이 ami 를 무시하므로 실제 교체는 terraform apply -replace=aws_instance.app
+# use_baked_ami = true

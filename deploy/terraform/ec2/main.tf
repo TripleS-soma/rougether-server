@@ -9,8 +9,10 @@ locals {
   db_password_param         = "/${local.name}/db/password"
   admin_seed_password_param = "/${local.name}/admin/seed-password"
   jwt_secret_param          = "/${local.name}/jwt/secret"
-  ecr_registry_server       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url           = "https://token.actions.githubusercontent.com"
+  # 값은 deploy/scripts/put-firebase-credentials.sh가 관리해 Terraform state 유입을 막는다.
+  firebase_credentials_param = "/${local.name}/firebase/credentials-json"
+  ecr_registry_server        = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url            = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -39,6 +41,29 @@ data "aws_ami" "al2023" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
+}
+
+# half-baked 베이스 AMI (deploy/packer/rougether-base.pkr.hcl 로 빌드).
+# use_baked_ami=false 면 조회 자체를 생략해, AMI 를 아직 굽지 않은 환경에서도 plan 이 깨지지 않는다.
+data "aws_ami" "rougether_base" {
+  count       = var.use_baked_ami ? 1 : 0
+  most_recent = true
+  owners      = ["self"]
+
+  filter {
+    name   = "name"
+    values = [var.baked_ami_name_pattern]
+  }
+
+  # packer 빌드 진행 중(pending)인 AMI 를 집어 -replace 도중 RunInstances 가 실패하는 레이스 방지
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+locals {
+  instance_ami_id = var.use_baked_ami ? data.aws_ami.rougether_base[0].id : data.aws_ami.al2023.id
 }
 
 resource "random_password" "db" {
@@ -265,8 +290,8 @@ resource "aws_db_instance" "mysql" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   # 직접 접속 CIDR 이 있으면 공개(접근은 위 SG 규칙으로 IP 제한), 없으면 비공개(SSM 터널만).
-  publicly_accessible    = length(var.db_direct_access_cidrs) > 0
-  multi_az               = false
+  publicly_accessible = length(var.db_direct_access_cidrs) > 0
+  multi_az            = false
 
   backup_retention_period = var.db_backup_retention_period
   deletion_protection     = var.db_deletion_protection
@@ -313,7 +338,8 @@ resource "aws_iam_role_policy" "app" {
           [
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
-            aws_ssm_parameter.jwt_secret.arn
+            aws_ssm_parameter.jwt_secret.arn,
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
@@ -475,7 +501,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
 }
 
 resource "aws_instance" "app" {
-  ami                         = data.aws_ami.al2023.id
+  ami                         = local.instance_ami_id
   instance_type               = var.instance_type
   subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.ec2.id]
@@ -502,22 +528,27 @@ resource "aws_instance" "app" {
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    aws_region                = var.aws_region
-    user_api_image            = local.user_api_image_value
-    admin_api_image           = local.admin_api_image_value
-    registry_server           = local.container_registry_server_value
-    registry_username         = var.container_registry_username == null ? "" : var.container_registry_username
-    registry_password_param   = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
-    db_url                    = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
-    db_username               = var.db_username
-    db_password_param         = aws_ssm_parameter.db_password.name
-    jwt_secret_param          = aws_ssm_parameter.jwt_secret.name
-    admin_seed_enabled        = tostring(var.admin_seed_enabled)
-    admin_seed_username       = var.admin_seed_username
-    admin_seed_password_param = aws_ssm_parameter.admin_seed_password.name
-    asset_bucket_name         = var.asset_bucket_name
-    asset_region              = var.asset_region
-    asset_public_base_url     = var.asset_public_base_url
+    aws_region                 = var.aws_region
+    user_api_image             = local.user_api_image_value
+    admin_api_image            = local.admin_api_image_value
+    registry_server            = local.container_registry_server_value
+    registry_username          = var.container_registry_username == null ? "" : var.container_registry_username
+    registry_password_param    = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
+    db_url                     = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+    db_username                = var.db_username
+    db_password_param          = aws_ssm_parameter.db_password.name
+    jwt_secret_param           = aws_ssm_parameter.jwt_secret.name
+    admin_seed_enabled         = tostring(var.admin_seed_enabled)
+    admin_seed_username        = var.admin_seed_username
+    admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
+    firebase_credentials_param = local.firebase_credentials_param
+    asset_bucket_name          = var.asset_bucket_name
+    asset_region               = var.asset_region
+    asset_public_base_url      = var.asset_public_base_url
+    use_baked_ami              = var.use_baked_ami
+    # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
+    user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))
+    admin_api_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api.service"))
   })
 
   depends_on = [

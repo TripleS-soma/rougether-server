@@ -16,6 +16,8 @@ import com.triples.rougether.domain.routine.entity.StreakStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
@@ -50,6 +52,8 @@ class RoutineCompletionServiceIntegrationTest {
     private StreakRepository streakRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TodoRepository todoRepository;
 
     private RoutineLogService service;
     private Long userId;
@@ -57,8 +61,10 @@ class RoutineCompletionServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
+                todoRepository);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository);
+                userWalletRepository, streakRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user);
@@ -105,12 +111,40 @@ class RoutineCompletionServiceIntegrationTest {
     }
 
     @Test
-    void 과거_날짜_완료는_INVALID_ROUTINE_DATE() {
+    void 과거_날짜_완료는_코인0_지갑불변_스트릭불변() {
+        persistStreak(userId, 3, TODAY.minusDays(1));
+
+        RoutineLogResponse response = service.complete(userId, routineId,
+                new RoutineLogCreateRequest(TODAY.minusDays(2)));
+
+        assertThat(response.status()).isEqualTo(RoutineLogStatus.COMPLETED);
+        assertThat(response.routineDate()).isEqualTo(TODAY.minusDays(2));
+        assertThat(response.rewardAmount()).isZero();
+        assertThat(walletBalance()).isZero();
+        // 스트릭은 소급하지 않고 기존 값 그대로 반환
+        assertThat(response.streak().currentCount()).isEqualTo(3);
+        assertThat(response.streak().lastSuccessDate()).isEqualTo(TODAY.minusDays(1));
+    }
+
+    @Test
+    void 스트릭이_없을때_과거_완료는_빈_스트릭을_반환한다() {
+        RoutineLogResponse response = service.complete(userId, routineId,
+                new RoutineLogCreateRequest(TODAY.minusDays(1)));
+
+        assertThat(response.streak().currentCount()).isZero();
+        assertThat(response.streak().lastSuccessDate()).isNull();
+        assertThat(streakRepository.findByUserId(userId)).isEmpty();
+    }
+
+    @Test
+    void 같은_과거_날짜_재완료는_ALREADY_COMPLETED() {
+        service.complete(userId, routineId, new RoutineLogCreateRequest(TODAY.minusDays(1)));
+
         assertThatThrownBy(() -> service.complete(userId, routineId,
                 new RoutineLogCreateRequest(TODAY.minusDays(1))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(RoutineLogErrorCode.INVALID_ROUTINE_DATE);
+                .isEqualTo(RoutineLogErrorCode.ALREADY_COMPLETED);
     }
 
     @Test

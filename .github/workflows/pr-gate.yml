@@ -32,6 +32,9 @@ jobs:
       - name: Grant Gradle wrapper permission
         run: chmod +x ./gradlew
 
+      - name: Test deployment scripts
+        run: bash .github/scripts/test-deploy-ec2-with-rollback.sh
+
       - name: Run tests
         run: ./gradlew test
 

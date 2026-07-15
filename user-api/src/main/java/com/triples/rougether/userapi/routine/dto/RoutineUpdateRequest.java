@@ -14,9 +14,13 @@ public record RoutineUpdateRequest(
         Long categoryId,
         @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형). 미지정(null)이면 기존 값 유지", example = "CHECK")
         AuthType authType,
-        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정 — repeatDays 함께 전달). 미지정(null)이면 기존 값 유지", example = "WEEKLY")
-        @Pattern(regexp = "DAILY|WEEKLY") String repeatType,
-        @Schema(description = "반복 설정. repeatType이 WEEKLY일 때 요일 지정. 미지정(null)이면 기존 값 유지")
+        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정 — repeatDays 함께 전달), "
+                + "BIWEEKLY(격주 — repeatDays.daysOfWeek + startsOn 필요), "
+                + "MONTHLY(매월 — repeatDays.dayOfMonth 필요), "
+                + "YEARLY(매년 — repeatDays.month/day 필요). 미지정(null)이면 기존 값 유지", example = "WEEKLY")
+        @Pattern(regexp = "DAILY|WEEKLY|BIWEEKLY|MONTHLY|YEARLY") String repeatType,
+        @Schema(description = "반복 설정. repeatType이 WEEKLY/BIWEEKLY면 daysOfWeek, "
+                + "MONTHLY면 dayOfMonth, YEARLY면 month/day 지정. 미지정(null)이면 기존 값 유지")
         RepeatDays repeatDays,
         @Schema(description = "수행 예정 시각(HH:mm:ss). null이면 해제합니다.", example = "07:00:00")
         LocalTime scheduledTime,

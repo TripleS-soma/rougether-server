@@ -16,6 +16,8 @@ import com.triples.rougether.domain.routine.entity.StreakStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
@@ -51,6 +53,8 @@ class RoutineCancelServiceIntegrationTest {
     private StreakRepository streakRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TodoRepository todoRepository;
 
     private RoutineLogService service;
     private Long userId;
@@ -58,8 +62,10 @@ class RoutineCancelServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
+                todoRepository);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository);
+                userWalletRepository, streakRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user);
@@ -94,11 +100,10 @@ class RoutineCancelServiceIntegrationTest {
     }
 
     @Test
-    void 오늘이_아닌_날짜_취소는_LOG_NOT_CANCELABLE() {
+    void 미래_날짜_취소는_LOG_NOT_CANCELABLE() {
         service.complete(userId, routineId, new RoutineLogCreateRequest(null));
 
-        // 과거 날짜로 취소 시도 → 오늘 걸 취소하지 않고 거부함
-        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY.minusDays(2)))
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY.plusDays(1)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
@@ -106,6 +111,36 @@ class RoutineCancelServiceIntegrationTest {
         assertThat(routineLogRepository
                 .findByRoutineIdAndRoutineDateAndStatus(routineId, TODAY, RoutineLogStatus.COMPLETED))
                 .isPresent();
+    }
+
+    @Test
+    void 과거_완료_취소는_0환불이고_스트릭이_변하지_않는다() {
+        persistStreak(userId, 3, TODAY.minusDays(1));
+        RoutineLogResponse completed = service.complete(userId, routineId,
+                new RoutineLogCreateRequest(TODAY.minusDays(2))); // 과거 완료 → 코인 0
+        assertThat(walletBalance()).isZero();
+
+        StreakSummaryResponse streak = service.cancel(userId, routineId, TODAY.minusDays(2));
+
+        assertThat(routineLogRepository.findById(completed.id())).isEmpty();
+        assertThat(walletBalance()).isZero();
+        assertThat(streak.currentCount()).isEqualTo(3);
+        assertThat(streak.lastSuccessDate()).isEqualTo(TODAY.minusDays(1));
+    }
+
+    @Test
+    void 과거_날짜로_취소해도_오늘_완료는_건드리지_않는다() {
+        service.complete(userId, routineId, new RoutineLogCreateRequest(null));
+
+        // 과거 날짜에는 완료 기록이 없으므로 NOT_FOUND — 오늘 완료가 지워지면 안 됨
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY.minusDays(2)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND);
+        assertThat(routineLogRepository
+                .findByRoutineIdAndRoutineDateAndStatus(routineId, TODAY, RoutineLogStatus.COMPLETED))
+                .isPresent();
+        assertThat(walletBalance()).isEqualTo(10);
     }
 
     @Test

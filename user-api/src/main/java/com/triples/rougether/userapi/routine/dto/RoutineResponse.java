@@ -18,9 +18,11 @@ public record RoutineResponse(
         AuthType authType,
         @Schema(description = "루틴 상태. 허용값: ACTIVE(진행 중)", example = "ACTIVE")
         RoutineStatus status,
-        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정)", example = "WEEKLY")
+        @Schema(description = "반복 유형. 허용값: DAILY(매일), WEEKLY(요일 지정), BIWEEKLY(격주), "
+                + "MONTHLY(매월), YEARLY(매년)", example = "WEEKLY")
         String repeatType,
-        @Schema(description = "반복 설정. repeatType이 WEEKLY일 때 요일 목록")
+        @Schema(description = "반복 설정. repeatType이 WEEKLY/BIWEEKLY면 요일 목록, "
+                + "MONTHLY면 dayOfMonth, YEARLY면 month/day")
         RepeatDays repeatDays,
         @Schema(description = "수행 예정 시각(HH:mm:ss)", example = "07:00:00")
         LocalTime scheduledTime,

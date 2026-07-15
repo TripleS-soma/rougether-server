@@ -277,6 +277,30 @@ class RoutineServiceIntegrationTest {
     }
 
     @Test
+    void 레거시_포맷_WEEKLY_루틴을_동일_요일로_수정하면_제자리다() {
+        // repeatDays에 dayOfMonth/month/day 키가 없는 옛 저장 포맷을 직접 재현(RepeatDays 신규 필드 추가 이전 데이터).
+        // MySQL의 JSON 컬럼은 저장 시 텍스트를 정규화(콜론 뒤 공백 추가 등)하므로,
+        // isScheduleChanged가 원본 문자열 그대로 비교했다면 동일 요일 재전송도 "변경"으로 오인했을 케이스
+        User user = userRepository.findById(userId).orElseThrow();
+        Routine legacy = Routine.create(user, null, "운동", AuthType.CHECK, "WEEKLY",
+                "{\"daysOfWeek\":[\"MON\"]}", LocalTime.of(7, 0), null, null);
+        Routine saved = routineRepository.save(legacy);
+        saved.assignOriginToSelf();
+        Long id = saved.getId();
+        backdateCreatedAt(id, 3);
+
+        RoutineResponse updated = routineService.update(userId, id,
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null));
+        em.flush();
+        em.clear();
+
+        // 요일이 그대로면 파싱한 RepeatDays 객체가 동일하므로 스케줄 미변경 → 제자리 수정
+        assertThat(updated.id()).isEqualTo(id);
+        assertThat(routineRepository.findById(id).orElseThrow().getDeletedAt()).isNull();
+    }
+
+    @Test
     void 제목만_수정이면_경과분이라도_제자리다() {
         RoutineResponse created = routineService.create(userId,
                 new RoutineCreateRequest("원래 제목", null, AuthType.CHECK, "DAILY", null,
@@ -365,6 +389,178 @@ class RoutineServiceIntegrationTest {
 
         assertThat(updated.startsOn()).isEqualTo(startsOn);
         assertThat(updated.title()).isEqualTo("바뀐 제목");
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_startsOn이_있으면_성공한다() {
+        LocalDate startsOn = LocalDate.now(KST);
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of("MON")), null, startsOn, null));
+
+        assertThat(created.repeatType()).isEqualTo("BIWEEKLY");
+        assertThat(created.startsOn()).isEqualTo(startsOn);
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_startsOn이_없으면_BIWEEKLY_REQUIRES_STARTS_ON() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of("MON")), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_daysOfWeek가_없으면_BIWEEKLY_REQUIRES_WEEKDAYS() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        null, null, LocalDate.of(2026, 7, 13), null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_WEEKDAYS);
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_daysOfWeek가_빈_목록이면_BIWEEKLY_REQUIRES_WEEKDAYS() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of()), null, LocalDate.of(2026, 7, 13), null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_WEEKDAYS);
+    }
+
+    @Test
+    void BIWEEKLY_등록_시_daysOfWeek에_유효하지_않은_요일이_있으면_BIWEEKLY_REQUIRES_WEEKDAYS() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("격주 운동", null, AuthType.CHECK, "BIWEEKLY",
+                        new RepeatDays(List.of("XXX")), null, LocalDate.of(2026, 7, 13), null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_WEEKDAYS);
+    }
+
+    @Test
+    void MONTHLY_YEARLY_등록이_정상_동작한다() {
+        RoutineResponse monthly = routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        new RepeatDays(null, 15, null, null), null, null, null));
+        RoutineResponse yearly = routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 7, 12), null, null, null));
+
+        assertThat(monthly.repeatType()).isEqualTo("MONTHLY");
+        assertThat(monthly.repeatDays().dayOfMonth()).isEqualTo(15);
+        assertThat(yearly.repeatType()).isEqualTo("YEARLY");
+        assertThat(yearly.repeatDays().month()).isEqualTo(7);
+        assertThat(yearly.repeatDays().day()).isEqualTo(12);
+    }
+
+    @Test
+    void MONTHLY_등록_시_dayOfMonth가_없으면_MONTHLY_REQUIRES_DAY_OF_MONTH() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        null, null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
+    void MONTHLY_등록_시_dayOfMonth가_범위를_벗어나면_MONTHLY_REQUIRES_DAY_OF_MONTH() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("월세 납부", null, AuthType.CHECK, "MONTHLY",
+                        new RepeatDays(null, 0, null, null), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
+    void YEARLY_등록_시_month나_day가_없으면_YEARLY_REQUIRES_MONTH_AND_DAY() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 7, null), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+    }
+
+    @Test
+    void YEARLY_등록_시_month가_범위를_벗어나면_YEARLY_REQUIRES_MONTH_AND_DAY() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 13, 12), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+    }
+
+    @Test
+    void YEARLY_등록_시_실존하지_않는_날짜_조합이면_YEARLY_REQUIRES_MONTH_AND_DAY() {
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 4, 31), null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.YEARLY_REQUIRES_MONTH_AND_DAY);
+    }
+
+    @Test
+    void YEARLY_등록_시_2월29일은_윤년_여부와_무관하게_허용된다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("생일", null, AuthType.CHECK, "YEARLY",
+                        new RepeatDays(null, null, 2, 29), null, null, null));
+
+        assertThat(created.repeatDays().month()).isEqualTo(2);
+        assertThat(created.repeatDays().day()).isEqualTo(29);
+    }
+
+    @Test
+    void 수정으로_repeatType이_MONTHLY로_바뀌는데_dayOfMonth가_결과적으로_없으면_실패한다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+
+        assertThatThrownBy(() -> routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "MONTHLY", null,
+                        null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.MONTHLY_REQUIRES_DAY_OF_MONTH);
+    }
+
+    @Test
+    void 수정으로_repeatType이_BIWEEKLY로_바뀌는데_startsOn이_결과적으로_없으면_실패한다() {
+        User owner = userRepository.findById(userId).orElseThrow();
+        Long id = routineRepository.save(Routine.create(owner, null, "운동", AuthType.CHECK,
+                "DAILY", null, LocalTime.of(7, 0), null, null)).getId();
+        em.flush();
+        em.clear();
+
+        assertThatThrownBy(() -> routineService.update(userId, id,
+                new RoutineUpdateRequest(null, null, null, "BIWEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.BIWEEKLY_REQUIRES_STARTS_ON);
+    }
+
+    @Test
+    void 수정으로_repeatType이_BIWEEKLY로_바뀌어도_기존_startsOn이_있으면_성공한다() {
+        LocalDate startsOn = LocalDate.now(KST);
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), startsOn, null));
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "BIWEEKLY", new RepeatDays(List.of("MON")),
+                        null, null, null));
+
+        assertThat(updated.repeatType()).isEqualTo("BIWEEKLY");
+        assertThat(updated.startsOn()).isEqualTo(startsOn);
     }
 
     private Long persistCategory(Long ownerId, String name) {

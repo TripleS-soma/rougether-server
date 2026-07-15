@@ -197,3 +197,15 @@ variable "db_direct_access_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "use_baked_ami" {
+  description = "Packer 로 구운 rougether-base AMI(half-baked) 사용 여부. true 면 self 소유 rougether-base-* 중 최신을 쓰고 user-data 가 패키지 설치·유닛 작성을 건너뛴다. AMI 를 아직 굽지 않았으면 false 를 유지한다. 인스턴스 lifecycle 이 ami 변경을 무시하므로 실제 교체는 terraform apply -replace=aws_instance.app 로 수행한다."
+  type        = bool
+  default     = false
+}
+
+variable "baked_ami_name_pattern" {
+  description = "use_baked_ami=true 일 때 조회할 AMI 이름 패턴 (deploy/packer/rougether-base.pkr.hcl 의 ami_name_prefix 와 일치해야 한다)."
+  type        = string
+  default     = "rougether-base-*"
+}

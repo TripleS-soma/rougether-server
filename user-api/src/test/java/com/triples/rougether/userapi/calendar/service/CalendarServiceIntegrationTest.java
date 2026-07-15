@@ -98,6 +98,42 @@ class CalendarServiceIntegrationTest {
     }
 
     @Test
+    void 오늘_BIWEEKLY_루틴은_starts_on_기준_2주_간격의_해당_요일일_때만_대상이다() {
+        String todayToken = weekdayToken(TODAY);
+        persistRoutine("이번_주기_격주", RoutineStatus.ACTIVE, "BIWEEKLY",
+                "{\"daysOfWeek\":[\"" + todayToken + "\"]}", null, TODAY, null, null);
+        persistRoutine("직전_주기_시작_격주", RoutineStatus.ACTIVE, "BIWEEKLY",
+                "{\"daysOfWeek\":[\"" + todayToken + "\"]}", null, TODAY.minusDays(7), null, null);
+
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("이번_주기_격주");
+    }
+
+    @Test
+    void 오늘_MONTHLY_루틴은_dayOfMonth가_오늘과_일치할_때만_대상이다() {
+        int todayDay = TODAY.getDayOfMonth();
+        int otherDay = todayDay == 1 ? 2 : todayDay - 1;
+        persistRoutine("오늘_dayOfMonth_루틴", RoutineStatus.ACTIVE, "MONTHLY",
+                "{\"dayOfMonth\":" + todayDay + "}", null, null, null, null);
+        persistRoutine("다른_dayOfMonth_루틴", RoutineStatus.ACTIVE, "MONTHLY",
+                "{\"dayOfMonth\":" + otherDay + "}", null, null, null, null);
+
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("오늘_dayOfMonth_루틴");
+    }
+
+    @Test
+    void 오늘_YEARLY_루틴은_month_day가_오늘과_일치할_때만_대상이다() {
+        persistRoutine("오늘_month_day_루틴", RoutineStatus.ACTIVE, "YEARLY",
+                "{\"month\":" + TODAY.getMonthValue() + ",\"day\":" + TODAY.getDayOfMonth() + "}",
+                null, null, null, null);
+        LocalDate other = TODAY.plusDays(1);
+        persistRoutine("다른_month_day_루틴", RoutineStatus.ACTIVE, "YEARLY",
+                "{\"month\":" + other.getMonthValue() + ",\"day\":" + other.getDayOfMonth() + "}",
+                null, null, null, null);
+
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("오늘_month_day_루틴");
+    }
+
+    @Test
     void 오늘_기준_시작전이거나_종료후면_제외된다() {
         persistRoutine("아직 시작 안 함", RoutineStatus.ACTIVE, "DAILY", null, null,
                 TODAY.plusDays(1), null, null);

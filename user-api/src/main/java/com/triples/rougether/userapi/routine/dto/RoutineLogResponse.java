@@ -19,9 +19,9 @@ public record RoutineLogResponse(
         Instant completedAt,
         @Schema(description = "보상 재화 종류. 허용값: COIN(루틴 실천 보상), DIAMOND(아이템 구매)", example = "COIN")
         CurrencyType rewardCurrencyType,
-        @Schema(description = "보상 금액. 루틴 완료 보상은 코인 10 고정", example = "10")
+        @Schema(description = "보상 금액. 오늘 완료는 코인 10이나, 일일 상한(4건) 도달 또는 과거 날짜 완료는 0 지급", example = "10")
         int rewardAmount,
-        @Schema(description = "갱신된 스트릭 요약. 그날 첫 완료면 갱신된 값, 이미 다른 완료가 있었으면 기존 값 그대로")
+        @Schema(description = "스트릭 요약. 오늘 첫 완료면 갱신된 값, 그 외(오늘 추가 완료·과거 날짜 완료)는 기존 값 그대로")
         StreakSummaryResponse streak
 ) {
 
@@ -33,7 +33,8 @@ public record RoutineLogResponse(
                 log.getCompletedAt(),
                 log.getRewardCurrencyType(),
                 log.getRewardAmount(),
-                StreakSummaryResponse.from(streak)
+                // 과거 완료는 스트릭을 건드리지 않으므로 스트릭이 아직 없을 수 있음
+                streak != null ? StreakSummaryResponse.from(streak) : new StreakSummaryResponse(0, 0, null)
         );
     }
 }

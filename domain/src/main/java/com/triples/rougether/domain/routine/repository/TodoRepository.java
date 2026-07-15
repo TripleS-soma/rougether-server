@@ -1,7 +1,9 @@
 package com.triples.rougether.domain.routine.repository;
 
+import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -28,4 +30,35 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                     @Param("categoryId") Long categoryId,
                                     @Param("status") TodoStatus status,
                                     @Param("dueDate") LocalDate dueDate);
+
+    // 타인(집 멤버) 열람용: 그날 마감 투두 중 카테고리 공개 범위가 허용된 것만.
+    // 미분류(category null) 투두는 inner join 으로 자연 제외됨(비공개 취급)
+    @Query("""
+            select t from Todo t
+            join fetch t.category c
+            where t.user.id = :userId
+              and t.deletedAt is null
+              and t.dueDate = :dueDate
+              and c.deletedAt is null
+              and c.visibility in :visibilities
+            order by t.id asc
+            """)
+    List<Todo> findVisibleDueOn(@Param("userId") Long userId,
+                                @Param("dueDate") LocalDate dueDate,
+                                @Param("visibilities") List<PrivacyScope> visibilities);
+
+    // 일일 보상 상한: KST 날짜에 완료되고 지급된 투두 건수(reward_amount > 0).
+    // 삭제된 투두도 포함함 — 삭제는 코인을 회수하지 않으므로 집계에서 빼면 지급 슬롯이 부당 복구됨
+    @Query("""
+            select count(t) from Todo t
+            where t.user.id = :userId
+              and t.completedAt >= :kstDayStart and t.completedAt < :kstDayEnd
+              and t.status = :status
+              and t.rewardAmount > 0
+            """)
+    long countCompletedByUserIdAndCompletedAtInKstDayAndRewardAmountGreaterThan(
+            @Param("userId") Long userId,
+            @Param("kstDayStart") Instant kstDayStart,
+            @Param("kstDayEnd") Instant kstDayEnd,
+            @Param("status") TodoStatus status);
 }

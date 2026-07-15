@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary", "scope", "findings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "COMMENT", "NEEDS_HUMAN_REVIEW"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_ref", "head_sha", "files_reviewed"],
+      "properties": {
+        "base_ref": { "type": "string" },
+        "head_sha": { "type": "string" },
+        "files_reviewed": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "category",
+          "path",
+          "line",
+          "side",
+          "title",
+          "body",
+          "confidence"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["blocking", "suggestion", "info"]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "money_consistency",
+              "transaction",
+              "authorization",
+              "security",
+              "migration",
+              "api_contract",
+              "spec_drift",
+              "test_gap",
+              "maintainability",
+              "other"
+            ]
+          },
+          "path": {
+            "type": ["string", "null"]
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "side": {
+            "type": ["string", "null"],
+            "enum": ["RIGHT", "LEFT", null]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          }
+        }
+      }
+    }
+  }
+}

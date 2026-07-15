@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REGION="ap-northeast-2"
-INSTANCE_ID="i-08b3fb7120a871cc4"
+INSTANCE_ID="i-0708a9ee0aba5d8ec"
 RDS_HOST="rougether-dev-mysql.cvkuqa4iyrq2.ap-northeast-2.rds.amazonaws.com"
 LOCAL_PORT="${1:-13306}"
 

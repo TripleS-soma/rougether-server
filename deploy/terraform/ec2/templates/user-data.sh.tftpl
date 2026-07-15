@@ -4,9 +4,17 @@ set -euo pipefail
 exec > >(tee -a /var/log/rougether-user-data.log) 2>&1
 
 ENV_DIR="/etc/rougether"
+FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
 
+umask 077
+
+%{ if use_baked_ami ~}
+# half-baked AMI(rougether-base): docker/awscli/python3/유닛 정의는 이미 구워져 있다.
+# 여기서는 인스턴스 고유·가변 레이어(시크릿, env, 이미지 pull, 기동)만 처리한다.
+%{ else ~}
 dnf update -y
-dnf install -y docker awscli
+dnf install -y docker awscli python3
+%{ endif ~}
 systemctl enable --now docker
 
 if [ ! -f /swapfile ]; then
@@ -25,6 +33,60 @@ DB_PASSWORD="$(aws ssm get-parameter --name '${db_password_param}' --with-decryp
 JWT_SECRET="$(aws ssm get-parameter --name '${jwt_secret_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 ADMIN_SEED_PASSWORD="$(aws ssm get-parameter --name '${admin_seed_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 
+firebase_credentials_valid() {
+  local credentials_file="$1"
+
+  [ -f "$credentials_file" ] || return 1
+
+  python3 - "$credentials_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as credentials_file:
+        credentials = json.load(credentials_file)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+required = ("project_id", "private_key", "client_email")
+if credentials.get("type") != "service_account" or any(not credentials.get(key) for key in required):
+    raise SystemExit(1)
+PY
+}
+
+write_firebase_credentials() {
+  local temporary_file
+  temporary_file="$(mktemp "$ENV_DIR/.firebase-adminsdk.json.XXXXXX")"
+
+  if ! aws ssm get-parameter --name '${firebase_credentials_param}' --with-decryption \
+    --query 'Parameter.Value' --output text --region '${aws_region}' > "$temporary_file"; then
+    rm -f "$temporary_file"
+    return 1
+  fi
+
+  if ! firebase_credentials_valid "$temporary_file"; then
+    rm -f "$temporary_file"
+    return 1
+  fi
+
+  chmod 600 "$temporary_file"
+  chown root:root "$temporary_file"
+  mv -f "$temporary_file" "$FIREBASE_CREDENTIALS_FILE"
+}
+
+firebase_mount_option=""
+if write_firebase_credentials; then
+  echo "Firebase credentials refreshed from SSM"
+elif firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  echo "Firebase credentials unavailable in SSM; keeping the current credentials" >&2
+else
+  echo "Firebase credentials unavailable; user-api will start with the FCM stub" >&2
+fi
+
+if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
+fi
+
 cat > "$ENV_DIR/user-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
 SERVER_PORT=8080
@@ -33,6 +95,10 @@ DB_USERNAME=${db_username}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
 EOF
+
+if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+  printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/user-api.env"
+fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
@@ -77,43 +143,30 @@ EOF
 
 chmod 600 "$ENV_DIR/user-api.deploy.env" "$ENV_DIR/admin-api.deploy.env" "$ENV_DIR/deploy-state.env"
 
+%{ if use_baked_ami ~}
+# 유닛 정의는 AMI 에 구워져 있다 (deploy/packer/files/*.service).
+# 주의: GitHub Actions 배포(deploy-ec2-with-rollback.sh write_units)가 매 배포마다 자체 사본으로 덮어쓴다.
+%{ else ~}
+# 순정 AL2023 폴백: deploy/packer/files/*.service 를 templatefile 로 주입받아 설치한다.
+# 주의: 유닛 사본은 배포 스크립트(write_units)에도 있으므로 수정 시 함께 갱신할 것 (deploy/packer/README.md).
 cat > /etc/systemd/system/rougether-user-api.service <<'EOF'
-[Unit]
-Description=Rougether user-api container
-After=docker.service network-online.target
-Requires=docker.service
-Wants=network-online.target
-
-[Service]
-Restart=always
-RestartSec=10
-EnvironmentFile=/etc/rougether/user-api.deploy.env
-ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api --env-file /etc/rougether/user-api.env -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_USER_API_IMAGE}
-ExecStop=/usr/bin/docker stop rougether-user-api
-
-[Install]
-WantedBy=multi-user.target
+${user_api_unit}
 EOF
 
 cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
-[Unit]
-Description=Rougether admin-api container
-After=docker.service network-online.target rougether-user-api.service
-Requires=docker.service
-Wants=network-online.target
-
-[Service]
-Restart=always
-RestartSec=10
-EnvironmentFile=/etc/rougether/admin-api.deploy.env
-ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
-ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 $${ROUGETHER_ADMIN_API_IMAGE}
-ExecStop=/usr/bin/docker stop rougether-admin-api
-
-[Install]
-WantedBy=multi-user.target
+${admin_api_unit}
 EOF
+%{ endif ~}
+
+# baked AMI 에 유닛이 실제로 구워졌는지 확인 — 잘못된 AMI 로 떴을 때 set -e 로 조용히 죽는 대신 원인을 남긴다
+for unit in rougether-user-api rougether-admin-api; do
+  if [ ! -f "/etc/systemd/system/$unit.service" ]; then
+    echo "ERROR: /etc/systemd/system/$unit.service 가 없습니다 — rougether-base AMI 가 아니거나 베이크가 누락됐습니다 (deploy/packer/README.md 참고)" >&2
+    exit 1
+  fi
+done
+
+sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
 
 systemctl daemon-reload
 systemctl enable rougether-user-api rougether-admin-api
