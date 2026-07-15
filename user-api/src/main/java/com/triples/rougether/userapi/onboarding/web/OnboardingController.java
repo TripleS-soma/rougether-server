@@ -41,7 +41,7 @@ public class OnboardingController {
         return onboardingCommandService.replaceGoals(authUser.id(), request);
     }
 
-    @Operation(summary = "대표 캐릭터 선택·변경", description = "대표 캐릭터를 선택하거나 변경합니다. characterId는 캐릭터 마스터 목록 조회(GET /api/v1/characters) 응답의 id를 사용하며 활성 캐릭터만 선택할 수 있습니다. 보유한 캐릭터가 없는 최초 선택이면 해당 캐릭터를 자동 지급하고 즉시 대표로 착용합니다. 이미 캐릭터를 보유한 경우에는 보유한 캐릭터만 대표로 변경할 수 있으며, 변경 시 기존 대표 캐릭터는 자동 해제됩니다. 변경된 대표 캐릭터는 내 방 조회(GET /api/v1/rooms/me) 응답에 즉시 반영됩니다.")
+    @Operation(summary = "대표 캐릭터 선택 (온보딩)", description = "온보딩에서 첫 캐릭터를 무료 선택합니다. characterId는 캐릭터 마스터 목록 조회(GET /api/v1/characters) 응답의 id를 사용하며 활성 캐릭터만 선택할 수 있습니다. 보유한 캐릭터가 없는 최초 선택이면 해당 캐릭터를 자동 지급하고 즉시 대표로 착용합니다. 온보딩 이후 착용 교체는 PUT /api/v1/me/characters/select 사용을 권장합니다 (이 경로의 교체 동작은 하위호환으로 유지). 변경된 대표 캐릭터는 내 방 조회(GET /api/v1/rooms/me) 응답에 즉시 반영됩니다.")
     @PutMapping("/character")
     public OnboardingCharacterResponse selectCharacter(@CurrentUser AuthUser authUser,
                                                        @Valid @RequestBody OnboardingCharacterRequest request) {
