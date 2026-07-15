@@ -282,6 +282,28 @@ test_first_batch_deploy_failure_stops_new_batch() {
   echo "ok - first batch deploy failure stops the new batch"
 }
 
+test_rollback_stops_batch_when_no_user_admin_images() {
+  reset_scenario "rollback-no-images"
+  rollback_user_image=""
+  rollback_admin_image=""
+  rollback_batch_image=""
+  local calls_file="$ENV_DIR/systemctl-calls.log"
+  : > "$calls_file"
+
+  systemctl() { echo "$*" >> "$calls_file"; return 0; }
+  docker() { return 0; }
+
+  # rollback() 은 마지막에 exit 를 부르므로 서브셸에서 실행해 테스트 프로세스가 죽지 않게 한다.
+  ( rollback ) >/dev/null 2>&1 || true
+
+  systemctl() { return 0; }
+  unset -f docker
+
+  assert_contains 'stop rougether-batch' "$calls_file" "rollback must stop failed batch even without user/admin images"
+  assert_contains 'disable rougether-batch' "$calls_file" "rollback must disable failed batch even without user/admin images"
+  echo "ok - rollback stops batch when user/admin images are unavailable"
+}
+
 test_batch_env_wires_firebase_when_credentials_present() {
   reset_scenario "batch-env-firebase"
   cat > "$USER_RUNTIME_ENV" <<'EOF'
@@ -325,5 +347,6 @@ test_batch_env_is_bootstrapped_from_user_runtime_env
 test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
 test_first_batch_deploy_failure_stops_new_batch
+test_rollback_stops_batch_when_no_user_admin_images
 
 echo "deployment script tests passed"

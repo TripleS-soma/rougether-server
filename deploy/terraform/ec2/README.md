@@ -85,8 +85,10 @@ After the stack creates the GitHub Actions deploy role, pushes to `main` or
 The SSM deploy script records the previously deployed images before restarting
 the services. If the new `user-api`, `admin-api`, or `batch` image fails its local
 health check, the script rewrites the systemd image env files back to the previous
-images and restarts the services. `batch` 는 독립 유닛이라 최초 도입 배포처럼 이전
-이미지가 없으면 롤백을 건너뛰고 새 유닛만 기동합니다. The GitHub Actions run still
+images and restarts the services. `batch` 는 독립 유닛이라 롤백이 user-api/admin-api
+복구를 가리지 않는다. 되돌릴 이전 `batch` 이미지가 있으면 그 이미지로 재기동하고, 최초 도입
+배포처럼 이전 이미지가 없으면 방금 기동한 실패 `batch` 를 정지·비활성화해 crash-loop 를 막는다.
+The GitHub Actions run still
 fails so the bad deployment is visible, but the EC2 service is rolled back when a
 previous image is available.
 

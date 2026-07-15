@@ -391,12 +391,14 @@ rollback() {
   fi
 
   if [ -z "$rollback_user_image" ] || [ -z "$rollback_admin_image" ]; then
+    # user/admin 이전 이미지가 없어도(완전 신규 박스 최초 배포) 방금 기동한 실패 batch 는
+    # user/admin 가용성과 무관하게 정지해야 하므로 rollback_batch 를 먼저 부른다.
+    rollback_batch
     cleanup_firebase_credentials_backup
-    echo "rollback skipped: previous images are not available" >&2
+    echo "rollback skipped: previous user-api/admin-api images are not available" >&2
     exit "$exit_code"
   fi
 
-  # batch 는 최초 도입 배포 시 이전 이미지가 없을 수 있다 — 없으면 새 이미지로 유닛만 써 두고 재기동은 건너뛴다.
   write_units "$rollback_user_image" "$rollback_admin_image" "${rollback_batch_image:-$NEW_BATCH_IMAGE}"
 
   systemctl restart rougether-user-api
