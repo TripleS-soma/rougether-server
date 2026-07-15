@@ -359,8 +359,15 @@ capture_rollback_images() {
 rollback_batch() {
   # batch 는 독립 유닛이라 롤백 처리가 user-api/admin-api 복구를 가리지 않게 best-effort 로 한다.
   if [ -n "$rollback_batch_image" ]; then
-    # 되돌릴 이전 이미지가 있으면 그 이미지로 재기동한다. restart/health 어느 쪽이 실패해도
-    # set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
+    # 되돌릴 이전 이미지가 있으면 그 이미지로 재기동한다. write_units 를 거치지 않는 롤백 경로
+    # (user/admin 한쪽 이미지만 없어 조기 종료하는 경우)에서도 실패한 새 이미지가 아니라 이전
+    # 이미지로 돌아가도록 deploy env 를 여기서 직접 이전 batch 이미지로 갱신한 뒤 재기동한다.
+    # restart/health 어느 쪽이 실패해도 set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
+    cat > "$BATCH_DEPLOY_ENV" <<EOF
+ROUGETHER_BATCH_IMAGE=$rollback_batch_image
+EOF
+    chmod 600 "$BATCH_DEPLOY_ENV"
+
     if ! ensure_batch_runtime_env \
       || ! systemctl restart rougether-batch \
       || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
