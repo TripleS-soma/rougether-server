@@ -39,3 +39,12 @@ google:
 # 비어 있으면 FCM 발송 stub으로 동작
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+
+# 사용자에게 노출할 게시 승인 집 커버 key manifest. S3 house/ 전체 목록과 분리함.
+house:
+  cover-images:
+    keys:
+      - house/cloud-balloon/house-unified-cloud-balloon-frame.png
+      - house/coral-aquarium/house-unified-coral-aquarium-frame.png
+      - house/mushroom-forest/house-unified-mushroom-forest-frame.png
+      - house/night-observatory/house-unified-night-observatory-frame-v3.png
