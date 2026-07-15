@@ -25,6 +25,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,8 @@ class RoutineServiceIntegrationTest {
 
     @PersistenceContext
     private EntityManager em;
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private RoutineService routineService;
     private Long userId;
@@ -155,9 +158,10 @@ class RoutineServiceIntegrationTest {
 
     @Test
     void scheduledTime과_endsOn에_null을_보내면_해제된다() {
+        LocalDate today = LocalDate.now(KST);
         RoutineResponse created = routineService.create(userId,
                 new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
-                        LocalTime.of(7, 0), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+                        LocalTime.of(7, 0), today, today.plusMonths(6)));
 
         RoutineResponse updated = routineService.update(userId, created.id(),
                 new RoutineUpdateRequest("운동", null, null, null, null, null, null, null));
@@ -223,10 +227,12 @@ class RoutineServiceIntegrationTest {
 
     @Test
     void 스케줄_수정이고_경과분이면_새_버전으로_분기한다() {
+        LocalDate startsOn = LocalDate.now(KST);
+        LocalDate endsOn = startsOn.plusMonths(6);
         RoutineResponse created = routineService.create(userId,
                 new RoutineCreateRequest("운동", null, AuthType.CHECK, "WEEKLY",
                         new RepeatDays(List.of("MON")), LocalTime.of(7, 0),
-                        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+                        startsOn, endsOn));
         Long oldId = created.id();
         backdateCreatedAt(oldId, 3);
 
@@ -243,8 +249,8 @@ class RoutineServiceIntegrationTest {
         // 옛 버전: deleted_at 세팅, starts_on/ends_on·스케줄 불변
         Routine old = routineRepository.findById(oldId).orElseThrow();
         assertThat(old.getDeletedAt()).isNotNull();
-        assertThat(old.getStartsOn()).isEqualTo(LocalDate.of(2026, 1, 1));
-        assertThat(old.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+        assertThat(old.getStartsOn()).isEqualTo(startsOn);
+        assertThat(old.getEndsOn()).isEqualTo(endsOn);
         assertThat(old.getRepeatDays()).contains("MON");
 
         // 새 버전: origin 승계(옛 버전의 origin = oldId), 살아 있음
@@ -306,6 +312,59 @@ class RoutineServiceIntegrationTest {
         // 옛 A는 닫혀 제외, 새 A는 origin(=A의 id) 기준 정렬이라 여전히 B 앞. 계보당 하나만 노출
         assertThat(routineService.list(userId, null, null).items())
                 .extracting(RoutineResponse::id).containsExactly(a2.id(), b.id());
+    }
+
+    @Test
+    void 시작일_미지정이면_생성일_오늘로_기본_지정된다() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+
+        assertThat(created.startsOn()).isEqualTo(LocalDate.now(KST));
+    }
+
+    @Test
+    void 시작일을_오늘_이전으로_생성하면_STARTS_ON_BEFORE_TODAY() {
+        LocalDate past = LocalDate.now(KST).minusDays(1);
+
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), past, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+    }
+
+    @Test
+    void 시작일을_오늘_이전으로_수정하면_STARTS_ON_BEFORE_TODAY() {
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", null, AuthType.CHECK, "DAILY", null,
+                        LocalTime.of(7, 0), null, null));
+        LocalDate past = LocalDate.now(KST).minusDays(1);
+
+        assertThatThrownBy(() -> routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, null, null, null, past, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+    }
+
+    @Test
+    void 기존_과거_시작일을_그대로_재전송하면_통과한다() {
+        // 어제 시작해 이미 저장된(=한번 통과한) 시작일이, 하루 지나 과거가 된 상태를 도메인 엔티티로 직접 모사
+        User owner = userRepository.findById(userId).orElseThrow();
+        LocalDate startsOn = LocalDate.now(KST).minusDays(1);
+        Long id = routineRepository.save(Routine.create(owner, null, "운동", AuthType.CHECK,
+                "DAILY", null, LocalTime.of(7, 0), startsOn, null)).getId();
+        em.flush();
+        em.clear();
+
+        // 수정 없이 그대로 재전송(no-op) → 멱등하게 통과해야 함
+        RoutineResponse updated = routineService.update(userId, id,
+                new RoutineUpdateRequest("바뀐 제목", null, null, null, null, null, startsOn, null));
+
+        assertThat(updated.startsOn()).isEqualTo(startsOn);
+        assertThat(updated.title()).isEqualTo("바뀐 제목");
     }
 
     private Long persistCategory(Long ownerId, String name) {

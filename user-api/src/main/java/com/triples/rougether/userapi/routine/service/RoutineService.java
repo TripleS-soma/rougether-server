@@ -66,9 +66,10 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+        LocalDate startsOn = resolveStartsOn(request.startsOn());
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
-                request.startsOn(), request.endsOn());
+                startsOn, request.endsOn());
         Routine saved = routineRepository.save(routine);
         // 계보 루트를 자기 id로 지정(dirty → 트랜잭션 커밋 시 반영)
         saved.assignOriginToSelf();
@@ -81,6 +82,7 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+        validateStartsOn(routine, request.startsOn());
 
         // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
         // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
@@ -117,6 +119,28 @@ public class RoutineService {
             return true;
         }
         return !Objects.equals(request.endsOn(), routine.getEndsOn());
+    }
+
+    // 생성 시: 시작일 미지정이면 생성일(오늘)로 기본 지정. 스냅샷 구조상 생성일 이전 소급은 불가.
+    private LocalDate resolveStartsOn(LocalDate startsOn) {
+        LocalDate today = LocalDate.now(KST);
+        if (startsOn == null) {
+            return today;
+        }
+        if (startsOn.isBefore(today)) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+        }
+        return startsOn;
+    }
+
+    // 수정 시: 시작일을 실제로 바꿀 때만 검사(null=유지, 기존값 재전송=no-op은 통과). 과거로 옮기는 것만 불가.
+    // startsOn>=오늘은 시간 상대적 제약이라 기준선(오늘)이 움직임 → 안 바뀐 값을 다시 검사하면 멱등성 깨짐
+    private void validateStartsOn(Routine routine, LocalDate startsOn) {
+        if (startsOn != null
+                && !startsOn.equals(routine.getStartsOn())
+                && startsOn.isBefore(LocalDate.now(KST))) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+        }
     }
 
     // 이 버전이 오늘 이전에 생성됐는지
