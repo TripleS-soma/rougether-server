@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse.WalletSummary;
 import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
+import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -98,6 +99,10 @@ public class GachaService {
         }
 
         int cost = count == 1 ? gacha.getCostAmount() : gacha.getCostAmount() * MULTI_MULTIPLIER;
+        // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
+        // 전부 같은 user 행 락을 잡으므로 동시 지급이 같은 캐릭터를 2행 만들 수 없다. 락 순서: user → wallet.
+        userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
         // 행 락으로 동시 뽑기의 이중 차감을 막는다.
         UserWallet wallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
