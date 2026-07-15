@@ -100,7 +100,7 @@ jobs:
 
       - name: Checkout trusted base
         if: steps.pr.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ steps.pr.outputs.base_sha }}
           path: trusted
@@ -123,7 +123,7 @@ jobs:
 
       - name: Checkout review subject
         if: steps.pr.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           token: ${{ steps.bot-token.outputs.token }}
           ref: ${{ steps.pr.outputs.head_sha }}
@@ -133,7 +133,7 @@ jobs:
 
       - name: Checkout spec repo
         if: steps.pr.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           token: ${{ steps.bot-token.outputs.token }}
           repository: TripleS-soma/rougether-spec
