@@ -52,10 +52,12 @@ reset_scenario() {
   STATE_FILE="$ENV_DIR/deploy-state.env"
   USER_DEPLOY_ENV="$ENV_DIR/user-api.deploy.env"
   ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
+  BATCH_DEPLOY_ENV="$ENV_DIR/batch.deploy.env"
   USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
   FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
   rollback_user_image=""
   rollback_admin_image=""
+  rollback_batch_image=""
   firebase_credentials_backup=""
   firebase_credentials_replaced=false
   AWS_MOCK_MODE="fail"
@@ -135,10 +137,12 @@ test_first_deploy_without_credentials_uses_stub() {
 
   refresh_firebase_credentials
   ensure_user_runtime_env
-  write_units "user-image" "admin-image"
+  write_units "user-image" "admin-image" "batch-image"
 
   assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "missing credentials must remove runtime path"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
+  assert_contains '127.0.0.1:8082:8082' "$SYSTEMD_DIR/rougether-batch.service" "batch must bind health port to localhost only"
+  assert_not_contains 'rougether-user-api.service' "$SYSTEMD_DIR/rougether-batch.service" "batch must not depend on user-api"
   echo "ok - first deploy without credentials uses stub"
 }
 
@@ -152,12 +156,12 @@ test_new_credentials_are_restored_with_runtime_wiring() {
   backup_firebase_credentials
   refresh_firebase_credentials
   ensure_user_runtime_env
-  write_units "new-user-image" "new-admin-image"
+  write_units "new-user-image" "new-admin-image" "new-batch-image"
   assert_contains '"project_id":"new"' "$FIREBASE_CREDENTIALS_FILE" "new credentials must be installed before restart"
 
   restore_firebase_credentials
   ensure_user_runtime_env
-  write_units "old-user-image" "old-admin-image"
+  write_units "old-user-image" "old-admin-image" "old-batch-image"
 
   assert_file_equal "$ENV_DIR/expected.json" "$FIREBASE_CREDENTIALS_FILE" "rollback must restore previous credentials"
   assert_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "rollback must restore runtime env"
@@ -208,12 +212,13 @@ test_capture_rollback_images_preserves_new_deploy_sha() {
   cat > "$STATE_FILE" <<'EOF'
 USER_API_IMAGE=old-user-image
 ADMIN_API_IMAGE=old-admin-image
+BATCH_API_IMAGE=old-batch-image
 DEPLOYED_SHA=old-deploy-sha
 EOF
 
   capture_rollback_images
 
-  if [ "$rollback_user_image" != "old-user-image" ] || [ "$rollback_admin_image" != "old-admin-image" ]; then
+  if [ "$rollback_user_image" != "old-user-image" ] || [ "$rollback_admin_image" != "old-admin-image" ] || [ "$rollback_batch_image" != "old-batch-image" ]; then
     echo "not ok - rollback images must be read from deploy state" >&2
     return 1
   fi

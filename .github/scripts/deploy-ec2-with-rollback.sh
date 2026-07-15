@@ -5,6 +5,7 @@ AWS_REGION="__AWS_REGION__"
 REGISTRY="__REGISTRY__"
 NEW_USER_IMAGE="__USER_IMAGE__"
 NEW_ADMIN_IMAGE="__ADMIN_IMAGE__"
+NEW_BATCH_IMAGE="__BATCH_IMAGE__"
 DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
 
@@ -13,6 +14,7 @@ SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
 STATE_FILE="$ENV_DIR/deploy-state.env"
 USER_DEPLOY_ENV="$ENV_DIR/user-api.deploy.env"
 ADMIN_DEPLOY_ENV="$ENV_DIR/admin-api.deploy.env"
+BATCH_DEPLOY_ENV="$ENV_DIR/batch.deploy.env"
 USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
 FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
 
@@ -20,6 +22,7 @@ umask 077
 
 rollback_user_image=""
 rollback_admin_image=""
+rollback_batch_image=""
 firebase_credentials_backup=""
 firebase_credentials_replaced=false
 
@@ -150,9 +153,11 @@ wait_health() {
 write_units() {
   local user_image="$1"
   local admin_image="$2"
+  local batch_image="$3"
   local firebase_mount_option=""
   local user_service_file="$SYSTEMD_DIR/rougether-user-api.service"
   local admin_service_file="$SYSTEMD_DIR/rougether-admin-api.service"
+  local batch_service_file="$SYSTEMD_DIR/rougether-batch.service"
 
   if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
     firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
@@ -170,7 +175,11 @@ EOF
 ROUGETHER_ADMIN_API_IMAGE=$admin_image
 EOF
 
-  chmod 600 "$USER_DEPLOY_ENV" "$ADMIN_DEPLOY_ENV"
+  cat > "$BATCH_DEPLOY_ENV" <<EOF
+ROUGETHER_BATCH_IMAGE=$batch_image
+EOF
+
+  chmod 600 "$USER_DEPLOY_ENV" "$ADMIN_DEPLOY_ENV" "$BATCH_DEPLOY_ENV"
 
   cat > "$user_service_file" <<EOF
 [Unit]
@@ -210,8 +219,29 @@ ExecStop=/usr/bin/docker stop rougether-admin-api
 WantedBy=multi-user.target
 EOF
 
+  # batch 는 user-api/admin-api 에 의존하지 않는 독립 유닛이다(리마인드 발송을 다른 배포가 끊지 않도록).
+  # 외부 접근 없이 localhost:8082 헬스체크만 노출한다.
+  cat > "$batch_service_file" <<'EOF'
+[Unit]
+Description=Rougether batch container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/batch.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-batch
+ExecStart=/usr/bin/docker run --rm --name rougether-batch --env-file /etc/rougether/batch.env -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_BATCH_IMAGE}
+ExecStop=/usr/bin/docker stop rougether-batch
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
   systemctl daemon-reload
-  systemctl enable rougether-user-api rougether-admin-api
+  systemctl enable rougether-user-api rougether-admin-api rougether-batch
 }
 
 capture_rollback_images() {
@@ -223,6 +253,9 @@ capture_rollback_images() {
           ;;
         ADMIN_API_IMAGE)
           rollback_admin_image="$value"
+          ;;
+        BATCH_API_IMAGE)
+          rollback_batch_image="$value"
           ;;
       esac
     done < "$STATE_FILE"
@@ -247,6 +280,16 @@ capture_rollback_images() {
       docker tag "$current_admin_image_id" "$rollback_admin_image"
     fi
   fi
+
+  if [ -z "$rollback_batch_image" ]; then
+    local current_batch_image_id
+    current_batch_image_id="$(docker inspect --format '{{.Image}}' rougether-batch 2>/dev/null || true)"
+
+    if [ -n "$current_batch_image_id" ]; then
+      rollback_batch_image="$REGISTRY/rougether-dev/batch:rollback-$DEPLOYED_SHA"
+      docker tag "$current_batch_image_id" "$rollback_batch_image"
+    fi
+  fi
 }
 
 rollback() {
@@ -269,13 +312,23 @@ rollback() {
     exit "$exit_code"
   fi
 
-  write_units "$rollback_user_image" "$rollback_admin_image"
+  # batch 는 최초 도입 배포 시 이전 이미지가 없을 수 있다 — 없으면 새 이미지로 유닛만 써 두고 재기동은 건너뛴다.
+  write_units "$rollback_user_image" "$rollback_admin_image" "${rollback_batch_image:-$NEW_BATCH_IMAGE}"
 
   systemctl restart rougether-user-api
   wait_health user-api http://127.0.0.1:8080/api/v1/health
 
   systemctl restart rougether-admin-api
   wait_health admin-api http://127.0.0.1:8081/admin/health
+
+  # batch 는 독립 유닛이라 롤백 실패가 user-api/admin-api 복구를 가리지 않게 best-effort 로 처리한다.
+  # restart/health 어느 쪽이 실패해도 set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
+  if [ -n "$rollback_batch_image" ]; then
+    if ! systemctl restart rougether-batch \
+      || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
+      echo "batch rollback failed; user-api/admin-api rollback is unaffected" >&2
+    fi
+  fi
 
   cleanup_firebase_credentials_backup
   echo "rollback completed"
@@ -298,8 +351,9 @@ trap rollback ERR
 aws ecr get-login-password --region "$AWS_REGION" | docker login "$REGISTRY" --username AWS --password-stdin
 docker pull "$NEW_USER_IMAGE"
 docker pull "$NEW_ADMIN_IMAGE"
+docker pull "$NEW_BATCH_IMAGE"
 
-write_units "$NEW_USER_IMAGE" "$NEW_ADMIN_IMAGE"
+write_units "$NEW_USER_IMAGE" "$NEW_ADMIN_IMAGE" "$NEW_BATCH_IMAGE"
 
 systemctl restart rougether-user-api
 wait_health user-api http://127.0.0.1:8080/api/v1/health
@@ -307,9 +361,13 @@ wait_health user-api http://127.0.0.1:8080/api/v1/health
 systemctl restart rougether-admin-api
 wait_health admin-api http://127.0.0.1:8081/admin/health
 
+systemctl restart rougether-batch
+wait_health batch http://127.0.0.1:8082/actuator/health
+
 cat > "$STATE_FILE" <<EOF
 USER_API_IMAGE=$NEW_USER_IMAGE
 ADMIN_API_IMAGE=$NEW_ADMIN_IMAGE
+BATCH_API_IMAGE=$NEW_BATCH_IMAGE
 DEPLOYED_SHA=$DEPLOYED_SHA
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF

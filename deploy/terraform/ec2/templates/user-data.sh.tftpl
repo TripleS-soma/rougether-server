@@ -114,7 +114,17 @@ ASSET_S3_REGION=${asset_region}
 ASSET_PUBLIC_BASE_URL=${asset_public_base_url}
 EOF
 
-chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env"
+# batch: 루틴 리마인드 발송 전용. 외부 접근 없이 localhost 헬스체크(8082)만 노출한다.
+# firebase 자격증명은 후속(비차단)으로 반영 예정 — 그 전까지는 FCM stub 으로 동작한다.
+cat > "$ENV_DIR/batch.env" <<EOF
+SPRING_PROFILES_ACTIVE=mysql
+SERVER_PORT=8082
+DB_URL=${db_url}
+DB_USERNAME=${db_username}
+DB_PASSWORD=$DB_PASSWORD
+EOF
+
+chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env" "$ENV_DIR/batch.env"
 
 if [[ '${registry_server}' == *.dkr.ecr.*.amazonaws.com ]]; then
   aws ecr get-login-password --region '${aws_region}' | docker login '${registry_server}' --username AWS --password-stdin
@@ -125,6 +135,7 @@ fi
 
 docker pull ${user_api_image}
 docker pull ${admin_api_image}
+docker pull ${batch_image}
 
 cat > "$ENV_DIR/user-api.deploy.env" <<EOF
 ROUGETHER_USER_API_IMAGE=${user_api_image}
@@ -134,14 +145,19 @@ cat > "$ENV_DIR/admin-api.deploy.env" <<EOF
 ROUGETHER_ADMIN_API_IMAGE=${admin_api_image}
 EOF
 
+cat > "$ENV_DIR/batch.deploy.env" <<EOF
+ROUGETHER_BATCH_IMAGE=${batch_image}
+EOF
+
 cat > "$ENV_DIR/deploy-state.env" <<EOF
 USER_API_IMAGE=${user_api_image}
 ADMIN_API_IMAGE=${admin_api_image}
+BATCH_API_IMAGE=${batch_image}
 DEPLOYED_SHA=bootstrap
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
-chmod 600 "$ENV_DIR/user-api.deploy.env" "$ENV_DIR/admin-api.deploy.env" "$ENV_DIR/deploy-state.env"
+chmod 600 "$ENV_DIR/user-api.deploy.env" "$ENV_DIR/admin-api.deploy.env" "$ENV_DIR/batch.deploy.env" "$ENV_DIR/deploy-state.env"
 
 %{ if use_baked_ami ~}
 # 유닛 정의는 AMI 에 구워져 있다 (deploy/packer/files/*.service).
@@ -156,10 +172,14 @@ EOF
 cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
 ${admin_api_unit}
 EOF
+
+cat > /etc/systemd/system/rougether-batch.service <<'EOF'
+${batch_unit}
+EOF
 %{ endif ~}
 
 # baked AMI 에 유닛이 실제로 구워졌는지 확인 — 잘못된 AMI 로 떴을 때 set -e 로 조용히 죽는 대신 원인을 남긴다
-for unit in rougether-user-api rougether-admin-api; do
+for unit in rougether-user-api rougether-admin-api rougether-batch; do
   if [ ! -f "/etc/systemd/system/$unit.service" ]; then
     echo "ERROR: /etc/systemd/system/$unit.service 가 없습니다 — rougether-base AMI 가 아니거나 베이크가 누락됐습니다 (deploy/packer/README.md 참고)" >&2
     exit 1
@@ -169,6 +189,7 @@ done
 sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
 
 systemctl daemon-reload
-systemctl enable rougether-user-api rougether-admin-api
+systemctl enable rougether-user-api rougether-admin-api rougether-batch
 systemctl restart rougether-user-api
 systemctl restart rougether-admin-api
+systemctl restart rougether-batch

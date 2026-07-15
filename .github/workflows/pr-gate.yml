@@ -47,6 +47,7 @@ jobs:
         include:
           - module: user-api
           - module: admin-api
+          - module: batch
 
     steps:
       - name: Checkout

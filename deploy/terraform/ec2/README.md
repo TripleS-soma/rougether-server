@@ -6,6 +6,7 @@ This stack is a small team/dev deployment:
 - RDS MySQL in the default VPC
 - `user-api` on port `8080`
 - `admin-api` on port `8081`
+- `batch` (루틴 리마인드 발송) — 외부 접근 없이 `127.0.0.1:8082` 헬스체크만 노출
 - EC2 instance role for S3 uploads to the existing asset bucket
 - SSM SecureString parameters for runtime secrets
 - SSM Session Manager access by default, with optional SSH
@@ -41,28 +42,31 @@ Terraform creates these private ECR repositories:
 
 - `rougether-dev/user-api`
 - `rougether-dev/admin-api`
+- `rougether-dev/batch`
 
 PRs into `main` or `feat/admin-assets` run `.github/workflows/pr-gate.yml`:
 
 1. run `./gradlew test`
-2. build both Docker images without pushing, to catch Dockerfile/module packaging failures
+2. build the `user-api`, `admin-api`, and `batch` Docker images without pushing, to catch Dockerfile/module packaging failures
 
 After the stack creates the GitHub Actions deploy role, pushes to `main` or
 `feat/admin-assets` run `.github/workflows/docker-publish.yml`:
 
 1. run `./gradlew test`
-2. build `user-api` and `admin-api` as `linux/amd64`
-3. push both images to ECR with `:dev` and commit SHA tags
+2. build `user-api`, `admin-api`, and `batch` as `linux/amd64`
+3. push all images to ECR with `:dev` and commit SHA tags
 4. deploy the immutable commit SHA tags through SSM
 5. restart the EC2 systemd services and verify local health endpoints
-6. verify public health endpoints
+   (`batch` 는 `127.0.0.1:8082/actuator/health` 로 인스턴스 안에서만 확인)
+6. verify public health endpoints (`user-api`, `admin-api`)
 
 The SSM deploy script records the previously deployed images before restarting
-the services. If the new `user-api` or `admin-api` image fails its local health
-check, the script rewrites the systemd image env files back to the previous
-images and restarts both services. The GitHub Actions run still fails so the
-bad deployment is visible, but the EC2 service is rolled back when a previous
-image is available.
+the services. If the new `user-api`, `admin-api`, or `batch` image fails its local
+health check, the script rewrites the systemd image env files back to the previous
+images and restarts the services. `batch` 는 독립 유닛이라 최초 도입 배포처럼 이전
+이미지가 없으면 롤백을 건너뛰고 새 유닛만 기동합니다. The GitHub Actions run still
+fails so the bad deployment is visible, but the EC2 service is rolled back when a
+previous image is available.
 
 Manual local build examples remain useful for bootstrap or debugging. Build, tag,
 and push `:dev` images before replacing the EC2 instance:
@@ -70,7 +74,8 @@ and push `:dev` images before replacing the EC2 instance:
 ```bash
 terraform apply \
   -target=aws_ecr_repository.user_api \
-  -target=aws_ecr_repository.admin_api
+  -target=aws_ecr_repository.admin_api \
+  -target=aws_ecr_repository.batch
 
 REGISTRY="$(terraform output -raw ecr_registry_server)"
 aws ecr get-login-password --region ap-northeast-2 \
@@ -78,12 +83,15 @@ aws ecr get-login-password --region ap-northeast-2 \
 
 docker build --build-arg APP_MODULE=user-api -t rougether-user-api:local .
 docker build --build-arg APP_MODULE=admin-api -t rougether-admin-api:local .
+docker build --build-arg APP_MODULE=batch -t rougether-batch:local .
 
 docker tag rougether-user-api:local "$REGISTRY/rougether-dev/user-api:dev"
 docker tag rougether-admin-api:local "$REGISTRY/rougether-dev/admin-api:dev"
+docker tag rougether-batch:local "$REGISTRY/rougether-dev/batch:dev"
 
 docker push "$REGISTRY/rougether-dev/user-api:dev"
 docker push "$REGISTRY/rougether-dev/admin-api:dev"
+docker push "$REGISTRY/rougether-dev/batch:dev"
 ```
 
 Terraform-managed ECR is the default registry for this dev stack. To deploy from a separate private registry instead, set:
@@ -91,6 +99,7 @@ Terraform-managed ECR is the default registry for this dev stack. To deploy from
 ```hcl
 user_api_image                            = "REGISTRY/user-api:TAG"
 admin_api_image                           = "REGISTRY/admin-api:TAG"
+batch_image                               = "REGISTRY/batch:TAG"
 container_registry_server                 = "REGISTRY"
 container_registry_username               = "USERNAME"
 container_registry_password_ssm_parameter = "/path/to/token"
@@ -199,11 +208,16 @@ Useful commands on EC2:
 ```bash
 sudo systemctl status rougether-user-api
 sudo systemctl status rougether-admin-api
+sudo systemctl status rougether-batch
 sudo journalctl -u rougether-user-api -f
 sudo journalctl -u rougether-admin-api -f
+sudo journalctl -u rougether-batch -f
 sudo docker ps
 sudo docker logs -f rougether-user-api
 sudo docker logs -f rougether-admin-api
+sudo docker logs -f rougether-batch
+# batch 리마인드 발송 로그(5분 주기) 확인 + 인스턴스 안에서 헬스체크
+curl -fsS http://127.0.0.1:8082/actuator/health
 sudo tail -f /var/log/rougether-user-data.log
 ```
 
