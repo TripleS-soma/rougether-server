@@ -356,6 +356,26 @@ capture_rollback_images() {
   fi
 }
 
+rollback_batch() {
+  # batch 는 독립 유닛이라 롤백 처리가 user-api/admin-api 복구를 가리지 않게 best-effort 로 한다.
+  if [ -n "$rollback_batch_image" ]; then
+    # 되돌릴 이전 이미지가 있으면 그 이미지로 재기동한다. restart/health 어느 쪽이 실패해도
+    # set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
+    if ! ensure_batch_runtime_env \
+      || ! systemctl restart rougether-batch \
+      || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
+      echo "batch rollback failed; user-api/admin-api rollback is unaffected" >&2
+    fi
+  else
+    # 최초 도입 배포라 되돌릴 이전 이미지가 없다. 방금 기동한 실패 이미지가 Restart=always 로
+    # 계속 스케줄 작업을 돌거나 crash-loop 하지 않도록 명시적으로 정지·비활성화한다.
+    echo "no previous batch image to roll back to; stopping the failed new batch" >&2
+    systemctl stop rougether-batch || true
+    systemctl disable rougether-batch || true
+    docker rm -f rougether-batch >/dev/null 2>&1 || true
+  fi
+}
+
 rollback() {
   local exit_code="$?"
   trap - ERR
@@ -385,15 +405,7 @@ rollback() {
   systemctl restart rougether-admin-api
   wait_health admin-api http://127.0.0.1:8081/admin/health
 
-  # batch 는 독립 유닛이라 롤백 실패가 user-api/admin-api 복구를 가리지 않게 best-effort 로 처리한다.
-  # restart/health 어느 쪽이 실패해도 set -e 로 여기서 죽지 않게 감싸 원래 exit code 와 cleanup 을 보존한다.
-  if [ -n "$rollback_batch_image" ]; then
-    if ! ensure_batch_runtime_env \
-      || ! systemctl restart rougether-batch \
-      || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
-      echo "batch rollback failed; user-api/admin-api rollback is unaffected" >&2
-    fi
-  fi
+  rollback_batch
 
   cleanup_firebase_credentials_backup
   echo "rollback completed"

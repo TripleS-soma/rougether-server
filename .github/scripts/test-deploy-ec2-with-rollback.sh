@@ -260,6 +260,28 @@ EOF
   echo "ok - batch.env is bootstrapped from user runtime env"
 }
 
+test_first_batch_deploy_failure_stops_new_batch() {
+  reset_scenario "batch-first-deploy-fail"
+  rollback_batch_image=""
+  local calls_file="$ENV_DIR/systemctl-calls.log"
+  : > "$calls_file"
+
+  # systemctl 호출을 기록하는 스파이로 잠깐 대체하고, docker 는 실제 실행을 막는다.
+  systemctl() { echo "$*" >> "$calls_file"; return 0; }
+  docker() { return 0; }
+
+  rollback_batch
+
+  # 기본 상태로 복구한다.
+  systemctl() { return 0; }
+  unset -f docker
+
+  assert_contains 'stop rougether-batch' "$calls_file" "first-deploy failure must stop the new batch"
+  assert_contains 'disable rougether-batch' "$calls_file" "first-deploy failure must disable the new batch"
+  assert_not_contains 'restart rougether-batch' "$calls_file" "no previous image means no restart"
+  echo "ok - first batch deploy failure stops the new batch"
+}
+
 test_batch_env_wires_firebase_when_credentials_present() {
   reset_scenario "batch-env-firebase"
   cat > "$USER_RUNTIME_ENV" <<'EOF'
@@ -302,5 +324,6 @@ test_capture_rollback_images_preserves_new_deploy_sha
 test_batch_env_is_bootstrapped_from_user_runtime_env
 test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
+test_first_batch_deploy_failure_stops_new_batch
 
 echo "deployment script tests passed"
