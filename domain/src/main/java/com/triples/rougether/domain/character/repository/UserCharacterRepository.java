@@ -21,9 +21,11 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
     Optional<UserCharacter> findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(Long userId);
 
     // 보유 캐릭터 목록용: character 를 fetch join 해 N+1 회피. 마스터 정렬(sort_order) 순.
+    // 회수(비활성) 캐릭터는 에셋이 내려가 표시 불가라 목록에서 제외한다 — 보유 레코드 자체는 유지
+    // (뽑기 중복 환급 판정은 보유 레코드 기준이라 영향 없음)
     @Query("select uc from UserCharacter uc "
             + "join fetch uc.character c "
-            + "where uc.user.id = :userId and uc.deletedAt is null "
+            + "where uc.user.id = :userId and uc.deletedAt is null and c.active = true "
             + "order by c.sortOrder asc, uc.id asc")
     List<UserCharacter> findOwnedWithCharacter(@Param("userId") Long userId);
 }

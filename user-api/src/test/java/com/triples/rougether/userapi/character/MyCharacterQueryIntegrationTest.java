@@ -55,6 +55,21 @@ class MyCharacterQueryIntegrationTest {
     }
 
     @Test
+    void 회수된_비활성_캐릭터는_보유_중이어도_목록에서_제외된다() {
+        User user = userRepository.save(User.signUp("my-char-retired@rougether.dev"));
+        Character active = characterRepository.save(
+                new Character("mc_active", "Active", "characters/mc_active.png", 10, true));
+        Character retired = characterRepository.save(
+                new Character("mc_retired", "Retired", "characters/mc_retired.png", 20, false));
+        userCharacterRepository.save(UserCharacter.of(user, active, Instant.now(), true));
+        userCharacterRepository.save(UserCharacter.of(user, retired, Instant.now(), false));
+
+        MyCharacterListResponse response = myCharacterQueryService.getMyCharacters(user.getId());
+
+        assertThat(response.items()).extracting("code").containsExactly("mc_active");
+    }
+
+    @Test
     void 삭제된_보유는_제외된다() {
         User user = userRepository.save(User.signUp("my-char-del@rougether.dev"));
         Character character = characterRepository.save(
