@@ -71,9 +71,11 @@ public class RoutineService {
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
         validateRepeatSchedule(request.repeatType(), request.startsOn(), request.repeatDays());
+        LocalDate startsOn = resolveStartsOn(request.startsOn());
+        validateDateRange(startsOn, request.endsOn());
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
-                request.startsOn(), request.endsOn());
+                startsOn, request.endsOn());
         Routine saved = routineRepository.save(routine);
         // 계보 루트를 자기 id로 지정(dirty → 트랜잭션 커밋 시 반영)
         saved.assignOriginToSelf();
@@ -86,6 +88,7 @@ public class RoutineService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         String repeatDays = request.repeatDays() != null ? request.repeatDays().toJson() : null;
+        validateStartsOn(routine, request.startsOn());
 
         String effectiveRepeatType = request.repeatType() != null
                 ? request.repeatType() : routine.getRepeatType();
@@ -94,6 +97,7 @@ public class RoutineService {
         RepeatDays effectiveRepeatDays = request.repeatDays() != null
                 ? request.repeatDays() : RepeatDays.fromJson(routine.getRepeatDays());
         validateRepeatSchedule(effectiveRepeatType, effectiveStartsOn, effectiveRepeatDays);
+        validateDateRange(effectiveStartsOn, request.endsOn());
 
         // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
         // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
@@ -133,6 +137,31 @@ public class RoutineService {
             return true;
         }
         return !Objects.equals(request.endsOn(), routine.getEndsOn());
+    }
+
+    private LocalDate resolveStartsOn(LocalDate startsOn) {
+        LocalDate today = LocalDate.now(KST);
+        if (startsOn == null) {
+            return today;
+        }
+        if (startsOn.isBefore(today)) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+        }
+        return startsOn;
+    }
+
+    private void validateStartsOn(Routine routine, LocalDate startsOn) {
+        if (startsOn != null
+                && !startsOn.equals(routine.getStartsOn())
+                && startsOn.isBefore(LocalDate.now(KST))) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
+        }
+    }
+
+    private void validateDateRange(LocalDate startsOn, LocalDate endsOn) {
+        if (startsOn != null && endsOn != null && startsOn.isAfter(endsOn)) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_AFTER_ENDS_ON);
+        }
     }
 
     private static final Set<String> VALID_WEEKDAY_TOKENS =
