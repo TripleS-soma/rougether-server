@@ -19,7 +19,7 @@ public class HouseCoverImageController {
 
     @Operation(
             summary = "집 커버 이미지 목록 조회",
-            description = "집 생성·설정 화면에서 선택할 수 있는 커버 이미지 asset key를 오름차순으로 반환합니다. "
+            description = "집 생성·설정 화면에서 선택할 수 있는 커버 이미지의 code, name, asset key를 반환합니다. "
                     + "클라이언트는 CDN base URL과 coverImageKey를 조합해 이미지를 표시합니다.")
     @GetMapping
     public HouseCoverImageListResponse getCoverImages() {

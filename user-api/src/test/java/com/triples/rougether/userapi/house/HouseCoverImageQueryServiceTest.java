@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.triples.rougether.userapi.house.dto.HouseCoverImageListResponse;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
+import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog.PublishedCoverImage;
 import com.triples.rougether.userapi.house.service.HouseCoverImageQueryService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -23,20 +24,26 @@ class HouseCoverImageQueryServiceTest {
     private HouseCoverImageQueryService houseCoverImageQueryService;
 
     @Test
-    void 게시된_이미지_key를_반환한다() {
-        when(houseCoverImageCatalog.keys()).thenReturn(
-                List.of("house/forest.png", "house/morning.png"));
+    void 게시된_이미지의_code_name_key를_반환한다() {
+        when(houseCoverImageCatalog.items()).thenReturn(List.of(
+                new PublishedCoverImage("forest", "버섯 숲 집", "house/forest.png"),
+                new PublishedCoverImage("morning", "아침 햇살 집", "house/morning.png")));
 
         HouseCoverImageListResponse response = houseCoverImageQueryService.getCoverImages();
 
         assertThat(response.items())
-                .extracting(HouseCoverImageListResponse.HouseCoverImage::coverImageKey)
-                .containsExactly("house/forest.png", "house/morning.png");
+                .extracting(
+                        HouseCoverImageListResponse.HouseCoverImage::code,
+                        HouseCoverImageListResponse.HouseCoverImage::name,
+                        HouseCoverImageListResponse.HouseCoverImage::coverImageKey)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("forest", "버섯 숲 집", "house/forest.png"),
+                        org.assertj.core.groups.Tuple.tuple("morning", "아침 햇살 집", "house/morning.png"));
     }
 
     @Test
     void 이미지가_없으면_빈_목록을_반환한다() {
-        when(houseCoverImageCatalog.keys()).thenReturn(List.of());
+        when(houseCoverImageCatalog.items()).thenReturn(List.of());
 
         HouseCoverImageListResponse response = houseCoverImageQueryService.getCoverImages();
 
