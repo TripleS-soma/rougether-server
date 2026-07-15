@@ -408,13 +408,15 @@ rollback() {
 
   write_units "$rollback_user_image" "$rollback_admin_image" "${rollback_batch_image:-$NEW_BATCH_IMAGE}"
 
+  # batch 는 독립 유닛이라 user-api/admin-api 복구보다 먼저 처리한다 — 아래 user/admin 재기동이
+  # set -e 로 실패해 스크립트가 죽더라도 batch 복구가 건너뛰어지지 않도록.
+  rollback_batch
+
   systemctl restart rougether-user-api
   wait_health user-api http://127.0.0.1:8080/api/v1/health
 
   systemctl restart rougether-admin-api
   wait_health admin-api http://127.0.0.1:8081/admin/health
-
-  rollback_batch
 
   cleanup_firebase_credentials_backup
   echo "rollback completed"

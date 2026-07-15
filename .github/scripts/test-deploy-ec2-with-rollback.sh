@@ -299,6 +299,24 @@ test_rollback_batch_restores_previous_image_deploy_env() {
   echo "ok - rollback_batch restores the previous batch image"
 }
 
+test_rollback_recovers_batch_even_if_user_admin_rollback_fails() {
+  reset_scenario "rollback-batch-first"
+  rollback_user_image="registry/user:prev"
+  rollback_admin_image="registry/admin:prev"
+  rollback_batch_image="registry/batch:prev"
+  printf 'ROUGETHER_BATCH_IMAGE=registry/batch:new-failed\n' > "$BATCH_DEPLOY_ENV"
+  printf 'DB_URL=x\nDB_USERNAME=u\nDB_PASSWORD=p\n' > "$USER_RUNTIME_ENV"
+  chmod 600 "$BATCH_DEPLOY_ENV" "$USER_RUNTIME_ENV"
+
+  # user-api health 가 실패해 rollback 이 set -e 로 죽어도 batch 는 이미 이전 이미지로 복구돼 있어야 한다.
+  ( systemctl() { return 0; }
+    wait_health() { case "$1" in user-api) return 1;; *) return 0;; esac; }
+    rollback ) >/dev/null 2>&1 || true
+
+  assert_contains '^ROUGETHER_BATCH_IMAGE=registry/batch:prev$' "$BATCH_DEPLOY_ENV" "batch must be recovered before user/admin rollback can abort"
+  echo "ok - rollback recovers batch even if user/admin rollback fails"
+}
+
 test_rollback_stops_batch_when_no_user_admin_images() {
   reset_scenario "rollback-no-images"
   rollback_user_image=""
@@ -366,5 +384,6 @@ test_batch_env_wires_firebase_when_credentials_present
 test_first_batch_deploy_failure_stops_new_batch
 test_rollback_stops_batch_when_no_user_admin_images
 test_rollback_batch_restores_previous_image_deploy_env
+test_rollback_recovers_batch_even_if_user_admin_rollback_fails
 
 echo "deployment script tests passed"
