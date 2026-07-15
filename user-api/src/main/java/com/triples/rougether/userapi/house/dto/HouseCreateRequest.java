@@ -14,7 +14,8 @@ public record HouseCreateRequest(
         @NotBlank @Size(min = 2, max = 30) String name,
         @Schema(description = "집 소개 (선택, 미지정 시 null)", example = "같이 아침 루틴 지켜요")
         String description,
-        @Schema(description = "커버 이미지 asset key. 어드민이 발급한 S3 asset key 로, 프론트는 CDN base URL 과 조합해 사용", example = "house/1f9d1c2e.png")
+        @Schema(description = "GET /api/v1/houses/cover-images에서 선택한 커버 이미지 asset key. 프론트는 CDN base URL과 조합해 사용",
+                example = "house/cloud-balloon/house-unified-cloud-balloon-frame.png")
         String coverImageKey,
         @Schema(description = "최대 구성원 수 (1~10, 미지정 시 4)", example = "4")
         @Min(1) @Max(10) Integer maxMembers,

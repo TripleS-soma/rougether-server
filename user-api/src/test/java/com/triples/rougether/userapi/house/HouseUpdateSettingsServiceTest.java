@@ -18,6 +18,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
@@ -38,6 +39,7 @@ class HouseUpdateSettingsServiceTest {
     @Mock private GoalRepository goalRepository;
     @Mock private UserRepository userRepository;
     @Mock private InviteCodeGenerator inviteCodeGenerator;
+    @Mock private HouseCoverImageCatalog houseCoverImageCatalog;
     @InjectMocks private HouseCommandService houseCommandService;
 
     // updateSettings 의 부분 수정 검증은 실제 엔티티로 확인한다(필드 변경 여부가 핵심이라 mock 부적합).

@@ -25,6 +25,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
@@ -46,6 +47,7 @@ class HouseCommandServiceTest {
     @Mock private GoalRepository goalRepository;
     @Mock private UserRepository userRepository;
     @Mock private InviteCodeGenerator inviteCodeGenerator;
+    @Mock private HouseCoverImageCatalog houseCoverImageCatalog;
     @InjectMocks private HouseCommandService houseCommandService;
 
     private HouseCreateRequest request(Integer maxMembers, List<Long> goalIds) {
@@ -68,6 +70,7 @@ class HouseCommandServiceTest {
 
         HouseCreateResponse response = houseCommandService.create(7L, request(6, List.of(1L, 2L)));
 
+        verify(houseCoverImageCatalog).validatePublished("house/cover.png");
         ArgumentCaptor<House> houseCaptor = ArgumentCaptor.forClass(House.class);
         verify(houseRepository).save(houseCaptor.capture());
         House saved = houseCaptor.getValue();
