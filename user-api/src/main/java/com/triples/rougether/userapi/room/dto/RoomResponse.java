@@ -6,6 +6,7 @@ import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.shop.entity.UserItem;
+import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -49,14 +50,17 @@ public record RoomResponse(
             String name,
             @Schema(description = "캐릭터 이미지 asset key (CDN base URL 과 조합해 사용)",
                     example = "characters/cat.png")
-            String assetKey) {
+            String assetKey,
+            @Schema(description = "애니메이션(APNG) asset key 묶음 (idle/poseCycle/wave)")
+            CharacterAnimations animations) {
         public static RoomCharacterResponse of(UserCharacter userCharacter) {
             if (userCharacter == null) {
                 return null;
             }
             Character character = userCharacter.getCharacter();
             return new RoomCharacterResponse(
-                    character.getId(), character.getCode(), character.getName(), character.getBaseAssetKey());
+                    character.getId(), character.getCode(), character.getName(), character.getBaseAssetKey(),
+                    CharacterAnimations.of(character.getCode()));
         }
     }
 
