@@ -56,6 +56,7 @@
                     <th>코인</th>
                     <th>다이아</th>
                     <th>재화 지급</th>
+                    <th>캐릭터 지급</th>
                 </tr>
                 </thead>
                 <tbody id="rows"></tbody>
@@ -80,7 +81,7 @@
         let page = 0;
         let total = 0;
 
-        load();
+        loadCharacters().then(load);
 
         async function load() {
             try {
@@ -149,8 +150,54 @@
             grantCell.style.display = 'flex';
             grantCell.style.gap = '6px';
 
-            tr.append(idCell, emailCell, nickCell, joinedCell, coinCell, diaCell, grantCell);
+            const charCell = document.createElement('td');
+            const charSelect = document.createElement('select');
+            charSelect.className = 'slot-select';
+            characterOptions.forEach(c => charSelect.add(new Option(c.name + ' (' + c.code + ')', c.code)));
+            const charBtn = document.createElement('button');
+            charBtn.type = 'button';
+            charBtn.className = 'btn-ghost';
+            charBtn.textContent = '지급';
+            charBtn.addEventListener('click', () => grantCharacter(user, charSelect.value, charBtn));
+            charCell.append(charSelect, charBtn);
+            charCell.style.display = 'flex';
+            charCell.style.gap = '6px';
+
+            tr.append(idCell, emailCell, nickCell, joinedCell, coinCell, diaCell, grantCell, charCell);
             return tr;
+        }
+
+        let characterOptions = [];
+        async function loadCharacters() {
+            try {
+                const res = await fetch('/admin/characters');
+                if (res.ok) { characterOptions = await res.json(); }
+            } catch (err) { /* select 가 비면 지급 버튼만 무의미 — 목록 화면은 계속 동작 */ }
+        }
+
+        async function grantCharacter(user, characterCode, btn) {
+            if (!characterCode) { showError('지급할 캐릭터를 선택하세요.'); return; }
+            btn.disabled = true;
+            try {
+                // grant API 는 curl 겸용이라 CSRF 제외 경로 (인증 세션은 필요)
+                const res = await fetch('/admin/users/' + user.userId + '/characters/grant', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ characterCode })
+                });
+                const result = await res.json();
+                if (!res.ok) { throw new Error(result.message || ('HTTP ' + res.status)); }
+                if (result.alreadyOwned) {
+                    showNotice('#' + user.userId + ' 이미 보유 중: ' + characterCode);
+                } else {
+                    showNotice('#' + user.userId + ' ' + characterCode + ' 지급 완료'
+                        + (result.selected ? ' (첫 캐릭터라 착용까지 완료)' : ''));
+                }
+            } catch (err) {
+                showError('#' + user.userId + ' 캐릭터 지급 실패: ' + err.message);
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         async function grant(user, currencyType, amount, btn, balanceCells) {
