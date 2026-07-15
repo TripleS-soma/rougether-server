@@ -39,7 +39,7 @@ class HouseCoverImageSecurityIntegrationTest {
 
     @Test
     void 유효한_토큰이면_목록을_조회한다() throws Exception {
-        when(houseCoverImageCatalog.keys()).thenReturn(List.of());
+        when(houseCoverImageCatalog.items()).thenReturn(List.of());
         String accessToken = tokenService.issueAccessToken(1L, MemberRole.NORMAL);
 
         mockMvc.perform(get("/api/v1/houses/cover-images")

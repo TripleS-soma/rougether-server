@@ -13,8 +13,8 @@ public class HouseCoverImageQueryService {
     private final HouseCoverImageCatalog houseCoverImageCatalog;
 
     public HouseCoverImageListResponse getCoverImages() {
-        return new HouseCoverImageListResponse(houseCoverImageCatalog.keys().stream()
-                .map(HouseCoverImage::new)
+        return new HouseCoverImageListResponse(houseCoverImageCatalog.items().stream()
+                .map(item -> new HouseCoverImage(item.code(), item.name(), item.coverImageKey()))
                 .toList());
     }
 }

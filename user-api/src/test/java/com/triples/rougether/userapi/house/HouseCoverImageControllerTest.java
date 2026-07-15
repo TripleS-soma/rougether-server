@@ -34,13 +34,19 @@ class HouseCoverImageControllerTest {
     void 집_커버_이미지_목록_응답_계약() throws Exception {
         when(houseCoverImageQueryService.getCoverImages()).thenReturn(
                 new HouseCoverImageListResponse(List.of(
-                        new HouseCoverImageListResponse.HouseCoverImage("house/forest.png"),
-                        new HouseCoverImageListResponse.HouseCoverImage("house/morning.png"))));
+                        new HouseCoverImageListResponse.HouseCoverImage(
+                                "forest", "버섯 숲 집", "house/forest.png"),
+                        new HouseCoverImageListResponse.HouseCoverImage(
+                                "morning", "아침 햇살 집", "house/morning.png"))));
 
         mockMvc.perform(get("/api/v1/houses/cover-images"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].code").value("forest"))
+                .andExpect(jsonPath("$.items[0].name").value("버섯 숲 집"))
                 .andExpect(jsonPath("$.items[0].coverImageKey").value("house/forest.png"))
+                .andExpect(jsonPath("$.items[1].code").value("morning"))
+                .andExpect(jsonPath("$.items[1].name").value("아침 햇살 집"))
                 .andExpect(jsonPath("$.items[1].coverImageKey").value("house/morning.png"));
     }
 
