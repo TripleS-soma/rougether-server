@@ -13,14 +13,14 @@ public interface HouseMissionRepository extends JpaRepository<HouseMission, Long
 
     List<HouseMission> findByHouseIdAndStatus(Long houseId, String status);
 
-    // 집 미션 목록 - 최신 생성순.
-    List<HouseMission> findByHouseIdOrderByCreatedAtDescIdDesc(Long houseId);
+    // 집 미션 목록 - 최신 생성순. 삭제(soft delete) 미션 제외.
+    List<HouseMission> findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(Long houseId);
 
-    Optional<HouseMission> findByIdAndHouseId(Long id, Long houseId);
+    Optional<HouseMission> findByIdAndHouseIdAndDeletedAtIsNull(Long id, Long houseId);
 
-    // claim 경로 전용 - 행 락으로 동시 claim 의 성장 포인트 이중 지급을 막는다.
+    // claim·삭제 경로 전용 - 행 락으로 동시 claim 의 이중 지급, claim 중 삭제 경합을 막는다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select m from HouseMission m where m.id = :missionId and m.house.id = :houseId")
+    @Query("select m from HouseMission m where m.id = :missionId and m.house.id = :houseId and m.deletedAt is null")
     Optional<HouseMission> findWithLockByIdAndHouseId(@Param("missionId") Long missionId,
                                                       @Param("houseId") Long houseId);
 }
