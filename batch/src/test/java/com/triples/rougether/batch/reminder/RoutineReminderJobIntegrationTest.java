@@ -35,7 +35,7 @@ import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
-import org.springframework.batch.test.JobLauncherTestUtils;
+import org.springframework.batch.test.JobOperatorTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -80,7 +80,7 @@ class RoutineReminderJobIntegrationTest {
     }
 
     @Autowired
-    private JobLauncherTestUtils jobLauncherTestUtils;
+    private JobOperatorTestUtils jobOperatorTestUtils;
     @Autowired
     private RoutineRepository routineRepository;
     @Autowired
@@ -205,9 +205,9 @@ class RoutineReminderJobIntegrationTest {
         LocalDate date = LocalDate.of(2026, 1, 11);
         JobParameters params = targetMinuteParams(date, LocalTime.of(9, 0));
 
-        jobLauncherTestUtils.launchJob(params);
+        jobOperatorTestUtils.startJob(params);
 
-        assertThatThrownBy(() -> jobLauncherTestUtils.launchJob(params))
+        assertThatThrownBy(() -> jobOperatorTestUtils.startJob(params))
                 .isInstanceOf(JobInstanceAlreadyCompleteException.class);
     }
 
@@ -219,7 +219,7 @@ class RoutineReminderJobIntegrationTest {
                 NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
         testFcmSender.nextResult = new FcmSendResult(1, List.of());
 
-        jobLauncherTestUtils.launchStep("routineReminderPushStep");
+        jobOperatorTestUtils.startStep("routineReminderPushStep");
 
         Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
         assertThat(updated.getPushStatus()).isEqualTo(PushStatus.SENT);
@@ -235,7 +235,7 @@ class RoutineReminderJobIntegrationTest {
                 NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
         testFcmSender.nextResult = new FcmSendResult(0, List.of("invalid-token"));
 
-        jobLauncherTestUtils.launchStep("routineReminderPushStep");
+        jobOperatorTestUtils.startStep("routineReminderPushStep");
 
         Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
         assertThat(updated.getPushStatus()).isEqualTo(PushStatus.FAILED);
@@ -245,7 +245,7 @@ class RoutineReminderJobIntegrationTest {
     }
 
     private void runJob(LocalDate date, LocalTime time) throws Exception {
-        JobExecution execution = jobLauncherTestUtils.launchJob(targetMinuteParams(date, time));
+        JobExecution execution = jobOperatorTestUtils.startJob(targetMinuteParams(date, time));
         assertThat(execution.getStatus()).isEqualTo(org.springframework.batch.core.BatchStatus.COMPLETED);
     }
 
