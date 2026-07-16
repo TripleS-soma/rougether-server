@@ -72,12 +72,29 @@ public class HouseMissionService {
         return HouseMissionResponse.of(mission, 0, 0);
     }
 
+    // 미션 삭제 - 소유자 전용, soft delete. 보상 수령(COMPLETED) 미션은 성장 포인트가 이미
+    // 지급돼 이력 보존을 위해 삭제 불가. claim 과 같은 행 락으로 "claim 중 삭제" 경합을 직렬화한다.
+    @Transactional
+    public void delete(Long userId, Long houseId, Long missionId) {
+        requireHouse(houseId);
+        HouseMember me = requireActiveMember(userId, houseId);
+        if (!me.isOwner()) {
+            throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
+        }
+        HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
+        if (mission.getStatus() == HouseMissionStatus.COMPLETED) {
+            throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED);
+        }
+        mission.softDelete(Instant.now());
+    }
+
     // 미션 목록 - 구성원 전용, 최신 생성순. currentValue 는 기여 합산을 일괄 조회(N+1 회피).
     @Transactional(readOnly = true)
     public HouseMissionListResponse getMissions(Long userId, Long houseId) {
         requireHouse(houseId);
         requireActiveMember(userId, houseId);
-        List<HouseMission> missions = houseMissionRepository.findByHouseIdOrderByCreatedAtDescIdDesc(houseId);
+        List<HouseMission> missions = houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(houseId);
         Map<Long, Long> sums = sumByMissionIds(missions);
         List<MissionSummary> items = missions.stream()
                 .map(mission -> MissionSummary.of(mission, sums.getOrDefault(mission.getId(), 0L)))
@@ -168,7 +185,7 @@ public class HouseMissionService {
     }
 
     private HouseMission requireMission(Long missionId, Long houseId) {
-        return houseMissionRepository.findByIdAndHouseId(missionId, houseId)
+        return houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(missionId, houseId)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
     }
 
