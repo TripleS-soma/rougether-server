@@ -2,8 +2,11 @@ package com.triples.rougether.userapi.house;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -173,5 +176,47 @@ class HouseMissionControllerTest {
         mockMvc.perform(post("/api/v1/houses/1/missions/3/claim"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("HOUSE_MISSION_NOT_ACHIEVED"));
+    }
+
+    @Test
+    void delete_는_204_를_반환한다() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(delete("/api/v1/houses/1/missions/3"))
+                .andExpect(status().isNoContent());
+        verify(houseMissionService).delete(7L, 1L, 3L);
+    }
+
+    @Test
+    void 비소유자_delete_는_403_에러_계약() throws Exception {
+        authAsUser7();
+        doThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER))
+                .when(houseMissionService).delete(7L, 1L, 3L);
+
+        mockMvc.perform(delete("/api/v1/houses/1/missions/3"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_OWNER"));
+    }
+
+    @Test
+    void 없는_미션_delete_는_404_에러_계약() throws Exception {
+        authAsUser7();
+        doThrow(new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND))
+                .when(houseMissionService).delete(7L, 1L, 3L);
+
+        mockMvc.perform(delete("/api/v1/houses/1/missions/3"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HOUSE_MISSION_NOT_FOUND"));
+    }
+
+    @Test
+    void 보상_수령된_미션_delete_는_409_에러_계약() throws Exception {
+        authAsUser7();
+        doThrow(new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED))
+                .when(houseMissionService).delete(7L, 1L, 3L);
+
+        mockMvc.perform(delete("/api/v1/houses/1/missions/3"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HOUSE_MISSION_ALREADY_CLAIMED"));
     }
 }

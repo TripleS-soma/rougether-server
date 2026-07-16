@@ -69,6 +69,8 @@ class HouseMissionServiceTest {
         lenient().when(mission.getTargetValue()).thenReturn(targetValue);
         lenient().when(houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(missionId, houseId))
                 .thenReturn(Optional.of(mission));
+        lenient().when(houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId))
+                .thenReturn(Optional.of(mission));
         return mission;
     }
 

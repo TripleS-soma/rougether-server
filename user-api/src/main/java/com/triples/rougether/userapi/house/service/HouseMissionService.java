@@ -116,11 +116,13 @@ public class HouseMissionService {
     }
 
     // 미션 수행 체크(기여) - 본인 +1, KST 하루 1회. 구성원이 공동 미션 자체를 직접 수행 체크한다 (모델 확정 2026-07-05).
+    // 삭제·claim 과 같은 미션 행 락으로 직렬화 — 비잠금 조회면 "삭제 커밋 직전 읽은 미션"에 기여가 기록될 수 있다.
     @Transactional
     public HouseMissionContributeResponse contribute(Long userId, Long houseId, Long missionId) {
         requireHouse(houseId);
         HouseMember me = requireActiveMember(userId, houseId);
-        HouseMission mission = requireMission(missionId, houseId);
+        HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
         Instant now = Instant.now();
         if (!mission.isActive() || !mission.isWithinPeriod(now)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE);
