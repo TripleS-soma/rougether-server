@@ -205,66 +205,15 @@ jobs:
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8081/admin/health"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
       # 끝난 뒤에만 실행 — 배포 실패로 롤백된 이미지가 :dev 로 남는 것을 막는다.
       # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
-      # 승격은 repo 별 순차라 중간 실패 시 두 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
-      # 기존 digest 를 먼저 저장해 두고, 실패하면 둘 다 이전 쌍으로 복원해 혼합 버전 부팅을 막는다.
+      # 승격은 repo 별 순차라 중간 실패 시 세 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
+      # 스크립트가 기존 digest 를 먼저 저장하고, 실패하면 전체 태그 세트를 복원한다.
       - name: Promote deployed images to :dev
         shell: bash
-        run: |
-          set -euo pipefail
-
-          registry="${{ steps.ecr.outputs.registry }}"
-          declare -A previous_digest
-
-          # 기존 digest 조회 — "태그 없음"(ABSENT)과 "조회 실패"를 구분한다.
-          # 조회 실패는 아직 아무것도 바뀌지 않은 지금 중단하는 게 안전하다 —
-          # 빈 값으로 삼키면 부분 승격 실패 시 복원을 건너뛰어 혼합 쌍이 남는다.
-          for repo in user-api admin-api; do
-            if output="$(
-              aws ecr describe-images \
-                --repository-name "${ECR_REPOSITORY_PREFIX}/${repo}" \
-                --image-ids imageTag="${IMAGE_TAG}" \
-                --query 'imageDetails[0].imageDigest' \
-                --output text 2>&1
-            )"; then
-              previous_digest[$repo]="$output"
-            elif grep -q "ImageNotFoundException" <<< "$output"; then
-              previous_digest[$repo]="ABSENT"
-            else
-              echo "failed to look up current :${IMAGE_TAG} digest for ${repo}: ${output}" >&2
-              exit 1
-            fi
-          done
-
-          restore_previous_dev_tags() {
-            echo "promotion failed; restoring previous :${IMAGE_TAG} tag pair" >&2
-            local restore_failed=false
-            for repo in user-api admin-api; do
-              digest="${previous_digest[$repo]}"
-              if [ "$digest" = "ABSENT" ]; then
-                # 원래 태그가 없던 repo 는 새로 붙은 태그를 떼어 원상복구
-                aws ecr batch-delete-image \
-                  --repository-name "${ECR_REPOSITORY_PREFIX}/${repo}" \
-                  --image-ids imageTag="${IMAGE_TAG}" > /dev/null || restore_failed=true
-              else
-                docker buildx imagetools create \
-                  --tag "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
-                  "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}@${digest}" || restore_failed=true
-              fi
-            done
-            if [ "$restore_failed" = true ]; then
-              echo "WARNING: :${IMAGE_TAG} restore incomplete — verify tag pair manually before any instance replace" >&2
-            fi
-          }
-          trap restore_previous_dev_tags ERR
-
-          for repo in user-api admin-api; do
-            docker buildx imagetools create \
-              --tag "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${IMAGE_TAG}" \
-              "${registry}/${ECR_REPOSITORY_PREFIX}/${repo}:${GITHUB_SHA}"
-          done
-          trap - ERR
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: bash .github/scripts/promote-ecr-dev-tags.sh user-api admin-api batch

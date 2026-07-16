@@ -235,18 +235,34 @@ resource "aws_ecr_lifecycle_policy" "batch" {
   repository = aws_ecr_repository.batch.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # API 이미지와 동일하게 부트스트랩용 :dev 를 실패한 SHA 이미지 누적으로부터 보호한다.
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
