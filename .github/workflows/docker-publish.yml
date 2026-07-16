@@ -54,6 +54,8 @@ jobs:
             repository: user-api
           - module: admin-api
             repository: admin-api
+          - module: batch
+            repository: batch
 
     steps:
       - name: Checkout
@@ -132,6 +134,7 @@ jobs:
           registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           user_image="${registry}/${ECR_REPOSITORY_PREFIX}/user-api:${GITHUB_SHA}"
           admin_image="${registry}/${ECR_REPOSITORY_PREFIX}/admin-api:${GITHUB_SHA}"
+          batch_image="${registry}/${ECR_REPOSITORY_PREFIX}/batch:${GITHUB_SHA}"
 
           deploy_script="$(
             sed \
@@ -139,6 +142,7 @@ jobs:
               -e "s|__REGISTRY__|${registry}|g" \
               -e "s|__USER_IMAGE__|${user_image}|g" \
               -e "s|__ADMIN_IMAGE__|${admin_image}|g" \
+              -e "s|__BATCH_IMAGE__|${batch_image}|g" \
               -e "s|__DEPLOYED_SHA__|${GITHUB_SHA}|g" \
               -e "s|__FIREBASE_PARAMETER_NAME__|${FIREBASE_CREDENTIALS_PARAMETER}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh

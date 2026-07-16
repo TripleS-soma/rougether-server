@@ -148,6 +148,17 @@ resource "aws_ecr_repository" "admin_api" {
   tags = merge(local.tags, { Name = "${local.name}/admin-api" })
 }
 
+resource "aws_ecr_repository" "batch" {
+  name                 = "${local.name}/batch"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}/batch" })
+}
+
 resource "aws_ecr_lifecycle_policy" "user_api" {
   repository = aws_ecr_repository.user_api.name
 
@@ -186,9 +197,29 @@ resource "aws_ecr_lifecycle_policy" "admin_api" {
   })
 }
 
+resource "aws_ecr_lifecycle_policy" "batch" {
+  repository = aws_ecr_repository.batch.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the last 10 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = {
+        type = "expire"
+      }
+    }]
+  })
+}
+
 locals {
   user_api_image_value            = var.user_api_image == null ? "${aws_ecr_repository.user_api.repository_url}:dev" : var.user_api_image
   admin_api_image_value           = var.admin_api_image == null ? "${aws_ecr_repository.admin_api.repository_url}:dev" : var.admin_api_image
+  batch_image_value               = var.batch_image == null ? "${aws_ecr_repository.batch.repository_url}:dev" : var.batch_image
   container_registry_server_value = var.container_registry_server == null ? local.ecr_registry_server : var.container_registry_server
 }
 
@@ -385,7 +416,8 @@ resource "aws_iam_role_policy" "app" {
         ]
         Resource = [
           aws_ecr_repository.user_api.arn,
-          aws_ecr_repository.admin_api.arn
+          aws_ecr_repository.admin_api.arn,
+          aws_ecr_repository.batch.arn
         ]
       }
     ]
@@ -469,7 +501,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         ]
         Resource = [
           aws_ecr_repository.user_api.arn,
-          aws_ecr_repository.admin_api.arn
+          aws_ecr_repository.admin_api.arn,
+          aws_ecr_repository.batch.arn
         ]
       },
       {
@@ -531,6 +564,7 @@ resource "aws_instance" "app" {
     aws_region                 = var.aws_region
     user_api_image             = local.user_api_image_value
     admin_api_image            = local.admin_api_image_value
+    batch_image                = local.batch_image_value
     registry_server            = local.container_registry_server_value
     registry_username          = var.container_registry_username == null ? "" : var.container_registry_username
     registry_password_param    = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
@@ -549,6 +583,7 @@ resource "aws_instance" "app" {
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
     user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))
     admin_api_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api.service"))
+    batch_unit     = trimspace(file("${path.module}/../../packer/files/rougether-batch.service"))
   })
 
   depends_on = [
