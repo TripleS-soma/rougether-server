@@ -11,7 +11,9 @@
 - Spring Security
 - Spring Data JPA
 - Flyway
-- MySQL (운영) · H2 (로컬·테스트)
+- MySQL — 운영, 그리고 user-api·batch 로컬 실행 (`docker compose up -d mysql`, compose.yml)
+- Testcontainers MySQL — user-api·batch 테스트. **`./gradlew test`에 Docker 데몬 필요**
+- H2 — admin-api 로컬 실행에만 사용
 
 ## 모듈 구조
 
@@ -20,21 +22,23 @@
 ```text
 common/      프레임워크 비의존 공유 부품 (ErrorCode, ErrorResponse, BusinessException, util)
 domain/      도메인별 Entity + Repository + Flyway migration. 스키마 단일 소스. JPA를 api 로 노출.
+infra/fcm/   FCM 발송 클라이언트 (FcmSender · FirebaseFcmSender · StubFcmSender). Firebase Admin SDK 의존.
 user-api/    사용자 대면 앱 :8080  /api/v1  OAuth2(카카오/구글/애플)+JWT(stateless)   [부팅]
 admin-api/   운영자 대면 앱 :8081  /admin   아이디·비밀번호 + 세션(form login)        [부팅]
+batch/       배치 앱   :8082  Spring Batch 잡(루틴 리마인드 등) + 스케줄 트리거       [부팅]
 ```
 
-의존 방향은 `user-api`/`admin-api` → `domain` → `common`입니다. 앱끼리는 서로 의존하지 않습니다.
+의존 방향은 `user-api`/`admin-api`/`batch` → `domain` → `common`입니다. 푸시 발송이 필요한 `user-api`·`batch`는 `infra:fcm`에도 의존합니다 (`infra:fcm`은 `domain`/`common`에 의존하지 않는 독립 부품입니다). 앱끼리는 서로 의존하지 않습니다.
 
 ### 산출물을 어느 모듈에 두는가
 
-| 산출물 | 모듈 | 패키지 |
-| --- | --- | --- |
-| Entity, Repository | `domain` | `com.triples.rougether.domain.<도메인>` |
-| Flyway migration | `domain` | `src/main/resources/db/migration/V{n}__*.sql` |
-| Service (비즈니스 로직) | 각 앱 | `...userapi.<도메인>` / `...adminapi.<도메인>` |
-| Controller, DTO | 각 앱 | 위와 동일 |
-| 공통 에러·util | `common` | `com.triples.rougether.common.*` |
+- Entity, Repository → `domain` 모듈 (`com.triples.rougether.domain.<도메인>`)
+- Flyway migration → `domain` 모듈 (`src/main/resources/db/migration/V{n}__*.sql`)
+- Service (비즈니스 로직) → 각 앱 (`...userapi.<도메인>` / `...adminapi.<도메인>`)
+- Controller, DTO → 각 앱, 위와 동일한 도메인 패키지
+- 공통 에러·util → `common` 모듈 (`com.triples.rougether.common.*`)
+- Spring Batch 잡 (Job/Step 구성, Reader·Processor·Writer, 스케줄 트리거) → `batch` 모듈 (`com.triples.rougether.batch.<기능>`)
+- 푸시(FCM) 발송 클라이언트 → `infra:fcm` 모듈
 
 현재 결정상 `domain`은 영속 계층(Entity+Repository)만 둡니다. Service는 각 앱에 둡니다. 같은 핵심 로직(재화 지급 등)을 admin도 쓰게 되면 그 Service만 `domain`으로 승격하는 것을 검토합니다. 도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가하고, 아직 확정되지 않은 구조를 미리 과하게 나누지 않습니다.
 
@@ -62,11 +66,9 @@ userapi/<도메인>/
 
 `@Transactional`은 성격이 균일한 클래스에는 **클래스 레벨**에 붙입니다.
 
-| 서비스 | 위치 |
-| --- | --- |
-| Command 서비스(쓰기 전용) | 클래스 레벨 `@Transactional` |
-| Query 서비스(읽기 전용) | 클래스 레벨 `@Transactional(readOnly = true)` |
-| 읽기·쓰기 혼합 단일 서비스 | 클래스 레벨 `@Transactional(readOnly = true)` + 쓰기 메서드만 `@Transactional` override |
+- Command 서비스(쓰기 전용) → 클래스 레벨 `@Transactional`
+- Query 서비스(읽기 전용) → 클래스 레벨 `@Transactional(readOnly = true)`
+- 읽기·쓰기 혼합 단일 서비스 → 클래스 레벨 `@Transactional(readOnly = true)` + 쓰기 메서드만 `@Transactional` override
 
 ## 기본 API 기준
 
@@ -141,11 +143,11 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 기본 검증:
 
 ```bash
-./gradlew test
+./gradlew test    # user-api·batch 테스트는 Testcontainers MySQL — Docker 데몬 필요
 git diff --check
 ```
 
-서버 smoke check:
+서버 smoke check (user-api·batch는 로컬 MySQL 필요 → `docker compose up -d mysql`):
 
 ```bash
 ./gradlew :user-api:bootRun     # :8080
@@ -153,6 +155,9 @@ curl http://localhost:8080/api/v1/health
 
 ./gradlew :admin-api:bootRun    # :8081
 curl http://localhost:8081/admin/health
+
+./gradlew :batch:bootRun        # :8082
+curl http://localhost:8082/actuator/health
 ```
 
 작업을 마칠 때 `bootRun` 같은 장기 실행 프로세스를 남겨두지 않습니다.

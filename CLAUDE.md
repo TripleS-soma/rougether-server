@@ -44,14 +44,14 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 백엔드 코드 변경 후 기본 검증:
 
 ```bash
-./gradlew test
+./gradlew test        # user-api·batch 테스트는 Testcontainers MySQL 사용 — Docker 데몬 필요
 git diff --check
 ```
 
-서버 smoke check가 필요할 때:
+서버 smoke check가 필요할 때 (user-api local 프로필은 MySQL 필요 → `docker compose up -d mysql`):
 
 ```bash
-./gradlew bootRun
+./gradlew :user-api:bootRun     # :8080. admin-api(:8081)·batch(:8082)는 backend.md 검증 절 참고
 curl http://localhost:8080/api/v1/health
 ```
 

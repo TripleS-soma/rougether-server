@@ -13,8 +13,10 @@ Rougether `user-api` 모듈의 컨트롤러와 DTO에 Swagger(springdoc-openapi)
 
 대상 도메인(예: `category`, `auth`, `member`)을 받으면 해당 패키지의 컨트롤러와 그 컨트롤러가 쓰는 요청/응답 DTO에 애노테이션을 붙인다.
 
-- 컨트롤러: `user-api/src/main/java/com/triples/rougether/userapi/<domain>/controller/*Controller.java`
+- 컨트롤러: `user-api/src/main/java/com/triples/rougether/userapi/<domain>/web/*Controller.java`
 - DTO: `.../<domain>/dto/*.java`
+
+springdoc은 `user-api`에만 적용돼 있다. `admin-api`는 대상이 아니다.
 
 ## 컨벤션 (반드시 지킬 것)
 

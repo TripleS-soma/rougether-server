@@ -44,8 +44,10 @@ feat: 제목 한 줄
 - 변경 핵심 1
 - 변경 핵심 2
 
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 ```
+
+(모델별 이름을 하드코딩하지 않는다 — 작업 환경이 자체 Co-Authored-By 라인을 붙이면 그것을 그대로 쓴다.)
 
 ## 5. 메시지 확인 후 커밋
 
@@ -53,4 +55,6 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
 ## 6. 마무리
 
-`git log -1`로 결과를 확인하고, 남은 변경(`git status`)을 사용자에게 보고하고 push한다. PR은 별도 요청이 있을 때만 한다 (PR은 `/pr`).
+`git log -1`로 결과를 확인하고, 남은 변경(`git status`)을 사용자에게 보고한다.
+
+**push는 커밋 승인과 별개다** — 사용자가 push까지 요청했거나 push 여부를 확인받은 경우에만 `git push`한다. 커밋 메시지 승인을 push 승인으로 간주하지 않는다. PR은 별도 요청이 있을 때만 한다 (PR은 `/pr`).

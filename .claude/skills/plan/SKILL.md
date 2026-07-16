@@ -40,7 +40,7 @@ spec-researcher가 보고한 미정값(enum 허용값, 코인 보상 금액, 타
 
 **제목**: 기능 중심으로 쓴다. API path(`GET /api/v1/...`)를 제목에 쓰지 않는다. (예: `내 방 슬롯 조회`, `보유 아이템 인벤토리 조회`)
 
-**라벨**: 도메인을 한국어 라벨로 단다 — `방`·`집`·`멤버`·`루틴/투두`·`상점`·`뽑기` 등. 라벨이 없으면 `gh label create`로 만들고 단다. **담당(assignee)은 지정하지 않는다.**
+**라벨**: 도메인을 실사용 라벨 체계로 단다 — `집`·`루틴/투두`·`회원`·`상점`·`알림`·`infra` (방·방명록 관련도 `집` 라벨을 쓴다). 새 라벨을 만들기 전에 반드시 `gh label list`로 기존 유사 라벨을 확인한다 — 예: `회원`이 있는데 `멤버`를 새로 만들지 않는다. 정말 없는 도메인이면 `gh label create`로 만들고 단다. **담당(assignee)은 지정하지 않는다.**
 
 **본문**: 구현 중심 + 결정값은 짧은 불릿. 산문으로 길게 풀지 않는다. 형식:
 
@@ -67,7 +67,7 @@ spec-researcher가 보고한 미정값(enum 허용값, 코인 보상 금액, 타
 
 - Entity·Repository·enum·migration → `domain` 모듈
 - Service·Controller·DTO·ErrorCode → `user-api`(또는 admin 기능이면 `admin-api`)
-- migration 버전 번호는 `domain/src/main/resources/db/migration/`의 최신 다음 번호로
+- migration 버전 번호는 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 정한다 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V'`의 최신 번호와, 오픈 PR이 이미 선점한 번호(`gh pr list` + 해당 브랜치의 migration 추가분)까지 확인해 겹치지 않는 다음 번호로 (backend.md "Flyway migration 규칙" 참고)
 
 위험영역(재화·완료·뽑기·인증·집 미션·migration)은 해당 스텝에 트랜잭션·롤백·정합성 테스트를 명시한다. `/run-plan`은 이 스텝을 멈추지 않고 구현하되, 끝나면 `reviewer` 서브에이전트로 검토한다. 결정값은 이미 이 plan에서 다 닫았으므로 실행 중 사람 확인은 필요 없다.
 

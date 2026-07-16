@@ -33,7 +33,7 @@ metadata:
    - Service·Controller·DTO → `user-api`(admin 기능이면 `admin-api`)
    - 에러는 `common.error.ErrorResponse` 형식 / `BusinessException` + `ErrorCode`
    - 여러 테이블 쓰기는 `@Transactional`, 조회 서비스는 `@Transactional(readOnly = true)`
-   - migration 버전은 `domain/src/main/resources/db/migration/`의 최신 다음 번호. **이미 적용된 migration 파일은 수정하지 않고 새 번호만 추가**한다.
+   - migration 버전은 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V'`로 main 최신 번호를 확인하고, 오픈 PR이 선점한 번호와도 겹치지 않는 다음 번호를 쓴다 (backend.md "Flyway migration 규칙"). **이미 적용된 migration 파일은 수정하지 않고 새 번호만 추가**한다.
    - **이슈 범위 안에서만** 작업한다. 본문에 없는 파일·스텝을 임의로 추가하지 않는다. 빠진 게 보이면 멈추고 보고한다(→ "멈춤 조건").
 3. `./gradlew test` 를 돌린다. 깨지면 고친다 — **단 최대 3회까지만**. 3회 안에 못 통과하면 멈추고 원인을 보고한다(→ "멈춤 조건").
    - **기존 테스트를 삭제·약화(assertion 제거 등)해서 통과시키지 않는다.** 테스트가 옳고 코드가 틀린 게 기본 가정이다.
@@ -60,9 +60,9 @@ metadata:
 
 ## 4. 마무리
 
-- 이번 run에서 `user-api`(또는 `admin-api`) 컨트롤러/DTO를 새로 추가·변경했으면, 그 파일들에 `/add-swagger`를 호출해 Swagger 애노테이션을 붙인다. 컨벤션 정본은 `add-swagger` — run-plan은 위임만 하고 규칙을 재서술하지 않는다.
+- 이번 run에서 `user-api` 컨트롤러/DTO를 새로 추가·변경했으면, 그 파일들에 `/add-swagger`를 호출해 Swagger 애노테이션을 붙인다 (springdoc은 user-api에만 적용 — admin-api는 대상 아님). 컨벤션 정본은 `add-swagger` — run-plan은 위임만 하고 규칙을 재서술하지 않는다.
 - 멈춤이든 완료든, 누적 변경에 대해 검증한다:
-  - `verifier` — **항상**. plan 완료기준 대비 완료성·테스트 충실도.
+  - `verifier` — **항상**. 호출할 때 **이슈 번호를 전달**한다(이슈 본문 체크리스트 = 완료기준). 완료성·테스트 충실도를 본다.
   - `reviewer` — **위험영역(재화·완료·뽑기·인증·집 미션·migration)을 건드렸을 때만** 깊게. 정합성·보안·인가.
 - 미달·blocking 지적이 나오면 **fix → 재검증** 루프를 돈다:
   - 이슈 범위 안에서 고칠 수 있는 것(빠진 구현, 약한/빈 테스트, 정합성 버그)은 고치고 해당 검증을 다시 돌린다. **최대 5회**.
