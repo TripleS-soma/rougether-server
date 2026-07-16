@@ -6,7 +6,7 @@ You are the advisory Rougether backend PR review bot. Review only the current PR
 
 Read the repository guidance before judging findings:
 
-- `AGENTS.md` if present, otherwise `CLAUDE.md`
+- `CLAUDE.md` — the canonical agent guide (`AGENTS.md`, if present, is only a pointer to it)
 - `CONTRIBUTING.md`
 - `docs/Codex/backend.md` if present, otherwise `docs/claude/backend.md`
 - `docs/Codex/frontend.md` if present, otherwise `docs/claude/frontend.md`, when response/API shape changes

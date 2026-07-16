@@ -67,7 +67,7 @@ spec-researcher가 보고한 미정값(enum 허용값, 코인 보상 금액, 타
 
 - Entity·Repository·enum·migration → `domain` 모듈
 - Service·Controller·DTO·ErrorCode → `user-api`(또는 admin 기능이면 `admin-api`)
-- migration 버전 번호는 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 정한다 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V'`의 최신 번호와, 오픈 PR이 이미 선점한 번호(`gh pr list` + 해당 브랜치의 migration 추가분)까지 확인해 겹치지 않는 다음 번호로 (backend.md "Flyway migration 규칙" 참고)
+- migration 버전 번호는 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 정한다 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V' | sort`의 최신 번호와, 오픈 PR이 이미 선점한 번호(`gh pr list` + 해당 브랜치의 migration 추가분)까지 확인해 겹치지 않는 다음 번호로 (backend.md "Flyway migration 규칙" 참고)
 
 위험영역(재화·완료·뽑기·인증·집 미션·migration)은 해당 스텝에 트랜잭션·롤백·정합성 테스트를 명시한다. `/run-plan`은 이 스텝을 멈추지 않고 구현하되, 끝나면 `reviewer` 서브에이전트로 검토한다. 결정값은 이미 이 plan에서 다 닫았으므로 실행 중 사람 확인은 필요 없다.
 

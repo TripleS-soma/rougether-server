@@ -33,7 +33,7 @@ metadata:
    - Service·Controller·DTO → `user-api`(admin 기능이면 `admin-api`)
    - 에러는 `common.error.ErrorResponse` 형식 / `BusinessException` + `ErrorCode`
    - 여러 테이블 쓰기는 `@Transactional`, 조회 서비스는 `@Transactional(readOnly = true)`
-   - migration 버전은 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V'`로 main 최신 번호를 확인하고, 오픈 PR이 선점한 번호와도 겹치지 않는 다음 번호를 쓴다 (backend.md "Flyway migration 규칙"). **이미 적용된 migration 파일은 수정하지 않고 새 번호만 추가**한다.
+   - migration 버전은 **로컬 디렉토리가 아니라 `origin/main` 기준**으로 — `git ls-tree -r --name-only origin/main | grep 'db/migration/V' | sort`로 main 최신 번호를 확인하고, 오픈 PR이 선점한 번호와도 겹치지 않는 다음 번호를 쓴다 (backend.md "Flyway migration 규칙"). **이미 적용된 migration 파일은 수정하지 않고 새 번호만 추가**한다.
    - **이슈 범위 안에서만** 작업한다. 본문에 없는 파일·스텝을 임의로 추가하지 않는다. 빠진 게 보이면 멈추고 보고한다(→ "멈춤 조건").
 3. `./gradlew test` 를 돌린다. 깨지면 고친다 — **단 최대 3회까지만**. 3회 안에 못 통과하면 멈추고 원인을 보고한다(→ "멈춤 조건").
    - **기존 테스트를 삭제·약화(assertion 제거 등)해서 통과시키지 않는다.** 테스트가 옳고 코드가 틀린 게 기본 가정이다.
@@ -71,4 +71,4 @@ metadata:
 - **plan 확정 내용을 spec에 반영** → `sync-spec <이슈번호>` 를 호출한다. 이슈 본문을 근거로 spec 정본(`../rougether-spec`)을 최신화한다. 자세한 규칙은 `sync-spec` skill 참고.
 - `bootRun` 등 long-running 세션을 남기지 않는다.
 - **이슈를 직접 close하지 않는다.** close는 **PR 머지 시 자동**으로 한다 — 구현이 끝나면 사용자에게 "`/pr`로 PR을 만들 때 본문에 `closes #<이슈번호>` 를 넣어라(머지되면 이슈 자동 close)"고 안내한다.
-- **커밋·PR은 하지 않는다.
+- **커밋·PR은 하지 않는다.**

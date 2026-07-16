@@ -13,7 +13,7 @@
 - Flyway
 - MySQL — 운영, 그리고 user-api·batch 로컬 실행 (`docker compose up -d mysql`, compose.yml)
 - Testcontainers MySQL — user-api·batch 테스트. **`./gradlew test`에 Docker 데몬 필요**
-- H2 — admin-api 로컬 실행에만 사용
+- H2 — admin-api 로컬 실행·테스트에 사용
 
 ## 모듈 구조
 
