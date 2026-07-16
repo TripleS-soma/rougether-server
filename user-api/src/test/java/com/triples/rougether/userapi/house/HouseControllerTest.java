@@ -137,6 +137,38 @@ class HouseControllerTest {
     }
 
     @Test
+    void 목록에_없는_집_커버키는_형식과_관계없이_도메인_에러를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseCommandService.create(eq(7L), any()))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_COVER_IMAGE_INVALID));
+
+        mockMvc.perform(post("/api/v1/houses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "아침 루틴 하우스", "coverImageKey": "characters/cat.png",
+                                 "goalIds": [1]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("HOUSE_COVER_IMAGE_INVALID"));
+    }
+
+    @Test
+    void 게시되지_않은_집_커버키는_400과_에러코드를_내려준다() throws Exception {
+        authAsUser7();
+        when(houseCommandService.create(eq(7L), any()))
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_COVER_IMAGE_INVALID));
+
+        mockMvc.perform(post("/api/v1/houses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "아침 루틴 하우스", "coverImageKey": "house/not-published.png",
+                                 "goalIds": [1]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("HOUSE_COVER_IMAGE_INVALID"));
+    }
+
+    @Test
     void goalIds가_비어있으면_400() throws Exception {
         authAsUser7();
 

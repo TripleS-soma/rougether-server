@@ -38,23 +38,27 @@ public class HouseCommandService {
     private final GoalRepository goalRepository;
     private final UserRepository userRepository;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final HouseCoverImageCatalog houseCoverImageCatalog;
 
     public HouseCommandService(HouseRepository houseRepository,
                                HouseMemberRepository houseMemberRepository,
                                HouseGoalRepository houseGoalRepository,
                                GoalRepository goalRepository,
                                UserRepository userRepository,
-                               InviteCodeGenerator inviteCodeGenerator) {
+                               InviteCodeGenerator inviteCodeGenerator,
+                               HouseCoverImageCatalog houseCoverImageCatalog) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.goalRepository = goalRepository;
         this.userRepository = userRepository;
         this.inviteCodeGenerator = inviteCodeGenerator;
+        this.houseCoverImageCatalog = houseCoverImageCatalog;
     }
 
     @Transactional
     public HouseCreateResponse create(Long userId, HouseCreateRequest request) {
+        houseCoverImageCatalog.validatePublished(request.coverImageKey());
         List<Long> goalIds = request.goalIds().stream().distinct().toList();
         List<Goal> goals = goalRepository.findByIdInAndActiveIsTrue(goalIds);
         if (goals.size() != goalIds.size()) {
@@ -90,6 +94,7 @@ public class HouseCommandService {
             throw new BusinessException(HouseErrorCode.HOUSE_MAX_MEMBERS_BELOW_CURRENT);
         }
 
+        houseCoverImageCatalog.validatePublished(request.coverImageKey());
         house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers());
         return new HouseUpdateResponse(house.getId(), house.getName(), house.getDescription(),
                 house.getCoverImageKey(), house.getMaxMembers());

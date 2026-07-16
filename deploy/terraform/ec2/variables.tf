@@ -40,6 +40,12 @@ variable "admin_api_image" {
   default     = null
 }
 
+variable "batch_image" {
+  description = "Docker image used for batch. If null, Terraform-managed ECR is used."
+  type        = string
+  default     = null
+}
+
 variable "container_registry_server" {
   description = "Container registry server. If null, Terraform-managed ECR is used."
   type        = string

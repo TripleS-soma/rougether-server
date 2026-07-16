@@ -10,4 +10,6 @@
 
 ## 구현 노트
 
-- (작성 예정)
+- `GET /api/v1/houses/cover-images`는 게시 승인된 집 커버 manifest를 `code` 오름차순으로 반환합니다.
+- manifest는 `house.cover-images.items` 설정으로 관리하며, S3 `house/`의 초안·중복 파일은 자동 노출하지 않습니다.
+- 응답은 프론트 식별·표시용 `code`, `name`과 이미지 로딩용 `coverImageKey`를 제공합니다. 전체 URL이나 S3 운영 메타데이터는 노출하지 않습니다.

@@ -21,6 +21,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
+import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +42,7 @@ class InviteCodeReissueServiceTest {
     @Mock private GoalRepository goalRepository;
     @Mock private UserRepository userRepository;
     @Mock private InviteCodeGenerator inviteCodeGenerator;
+    @Mock private HouseCoverImageCatalog houseCoverImageCatalog;
     @InjectMocks private HouseCommandService houseCommandService;
 
     private HouseMember memberOf(HouseMemberRole role) {

@@ -32,6 +32,7 @@ import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -48,6 +49,14 @@ class GachaServiceTest {
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private GachaService gachaService;
+
+    @BeforeEach
+    void stubUserLock() {
+        // draw 는 획득 경로 직렬화를 위해 user 행 락을 먼저 잡는다 — draw 를 안 타는 테스트도 있어 lenient
+        org.mockito.Mockito.lenient()
+                .when(userRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(Optional.of(mock(com.triples.rougether.domain.member.entity.User.class)));
+    }
 
     private Gacha activeGacha(int cost) {
         Gacha g = mock(Gacha.class);

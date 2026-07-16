@@ -5,6 +5,7 @@ import com.triples.rougether.common.error.ErrorCode;
 public enum HouseErrorCode implements ErrorCode {
 
     HOUSE_GOAL_INVALID("HOUSE_GOAL_INVALID", "존재하지 않거나 비활성인 목표가 포함되어 있습니다.", 400),
+    HOUSE_COVER_IMAGE_INVALID("HOUSE_COVER_IMAGE_INVALID", "선택할 수 없는 집 커버 이미지입니다.", 400),
     HOUSE_NOT_FOUND("HOUSE_NOT_FOUND", "존재하지 않는 집입니다.", 404),
     HOUSE_NOT_MEMBER("HOUSE_NOT_MEMBER", "이 집의 구성원이 아닙니다.", 403),
     HOUSE_NOT_OWNER("HOUSE_NOT_OWNER", "집 소유자만 할 수 있습니다.", 403),

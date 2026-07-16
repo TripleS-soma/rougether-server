@@ -93,7 +93,7 @@ build {
 
   # 유닛 파일은 ssh 사용자 권한으로 /tmp 에 올린 뒤 root 로 제자리 이동
   provisioner "file" {
-    sources     = ["${path.root}/files/rougether-user-api.service", "${path.root}/files/rougether-admin-api.service"]
+    sources     = ["${path.root}/files/rougether-user-api.service", "${path.root}/files/rougether-admin-api.service", "${path.root}/files/rougether-batch.service"]
     destination = "/tmp/"
   }
 
@@ -113,8 +113,8 @@ build {
       # systemd 가 유닛 로드를 거부한다 — install 은 대상 디렉터리 컨텍스트를 상속한다.
       "mkdir -p /etc/rougether",
       "chmod 700 /etc/rougether",
-      "install -o root -g root -m 644 /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /etc/systemd/system/",
-      "rm -f /tmp/rougether-user-api.service /tmp/rougether-admin-api.service",
+      "install -o root -g root -m 644 /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-batch.service /etc/systemd/system/",
+      "rm -f /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-batch.service",
 
       # 이미지 다이어트 + 다음 부팅에서 cloud-init(user-data)이 새로 돌게 초기화
       "dnf clean all",

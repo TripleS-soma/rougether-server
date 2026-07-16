@@ -10,6 +10,7 @@ COPY common/build.gradle ./common/build.gradle
 COPY domain/build.gradle ./domain/build.gradle
 COPY user-api/build.gradle ./user-api/build.gradle
 COPY admin-api/build.gradle ./admin-api/build.gradle
+COPY batch/build.gradle ./batch/build.gradle
 
 ARG APP_MODULE=user-api
 
@@ -26,6 +27,6 @@ WORKDIR /app
 
 COPY --from=build /workspace/${APP_MODULE}/build/libs/*.jar /app/app.jar
 
-EXPOSE 8080 8081
+EXPOSE 8080 8081 8082
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
