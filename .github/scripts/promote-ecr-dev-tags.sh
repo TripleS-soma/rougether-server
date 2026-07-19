@@ -10,7 +10,12 @@ promote_ecr_dev_tags() {
   local registry="${ECR_REGISTRY:?ECR_REGISTRY is required}"
   local repository_prefix="${ECR_REPOSITORY_PREFIX:?ECR_REPOSITORY_PREFIX is required}"
   local image_tag="${IMAGE_TAG:?IMAGE_TAG is required}"
-  local deployed_sha="${GITHUB_SHA:?GITHUB_SHA is required}"
+  # 승격 원본 태그. 기본은 :<sha> → :dev 승격이고, SOURCE_TAG 를 주면
+  # :unverified-<sha> → :<sha> 같은 다른 승격에도 같은 보상 로직을 재사용한다.
+  local source_tag="${SOURCE_TAG:-}"
+  if [ -z "$source_tag" ]; then
+    source_tag="${GITHUB_SHA:?GITHUB_SHA is required when SOURCE_TAG is not set}"
+  fi
   local -a repositories=("$@")
   local -a previous_digests=()
 
@@ -84,7 +89,7 @@ promote_ecr_dev_tags() {
   for repo in "${repositories[@]}"; do
     docker buildx imagetools create \
       --tag "${registry}/${repository_prefix}/${repo}:${image_tag}" \
-      "${registry}/${repository_prefix}/${repo}:${deployed_sha}"
+      "${registry}/${repository_prefix}/${repo}:${source_tag}"
   done
 
   trap - ERR

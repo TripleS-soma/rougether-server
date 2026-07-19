@@ -136,6 +136,18 @@ test_promotes_all_deployment_images() {
   echo "ok - all deployment images are promoted"
 }
 
+test_source_tag_override_promotes_unverified_to_sha() {
+  reset_scenario "success"
+
+  SOURCE_TAG="unverified-new-sha" IMAGE_TAG="new-sha" run_promotion
+
+  for repo in user-api admin-api batch; do
+    assert_contains "/${repo}:new-sha 478572912668.dkr.ecr.ap-northeast-2.amazonaws.com/rougether-dev/${repo}:unverified-new-sha" \
+      "$CALL_LOG" "${repo} must be promoted from the unverified source tag to :sha"
+  done
+  echo "ok - SOURCE_TAG override promotes unverified images to :sha"
+}
+
 test_partial_failure_restores_all_previous_tags() {
   reset_scenario "promotion-failure"
   local output_log="$TEST_ROOT/promotion-failure.log"
@@ -264,6 +276,7 @@ test_semantic_delete_failure_is_reported() {
 }
 
 test_promotes_all_deployment_images
+test_source_tag_override_promotes_unverified_to_sha
 test_partial_failure_restores_all_previous_tags
 test_absent_tag_is_removed_during_restore
 test_lookup_failure_stops_before_promotion
