@@ -54,7 +54,7 @@ public class AuthService {
             isNewUser = false;
         }
 
-        user.recordLogin(Instant.now());
+        user.recordAccess(Instant.now());
         // 등급 분기 도입 전까지 모든 회원은 NORMAL
         String accessToken = tokenService.issueAccessToken(user.getId(), MemberRole.NORMAL);
         String refreshToken = issueRefreshToken(user);
@@ -109,6 +109,10 @@ public class AuthService {
         }
 
         User user = stored.getUser();
+        // 정상 회전 성공 시에만 마지막 접속 시각 갱신(reuse 감지→전체 revoke 경로 제외).
+        // dirty checking 대신 targeted UPDATE 로 동시 refresh 경합·불필요한 전체 row 갱신을 피함.
+        // 주의: bulk UPDATE 는 영속성 컨텍스트를 우회하므로 이후 이 트랜잭션에서 user.getLastAccessedAt() 를 읽으면 옛값이다.
+        userRepository.updateLastAccessedAt(user.getId(), now);
         String accessToken = tokenService.issueAccessToken(user.getId(), MemberRole.NORMAL);
         String refreshToken = issueRefreshToken(user);
         return new TokenResponse(accessToken, refreshToken);

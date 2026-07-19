@@ -40,7 +40,7 @@ public class MemberService {
     }
 
     private MeResponse toMeResponse(User user) {
-        return new MeResponse(user.getId(), user.getNickname(), user.getBio(), user.getLastLoginAt(),
+        return new MeResponse(user.getId(), user.getNickname(), user.getBio(), user.getLastAccessedAt(),
                 onboardingQueryService.getSummary(user.getId()));
     }
 }
