@@ -202,7 +202,7 @@ class HouseMemberActivityIntegrationTest {
     @Test
     void 루틴은_그날_반복_대상만_완료_여부와_함께_보인다() {
         Fixture f = fixture();
-        LocalDate monday = LocalDate.of(2026, 7, 6); // 월요일
+        LocalDate monday = LocalDate.now(KST).with(java.time.temporal.TemporalAdjusters.previous(java.time.DayOfWeek.MONDAY));
         Category category = categoryRepository.save(Category.create(
                 f.target(), "요일 카테고리", null, null, 0, PrivacyScope.HOUSE));
         Routine daily = routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
