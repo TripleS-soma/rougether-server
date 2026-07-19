@@ -33,7 +33,9 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Test deployment scripts
-        run: bash .github/scripts/test-deploy-ec2-with-rollback.sh
+        run: |
+          bash .github/scripts/test-deploy-ec2-with-rollback.sh
+          bash .github/scripts/test-promote-ecr-dev-tags.sh
 
       - name: Run tests
         run: ./gradlew test
