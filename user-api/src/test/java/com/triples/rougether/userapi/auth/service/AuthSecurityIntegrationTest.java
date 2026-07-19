@@ -24,6 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 // 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·재사용을 검증함.
 @SpringBootTest
@@ -38,6 +39,8 @@ class AuthSecurityIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private TokenService tokenService;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Test
     void 토큰_없이_보호자원_접근하면_401_과_code_를_준다() throws Exception {
@@ -135,6 +138,12 @@ class AuthSecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"" + r2 + "\"}"))
                 .andExpect(status().isUnauthorized());
+        assertThat(userRepository.findById(userId).orElseThrow().getLastAccessedAt())
+                .isEqualTo(afterRotate);
+
+        // 4) 과거 시각으로의 역행 UPDATE 는 무시된다(여러 기기 동시 회전 시 최신 값 보호)
+        transactionTemplate.executeWithoutResult(tx ->
+                userRepository.updateLastAccessedAt(userId, seeded));
         assertThat(userRepository.findById(userId).orElseThrow().getLastAccessedAt())
                 .isEqualTo(afterRotate);
     }
