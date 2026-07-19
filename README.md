@@ -52,6 +52,8 @@ curl http://localhost:8080/api/v1/health
 
 커밋, 브랜치, PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 따릅니다.
 
+AI 에이전트 작업 기준과 도메인별 문서는 [CLAUDE.md](CLAUDE.md)를 진입점으로 사용합니다.
+
 ## MySQL Profile
 
 MySQL로 실행할 때는 환경변수를 지정하고 `mysql` 프로파일을 켭니다.
