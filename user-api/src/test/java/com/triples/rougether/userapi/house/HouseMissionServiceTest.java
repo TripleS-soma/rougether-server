@@ -67,7 +67,9 @@ class HouseMissionServiceTest {
         lenient().when(mission.isWithinPeriod(any())).thenReturn(true);
         lenient().when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
         lenient().when(mission.getTargetValue()).thenReturn(targetValue);
-        lenient().when(houseMissionRepository.findByIdAndHouseId(missionId, houseId))
+        lenient().when(houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(missionId, houseId))
+                .thenReturn(Optional.of(mission));
+        lenient().when(houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId))
                 .thenReturn(Optional.of(mission));
         return mission;
     }
@@ -274,7 +276,7 @@ class HouseMissionServiceTest {
     void 존재하지_않는_미션은_404() {
         aliveHouse(1L);
         activeMember(1L, 7L, false, 10L);
-        when(houseMissionRepository.findByIdAndHouseId(99L, 1L)).thenReturn(Optional.empty());
+        when(houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(99L, 1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseMissionService.getMission(7L, 1L, 99L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())

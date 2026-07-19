@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -96,5 +97,20 @@ public class HouseMissionController {
                                            @Parameter(description = "미션 ID. GET /api/v1/houses/{houseId}/missions (단체 미션 목록) 응답의 missionId 값")
                                            @PathVariable Long missionId) {
         return houseMissionService.claim(user.id(), houseId, missionId);
+    }
+
+    @Operation(summary = "단체 미션 삭제",
+            description = "미션을 삭제합니다. 집 소유자(OWNER)만 호출할 수 있습니다. "
+                    + "삭제된 미션은 목록·상세에서 사라지고 기여·보상 수령도 불가능해지지만, 기여 이력 자체는 보존됩니다. "
+                    + "이미 보상을 수령한(COMPLETED) 미션은 성장 포인트가 지급된 이력이라 삭제할 수 없습니다 "
+                    + "(409 HOUSE_MISSION_ALREADY_CLAIMED). 진행 중(ACTIVE) 미션은 기여가 있어도 삭제할 수 있습니다.")
+    @DeleteMapping("/{missionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@CurrentUser AuthUser user,
+                       @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값")
+                       @PathVariable Long houseId,
+                       @Parameter(description = "미션 ID. GET /api/v1/houses/{houseId}/missions (단체 미션 목록) 응답의 missionId 값")
+                       @PathVariable Long missionId) {
+        houseMissionService.delete(user.id(), houseId, missionId);
     }
 }
