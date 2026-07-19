@@ -86,7 +86,7 @@ class DailyRewardCapAggregateIntegrationTest {
 
         // 투두 1건 완료 (5코인) — 합산 4건
         Long todoId = todoService.create(userId,
-                new TodoCreateRequest("투두", null, null, TODAY)).id();
+                new TodoCreateRequest("투두", null, null, TODAY, null)).id();
         todoService.complete(userId, todoId);
         assertThat(walletBalance()).isEqualTo(35);
 
@@ -99,7 +99,7 @@ class DailyRewardCapAggregateIntegrationTest {
 
         // 다음 투두 완료도 0 지급
         Long fifthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두2", null, null, TODAY)).id();
+                new TodoCreateRequest("투두2", null, null, TODAY, null)).id();
         var todoResponse = todoService.complete(userId, fifthTodoId);
         assertThat(todoResponse.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(35);
@@ -114,7 +114,7 @@ class DailyRewardCapAggregateIntegrationTest {
         }
         for (int i = 0; i < 2; i++) {
             Long todoId = todoService.create(userId,
-                    new TodoCreateRequest("투두 " + i, null, null, TODAY)).id();
+                    new TodoCreateRequest("투두 " + i, null, null, TODAY, null)).id();
             todoService.complete(userId, todoId);
         }
         assertThat(walletBalance()).isEqualTo(30); // 10+10+5+5
@@ -127,7 +127,7 @@ class DailyRewardCapAggregateIntegrationTest {
         assertThat(walletBalance()).isEqualTo(30);
 
         Long fifthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 5", null, null, TODAY)).id();
+                new TodoCreateRequest("투두 5", null, null, TODAY, null)).id();
         var sixth = todoService.complete(userId, fifthTodoId);
         assertThat(sixth.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(30);
@@ -142,7 +142,7 @@ class DailyRewardCapAggregateIntegrationTest {
             routineLogService.complete(userId, routines[i], new RoutineLogCreateRequest(null));
         }
         Long todoId = todoService.create(userId,
-                new TodoCreateRequest("투두", null, null, TODAY)).id();
+                new TodoCreateRequest("투두", null, null, TODAY, null)).id();
         todoService.complete(userId, todoId);
         assertThat(walletBalance()).isEqualTo(35);
 

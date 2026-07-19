@@ -91,11 +91,11 @@ class TodoCompletionRollbackTest {
     }
 
     private Long persistTodo(User owner) {
-        return todoRepository.save(Todo.create(owner, null, "장보기", null, null)).getId();
+        return todoRepository.save(Todo.create(owner, null, "장보기", null, null, null)).getId();
     }
 
     private Long persistCompletedTodo(User owner) {
-        Todo todo = Todo.create(owner, null, "장보기", null, null);
+        Todo todo = Todo.create(owner, null, "장보기", null, null, null);
         todo.complete(CurrencyType.COIN, 5, Instant.now());
         return todoRepository.save(todo).getId();
     }

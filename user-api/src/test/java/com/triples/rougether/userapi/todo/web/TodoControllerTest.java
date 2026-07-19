@@ -60,7 +60,7 @@ class TodoControllerTest {
     @Test
     void 목록은_items_배열로_감싸_응답한다() throws Exception {
         when(todoService.list(1L, null, null, null)).thenReturn(new TodoListResponse(List.of(
-                new TodoResponse(10L, "장보기", "우유", 3L, LocalDate.of(2026, 7, 1),
+                new TodoResponse(10L, "장보기", "우유", 3L, LocalDate.of(2026, 7, 1), null,
                         TodoStatus.PENDING, null))));
 
         mockMvc.perform(get("/api/v1/todos"))
@@ -74,7 +74,7 @@ class TodoControllerTest {
     @Test
     void 등록은_201과_생성된_투두를_응답한다() throws Exception {
         when(todoService.create(eq(1L), any(TodoCreateRequest.class)))
-                .thenReturn(new TodoResponse(5L, "장보기", null, null, null,
+                .thenReturn(new TodoResponse(5L, "장보기", null, null, null, null,
                         TodoStatus.PENDING, null));
 
         mockMvc.perform(post("/api/v1/todos")
@@ -140,7 +140,7 @@ class TodoControllerTest {
     @Test
     void 완료_취소는_200과_되돌린_투두를_응답한다() throws Exception {
         when(todoService.cancelComplete(1L, 7L))
-                .thenReturn(new TodoResponse(7L, "장보기", null, null, null,
+                .thenReturn(new TodoResponse(7L, "장보기", null, null, null, null,
                         TodoStatus.PENDING, null));
 
         mockMvc.perform(delete("/api/v1/todos/7/complete"))

@@ -6,6 +6,7 @@ import com.triples.rougether.domain.routine.entity.TodoStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 public record TodoResponse(
         @Schema(description = "투두 ID", example = "1")
@@ -18,6 +19,8 @@ public record TodoResponse(
         Long categoryId,
         @Schema(description = "마감일(YYYY-MM-DD)", example = "2026-07-01")
         LocalDate dueDate,
+        @Schema(description = "마감 시각(HH:mm:ss, 미지정이면 null)", example = "18:00:00")
+        LocalTime dueTime,
         @Schema(description = "투두 상태. 허용값: PENDING(대기), COMPLETED(완료)", example = "PENDING")
         TodoStatus status,
         @Schema(description = "완료 시각(ISO-8601, 미완료면 null)", example = "2026-06-30T07:00:00Z")
@@ -32,6 +35,7 @@ public record TodoResponse(
                 todo.getDescription(),
                 category != null ? category.getId() : null,
                 todo.getDueDate(),
+                todo.getDueTime(),
                 todo.getStatus(),
                 todo.getCompletedAt()
         );

@@ -282,12 +282,12 @@ class HouseMemberActivityIntegrationTest {
                 f.target(), "공개 카테고리", null, null, 0, PrivacyScope.HOUSE));
         Category closed = categoryRepository.save(Category.create(
                 f.target(), "비공개 카테고리", null, null, 0, PrivacyScope.PRIVATE));
-        Todo done = todoRepository.save(Todo.create(f.target(), open, "완료한 투두", null, today));
+        Todo done = todoRepository.save(Todo.create(f.target(), open, "완료한 투두", null, today, null));
         done.complete(CurrencyType.COIN, 10, Instant.now());
-        todoRepository.save(Todo.create(f.target(), open, "남은 투두", null, today));
-        todoRepository.save(Todo.create(f.target(), open, "내일 투두", null, today.plusDays(1)));
-        todoRepository.save(Todo.create(f.target(), closed, "비공개 투두", null, today));
-        todoRepository.save(Todo.create(f.target(), null, "미분류 투두", null, today));
+        todoRepository.save(Todo.create(f.target(), open, "남은 투두", null, today, null));
+        todoRepository.save(Todo.create(f.target(), open, "내일 투두", null, today.plusDays(1), null));
+        todoRepository.save(Todo.create(f.target(), closed, "비공개 투두", null, today, null));
+        todoRepository.save(Todo.create(f.target(), null, "미분류 투두", null, today, null));
 
         HouseMemberDayResponse response = activityService.getMemberDay(
                 f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);

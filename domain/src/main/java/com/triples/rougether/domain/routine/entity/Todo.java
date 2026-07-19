@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,6 +48,9 @@ public class Todo extends BaseEntity {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Column(name = "due_time")
+    private LocalTime dueTime;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private TodoStatus status;
@@ -64,22 +68,24 @@ public class Todo extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    private Todo(User user, Category category, String title, String description, LocalDate dueDate) {
+    private Todo(User user, Category category, String title, String description, LocalDate dueDate,
+                LocalTime dueTime) {
         this.user = user;
         this.category = category;
         this.title = title;
         this.description = description;
         this.dueDate = dueDate;
+        this.dueTime = dueTime == null ? null : dueTime.withSecond(0).withNano(0);
         this.status = TodoStatus.PENDING;
         this.rewardAmount = 0;
     }
 
     public static Todo create(User user, Category category, String title, String description,
-                              LocalDate dueDate) {
-        return new Todo(user, category, title, description, dueDate);
+                              LocalDate dueDate, LocalTime dueTime) {
+        return new Todo(user, category, title, description, dueDate, dueTime);
     }
 
-    public void update(String title, String description, LocalDate dueDate) {
+    public void update(String title, String description, LocalDate dueDate, LocalTime dueTime) {
         // title은 NOT NULL 업무필수라 공백이면 덮어쓰지 않음
         if (title != null && !title.isBlank()) {
             this.title = title;
@@ -89,6 +95,9 @@ public class Todo extends BaseEntity {
         }
         if (dueDate != null) {
             this.dueDate = dueDate;
+        }
+        if (dueTime != null) {
+            this.dueTime = dueTime.withSecond(0).withNano(0);
         }
     }
 

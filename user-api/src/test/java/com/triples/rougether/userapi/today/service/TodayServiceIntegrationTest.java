@@ -176,6 +176,16 @@ class TodayServiceIntegrationTest {
     }
 
     @Test
+    void 투두는_due_time_시간순이고_null은_뒤로_정렬된다() {
+        persistTodo("미정", null, MONDAY, null);
+        persistTodo("아침", null, MONDAY, LocalTime.of(7, 0));
+        persistTodo("저녁", null, MONDAY, LocalTime.of(20, 0));
+
+        assertThat(todoTitles(service.today(userId, MONDAY)))
+                .containsExactly("아침", "저녁", "미정");
+    }
+
+    @Test
     void summary는_루틴과_투두_완료_미완료_진행률을_정확히_계산한다() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
@@ -263,11 +273,15 @@ class TodayServiceIntegrationTest {
     }
 
     private void persistTodo(String title, Category category, LocalDate dueDate) {
-        todoRepository.save(Todo.create(user, category, title, null, dueDate));
+        persistTodo(title, category, dueDate, null);
+    }
+
+    private void persistTodo(String title, Category category, LocalDate dueDate, LocalTime dueTime) {
+        todoRepository.save(Todo.create(user, category, title, null, dueDate, dueTime));
     }
 
     private void persistCompletedTodo(String title, Category category, LocalDate dueDate) {
-        Todo todo = Todo.create(user, category, title, null, dueDate);
+        Todo todo = Todo.create(user, category, title, null, dueDate, null);
         todo.complete(CurrencyType.COIN, 5, Instant.now());
         todoRepository.save(todo);
     }
