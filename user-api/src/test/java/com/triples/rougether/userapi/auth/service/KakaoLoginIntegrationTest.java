@@ -60,6 +60,8 @@ class KakaoLoginIntegrationTest {
         assertThat(user.getEmail()).isEqualTo("a@b.com");
         // 닉네임은 가입 시 비우고 온보딩에서 채움.
         assertThat(user.getNickname()).isNull();
+        // 로그인 성공 시 마지막 접속 시각 기록(회귀 확인).
+        assertThat(user.getLastAccessedAt()).isNotNull();
 
         assertThat(userWalletRepository.findByUserId(user.getId()))
                 .extracting(UserWallet::getCurrencyType)
