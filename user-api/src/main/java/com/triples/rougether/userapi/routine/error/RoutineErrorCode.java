@@ -18,7 +18,8 @@ public enum RoutineErrorCode implements ErrorCode {
             "매월 반복은 repeatDays.dayOfMonth(1~31)가 필요합니다.", 400),
     // 누락/범위 밖/2·30·4·31처럼 실존하지 않는 조합이면 어느 날짜에도 매칭되지 않는 "죽은" 루틴이 생성되므로 필수값으로 막음(2/29는 허용)
     YEARLY_REQUIRES_MONTH_AND_DAY("YEARLY_REQUIRES_MONTH_AND_DAY",
-            "매년 반복은 repeatDays.month(1~12)와 day(1~31)의 실제 존재하는 날짜 조합이 필요합니다.", 400);
+            "매년 반복은 repeatDays.month(1~12)와 day(1~31)의 실제 존재하는 날짜 조합이 필요합니다.", 400),
+    REPEAT_DAYS_SERIALIZATION_FAILED("REPEAT_DAYS_SERIALIZATION_FAILED", "반복 설정을 저장하는 중 오류가 발생했습니다.", 500);
 
     private final String code;
     private final String message;

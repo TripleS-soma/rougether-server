@@ -14,6 +14,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 // 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·재사용을 검증함.
 @SpringBootTest
@@ -37,6 +39,8 @@ class AuthSecurityIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private TokenService tokenService;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Test
     void 토큰_없이_보호자원_접근하면_401_과_code_를_준다() throws Exception {
@@ -58,7 +62,7 @@ class AuthSecurityIntegrationTest {
     @Test
     void 유효한_access_토큰으로_me_조회와_refresh_회전_재사용을_검증한다() throws Exception {
         User user = userRepository.save(User.signUp());
-        user.recordLogin(Instant.now());
+        user.recordAccess(Instant.now());
         userRepository.save(user);
         Long userId = user.getId();
 
@@ -95,5 +99,52 @@ class AuthSecurityIntegrationTest {
                         .content("{\"refreshToken\":\"" + r2 + "\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REFRESH_TOKEN_INVALID"));
+    }
+
+    @Test
+    void refresh_정상_회전은_last_accessed_at_을_갱신하고_revoke_경로는_갱신하지_않는다() throws Exception {
+        User user = userRepository.save(User.signUp());
+        // TIMESTAMP 초 단위 정밀도 영향을 받지 않도록 과거 시각으로 시드함.
+        Instant seeded = Instant.now().minus(Duration.ofDays(1));
+        user.recordAccess(seeded);
+        userRepository.save(user);
+        Long userId = user.getId();
+
+        GeneratedRefreshToken firstRefresh = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(
+                RefreshToken.issue(user, firstRefresh.tokenHash(), firstRefresh.expiresAt()));
+        String r1 = firstRefresh.raw();
+
+        // 1) 정상 회전 → 회전과 같은 트랜잭션에서 last_accessed_at 이 갱신됨
+        MvcResult refreshed = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + r1 + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String r2 = JsonPath.read(refreshed.getResponse().getContentAsString(), "$.refreshToken");
+        Instant afterRotate = userRepository.findById(userId).orElseThrow().getLastAccessedAt();
+        assertThat(afterRotate).isAfter(seeded);
+
+        // 2) 회전된 r1 재사용(reuse 감지→전체 revoke) → 401, last_accessed_at 미갱신
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + r1 + "\"}"))
+                .andExpect(status().isUnauthorized());
+        assertThat(userRepository.findById(userId).orElseThrow().getLastAccessedAt())
+                .isEqualTo(afterRotate);
+
+        // 3) reuse 감지로 폐기된 r2 → 401, last_accessed_at 미갱신
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + r2 + "\"}"))
+                .andExpect(status().isUnauthorized());
+        assertThat(userRepository.findById(userId).orElseThrow().getLastAccessedAt())
+                .isEqualTo(afterRotate);
+
+        // 4) 과거 시각으로의 역행 UPDATE 는 무시된다(여러 기기 동시 회전 시 최신 값 보호)
+        transactionTemplate.executeWithoutResult(tx ->
+                userRepository.updateLastAccessedAt(userId, seeded));
+        assertThat(userRepository.findById(userId).orElseThrow().getLastAccessedAt())
+                .isEqualTo(afterRotate);
     }
 }

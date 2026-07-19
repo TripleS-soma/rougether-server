@@ -44,7 +44,8 @@ public class DailyAgendaAssembler {
             Long key = categoryIdOf(todo.getCategory());
             groups.computeIfAbsent(key, Accumulator::new)
                     .todos.add(new TodayTodoItem(todo.getId(), todo.getTitle(),
-                            todo.getDueDate(), todo.getStatus(), todo.getCompletedAt()));
+                            todo.getDueDate(), todo.getDueTime(), todo.getStatus(),
+                            todo.getCompletedAt()));
         }
 
         return groups.values().stream()
@@ -88,6 +89,11 @@ public class DailyAgendaAssembler {
                     .comparing(TodayRoutineItem::scheduledTime,
                             Comparator.nullsLast(Comparator.naturalOrder()))
                     .thenComparing(TodayRoutineItem::id));
+            // 투두는 due_time 시간순(null은 뒤), 그다음 id
+            todos.sort(Comparator
+                    .comparing(TodayTodoItem::dueTime,
+                            Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(TodayTodoItem::id));
             return new TodayCategoryGroup(categoryId, List.copyOf(routines), List.copyOf(todos));
         }
     }

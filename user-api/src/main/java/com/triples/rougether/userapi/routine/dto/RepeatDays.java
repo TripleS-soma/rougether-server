@@ -3,6 +3,8 @@ package com.triples.rougether.userapi.routine.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -38,7 +40,7 @@ public record RepeatDays(
         try {
             return MAPPER.writeValueAsString(this);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("repeatDays 직렬화 실패", e);
+            throw new BusinessException(RoutineErrorCode.REPEAT_DAYS_SERIALIZATION_FAILED);
         }
     }
 

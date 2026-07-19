@@ -58,7 +58,7 @@ class TodayControllerTest {
                 List.of(new TodayCategoryGroup(3L,
                         List.of(new TodayRoutineItem(10L, "아침 운동", LocalTime.of(7, 0),
                                 AuthType.CHECK, true)),
-                        List.of(new TodayTodoItem(20L, "장보기", LocalDate.of(2026, 6, 29),
+                        List.of(new TodayTodoItem(20L, "장보기", LocalDate.of(2026, 6, 29), null,
                                 TodoStatus.PENDING, null)))),
                 new TodaySummary(1, 1, 0.5),
                 new TodayStreak(5, 9, LocalDate.of(2026, 6, 29)));

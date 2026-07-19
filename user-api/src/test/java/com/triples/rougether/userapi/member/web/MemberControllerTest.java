@@ -13,6 +13,7 @@ import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.service.MemberService;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingSummary;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,12 +46,16 @@ class MemberControllerTest {
     @Test
     void 내_정보는_온보딩_요약을_포함해_응답한다() throws Exception {
         when(memberService.getMe(1L)).thenReturn(new MeResponse(
-                1L, "루티니", null, null, new OnboardingSummary(true, 3L, 5L)));
+                1L, "루티니", null, Instant.parse("2026-07-05T03:34:56Z"),
+                new OnboardingSummary(true, 3L, 5L)));
 
         mockMvc.perform(get("/api/v1/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(1))
                 .andExpect(jsonPath("$.nickname").value("루티니"))
+                // lastLoginAt → lastAccessedAt rename (breaking) 반영 확인
+                .andExpect(jsonPath("$.lastAccessedAt").value("2026-07-05T03:34:56Z"))
+                .andExpect(jsonPath("$.lastLoginAt").doesNotExist())
                 .andExpect(jsonPath("$.onboarding.completed").value(true))
                 .andExpect(jsonPath("$.onboarding.primaryGoalId").value(3))
                 .andExpect(jsonPath("$.onboarding.selectedCharacterId").value(5));

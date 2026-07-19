@@ -84,6 +84,8 @@ class AuthServiceRefreshTest {
         assertThat(response.refreshToken()).isEqualTo("new-raw");
         verify(refreshTokenRepository).revokeIfActive(eq(100L), any(Instant.class));
         verify(refreshTokenRepository).save(any(RefreshToken.class));
+        // 정상 회전 성공 시 마지막 접속 시각을 targeted UPDATE 로 갱신함.
+        verify(userRepository).updateLastAccessedAt(eq(1L), any(Instant.class));
     }
 
     @Test
@@ -103,6 +105,7 @@ class AuthServiceRefreshTest {
                 .isEqualTo(AuthErrorCode.REFRESH_TOKEN_INVALID);
         assertThat(anotherActive.isRevoked()).isTrue();
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verify(userRepository, never()).updateLastAccessedAt(anyLong(), any(Instant.class));
     }
 
     @Test
@@ -136,6 +139,8 @@ class AuthServiceRefreshTest {
         assertThat(anotherActive.isRevoked()).isTrue();
         verify(refreshTokenRepository).findAllByUserIdAndRevokedAtIsNull(9L);
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        // reuse 감지→전체 revoke 경로에서는 마지막 접속 시각을 갱신하지 않음.
+        verify(userRepository, never()).updateLastAccessedAt(anyLong(), any(Instant.class));
     }
 
     @Test

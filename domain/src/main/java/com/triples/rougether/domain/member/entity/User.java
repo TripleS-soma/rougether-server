@@ -31,8 +31,8 @@ public class User extends BaseEntity {
     @Column(name = "email", length = 255)
     private String email;
 
-    @Column(name = "last_login_at")
-    private Instant lastLoginAt;
+    @Column(name = "last_accessed_at")
+    private Instant lastAccessedAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
@@ -51,8 +51,9 @@ public class User extends BaseEntity {
         return new User(email);
     }
 
-    public void recordLogin(Instant now) {
-        this.lastLoginAt = now;
+    // 마지막 접속(토큰 발급) 시각 기록. 로그인과 refresh 정상 회전 시 갱신됨.
+    public void recordAccess(Instant now) {
+        this.lastAccessedAt = now;
     }
 
     public void changeNickname(String nickname) {

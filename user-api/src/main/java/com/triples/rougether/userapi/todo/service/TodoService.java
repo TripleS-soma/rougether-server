@@ -61,7 +61,7 @@ public class TodoService {
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
         Todo todo = Todo.create(user, category, request.title(), request.description(),
-                request.dueDate());
+                request.dueDate(), request.dueTime());
         return TodoResponse.from(todoRepository.save(todo));
     }
 
@@ -71,7 +71,7 @@ public class TodoService {
         if (request.categoryId() != null) {
             todo.changeCategory(findOwnedCategory(userId, request.categoryId()));
         }
-        todo.update(request.title(), request.description(), request.dueDate());
+        todo.update(request.title(), request.description(), request.dueDate(), request.dueTime());
         return TodoResponse.from(todo);
     }
 

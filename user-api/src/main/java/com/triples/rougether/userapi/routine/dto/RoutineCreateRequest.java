@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.routine.dto;
 
 import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.userapi.global.validation.FiveMinuteStep;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,8 +25,8 @@ public record RoutineCreateRequest(
         @Schema(description = "반복 설정. repeatType이 WEEKLY/BIWEEKLY면 daysOfWeek, "
                 + "MONTHLY면 dayOfMonth, YEARLY면 month/day 지정. DAILY면 생략")
         RepeatDays repeatDays,
-        @Schema(description = "수행 예정 시각(HH:mm:ss). 루틴 목록·오늘 현황의 정렬 기준, 미지정 가능", example = "07:00:00")
-        LocalTime scheduledTime,
+        @Schema(description = "수행 예정 시각(HH:mm, 5분 단위만 허용). 루틴 목록·오늘 현황의 정렬 기준, 미지정 가능", example = "07:00:00")
+        @FiveMinuteStep LocalTime scheduledTime,
         @Schema(description = "시작일(YYYY-MM-DD). 미지정이면 생성일(오늘)로 지정됨. 오늘 이전 과거일은 불가. 오늘 현황은 시작일~종료일 범위의 루틴만 대상으로 봄", example = "2026-07-01")
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD). 미지정이면 제한 없음. 시작일보다 앞설 수 없음", example = "2026-12-31")

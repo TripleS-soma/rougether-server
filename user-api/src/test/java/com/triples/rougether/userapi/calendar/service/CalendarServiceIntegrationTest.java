@@ -235,7 +235,7 @@ class CalendarServiceIntegrationTest {
         User other = userRepository.save(User.signUp());
         routineRepository.save(Routine.create(other, null, "남의 루틴", AuthType.CHECK,
                 "DAILY", null, null, null, null));
-        todoRepository.save(Todo.create(other, null, "남의 투두", null, TODAY));
+        todoRepository.save(Todo.create(other, null, "남의 투두", null, TODAY, null));
 
         CalendarDayResponse response = service.day(userId, TODAY);
 
@@ -455,11 +455,11 @@ class CalendarServiceIntegrationTest {
     }
 
     private void persistTodo(String title, Category category, LocalDate dueDate) {
-        todoRepository.save(Todo.create(user, category, title, null, dueDate));
+        todoRepository.save(Todo.create(user, category, title, null, dueDate, null));
     }
 
     private void persistCompletedTodo(String title, Category category, LocalDate dueDate) {
-        Todo todo = Todo.create(user, category, title, null, dueDate);
+        Todo todo = Todo.create(user, category, title, null, dueDate, null);
         todo.complete(CurrencyType.COIN, 5, Instant.now());
         todoRepository.save(todo);
     }

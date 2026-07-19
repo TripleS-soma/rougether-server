@@ -46,7 +46,7 @@ public class GoogleLoginHandler {
             isNewUser = true;
         }
 
-        user.recordLogin(Instant.now());
+        user.recordAccess(Instant.now());
         String accessToken = tokenService.issueAccessToken(user.getId(), MemberRole.NORMAL);
         String refreshToken = issueRefreshToken(user);
         return new LoginResponse(user.getId(), accessToken, refreshToken, isNewUser);

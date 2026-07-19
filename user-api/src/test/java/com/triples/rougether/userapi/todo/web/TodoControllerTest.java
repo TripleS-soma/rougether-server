@@ -60,7 +60,7 @@ class TodoControllerTest {
     @Test
     void 목록은_items_배열로_감싸_응답한다() throws Exception {
         when(todoService.list(1L, null, null, null)).thenReturn(new TodoListResponse(List.of(
-                new TodoResponse(10L, "장보기", "우유", 3L, LocalDate.of(2026, 7, 1),
+                new TodoResponse(10L, "장보기", "우유", 3L, LocalDate.of(2026, 7, 1), null,
                         TodoStatus.PENDING, null))));
 
         mockMvc.perform(get("/api/v1/todos"))
@@ -74,7 +74,7 @@ class TodoControllerTest {
     @Test
     void 등록은_201과_생성된_투두를_응답한다() throws Exception {
         when(todoService.create(eq(1L), any(TodoCreateRequest.class)))
-                .thenReturn(new TodoResponse(5L, "장보기", null, null, null,
+                .thenReturn(new TodoResponse(5L, "장보기", null, null, null, null,
                         TodoStatus.PENDING, null));
 
         mockMvc.perform(post("/api/v1/todos")
@@ -94,6 +94,16 @@ class TodoControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("title"));
+    }
+
+    @Test
+    void dueTime이_5분_단위가_아니면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"장보기\",\"dueDate\":\"2026-07-01\",\"dueTime\":\"18:03:00\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("dueTime"));
     }
 
     @Test
@@ -140,7 +150,7 @@ class TodoControllerTest {
     @Test
     void 완료_취소는_200과_되돌린_투두를_응답한다() throws Exception {
         when(todoService.cancelComplete(1L, 7L))
-                .thenReturn(new TodoResponse(7L, "장보기", null, null, null,
+                .thenReturn(new TodoResponse(7L, "장보기", null, null, null, null,
                         TodoStatus.PENDING, null));
 
         mockMvc.perform(delete("/api/v1/todos/7/complete"))

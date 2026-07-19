@@ -86,7 +86,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void 기존_userId_는_새로_만들지_않고_last_login_갱신_후_토큰을_발급한다() {
+    void 기존_userId_는_새로_만들지_않고_last_accessed_갱신_후_토큰을_발급한다() {
         User existing = User.signUp();
         ReflectionTestUtils.setField(existing, "id", 7L);
         when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
@@ -96,7 +96,7 @@ class AuthServiceTest {
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(7L);
-        assertThat(existing.getLastLoginAt()).isNotNull();
+        assertThat(existing.getLastAccessedAt()).isNotNull();
         verify(userRepository, never()).save(any(User.class));
         verify(userWalletRepository, never()).save(any(UserWallet.class));
         verify(refreshTokenRepository).save(any(RefreshToken.class));

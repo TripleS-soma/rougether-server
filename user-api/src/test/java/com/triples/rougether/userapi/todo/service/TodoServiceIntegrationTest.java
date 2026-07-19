@@ -23,6 +23,7 @@ import com.triples.rougether.userapi.todo.dto.TodoResponse;
 import com.triples.rougether.userapi.todo.dto.TodoUpdateRequest;
 import com.triples.rougether.userapi.todo.error.TodoErrorCode;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -63,7 +64,7 @@ class TodoServiceIntegrationTest {
     @Test
     void 등록하면_PENDING_상태에_보상은_0이다() {
         TodoResponse response = service.create(userId,
-                new TodoCreateRequest("장보기", "우유, 계란", null, LocalDate.of(2026, 7, 1)));
+                new TodoCreateRequest("장보기", "우유, 계란", null, LocalDate.of(2026, 7, 1), null));
 
         assertThat(response.status()).isEqualTo(TodoStatus.PENDING);
         assertThat(response.title()).isEqualTo("장보기");
@@ -73,11 +74,19 @@ class TodoServiceIntegrationTest {
     }
 
     @Test
+    void 등록시_dueTime의_초_나노는_0으로_정규화된다() {
+        TodoResponse response = service.create(userId,
+                new TodoCreateRequest("장보기", null, null, null, LocalTime.of(18, 30, 45)));
+
+        assertThat(response.dueTime()).isEqualTo(LocalTime.of(18, 30));
+    }
+
+    @Test
     void 타인_카테고리로_등록하면_CATEGORY_NOT_FOUND() {
         Long otherCategory = persistCategory(otherUser());
 
         assertThatThrownBy(() -> service.create(userId,
-                new TodoCreateRequest("장보기", null, otherCategory, null)))
+                new TodoCreateRequest("장보기", null, otherCategory, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
@@ -85,7 +94,7 @@ class TodoServiceIntegrationTest {
 
     @Test
     void 타인_투두_조회는_TODO_NOT_FOUND() {
-        Long otherTodo = service.create(otherUserId(), new TodoCreateRequest("남의 투두", null, null, null)).id();
+        Long otherTodo = service.create(otherUserId(), new TodoCreateRequest("남의 투두", null, null, null, null)).id();
 
         assertThatThrownBy(() -> service.get(userId, otherTodo))
                 .isInstanceOf(BusinessException.class)
@@ -96,10 +105,10 @@ class TodoServiceIntegrationTest {
     @Test
     void 수정은_지정한_필드만_바꾼다() {
         Long todoId = service.create(userId,
-                new TodoCreateRequest("장보기", "원래 설명", null, LocalDate.of(2026, 7, 1))).id();
+                new TodoCreateRequest("장보기", "원래 설명", null, LocalDate.of(2026, 7, 1), null)).id();
 
         TodoResponse updated = service.update(userId, todoId,
-                new TodoUpdateRequest("청소하기", null, null, null));
+                new TodoUpdateRequest("청소하기", null, null, null, null));
 
         assertThat(updated.title()).isEqualTo("청소하기");
         assertThat(updated.description()).isEqualTo("원래 설명");
@@ -107,8 +116,30 @@ class TodoServiceIntegrationTest {
     }
 
     @Test
+    void 수정에서_dueTime을_지정하지_않으면_기존_값을_유지한다() {
+        Long todoId = service.create(userId,
+                new TodoCreateRequest("장보기", null, null, null, LocalTime.of(9, 0))).id();
+
+        TodoResponse updated = service.update(userId, todoId,
+                new TodoUpdateRequest("청소하기", null, null, null, null));
+
+        assertThat(updated.dueTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    @Test
+    void 수정에서_dueTime을_지정하면_초_나노가_정규화되어_바뀐다() {
+        Long todoId = service.create(userId,
+                new TodoCreateRequest("장보기", null, null, null, LocalTime.of(9, 0))).id();
+
+        TodoResponse updated = service.update(userId, todoId,
+                new TodoUpdateRequest(null, null, null, null, LocalTime.of(21, 15, 30)));
+
+        assertThat(updated.dueTime()).isEqualTo(LocalTime.of(21, 15));
+    }
+
+    @Test
     void 삭제하면_목록에서_빠진다() {
-        Long todoId = service.create(userId, new TodoCreateRequest("장보기", null, null, null)).id();
+        Long todoId = service.create(userId, new TodoCreateRequest("장보기", null, null, null, null)).id();
 
         service.delete(userId, todoId);
 
@@ -118,8 +149,8 @@ class TodoServiceIntegrationTest {
     @Test
     void categoryId_필터는_해당_카테고리만_반환한다() {
         Long categoryId = persistCategory(userRepository.findById(userId).orElseThrow());
-        service.create(userId, new TodoCreateRequest("분류됨", null, categoryId, null));
-        service.create(userId, new TodoCreateRequest("미분류", null, null, null));
+        service.create(userId, new TodoCreateRequest("분류됨", null, categoryId, null, null));
+        service.create(userId, new TodoCreateRequest("미분류", null, null, null, null));
 
         var items = service.list(userId, categoryId, null, null).items();
 
@@ -129,8 +160,8 @@ class TodoServiceIntegrationTest {
 
     @Test
     void status_필터는_해당_상태만_반환한다() {
-        Long pending = service.create(userId, new TodoCreateRequest("대기", null, null, null)).id();
-        Long done = service.create(userId, new TodoCreateRequest("완료", null, null, null)).id();
+        Long pending = service.create(userId, new TodoCreateRequest("대기", null, null, null, null)).id();
+        Long done = service.create(userId, new TodoCreateRequest("완료", null, null, null, null)).id();
         persistWallet(userRepository.findById(userId).orElseThrow());
         service.complete(userId, done);
 
@@ -141,8 +172,8 @@ class TodoServiceIntegrationTest {
 
     @Test
     void dueDate_필터는_해당_마감일만_반환한다() {
-        service.create(userId, new TodoCreateRequest("오늘", null, null, LocalDate.of(2026, 7, 1)));
-        service.create(userId, new TodoCreateRequest("내일", null, null, LocalDate.of(2026, 7, 2)));
+        service.create(userId, new TodoCreateRequest("오늘", null, null, LocalDate.of(2026, 7, 1), null));
+        service.create(userId, new TodoCreateRequest("내일", null, null, LocalDate.of(2026, 7, 2), null));
 
         var items = service.list(userId, null, null, LocalDate.of(2026, 7, 1)).items();
 
