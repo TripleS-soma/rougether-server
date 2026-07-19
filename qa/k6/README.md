@@ -30,6 +30,12 @@
 | `baseline` | 15초 ramp-up, 최대 10 VU, 총 75초 | 개발 장비 기준 반복 측정 |
 | `stress` | 최대 50 VU, 총 120초 | 병목과 실패 시작점 탐색 |
 
+`stress`의 최대 VU는 `STRESS_MAX_VUS`로 단계적으로 높일 수 있다. 중간 단계는 최대 VU의 20%, 50%로 계산한다.
+
+```bash
+STRESS_MAX_VUS=100 ./qa/k6/run-local.sh stress
+```
+
 `run-local.sh`는 다음 자원을 자동으로 관리한다.
 
 - host port `13306`의 tmpfs MySQL 8.4 container

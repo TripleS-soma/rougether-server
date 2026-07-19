@@ -6,6 +6,7 @@ const PROFILE = __ENV.PROFILE || 'smoke';
 const BASE_URL = (__ENV.BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
 const ALLOW_REMOTE = (__ENV.ALLOW_REMOTE || 'false').toLowerCase() === 'true';
 const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || '0.2');
+const STRESS_MAX_VUS = Number(__ENV.STRESS_MAX_VUS || '50');
 const ACCESS_TOKENS = (__ENV.ACCESS_TOKENS || '')
   .split(',')
   .map((token) => token.trim())
@@ -37,9 +38,9 @@ const PROFILE_CONFIG = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '20s', target: 10 },
-        { duration: '40s', target: 25 },
-        { duration: '40s', target: 50 },
+        { duration: '20s', target: Math.max(1, Math.round(STRESS_MAX_VUS * 0.2)) },
+        { duration: '40s', target: Math.max(1, Math.round(STRESS_MAX_VUS * 0.5)) },
+        { duration: '40s', target: STRESS_MAX_VUS },
         { duration: '20s', target: 0 },
       ],
       gracefulRampDown: '15s',
@@ -49,6 +50,9 @@ const PROFILE_CONFIG = {
 
 if (!PROFILE_CONFIG[PROFILE]) {
   throw new Error(`지원하지 않는 PROFILE입니다: ${PROFILE}`);
+}
+if (!Number.isInteger(STRESS_MAX_VUS) || STRESS_MAX_VUS < 1) {
+  throw new Error('STRESS_MAX_VUS는 1 이상의 정수여야 합니다.');
 }
 
 const isLoopback = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(BASE_URL);
