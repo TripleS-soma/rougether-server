@@ -32,6 +32,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -54,6 +56,9 @@ class RoutineFailedLogTransitionIntegrationTest {
     @Autowired
     private TodoRepository todoRepository;
 
+@Autowired
+    private PlatformTransactionManager transactionManager;
+
     private RoutineLogService service;
     private User user;
     private Long userId;
@@ -63,7 +68,8 @@ class RoutineFailedLogTransitionIntegrationTest {
     void setUp() {
         service = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository,
-                new DailyRewardService(routineLogRepository, todoRepository));
+                new DailyRewardService(routineLogRepository, todoRepository),
+                new TransactionTemplate(transactionManager));
         user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user).getId();
@@ -84,8 +90,10 @@ class RoutineFailedLogTransitionIntegrationTest {
         RoutineLog transitioned = routineLogRepository.findById(failedLogId).orElseThrow();
         assertThat(transitioned.getStatus()).isEqualTo(RoutineLogStatus.COMPLETED);
         assertThat(transitioned.getCompletedAt()).isNotNull();
-        // 과거 완료 규칙 그대로 — 보상 0·지갑 불변·스트릭 불변
+        // 과거 완료 규칙 그대로 — 보상 0·지갑 불변·스트릭 불변. 통화는 일반 완료 경로와 같게 COIN 기록
         assertThat(transitioned.getRewardAmount()).isZero();
+        assertThat(transitioned.getRewardCurrencyType()).isEqualTo(CurrencyType.COIN);
+        assertThat(response.rewardCurrencyType()).isEqualTo(CurrencyType.COIN);
         assertThat(walletBalance()).isEqualTo(50);
         assertThat(response.streak().currentCount()).isEqualTo(3);
         assertThat(streakRepository.findByUserId(userId).orElseThrow().getCurrentCount()).isEqualTo(3);
@@ -131,8 +139,35 @@ class RoutineFailedLogTransitionIntegrationTest {
                 RoutineLog.complete(routine, YESTERDAY, Instant.now(), CurrencyType.COIN, 0));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> completed.completeFromFailed(Instant.now()))
+                        () -> completed.completeFromFailed(Instant.now(), CurrencyType.COIN))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void 버전_분기_후_전이된_완료를_새_버전_id로_취소할_수_있다() {
+        // 전이된 COMPLETED row는 옛 버전 id에 남지만, 유저가 아는 id는 새 버전임
+        persistFailedLog(routineId, YESTERDAY);
+        Routine newVersion = forkVersion(routineId);
+        service.complete(userId, newVersion.getId(), new RoutineLogCreateRequest(YESTERDAY));
+
+        service.cancel(userId, newVersion.getId(), YESTERDAY);
+
+        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(routineId, YESTERDAY)).isEmpty();
+        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(newVersion.getId(), YESTERDAY)).isEmpty();
+        assertThat(walletBalance()).isEqualTo(50);
+    }
+
+    @Test
+    void 계보에_전이된_완료가_있으면_새_버전_id의_재완료는_거부된다() {
+        persistFailedLog(routineId, YESTERDAY);
+        Routine newVersion = forkVersion(routineId);
+        service.complete(userId, newVersion.getId(), new RoutineLogCreateRequest(YESTERDAY));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.complete(userId, newVersion.getId(), new RoutineLogCreateRequest(YESTERDAY)))
+                .isInstanceOf(com.triples.rougether.common.error.BusinessException.class);
+        // 새 버전 쪽에 중복 row가 생기지 않았어야 함
+        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(newVersion.getId(), YESTERDAY)).isEmpty();
     }
 
     @Test
@@ -142,6 +177,16 @@ class RoutineFailedLogTransitionIntegrationTest {
 
         assertThat(response.status()).isEqualTo(RoutineLogStatus.COMPLETED);
         assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(routineId, YESTERDAY)).hasSize(1);
+    }
+
+    // oldId를 닫고 같은 계보의 새 버전을 만듦
+    private Routine forkVersion(Long oldId) {
+        Routine oldVersion = routineRepository.findById(oldId).orElseThrow();
+        Routine newVersion = routineRepository.save(oldVersion.copyAsNewVersion(
+                null, "새 버전", null, null, null, null, null, null));
+        oldVersion.softDelete(Instant.now());
+        routineRepository.save(oldVersion);
+        return newVersion;
     }
 
     private Routine persistRoutine(User owner) {

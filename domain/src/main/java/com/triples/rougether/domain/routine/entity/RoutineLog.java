@@ -70,11 +70,13 @@ public class RoutineLog extends BaseCreatedEntity {
         return new RoutineLog(routine, routineDate, RoutineLogStatus.FAILED, null, null, 0);
     }
 
-    public void completeFromFailed(Instant completedAt) {
+    public void completeFromFailed(Instant completedAt, CurrencyType rewardCurrencyType) {
         if (this.status != RoutineLogStatus.FAILED) {
             throw new IllegalStateException("FAILED 상태의 로그만 완료로 전이할 수 있음: " + this.status);
         }
         this.status = RoutineLogStatus.COMPLETED;
         this.completedAt = completedAt;
+        // fail()이 통화를 null로 두므로 여기서 채워야 일반 완료 경로와 응답 계약이 같아짐(금액은 0 유지)
+        this.rewardCurrencyType = rewardCurrencyType;
     }
 }

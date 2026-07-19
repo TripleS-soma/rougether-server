@@ -29,6 +29,8 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -52,6 +54,9 @@ class DailyRewardCapAggregateIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+@Autowired
+    private PlatformTransactionManager transactionManager;
+
     private RoutineLogService routineLogService;
     private TodoService todoService;
     private Long userId;
@@ -61,7 +66,8 @@ class DailyRewardCapAggregateIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository, dailyRewardService);
+                userWalletRepository, streakRepository, dailyRewardService,
+                new TransactionTemplate(transactionManager));
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService);
         User user = userRepository.save(User.signUp());

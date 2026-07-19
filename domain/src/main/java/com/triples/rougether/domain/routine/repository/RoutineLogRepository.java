@@ -17,10 +17,6 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     Optional<RoutineLog> findByRoutineIdAndRoutineDateAndStatus(
             Long routineId, LocalDate routineDate, RoutineLogStatus status);
 
-    // 당일 중복 완료 guard
-    boolean existsByRoutineIdAndRoutineDateAndStatus(
-            Long routineId, LocalDate routineDate, RoutineLogStatus status);
-
     @Query("select l from RoutineLog l join l.routine r "
             + "where coalesce(r.originRoutineId, r.id) = :originKey "
             + "and l.routineDate = :routineDate and l.status = :status")
