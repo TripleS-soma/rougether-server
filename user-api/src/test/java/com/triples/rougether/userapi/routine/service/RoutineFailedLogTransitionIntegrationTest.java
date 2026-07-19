@@ -56,7 +56,7 @@ class RoutineFailedLogTransitionIntegrationTest {
     @Autowired
     private TodoRepository todoRepository;
 
-@Autowired
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     private RoutineLogService service;
