@@ -14,7 +14,6 @@ import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -61,31 +60,18 @@ public class CalendarService {
         return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
     }
 
-    // 과거: 그날 유효했던 버전을 재구성함.
+    // 과거: 그날 log(COMPLETED+FAILED) 단독 조회. 판정은 day-end 배치가 끝냈으므로 재구성하지 않고,
+    // 표시값은 log가 가리키는 버전 row에서 읽음(루틴은 soft delete라 버전 row가 남아 있음)
     private CalendarDayResponse pastDay(Long userId, LocalDate date) {
-        // ① 그날 유효한 버전(닫힌·삭제 버전 포함) 중 반복 대상
-        List<Routine> targeted = routineRepository.findEffectiveOnDay(userId, date).stream()
-                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
-                .toList();
+        List<RoutineLog> logs = routineLogRepository.findAllWithRoutineForDay(userId, date);
 
-        // ② 그날 완료 로그가 가리키는 루틴
-        List<Routine> completedRoutines = routineLogRepository
-                .findCompletedWithRoutineForDay(userId, date, RoutineLogStatus.COMPLETED)
-                .stream()
+        List<Routine> routines = logs.stream()
                 .map(RoutineLog::getRoutine)
                 .toList();
-        Set<Long> completedRoutineIds = completedRoutines.stream()
-                .map(Routine::getId)
+        Set<Long> completedRoutineIds = logs.stream()
+                .filter(log -> log.getStatus() == RoutineLogStatus.COMPLETED)
+                .map(log -> log.getRoutine().getId())
                 .collect(Collectors.toSet());
-
-        // ① ∪ ②
-        List<Routine> routines = new ArrayList<>(targeted);
-        Set<Long> seen = targeted.stream().map(Routine::getId).collect(Collectors.toSet());
-        for (Routine completed : completedRoutines) {
-            if (seen.add(completed.getId())) {
-                routines.add(completed);
-            }
-        }
 
         return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
     }

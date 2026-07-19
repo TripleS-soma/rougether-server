@@ -70,6 +70,16 @@ public class RoutineLog extends BaseCreatedEntity {
         return new RoutineLog(routine, routineDate, RoutineLogStatus.FAILED, null, null, 0);
     }
 
+    public void revertToFailed() {
+        if (this.status != RoutineLogStatus.COMPLETED) {
+            throw new IllegalStateException("COMPLETED 상태의 로그만 FAILED로 복원할 수 있음: " + this.status);
+        }
+        this.status = RoutineLogStatus.FAILED;
+        this.completedAt = null;
+        this.rewardCurrencyType = null;
+        this.rewardAmount = 0;
+    }
+
     public void completeFromFailed(Instant completedAt, CurrencyType rewardCurrencyType) {
         if (this.status != RoutineLogStatus.FAILED) {
             throw new IllegalStateException("FAILED 상태의 로그만 완료로 전이할 수 있음: " + this.status);

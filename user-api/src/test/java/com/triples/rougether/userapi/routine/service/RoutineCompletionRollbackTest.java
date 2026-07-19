@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -46,6 +47,8 @@ class RoutineCompletionRollbackTest {
     private UserWalletRepository userWalletRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @MockitoSpyBean
     private StreakRepository streakRepository;
@@ -112,6 +115,29 @@ class RoutineCompletionRollbackTest {
     }
 
     @Test
+    void 과거_취소의_FAILED_복원_중_예외가_나면_COMPLETED_상태와_지갑이_그대로_유지된다() {
+        User user = userRepository.save(User.signUp());
+        userId = user.getId();
+        routineId = persistDailyRoutine(user);
+        // 복원 판정(그날 유효했던 버전)이 성립하도록 생성일을 과거로 당김
+        jdbcTemplate.update("update routines set created_at = created_at - interval 9 day where id = ?",
+                routineId);
+        walletId = persistWallet(user, 10);
+        logId = persistPastLog(routineId, TODAY.minusDays(2));
+
+        // 복원(revertToFailed) 이후 단계에서 터뜨림 — 과거 취소 경로도 findByUserId를 호출함
+        doThrow(new RuntimeException("스트릭 조회 실패")).when(streakRepository).findByUserId(anyLong());
+
+        assertThatThrownBy(() -> service.cancel(userId, routineId, TODAY.minusDays(2)))
+                .isInstanceOf(RuntimeException.class);
+
+        RoutineLog log = routineLogRepository.findById(logId).orElseThrow();
+        assertThat(log.getStatus()).isEqualTo(RoutineLogStatus.COMPLETED);
+        assertThat(log.getCompletedAt()).isNotNull();
+        assertThat(walletBalance()).isEqualTo(10);
+    }
+
+    @Test
     void 전이_중_스트릭_단계가_실패하면_FAILED_상태와_보상이_그대로_유지된다() {
         User user = userRepository.save(User.signUp());
         userId = user.getId();
@@ -141,6 +167,19 @@ class RoutineCompletionRollbackTest {
         Routine routine = Routine.create(owner, null, "아침 운동", AuthType.CHECK,
                 null, null, null, null, null);
         return routineRepository.save(routine).getId();
+    }
+
+    private Long persistDailyRoutine(User owner) {
+        Routine routine = Routine.create(owner, null, "매일 운동", AuthType.CHECK,
+                "DAILY", null, null, null, null);
+        return routineRepository.save(routine).getId();
+    }
+
+    // 과거 완료 로그(보상 0 — 과거 완료 규칙과 동일)
+    private Long persistPastLog(Long routineId, LocalDate date) {
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        RoutineLog log = RoutineLog.complete(routine, date, Instant.now(), CurrencyType.COIN, 0);
+        return routineLogRepository.save(log).getId();
     }
 
     private Long persistWallet(User owner, int balance) {
