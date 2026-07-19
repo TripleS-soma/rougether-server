@@ -13,7 +13,7 @@ public record RoutineLogResponse(
         Long id,
         @Schema(description = "완료 날짜(YYYY-MM-DD)", example = "2026-06-29")
         LocalDate routineDate,
-        @Schema(description = "완료 상태. 허용값: PENDING(미수행), COMPLETED(완료), MISSED(놓침). 완료 체크 직후에는 항상 COMPLETED", example = "COMPLETED")
+        @Schema(description = "완료 상태. 허용값: PENDING(미수행), COMPLETED(완료), FAILED(실패)", example = "COMPLETED")
         RoutineLogStatus status,
         @Schema(description = "완료 시각(ISO-8601)", example = "2026-06-29T07:00:00Z")
         Instant completedAt,

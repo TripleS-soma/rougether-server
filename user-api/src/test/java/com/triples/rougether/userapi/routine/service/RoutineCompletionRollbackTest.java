@@ -13,6 +13,7 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
@@ -108,6 +109,32 @@ class RoutineCompletionRollbackTest {
 
         assertThat(routineLogRepository.findById(logId)).isPresent();
         assertThat(walletBalance()).isEqualTo(10);
+    }
+
+    @Test
+    void 전이_중_스트릭_단계가_실패하면_FAILED_상태와_보상이_그대로_유지된다() {
+        User user = userRepository.save(User.signUp());
+        userId = user.getId();
+        routineId = persistRoutine(user);
+        walletId = persistWallet(user, 0);
+        logId = persistFailedLog(routineId, TODAY.minusDays(1));
+
+        doThrow(new RuntimeException("스트릭 조회 실패")).when(streakRepository).findByUserId(anyLong());
+
+        assertThatThrownBy(() -> service.complete(userId, routineId,
+                new RoutineLogCreateRequest(TODAY.minusDays(1))))
+                .isInstanceOf(RuntimeException.class);
+
+        RoutineLog log = routineLogRepository.findById(logId).orElseThrow();
+        assertThat(log.getStatus()).isEqualTo(RoutineLogStatus.FAILED);
+        assertThat(log.getCompletedAt()).isNull();
+        assertThat(log.getRewardAmount()).isZero();
+        assertThat(walletBalance()).isEqualTo(0);
+    }
+
+    private Long persistFailedLog(Long routineId, LocalDate date) {
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        return routineLogRepository.save(RoutineLog.fail(routine, date)).getId();
     }
 
     private Long persistRoutine(User owner) {

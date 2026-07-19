@@ -22,8 +22,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -39,10 +41,21 @@ public class RoutineLogService {
     private final UserWalletRepository userWalletRepository;
     private final StreakRepository streakRepository;
     private final DailyRewardService dailyRewardService;
+    private final TransactionTemplate transactionTemplate;
 
-    // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함
-    @Transactional
+    // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함.
+    // @Transactional 대신 template인 이유: unique 충돌 재시도가 롤백된 첫 트랜잭션 밖에서 새로 시작돼야 함
     public RoutineLogResponse complete(Long userId, Long routineId, RoutineLogCreateRequest request) {
+        try {
+            return transactionTemplate.execute(tx -> doComplete(userId, routineId, request));
+        } catch (DataIntegrityViolationException e) {
+            // 로그 부재 확인과 insert 사이에 day-end 배치가 같은 (routine_id, routine_date)의 FAILED를
+            // 먼저 커밋한 경합 — 재시도에서는 그 row가 보여 FAILED 전이(또는 중복 거부) 경로로 흡수됨
+            return transactionTemplate.execute(tx -> doComplete(userId, routineId, request));
+        }
+    }
+
+    private RoutineLogResponse doComplete(Long userId, Long routineId, RoutineLogCreateRequest request) {
         // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
         // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
         UserWallet wallet = findWalletForUpdate(userId);
@@ -55,10 +68,18 @@ public class RoutineLogService {
             throw new BusinessException(RoutineLogErrorCode.INVALID_ROUTINE_DATE);
         }
         boolean isToday = routineDate.equals(today);
-        // 앱 레이어 중복 완료 guard(DB unique와 이중 방어)
-        if (routineLogRepository.existsByRoutineIdAndRoutineDateAndStatus(
-                routineId, routineDate, RoutineLogStatus.COMPLETED)) {
+        // 앱 레이어 중복 완료 guard(DB unique와 이중 방어). 계보 기준 — FAILED 전이·버전 분기 전 완료는
+        // 다른 버전 id의 row로 남아 있어 현재 id만 보면 같은 날짜를 이중 완료할 수 있음
+        if (!routineLogRepository.findByLineageAndDateAndStatus(
+                lineageKey(routine), routineDate, RoutineLogStatus.COMPLETED).isEmpty()) {
             throw new BusinessException(RoutineLogErrorCode.ALREADY_COMPLETED);
+        }
+
+        RoutineLog failedLog = findFailedLogInLineage(routine, routineDate);
+        if (failedLog != null) {
+            failedLog.completeFromFailed(Instant.now(), REWARD_CURRENCY);
+            Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
+            return RoutineLogResponse.from(failedLog, currentStreak);
         }
 
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
@@ -85,15 +106,20 @@ public class RoutineLogService {
     // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
     @Transactional
     public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
-        findOwnedRoutine(userId, routineId); // 소유권 guard(타인·미존재·삭제 → ROUTINE_NOT_FOUND)
+        Routine routine = findOwnedRoutine(userId, routineId); // 소유권 guard(타인·미존재·삭제 → ROUTINE_NOT_FOUND)
 
         LocalDate today = LocalDate.now(KST);
         // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
         if (date.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
         }
+        // 버전 분기 전 완료·FAILED 전이 완료는 옛 버전 id의 row로 남으므로 계보까지 찾아야 취소 가능함.
+        // 계보의 모든 버전이 같은 user 소유라 위 guard로 소유권은 이미 보장됨
         RoutineLog log = routineLogRepository
                 .findByRoutineIdAndRoutineDateAndStatus(routineId, date, RoutineLogStatus.COMPLETED)
+                .or(() -> routineLogRepository
+                        .findByLineageAndDateAndStatus(lineageKey(routine), date, RoutineLogStatus.COMPLETED)
+                        .stream().findFirst())
                 .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
 
         UserWallet wallet = findWalletForUpdate(userId);
@@ -137,6 +163,18 @@ public class RoutineLogService {
             streak.rollback(today);
         }
         return streak;
+    }
+
+    // 계보(origin) 안에서 해당 날짜의 FAILED row
+    private RoutineLog findFailedLogInLineage(Routine routine, LocalDate routineDate) {
+        return routineLogRepository
+                .findByLineageAndDateAndStatus(lineageKey(routine), routineDate, RoutineLogStatus.FAILED)
+                .stream().findFirst().orElse(null);
+    }
+
+    // coalesce 키와 짝 — origin 미백필 row는 자기 id가 계보 키임
+    private Long lineageKey(Routine routine) {
+        return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
     }
 
     private Routine findOwnedRoutine(Long userId, Long routineId) {

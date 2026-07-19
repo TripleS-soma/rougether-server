@@ -28,6 +28,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -49,6 +51,9 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
     @Autowired
     private TodoRepository todoRepository;
 
+@Autowired
+    private PlatformTransactionManager transactionManager;
+
     private RoutineLogService routineLogService;
     private Long userId;
 
@@ -57,7 +62,8 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository, dailyRewardService);
+                userWalletRepository, streakRepository, dailyRewardService,
+                new TransactionTemplate(transactionManager));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);

@@ -75,6 +75,19 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     List<Routine> findEffectiveBefore(@Param("userId") Long userId,
                                       @Param("dayEndExclusive") Instant dayEndExclusive);
 
+    @Query("select r from Routine r "
+            + "where r.id > :afterId "
+            + "and r.createdAt < :dayEndExclusive "
+            + "and (r.deletedAt is null or r.deletedAt >= :dayEndExclusive) "
+            + "and not exists (select 1 from RoutineLog l "
+            + "where coalesce(l.routine.originRoutineId, l.routine.id) = coalesce(r.originRoutineId, r.id) "
+            + "and l.routineDate = :routineDate) "
+            + "order by r.id asc")
+    List<Routine> findDayEndFailCandidates(@Param("afterId") long afterId,
+                                           @Param("dayEndExclusive") Instant dayEndExclusive,
+                                           @Param("routineDate") LocalDate routineDate,
+                                           Pageable pageable);
+
     // 타인(집 멤버) 열람용: 카테고리 공개 범위가 허용된 루틴만.
     // 미분류(category null) 루틴은 공개 범위를 정할 수 없어 inner join 으로 자연 제외됨(비공개 취급)
     @Query("select r from Routine r "
