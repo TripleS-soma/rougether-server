@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: rougether_k6
+      MYSQL_USER: rougether
+      MYSQL_PASSWORD: rougether
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Seoul
+    ports:
+      - "127.0.0.1:${K6_DB_PORT:-13306}:3306"
+    tmpfs:
+      - /var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -urougether -prougether --silent"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
