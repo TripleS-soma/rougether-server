@@ -97,6 +97,16 @@ class TodoControllerTest {
     }
 
     @Test
+    void dueTime이_5분_단위가_아니면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"장보기\",\"dueDate\":\"2026-07-01\",\"dueTime\":\"18:03:00\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("dueTime"));
+    }
+
+    @Test
     void 없는_투두_조회는_404와_TODO_NOT_FOUND를_응답한다() throws Exception {
         when(todoService.get(eq(1L), eq(99L)))
                 .thenThrow(new BusinessException(TodoErrorCode.TODO_NOT_FOUND));

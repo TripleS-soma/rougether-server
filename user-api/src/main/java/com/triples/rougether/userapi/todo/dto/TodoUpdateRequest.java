@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.todo.dto;
 
+import com.triples.rougether.userapi.global.validation.FiveMinuteStep;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -14,7 +15,7 @@ public record TodoUpdateRequest(
         Long categoryId,
         @Schema(description = "마감일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지", example = "2026-07-01")
         LocalDate dueDate,
-        @Schema(description = "마감 시각(HH:mm:ss). 미지정(null)이면 기존 값 유지", example = "18:00:00")
-        LocalTime dueTime
+        @Schema(description = "마감 시각(HH:mm, 5분 단위만 허용). 미지정(null)이면 기존 값 유지", example = "18:00:00")
+        @FiveMinuteStep LocalTime dueTime
 ) {
 }

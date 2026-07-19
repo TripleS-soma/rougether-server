@@ -149,6 +149,17 @@ class RoutineControllerTest {
     }
 
     @Test
+    void scheduledTime이_5분_단위가_아니면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"물 마시기\",\"authType\":\"CHECK\",\"repeatType\":\"DAILY\","
+                                + "\"scheduledTime\":\"07:02:00\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("scheduledTime"));
+    }
+
+    @Test
     void repeatType이_없으면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
