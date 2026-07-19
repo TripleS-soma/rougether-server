@@ -61,6 +61,13 @@ public class RoutineLogService {
             throw new BusinessException(RoutineLogErrorCode.ALREADY_COMPLETED);
         }
 
+        RoutineLog failedLog = findFailedLogInLineage(routine, routineDate);
+        if (failedLog != null) {
+            failedLog.completeFromFailed(Instant.now());
+            Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
+            return RoutineLogResponse.from(failedLog, currentStreak);
+        }
+
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
         boolean firstToday = isToday && routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
@@ -137,6 +144,15 @@ public class RoutineLogService {
             streak.rollback(today);
         }
         return streak;
+    }
+
+    // 계보(origin) 안에서 해당 날짜의 FAILED row. coalesce 키는 origin 미백필 row 방어
+    private RoutineLog findFailedLogInLineage(Routine routine, LocalDate routineDate) {
+        Long originKey = routine.getOriginRoutineId() != null
+                ? routine.getOriginRoutineId() : routine.getId();
+        return routineLogRepository
+                .findByLineageAndDateAndStatus(originKey, routineDate, RoutineLogStatus.FAILED)
+                .stream().findFirst().orElse(null);
     }
 
     private Routine findOwnedRoutine(Long userId, Long routineId) {

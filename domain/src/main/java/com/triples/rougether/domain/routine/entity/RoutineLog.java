@@ -50,11 +50,11 @@ public class RoutineLog extends BaseCreatedEntity {
     @Column(name = "reward_amount", nullable = false)
     private int rewardAmount;
 
-    private RoutineLog(Routine routine, LocalDate routineDate, Instant completedAt,
-                       CurrencyType rewardCurrencyType, int rewardAmount) {
+    private RoutineLog(Routine routine, LocalDate routineDate, RoutineLogStatus status,
+                       Instant completedAt, CurrencyType rewardCurrencyType, int rewardAmount) {
         this.routine = routine;
         this.routineDate = routineDate;
-        this.status = RoutineLogStatus.COMPLETED;
+        this.status = status;
         this.completedAt = completedAt;
         this.rewardCurrencyType = rewardCurrencyType;
         this.rewardAmount = rewardAmount;
@@ -62,6 +62,19 @@ public class RoutineLog extends BaseCreatedEntity {
 
     public static RoutineLog complete(Routine routine, LocalDate routineDate, Instant completedAt,
                                       CurrencyType rewardCurrencyType, int rewardAmount) {
-        return new RoutineLog(routine, routineDate, completedAt, rewardCurrencyType, rewardAmount);
+        return new RoutineLog(routine, routineDate, RoutineLogStatus.COMPLETED,
+                completedAt, rewardCurrencyType, rewardAmount);
+    }
+
+    public static RoutineLog fail(Routine routine, LocalDate routineDate) {
+        return new RoutineLog(routine, routineDate, RoutineLogStatus.FAILED, null, null, 0);
+    }
+
+    public void completeFromFailed(Instant completedAt) {
+        if (this.status != RoutineLogStatus.FAILED) {
+            throw new IllegalStateException("FAILED 상태의 로그만 완료로 전이할 수 있음: " + this.status);
+        }
+        this.status = RoutineLogStatus.COMPLETED;
+        this.completedAt = completedAt;
     }
 }
