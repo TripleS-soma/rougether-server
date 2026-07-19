@@ -25,6 +25,8 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +62,9 @@ class RoutineCancelServiceIntegrationTest {
 
 @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private RoutineLogService service;
     private Long userId;
@@ -135,6 +140,43 @@ class RoutineCancelServiceIntegrationTest {
     }
 
     @Test
+    void 과거_수행_대상_완료를_취소하면_FAILED로_복원되고_코인과_스트릭이_불변이다() {
+        persistStreak(userId, 3, TODAY.minusDays(1));
+        LocalDate pastDate = TODAY.minusDays(2);
+        Long dailyRoutine = persistDailyRoutine(userRepository.findById(userId).orElseThrow(), null);
+        backdateCreatedAt(dailyRoutine, 9);
+        RoutineLogResponse completed = service.complete(userId, dailyRoutine,
+                new RoutineLogCreateRequest(pastDate)); // 과거 완료 → 코인 0
+
+        StreakSummaryResponse streak = service.cancel(userId, dailyRoutine, pastDate);
+
+        // 그날 수행 대상이었으므로 배치가 만들었을 FAILED로 복원됨(row 유지)
+        var restored = routineLogRepository.findById(completed.id()).orElseThrow();
+        assertThat(restored.getStatus()).isEqualTo(RoutineLogStatus.FAILED);
+        assertThat(restored.getCompletedAt()).isNull();
+        assertThat(restored.getRewardAmount()).isZero();
+        assertThat(walletBalance()).isZero();
+        assertThat(streak.currentCount()).isEqualTo(3);
+        assertThat(streak.lastSuccessDate()).isEqualTo(TODAY.minusDays(1));
+    }
+
+    @Test
+    void 유효기간_밖_과거_완료_취소는_기존대로_hard_delete된다() {
+        LocalDate pastDate = TODAY.minusDays(2);
+        // ends_on이 그날 이전이라 그날 수행 대상이 아니었음 — 복원할 FAILED가 성립하지 않음
+        Long endedRoutine = persistDailyRoutine(userRepository.findById(userId).orElseThrow(),
+                pastDate.minusDays(1));
+        backdateCreatedAt(endedRoutine, 9);
+        RoutineLogResponse completed = service.complete(userId, endedRoutine,
+                new RoutineLogCreateRequest(pastDate));
+
+        service.cancel(userId, endedRoutine, pastDate);
+
+        assertThat(routineLogRepository.findById(completed.id())).isEmpty();
+        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(endedRoutine, pastDate)).isEmpty();
+    }
+
+    @Test
     void 과거_날짜로_취소해도_오늘_완료는_건드리지_않는다() {
         service.complete(userId, routineId, new RoutineLogCreateRequest(null));
 
@@ -191,6 +233,20 @@ class RoutineCancelServiceIntegrationTest {
         Routine routine = Routine.create(owner, null, "아침 운동", AuthType.CHECK,
                 null, null, null, null, null);
         return routineRepository.save(routine).getId();
+    }
+
+    private Long persistDailyRoutine(User owner, LocalDate endsOn) {
+        Routine routine = Routine.create(owner, null, "매일 운동", AuthType.CHECK,
+                "DAILY", null, null, null, endsOn);
+        return routineRepository.save(routine).getId();
+    }
+
+    // created_at은 auditing이 now로 채우고 updatable=false라 JPA로 못 바꿈 → 네이티브로 N일 과거로 당김
+    private void backdateCreatedAt(Long targetRoutineId, int days) {
+        em.flush();
+        em.createNativeQuery("update routines set created_at = created_at - interval " + days
+                + " day where id = " + targetRoutineId).executeUpdate();
+        em.clear();
     }
 
     private void persistWallet(User owner, int balance) {

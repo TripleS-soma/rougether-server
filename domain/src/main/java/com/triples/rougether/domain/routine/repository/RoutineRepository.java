@@ -24,6 +24,9 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     // 소유권 guard 단건: 타인 소유·미존재·삭제됨 모두 empty
     Optional<Routine> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
+    // 과거 날짜 액션용: 과거 캘린더가 내려준 닫힌(soft-deleted) 버전 id도 소유권만 맞으면 허용
+    Optional<Routine> findByIdAndUserId(Long id, Long userId);
+
     // 카테고리 삭제 차단 검사용: status 무관 살아있는 루틴 존재 여부
     boolean existsByCategoryIdAndDeletedAtIsNull(Long categoryId);
 

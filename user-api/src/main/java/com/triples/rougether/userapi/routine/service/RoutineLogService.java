@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.routine.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.routine.RoutineRecurrence;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
@@ -59,10 +60,10 @@ public class RoutineLogService {
         // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
         // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
         UserWallet wallet = findWalletForUpdate(userId);
-        Routine routine = findOwnedRoutine(userId, routineId);
 
         LocalDate today = LocalDate.now(KST);
         LocalDate routineDate = request.routineDate() != null ? request.routineDate() : today;
+        Routine routine = findActionableRoutine(userId, routineId, routineDate, today);
         // 과거 완료는 허용, 미래만 거부. 단 코인·스트릭은 당일 완료에만 반응함
         if (routineDate.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.INVALID_ROUTINE_DATE);
@@ -106,9 +107,8 @@ public class RoutineLogService {
     // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
     @Transactional
     public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
-        Routine routine = findOwnedRoutine(userId, routineId); // 소유권 guard(타인·미존재·삭제 → ROUTINE_NOT_FOUND)
-
         LocalDate today = LocalDate.now(KST);
+        Routine routine = findActionableRoutine(userId, routineId, date, today); // 소유권 guard
         // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
         if (date.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE);
@@ -126,8 +126,12 @@ public class RoutineLogService {
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
 
-        routineLogRepository.delete(log);
-        routineLogRepository.flush(); // 아래 count가 삭제를 반영해야 함
+        if (date.isBefore(today) && wasTargetOn(userId, routine, date)) {
+            log.revertToFailed();
+        } else {
+            routineLogRepository.delete(log);
+            routineLogRepository.flush(); // 아래 count가 삭제를 반영해야 함
+        }
 
         // 스트릭은 당일 완료 취소에만 반응함(과거 완료는 애초에 스트릭에 반영되지 않음)
         Streak streak = date.equals(today)
@@ -165,6 +169,14 @@ public class RoutineLogService {
         return streak;
     }
 
+    // 그날 수행 대상이었는지 — day-end 배치와 같은 기준(그날 유효했던 버전 + 반복규칙)으로 계보를 판정함
+    private boolean wasTargetOn(Long userId, Routine routine, LocalDate date) {
+        Long lineage = lineageKey(routine);
+        return routineRepository.findEffectiveOnDay(userId, date).stream()
+                .filter(r -> lineage.equals(lineageKey(r)))
+                .anyMatch(r -> RoutineRecurrence.isTargetOn(r, date));
+    }
+
     // 계보(origin) 안에서 해당 날짜의 FAILED row
     private RoutineLog findFailedLogInLineage(Routine routine, LocalDate routineDate) {
         return routineLogRepository
@@ -177,8 +189,13 @@ public class RoutineLogService {
         return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
     }
 
-    private Routine findOwnedRoutine(Long userId, Long routineId) {
+    // 기본은 살아있는 현재 버전만. 과거 날짜 액션은 과거 캘린더가 내려준 닫힌(soft-deleted) 버전 id도
+    // 허용함 — 당일까지 열면 삭제된 루틴을 당일 완료해 보상을 받는 경로가 생김
+    private Routine findActionableRoutine(Long userId, Long routineId, LocalDate date, LocalDate today) {
         return routineRepository.findByIdAndUserIdAndDeletedAtIsNull(routineId, userId)
+                .or(() -> date.isBefore(today)
+                        ? routineRepository.findByIdAndUserId(routineId, userId)
+                        : Optional.empty())
                 .orElseThrow(() -> new BusinessException(RoutineErrorCode.ROUTINE_NOT_FOUND));
     }
 

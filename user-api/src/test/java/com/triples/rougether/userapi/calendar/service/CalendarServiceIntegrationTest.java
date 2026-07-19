@@ -244,62 +244,66 @@ class CalendarServiceIntegrationTest {
         assertThat(response.summary().remainingCount()).isZero();
     }
 
-    // --- 과거: 그날 유효했던 버전 재구성 경로 ---
+    // --- 과거: routine_logs 단독 조회 경로 ---
 
     @Test
-    void 과거_그날_대상_버전은_로그가_없어도_노출되고_완료는_로그로_판정된다() {
-        // 두 루틴 모두 PAST 이전에 생성된 것으로 당겨 그날 유효하게 만듦
+    void 과거는_FAILED와_COMPLETED_로그가_혼재_노출되고_완료는_로그_status로_판정된다() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        Long undone = persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
-        backdateCreatedAt(done, 20);
-        backdateCreatedAt(undone, 20);
+        Long failed = persistRoutine("실패 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistCompletedLog(done, PAST);
+        persistFailedLog(failed, PAST);
 
         List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
 
-        // 미완료(무로그)도 노출됨 — 그날 유효한 버전 + 반복 대상이므로
         assertThat(routines).extracting(TodayRoutineItem::title)
-                .containsExactlyInAnyOrder("완료 루틴", "미완료 루틴");
+                .containsExactlyInAnyOrder("완료 루틴", "실패 루틴");
         assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
                 .extracting(TodayRoutineItem::completed).containsExactly(true);
-        assertThat(routines).filteredOn(r -> r.title().equals("미완료 루틴"))
+        assertThat(routines).filteredOn(r -> r.title().equals("실패 루틴"))
                 .extracting(TodayRoutineItem::completed).containsExactly(false);
     }
 
     @Test
-    void 과거_생성_이전_날짜에는_노출되지_않는다() {
-        // 오늘 생성분(created_at=today) — PAST엔 아직 존재하지 않았으므로 노출 안 됨
-        persistRoutine("오늘 만든 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+    void 로그가_없는_과거_날짜는_그날_유효했던_루틴이_있어도_빈_응답이다() {
+        // PAST에 유효했던 대상 루틴이지만 로그가 없음 — 판정은 배치 몫이라 조회는 재구성하지 않음
+        Long noLog = persistRoutine("로그 없는 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        backdateCreatedAt(noLog, 20);
 
-        assertThat(service.day(userId, PAST).categories()).isEmpty();
+        CalendarDayResponse response = service.day(userId, PAST);
+
+        assertThat(response.categories()).isEmpty();
+        assertThat(response.summary().completedCount()).isZero();
+        assertThat(response.summary().remainingCount()).isZero();
     }
 
     @Test
-    void 과거_스케줄_수정_후에도_옛_버전_기준으로_재구성된다() {
-        // PAST(월요일) 이전에 생성된 WEEKLY MON 루틴
-        Long routineId = persistRoutine("주간 루틴", RoutineStatus.ACTIVE, "WEEKLY",
+    void 과거_버전_분기_후에도_로그가_가리키는_옛_버전의_표시값으로_노출된다() {
+        // PAST(월요일)에 유효했던 WEEKLY MON 버전에 FAILED 로그가 남음
+        Long routineId = persistRoutine("옛 제목", RoutineStatus.ACTIVE, "WEEKLY",
                 "{\"daysOfWeek\":[\"MON\"]}", null, null, null, null);
         backdateCreatedAt(routineId, 20);
+        persistFailedLog(routineId, PAST);
 
-        // 스케줄을 TUE로 변경 → 새 버전으로 분기(옛 MON 버전은 닫힘)
+        // 제목·스케줄을 함께 변경 → 새 버전으로 분기(옛 제목은 닫힌 옛 버전 row에 남음)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
                 userRepository);
-        routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
+        routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
                 "WEEKLY", new RepeatDays(List.of("TUE")), null, null, null));
         em.flush();
         em.clear();
 
-        // 과거(PAST=MON)는 옛 MON 버전으로 재구성 — 편집에 영향받지 않음
-        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("주간 루틴");
+        // 과거는 로그가 가리키는 옛 버전 row의 표시값 — 편집에 영향받지 않음
+        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("옛 제목");
     }
 
     @Test
-    void 분기_경계에서_과거는_옛_버전_당일은_새_버전만_노출한다() {
-        // 오늘도 유효하도록 옛 버전은 오늘 요일 WEEKLY, PAST 이전에 생성된 것으로 당김
+    void 분기_경계에서_과거는_로그의_옛_버전_당일은_새_버전만_노출한다() {
         String todayToken = weekdayToken(TODAY);
         Long routineId = persistRoutine("경계 루틴", RoutineStatus.ACTIVE, "WEEKLY",
                 "{\"daysOfWeek\":[\"" + todayToken + "\"]}", null, null, null, null);
         backdateCreatedAt(routineId, 20);
+        LocalDate pastSameWeekday = TODAY.minusWeeks(2);
+        persistFailedLog(routineId, pastSameWeekday);
 
         // 스케줄을 DAILY로 변경 → 분기(옛 WEEKLY 버전 닫힘, 새 DAILY 버전 생성)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
@@ -309,9 +313,11 @@ class CalendarServiceIntegrationTest {
         em.flush();
         em.clear();
 
-        // 과거(옛 버전이 유효했던 요일): 옛 버전 하나만 — 새 버전은 생성 이전이라 제외(공백·겹침 없음)
-        LocalDate pastSameWeekday = TODAY.minusWeeks(2);
-        assertThat(routineTitles(service.day(userId, pastSameWeekday))).containsExactly("경계 루틴");
+        // 과거: 로그가 가리키는 옛 버전 하나만 — 새 버전 로그는 없으므로 겹침 없음
+        assertThat(service.day(userId, pastSameWeekday).categories().stream()
+                .flatMap(g -> g.routines().stream()))
+                .extracting(TodayRoutineItem::id)
+                .containsExactly(routineId);
 
         // 당일: 새 DAILY 버전 하나만 — 옛 버전은 닫혀 live 경로에서 제외
         assertThat(service.day(userId, TODAY).categories().stream()
@@ -321,23 +327,27 @@ class CalendarServiceIntegrationTest {
     }
 
     @Test
-    void 과거_삭제된_버전도_자기_유효기간_안에서는_노출된다() {
+    void 과거_삭제된_루틴의_FAILED_로그도_노출된다() {
         Long routineId = persistRoutine("삭제될 루틴", RoutineStatus.ACTIVE, "DAILY",
                 null, null, null, null, null);
         backdateCreatedAt(routineId, 20);
-        // 오늘 soft-delete(deleted_at=today) — PAST 시점엔 아직 살아 있었음
+        persistFailedLog(routineId, PAST);
+        // 오늘 soft-delete — 로그는 여전히 삭제된 버전 row를 가리킴
         Routine routine = routineRepository.findById(routineId).orElseThrow();
         routine.softDelete(Instant.now());
         routineRepository.save(routine);
         em.flush();
         em.clear();
 
-        assertThat(routineTitles(service.day(userId, PAST))).containsExactly("삭제될 루틴");
+        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+
+        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("삭제될 루틴");
+        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(false);
     }
 
     @Test
     void 과거_완료로그만_있고_유효기간_밖이어도_로그로_노출된다() {
-        // created_at=today라 PAST엔 유효하지 않지만, PAST에 완료 로그가 있으면 union으로 노출
+        // created_at=today라 PAST엔 유효하지 않았지만, 로그 단독 조회라 완료 로그만 있으면 노출
         Long routineId = persistRoutine("나중에 만든 루틴", RoutineStatus.ACTIVE, "DAILY",
                 null, null, null, null, null);
         persistCompletedLog(routineId, PAST);
@@ -386,19 +396,21 @@ class CalendarServiceIntegrationTest {
     }
 
     @Test
-    void 과거_summary는_완료_루틴과_그날_투두_기준으로_계산된다() {
+    void 과거_summary는_로그_노출_루틴과_그날_투두_기준으로_계산된다() {
         Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        Long failed = persistRoutine("실패 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         // log 없는 과거 루틴은 총계에서 제외됨
-        persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistRoutine("로그 없는 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistCompletedLog(done, PAST);
+        persistFailedLog(failed, PAST);
         persistCompletedTodo("완료 투두", null, PAST);
         persistTodo("미완료 투두", null, PAST);
 
         var summary = service.day(userId, PAST).summary();
 
-        // 노출 루틴 = 완료 1, 투두 = 총 2(완료 1) → 전체 3, 완료 2, 남은 1
+        // 노출 루틴 = 완료 1 + 실패 1, 투두 = 총 2(완료 1) → 전체 4, 완료 2, 남은 2
         assertThat(summary.completedCount()).isEqualTo(2);
-        assertThat(summary.remainingCount()).isEqualTo(1);
+        assertThat(summary.remainingCount()).isEqualTo(2);
     }
 
     private List<String> routineTitles(CalendarDayResponse response) {
@@ -435,6 +447,11 @@ class CalendarServiceIntegrationTest {
         Routine routine = routineRepository.findById(routineId).orElseThrow();
         routineLogRepository.save(RoutineLog.complete(routine, date, Instant.now(),
                 CurrencyType.COIN, 10));
+    }
+
+    private void persistFailedLog(Long routineId, LocalDate date) {
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        routineLogRepository.save(RoutineLog.fail(routine, date));
     }
 
     private void persistTodo(String title, Category category, LocalDate dueDate) {

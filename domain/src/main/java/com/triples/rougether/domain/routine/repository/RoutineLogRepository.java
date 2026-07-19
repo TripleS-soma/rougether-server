@@ -33,15 +33,14 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     List<RoutineLog> findByRoutine_UserIdAndRoutineDateAndStatus(
             Long userId, LocalDate routineDate, RoutineLogStatus status);
 
-    // 과거 캘린더용: 그날 완료 log를 루틴·카테고리까지 fetch. 연관 fetch는 soft-deleted 루틴/카테고리도 포함함
+    // 과거 캘린더용: 그날 log 전체(COMPLETED+FAILED)를 루틴·카테고리까지 fetch.
     @Query("select l from RoutineLog l "
             + "join fetch l.routine r "
             + "left join fetch r.category "
-            + "where r.user.id = :userId and l.routineDate = :routineDate and l.status = :status")
-    List<RoutineLog> findCompletedWithRoutineForDay(
+            + "where r.user.id = :userId and l.routineDate = :routineDate")
+    List<RoutineLog> findAllWithRoutineForDay(
             @Param("userId") Long userId,
-            @Param("routineDate") LocalDate routineDate,
-            @Param("status") RoutineLogStatus status);
+            @Param("routineDate") LocalDate routineDate);
 
     // 타인(집 멤버) 열람용: 기간 내 완료 log 중 카테고리 공개 범위가 허용된 것만.
     // 미분류 루틴의 log 는 inner join 으로 자연 제외됨(비공개 취급).

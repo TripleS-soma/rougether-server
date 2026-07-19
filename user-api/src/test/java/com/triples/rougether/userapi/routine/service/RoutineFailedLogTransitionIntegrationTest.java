@@ -21,6 +21,8 @@ import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -58,6 +60,9 @@ class RoutineFailedLogTransitionIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private RoutineLogService service;
     private User user;
@@ -121,14 +126,20 @@ class RoutineFailedLogTransitionIntegrationTest {
     }
 
     @Test
-    void 전이된_완료를_취소하면_row가_hard_delete되고_환불은_0이다() {
-        persistFailedLog(routineId, YESTERDAY);
+    void 전이된_완료를_취소하면_FAILED로_복원되고_환불은_0이다() {
+        // FAILED 복원 판정은 배치와 같은 "그날 유효했던 버전" 기준이라 생성일을 그날 이전으로 당김
+        backdateCreatedAt(routineId, 9);
+        Long failedLogId = persistFailedLog(routineId, YESTERDAY);
         service.complete(userId, routineId, new RoutineLogCreateRequest(YESTERDAY));
 
         service.cancel(userId, routineId, YESTERDAY);
 
-        // 기존 정책대로 그 날짜 로그는 사라지고(배치는 재생성하지 않음) 지갑은 그대로
-        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(routineId, YESTERDAY)).isEmpty();
+        // 그날 수행 대상이었던 과거 완료라 배치가 만들었을 FAILED 상태로 되돌아가고 지갑은 그대로
+        RoutineLog restored = routineLogRepository.findById(failedLogId).orElseThrow();
+        assertThat(restored.getStatus()).isEqualTo(RoutineLogStatus.FAILED);
+        assertThat(restored.getCompletedAt()).isNull();
+        assertThat(restored.getRewardAmount()).isZero();
+        assertThat(restored.getRewardCurrencyType()).isNull();
         assertThat(walletBalance()).isEqualTo(50);
     }
 
@@ -144,17 +155,64 @@ class RoutineFailedLogTransitionIntegrationTest {
     }
 
     @Test
-    void 버전_분기_후_전이된_완료를_새_버전_id로_취소할_수_있다() {
+    void 버전_분기_후_전이된_완료를_새_버전_id로_취소하면_옛_버전_row가_FAILED로_복원된다() {
         // 전이된 COMPLETED row는 옛 버전 id에 남지만, 유저가 아는 id는 새 버전임
-        persistFailedLog(routineId, YESTERDAY);
+        backdateCreatedAt(routineId, 9);
+        Long failedLogId = persistFailedLog(routineId, YESTERDAY);
         Routine newVersion = forkVersion(routineId);
         service.complete(userId, newVersion.getId(), new RoutineLogCreateRequest(YESTERDAY));
 
         service.cancel(userId, newVersion.getId(), YESTERDAY);
 
-        assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(routineId, YESTERDAY)).isEmpty();
+        RoutineLog restored = routineLogRepository.findById(failedLogId).orElseThrow();
+        assertThat(restored.getStatus()).isEqualTo(RoutineLogStatus.FAILED);
+        assertThat(restored.getCompletedAt()).isNull();
         assertThat(routineLogRepository.findByRoutineIdAndRoutineDate(newVersion.getId(), YESTERDAY)).isEmpty();
         assertThat(walletBalance()).isEqualTo(50);
+    }
+
+    @Test
+    void 옛_버전_id로도_과거_FAILED를_완료로_전이할_수_있다() {
+        // 과거 캘린더는 로그가 가리키는 옛(닫힌) 버전 id를 내려주므로 그 id의 과거 액션을 받아줌
+        backdateCreatedAt(routineId, 9);
+        Long failedLogId = persistFailedLog(routineId, YESTERDAY);
+        forkVersion(routineId);
+
+        RoutineLogResponse response = service.complete(userId, routineId,
+                new RoutineLogCreateRequest(YESTERDAY));
+
+        assertThat(response.id()).isEqualTo(failedLogId);
+        assertThat(routineLogRepository.findById(failedLogId).orElseThrow().getStatus())
+                .isEqualTo(RoutineLogStatus.COMPLETED);
+    }
+
+    @Test
+    void 옛_버전_id로도_과거_완료를_취소하면_FAILED로_복원된다() {
+        backdateCreatedAt(routineId, 9);
+        Long failedLogId = persistFailedLog(routineId, YESTERDAY);
+        Routine newVersion = forkVersion(routineId);
+        service.complete(userId, newVersion.getId(), new RoutineLogCreateRequest(YESTERDAY));
+
+        service.cancel(userId, routineId, YESTERDAY);
+
+        RoutineLog restored = routineLogRepository.findById(failedLogId).orElseThrow();
+        assertThat(restored.getStatus()).isEqualTo(RoutineLogStatus.FAILED);
+        assertThat(restored.getCompletedAt()).isNull();
+        assertThat(walletBalance()).isEqualTo(50);
+    }
+
+    @Test
+    void 닫힌_버전_id의_당일_완료와_취소는_여전히_거부된다() {
+        // 당일까지 열면 삭제된 루틴을 당일 완료해 보상을 받는 경로가 생김 — 과거 날짜만 허용
+        backdateCreatedAt(routineId, 9);
+        forkVersion(routineId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.complete(userId, routineId, new RoutineLogCreateRequest(null)))
+                .isInstanceOf(com.triples.rougether.common.error.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.cancel(userId, routineId, TODAY))
+                .isInstanceOf(com.triples.rougether.common.error.BusinessException.class);
     }
 
     @Test
@@ -221,5 +279,13 @@ class RoutineFailedLogTransitionIntegrationTest {
     private int walletBalance() {
         return userWalletRepository.findByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow().getBalance();
+    }
+
+    // created_at은 auditing이 now로 채우고 updatable=false라 JPA로 못 바꿈 → 네이티브로 N일 과거로 당김
+    private void backdateCreatedAt(Long targetRoutineId, int days) {
+        em.flush();
+        em.createNativeQuery("update routines set created_at = created_at - interval " + days
+                + " day where id = " + targetRoutineId).executeUpdate();
+        em.clear();
     }
 }
