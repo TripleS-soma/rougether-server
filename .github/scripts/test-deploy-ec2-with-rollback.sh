@@ -212,6 +212,86 @@ test_restore_failure_is_propagated_and_backup_is_kept() {
   echo "ok - restore failure is propagated and backup is kept"
 }
 
+test_rollback_restarts_both_services_in_parallel_then_checks_health() {
+  reset_scenario "parallel-restart"
+  rollback_user_image="old-user-image"
+  rollback_admin_image="old-admin-image"
+  local call_log="$ENV_DIR/calls.log"
+
+  # systemctl 호출과 health 확인 순서를 기록해 병렬 재시작 계약을 검증한다
+  systemctl() {
+    echo "systemctl $*" >> "$call_log"
+    return 0
+  }
+  curl() {
+    # 마지막 인자가 URL — health 성공 시나리오
+    echo "curl ${*: -1}" >> "$call_log"
+    return 0
+  }
+
+  local exit_code=0
+  (false || rollback) > /dev/null 2>&1 || exit_code="$?"
+  # unset -f 는 상단의 base mock 까지 지워버린다 — 이후 테스트가 실제 systemctl 을
+  # 호출하지 않도록 base mock 으로 되돌린다 (curl 은 base mock 이 없어 제거)
+  systemctl() { return 0; }
+  unset -f curl
+
+  if [ "$exit_code" -ne 1 ]; then
+    echo "not ok - rollback must exit with the original failure code (got $exit_code)" >&2
+    return 1
+  fi
+  assert_contains '^systemctl restart rougether-user-api rougether-admin-api$' "$call_log" \
+    "rollback must restart both services in one parallel transaction"
+  if [ "$(grep -c '^systemctl restart' "$call_log")" -ne 1 ]; then
+    echo "not ok - rollback must not restart services sequentially" >&2
+    return 1
+  fi
+  if ! grep -A2 'restart rougether-user-api rougether-admin-api' "$call_log" \
+      | tail -2 | paste -sd' ' - | grep -q '8080/api/v1/health.*8081/admin/health'; then
+    echo "not ok - health checks must run after restart, user-api first" >&2
+    return 1
+  fi
+  echo "ok - rollback restarts both services in parallel, then checks health in order"
+}
+
+test_rollback_health_failure_is_reported_and_propagated() {
+  reset_scenario "health-failure"
+  rollback_user_image="old-user-image"
+  rollback_admin_image="old-admin-image"
+  local output_log="$ENV_DIR/output.log"
+
+  systemctl() { return 0; }
+  # admin-api health 만 계속 실패 — user 성공 후 admin 실패가 보고·전파되는지 확인
+  curl() {
+    case "${*: -1}" in
+      *8081*) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+  sleep() { :; }
+
+  local exit_code=0
+  # 데드라인을 1초로 줄여 실패 루프를 빠르게 소진시킨다 (sleep 은 mock)
+  (false || ROUGETHER_HEALTH_TIMEOUT_SECONDS=1 rollback) > "$output_log" 2>&1 || exit_code="$?"
+  # base mock 복원 (위 테스트와 동일한 이유)
+  systemctl() { return 0; }
+  unset -f curl sleep
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - admin health failure during rollback must propagate a non-zero exit" >&2
+    return 1
+  fi
+  # exit code 는 원래 실패 코드로 고정이므로, 제어 흐름은 출력으로 검증한다:
+  # 실패가 집계되어 'health checks failed' 경고가 나가고 성공 메시지는 나가지 않아야 한다
+  assert_contains 'rollback finished but health checks failed' "$output_log" \
+    "admin health failure must be reported after rollback"
+  assert_not_contains 'rollback completed' "$output_log" \
+    "failed rollback must not claim success"
+  assert_contains 'user-api health check passed' "$output_log" \
+    "user-api health must still be checked and pass"
+  echo "ok - rollback health failure is reported and propagated"
+}
+
 test_capture_rollback_images_preserves_new_deploy_sha() {
   reset_scenario "deploy-state"
   DEPLOYED_SHA="new-deploy-sha"
@@ -377,6 +457,8 @@ test_invalid_ssm_json_keeps_existing_credentials
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
+test_rollback_restarts_both_services_in_parallel_then_checks_health
+test_rollback_health_failure_is_reported_and_propagated
 test_capture_rollback_images_preserves_new_deploy_sha
 test_batch_env_is_bootstrapped_from_user_runtime_env
 test_batch_env_bootstrap_is_idempotent

@@ -47,10 +47,11 @@ Terraform creates these private ECR repositories:
 ### batch 롤아웃 순서 (기존 환경)
 
 batch 컨테이너를 처음 도입할 때는 **Terraform 을 먼저 적용한 뒤** main push workflow 를
-활성화해야 한다. `docker-publish.yml` 은 main push 시 곧바로 `rougether-dev/batch` 로 이미지를
-push 하는데, 그 저장소와 GitHub Actions 배포 role 의 push 권한은 이 스택의 Terraform 으로만
-생성되기 때문이다. 선적용하지 않으면 첫 workflow 가 `RepositoryNotFound` 또는 `AccessDenied` 로
-실패한다.
+활성화해야 한다. `docker-publish.yml` 은 main push 시 `rougether-dev/batch` 로 `:unverified-<sha>`
+이미지를 push하고, 테스트 통과 후 `:sha` 로, 배포와 health 검증이 끝난 뒤 `:dev` 로 승격한다.
+그 저장소와 GitHub Actions 배포
+role 의 push·승격·복원 권한은 이 스택의 Terraform 으로만 생성되기 때문이다. 선적용하지 않으면
+첫 workflow 가 `RepositoryNotFound` 또는 `AccessDenied` 로 실패한다.
 
 ```bash
 # 1) batch ECR 레포·lifecycle·IAM 권한을 먼저 만든다 (기존 인스턴스 재생성 없이 안전)
@@ -66,21 +67,26 @@ terraform apply \
 (`deploy-ec2-with-rollback.sh`)가 최초 배포 시 `user-api.env` 의 DB 접속을 복사해 `batch.env` 를
 자동 생성하므로 인스턴스 재생성은 필요 없다.
 
-PRs into `main` or `feat/admin-assets` run `.github/workflows/pr-gate.yml`:
+PRs into `main` run `.github/workflows/pr-gate.yml`:
 
-1. run `./gradlew test`
+1. test the deployment and ECR tag-promotion scripts, then run `./gradlew test`
 2. build the `user-api`, `admin-api`, and `batch` Docker images without pushing, to catch Dockerfile/module packaging failures
 
-After the stack creates the GitHub Actions deploy role, pushes to `main` or
-`feat/admin-assets` run `.github/workflows/docker-publish.yml`:
+After the stack creates the GitHub Actions deploy role, pushes to `main` run
+`.github/workflows/docker-publish.yml`:
 
-1. run `./gradlew test`
+1. run `./gradlew test` while the image builds run in parallel
 2. build `user-api`, `admin-api`, and `batch` as `linux/amd64`
-3. push all images to ECR with `:dev` and commit SHA tags
-4. deploy the immutable commit SHA tags through SSM
-5. restart the EC2 systemd services and verify local health endpoints
+3. push all images to ECR with `:unverified-<sha>` tags only — a bare `:sha` tag in ECR
+   always means the commit passed the test gate
+4. after both test and build succeed, promote `:unverified-<sha>` to the immutable
+   commit SHA tags (manifest copy, seconds)
+5. deploy the immutable commit SHA tags through SSM
+6. restart the EC2 systemd services and verify local health endpoints
    (`batch` 는 `127.0.0.1:8082/actuator/health` 로 인스턴스 안에서만 확인)
-6. verify public health endpoints (`user-api`, `admin-api`)
+7. verify public health endpoints (`user-api`, `admin-api`)
+8. promote all three verified SHA images to `:dev`; if promotion partially fails,
+   restore the previous complete tag set
 
 The SSM deploy script records the previously deployed images before restarting
 the services. If the new `user-api`, `admin-api`, or `batch` image fails its local

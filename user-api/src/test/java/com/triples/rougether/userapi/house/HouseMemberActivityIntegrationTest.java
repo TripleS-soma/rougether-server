@@ -202,7 +202,9 @@ class HouseMemberActivityIntegrationTest {
     @Test
     void 루틴은_그날_반복_대상만_완료_여부와_함께_보인다() {
         Fixture f = fixture();
-        LocalDate monday = LocalDate.now(KST).with(java.time.temporal.TemporalAdjusters.previous(java.time.DayOfWeek.MONDAY));
+        // 지난주 월요일 (오늘 기준 7~13일 전) — 고정 날짜를 쓰면 시간이 지나
+        // backdate 폭(아래 15일)보다 과거가 되어 "그날 존재했던 루틴" 재구성에서 빠진다
+        LocalDate monday = LocalDate.now(KST).minusWeeks(1).with(java.time.DayOfWeek.MONDAY);
         Category category = categoryRepository.save(Category.create(
                 f.target(), "요일 카테고리", null, null, 0, PrivacyScope.HOUSE));
         Routine daily = routineRepository.save(Routine.create(f.target(), category, "매일 루틴",
@@ -221,8 +223,9 @@ class HouseMemberActivityIntegrationTest {
         ended.assignOriginToSelf();
         completeOn(daily, monday);
         // 기준일(과거)에 이미 존재했던 루틴들로 만들기 위해 생성일을 당김
+        // — monday 가 최대 13일 전이므로 그보다 넉넉히 과거로
         for (Routine routine : List.of(daily, mon, tue, ended)) {
-            backdateCreatedAt(routine.getId(), 10);
+            backdateCreatedAt(routine.getId(), 15);
         }
 
         HouseMemberDayResponse response = activityService.getMemberDay(

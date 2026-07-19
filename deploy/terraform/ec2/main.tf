@@ -163,18 +163,35 @@ resource "aws_ecr_lifecycle_policy" "user_api" {
   repository = aws_ecr_repository.user_api.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # :dev 는 부트스트랩(user-data)이 pull 하는 태그 — 태그 무관 보존 한도에 밀려
+        # 만료되지 않게 우선 규칙으로 보호한다 (dev 태그는 항상 1개라 만료 조건에 걸리지 않음)
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
@@ -182,18 +199,35 @@ resource "aws_ecr_lifecycle_policy" "admin_api" {
   repository = aws_ecr_repository.admin_api.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # :dev 는 부트스트랩(user-data)이 pull 하는 태그 — 태그 무관 보존 한도에 밀려
+        # 만료되지 않게 우선 규칙으로 보호한다 (dev 태그는 항상 1개라 만료 조건에 걸리지 않음)
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
@@ -201,18 +235,34 @@ resource "aws_ecr_lifecycle_policy" "batch" {
   repository = aws_ecr_repository.batch.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    rules = [
+      {
+        # API 이미지와 동일하게 부트스트랩용 :dev 를 실패한 SHA 이미지 누적으로부터 보호한다.
+        rulePriority = 1
+        description  = "Protect the :dev bootstrap tag"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
       }
-      action = {
-        type = "expire"
-      }
-    }]
+    ]
   })
 }
 
@@ -490,6 +540,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability",
+          # BatchDeleteImage 는 :dev 승격 실패 보상(원래 태그가 없던 repo 의 태그 제거)에만 쓰인다
+          "ecr:BatchDeleteImage",
           "ecr:BatchGetImage",
           "ecr:CompleteLayerUpload",
           "ecr:DescribeImages",
