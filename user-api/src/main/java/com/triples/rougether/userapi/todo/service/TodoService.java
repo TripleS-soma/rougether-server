@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TodoService {
 
-    // KST 고정 — 완료 취소 "당일" 판정 기준
+    // KST 고정 — 완료 가능 여부(마감일) 판정 기준
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     // 투두 보상: 루틴(10)과 별도로 5코인 고정
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
@@ -117,12 +117,6 @@ public class TodoService {
         if (todo.getStatus() != TodoStatus.COMPLETED) {
             throw new BusinessException(TodoErrorCode.TODO_NOT_COMPLETED);
         }
-        // 당일 완료만 취소 가능(과거 완료 취소 금지)
-        LocalDate completedDate = todo.getCompletedAt().atZone(KST).toLocalDate();
-        if (!completedDate.equals(LocalDate.now(KST))) {
-            throw new BusinessException(TodoErrorCode.TODO_NOT_CANCELABLE);
-        }
-
         UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(todo.getRewardAmount());

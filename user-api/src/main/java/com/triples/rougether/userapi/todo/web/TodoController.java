@@ -101,9 +101,9 @@ public class TodoController {
     }
 
     @Operation(summary = "투두 완료 취소",
-            description = "당일 완료를 취소합니다. 지급한 코인 5를 회수하고(잔액이 부족해도 그대로 차감) "
-                    + "상태를 PENDING으로 되돌리며 완료 시각·보상 정보를 초기화합니다. "
-                    + "완료한 당일(KST 기준)에만 취소할 수 있습니다.")
+            description = "완료를 취소합니다. 과거에 완료한 투두도 취소할 수 있습니다. "
+                    + "완료 시 지급했던 코인을 회수하고(잔액이 부족해도 그대로 차감) "
+                    + "상태를 PENDING으로 되돌리며 완료 시각·보상 정보를 초기화합니다.")
     @DeleteMapping("/{id}/complete")
     public TodoResponse cancelComplete(@CurrentUser AuthUser authUser,
                                        @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id) {

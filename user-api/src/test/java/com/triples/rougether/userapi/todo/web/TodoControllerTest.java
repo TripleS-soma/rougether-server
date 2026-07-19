@@ -149,16 +149,6 @@ class TodoControllerTest {
     }
 
     @Test
-    void 당일이_아닌_완료_취소는_409와_TODO_NOT_CANCELABLE을_응답한다() throws Exception {
-        when(todoService.cancelComplete(1L, 7L))
-                .thenThrow(new BusinessException(TodoErrorCode.TODO_NOT_CANCELABLE));
-
-        mockMvc.perform(delete("/api/v1/todos/7/complete"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("TODO_NOT_CANCELABLE"));
-    }
-
-    @Test
     void 미완료_투두_취소는_409와_TODO_NOT_COMPLETED를_응답한다() throws Exception {
         when(todoService.cancelComplete(1L, 7L))
                 .thenThrow(new BusinessException(TodoErrorCode.TODO_NOT_COMPLETED));

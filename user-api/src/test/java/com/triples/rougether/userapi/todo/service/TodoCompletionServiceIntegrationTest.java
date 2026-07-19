@@ -161,17 +161,18 @@ class TodoCompletionServiceIntegrationTest {
     }
 
     @Test
-    void 당일이_아닌_완료_취소는_TODO_NOT_CANCELABLE() {
+    void 과거에_완료한_투두도_취소되고_지급했던_코인을_회수한다() {
         Todo todo = todoRepository.findById(todoId).orElseThrow();
-        // 어제 완료한 것으로 만들어 당일 조건을 깨뜨림
         Instant yesterday = LocalDate.now(KST).minusDays(1).atStartOfDay(KST).toInstant();
         todo.complete(CurrencyType.COIN, 5, yesterday);
         todoRepository.save(todo);
 
-        assertThatThrownBy(() -> service.cancelComplete(userId, todoId))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(TodoErrorCode.TODO_NOT_CANCELABLE);
+        service.cancelComplete(userId, todoId);
+
+        assertThat(todoRepository.findById(todoId).orElseThrow().getStatus())
+                .isEqualTo(TodoStatus.PENDING);
+        // 완료 시 기록된 reward_amount 기준으로 회수함(잔액 0 → -5)
+        assertThat(walletBalance()).isEqualTo(-5);
     }
 
     private void persistWallet(User owner, int balance) {
