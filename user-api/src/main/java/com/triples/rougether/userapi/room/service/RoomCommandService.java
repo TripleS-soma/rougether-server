@@ -22,6 +22,7 @@ import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,9 @@ public class RoomCommandService {
     private static final BigDecimal SCALE_MAX = new BigDecimal("5.0");
     private static final BigDecimal SCALE_DEFAULT = BigDecimal.ONE;
     private static final int ROTATION_LIMIT_DEG = 360;
+    // DB 컬럼 소수 자릿수 (V19: position_x/y DECIMAL(6,5), scale DECIMAL(4,2))
+    private static final int POSITION_DB_SCALE = 5;
+    private static final int SCALE_DB_SCALE = 2;
 
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
@@ -130,9 +134,15 @@ public class RoomCommandService {
         roomItemPlacementRepository.deleteByRoomUserId(userId);
         List<RoomItemPlacement> placements = new ArrayList<>();
         for (PlacementItem item : request.placements()) {
+            // DB 컬럼 정밀도(position DECIMAL(6,5)·scale DECIMAL(4,2))로 정규화해 저장 - 저장 직후
+            // 응답과 이후 조회가 달라지는 것(MySQL 조용한 반올림)을 방지한다. 클라이언트 float 노이즈에 관대.
             placements.add(RoomItemPlacement.place(
-                    room, ownedItems.get(item.userItemId()), item.positionX(), item.positionY(), item.zIndex(),
-                    scaleOrDefault(item), rotationOrDefault(item), Boolean.TRUE.equals(item.flipped())));
+                    room, ownedItems.get(item.userItemId()),
+                    item.positionX().setScale(POSITION_DB_SCALE, RoundingMode.HALF_UP),
+                    item.positionY().setScale(POSITION_DB_SCALE, RoundingMode.HALF_UP),
+                    item.zIndex(),
+                    scaleOrDefault(item).setScale(SCALE_DB_SCALE, RoundingMode.HALF_UP),
+                    rotationOrDefault(item), Boolean.TRUE.equals(item.flipped())));
         }
         roomItemPlacementRepository.saveAll(placements);
 

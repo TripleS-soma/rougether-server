@@ -242,4 +242,27 @@ class RoomLayoutServiceTest {
         assertThat(saved.getRotationDeg()).isZero();
         assertThat(saved.isFlipped()).isFalse();
     }
+
+    // DB 컬럼 정밀도로 정규화 저장 - 저장 직후 응답과 이후 조회(MySQL 반올림 값)가 일치해야 한다
+    @Test
+    void 좌표와_scale은_DB_정밀도로_반올림해_저장한다() {
+        PersonalRoom room = realRoom();
+        UserItem item = ownedItem(77L);
+        when(personalRoomRepository.findWithLockById(USER_ID)).thenReturn(Optional.of(room));
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(USER_ID)).thenReturn(List.of(item));
+        stubAssemble();
+
+        roomCommandService.updateLayout(USER_ID, new RoomLayoutUpdateRequest(
+                0, List.of(), List.of(new PlacementItem(
+                        77L, new BigDecimal("0.1234567"), new BigDecimal("0.9999999"),
+                        0, new BigDecimal("1.005"), null, null))));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<RoomItemPlacement>> captor = ArgumentCaptor.forClass(List.class);
+        verify(roomItemPlacementRepository).saveAll(captor.capture());
+        RoomItemPlacement saved = captor.getValue().get(0);
+        assertThat(saved.getPositionX()).isEqualByComparingTo(new BigDecimal("0.12346"));
+        assertThat(saved.getPositionY()).isEqualByComparingTo(new BigDecimal("1.00000"));
+        assertThat(saved.getScale()).isEqualByComparingTo(new BigDecimal("1.01"));
+    }
 }
