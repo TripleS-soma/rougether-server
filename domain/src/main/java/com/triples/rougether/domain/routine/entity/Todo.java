@@ -85,6 +85,7 @@ public class Todo extends BaseEntity {
         return new Todo(user, category, title, description, dueDate, dueTime);
     }
 
+    // dueTime은 해제(null) 반영을 위해 무조건 대입함 — 루틴 scheduledTime과 동일 정책
     public void update(String title, String description, LocalDate dueDate, LocalTime dueTime) {
         // title은 NOT NULL 업무필수라 공백이면 덮어쓰지 않음
         if (title != null && !title.isBlank()) {
@@ -96,9 +97,7 @@ public class Todo extends BaseEntity {
         if (dueDate != null) {
             this.dueDate = dueDate;
         }
-        if (dueTime != null) {
-            this.dueTime = dueTime.withSecond(0).withNano(0);
-        }
+        this.dueTime = dueTime == null ? null : dueTime.withSecond(0).withNano(0);
     }
 
     public void changeCategory(Category category) {

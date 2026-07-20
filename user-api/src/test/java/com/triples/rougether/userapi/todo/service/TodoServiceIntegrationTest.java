@@ -116,14 +116,14 @@ class TodoServiceIntegrationTest {
     }
 
     @Test
-    void 수정에서_dueTime을_지정하지_않으면_기존_값을_유지한다() {
+    void 수정에서_dueTime이_null이면_해제된다() {
         Long todoId = service.create(userId,
                 new TodoCreateRequest("장보기", null, null, null, LocalTime.of(9, 0))).id();
 
         TodoResponse updated = service.update(userId, todoId,
                 new TodoUpdateRequest("청소하기", null, null, null, null));
 
-        assertThat(updated.dueTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(updated.dueTime()).isNull();
     }
 
     @Test
