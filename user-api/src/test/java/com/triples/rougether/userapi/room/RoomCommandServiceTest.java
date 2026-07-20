@@ -14,6 +14,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shop.entity.UserItem;
@@ -36,6 +37,7 @@ class RoomCommandServiceTest {
 
     @Mock private PersonalRoomRepository personalRoomRepository;
     @Mock private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
+    @Mock private RoomItemPlacementRepository roomItemPlacementRepository;
     @Mock private UserItemRepository userItemRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
@@ -66,6 +68,7 @@ class RoomCommandServiceTest {
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of(item));
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.empty());
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
@@ -84,6 +87,7 @@ class RoomCommandServiceTest {
         RoomSurfaceSlot existing = mock(RoomSurfaceSlot.class);
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "floor")).thenReturn(Optional.of(existing));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
@@ -141,6 +145,7 @@ class RoomCommandServiceTest {
         RoomSurfaceSlot existing = mock(RoomSurfaceSlot.class);
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.of(existing));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
@@ -148,5 +153,43 @@ class RoomCommandServiceTest {
 
         verify(roomSurfaceSlotRepository).delete(existing);
         verify(roomSurfaceSlotRepository, never()).save(any());
+    }
+
+    // FREE_V1 전환 방: 구버전 슬롯 저장은 positioned 포함 시에만 거부, surface 만이면 허용(팀 확정 #162).
+    @Test
+    void FREE_V1_방에_positioned_슬롯_저장은_409로_거부한다() {
+        Long userId = 1L;
+        PersonalRoom room = mock(PersonalRoom.class);
+        when(room.isFreeLayout()).thenReturn(true);
+        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomCommandService.updateSlots(
+                userId, new RoomSlotUpdateRequest(List.of(
+                        new SlotAssignment("wallpaper", 10L),
+                        new SlotAssignment("topLeft", 20L)))))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(RoomErrorCode.LAYOUT_FORMAT_CONFLICT));
+        verify(roomSurfaceSlotRepository, never()).save(any());
+        verify(roomSurfaceSlotRepository, never()).delete(any());
+    }
+
+    @Test
+    void FREE_V1_방에_surface만_저장은_기존대로_허용한다() {
+        Long userId = 1L;
+        PersonalRoom room = stubbedRoom(userId);
+        when(room.isFreeLayout()).thenReturn(true);
+        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        UserItem item = ownedItem(10L);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of(item));
+        when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "wallpaper")).thenReturn(Optional.empty());
+        when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
+
+        roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("wallpaper", 10L))));
+
+        verify(roomSurfaceSlotRepository).save(any(RoomSurfaceSlot.class));
     }
 }

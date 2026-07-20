@@ -42,4 +42,9 @@ public enum RoomSlotType {
                 .filter(type -> type != WALLPAPER && type != FLOOR && type != BACKGROUND)
                 .anyMatch(type -> type.code.equals(code));
     }
+
+    // surface(벽지/바닥/배경) 슬롯 코드인지 (자유배치 layout 저장의 surfaceSlots 허용값 검증용).
+    public static boolean isSurfaceCode(String code) {
+        return WALLPAPER.code.equals(code) || FLOOR.code.equals(code) || BACKGROUND.code.equals(code);
+    }
 }

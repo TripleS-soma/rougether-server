@@ -5,8 +5,10 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
+import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -22,17 +24,20 @@ public class RoomQueryService {
 
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
+    private final RoomItemPlacementRepository roomItemPlacementRepository;
     private final StreakRepository streakRepository;
     private final UserCharacterRepository userCharacterRepository;
     private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
                             RoomSurfaceSlotRepository roomSurfaceSlotRepository,
+                            RoomItemPlacementRepository roomItemPlacementRepository,
                             StreakRepository streakRepository,
                             UserCharacterRepository userCharacterRepository,
                             UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
+        this.roomItemPlacementRepository = roomItemPlacementRepository;
         this.streakRepository = streakRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.userRepository = userRepository;
@@ -58,9 +63,10 @@ public class RoomQueryService {
 
     private RoomResponse assemble(PersonalRoom room, Long userId) {
         List<RoomSurfaceSlot> slots = roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId);
+        List<RoomItemPlacement> placements = roomItemPlacementRepository.findByRoomUserIdWithItem(userId);
         Streak streak = streakRepository.findByUserId(userId).orElse(null);
         UserCharacter selectedCharacter = userCharacterRepository
                 .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
-        return RoomResponse.of(room, slots, streak, selectedCharacter);
+        return RoomResponse.of(room, slots, placements, streak, selectedCharacter);
     }
 }
