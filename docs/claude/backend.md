@@ -68,7 +68,11 @@ userapi/<도메인>/
 | Query 서비스(읽기 전용) | 클래스 레벨 `@Transactional(readOnly = true)` |
 | 읽기·쓰기 혼합 단일 서비스 | 클래스 레벨 `@Transactional(readOnly = true)` + 쓰기 메서드만 `@Transactional` override |
 
-## 기본 API 기준
+### 도메인 알림 발송 패턴
+
+도메인 사건에 대한 알림은 **`NotificationService.send(...)`(공용 진입점)를 도메인 서비스의 트랜잭션 안에서 직접 호출**합니다. 알림 내역이 도메인 커밋과 원자적으로 저장되고(spec 계약: 내역 동기 저장), push는 진입점 내부의 커밋 후 비동기 경로가 처리합니다(push 실패는 best-effort).
+
+`@TransactionalEventListener(AFTER_COMMIT)` 리스너에서 send 를 호출하는 방식은 쓰지 않습니다 — PR #174 리뷰에서 확인된 실패 모드가 많습니다: AFTER_COMMIT 시점엔 원 트랜잭션 리소스가 아직 바인딩돼 있어 REQUIRED 참여 시 내역이 커밋되지 않고, `@Transactional(REQUIRES_NEW)` 는 커밋 예외가 메서드 밖(프록시)에서 나 요청을 500 으로 만들며, 동기 새 트랜잭션은 요청당 커넥션을 2개 점유하고, `@Async` 는 제출 거부 예외가 try 진입 전에 전파되고, 완전 비동기화하면 내역 자체가 유실될 수 있습니다. 발송 보장이 필요해지면(예: 재화 지급 알림) durable outbox 를 별도 설계로 검토합니다.
 
 - API prefix는 user-api `/api/v1`, admin-api `/admin`입니다.
 - Controller는 요청/응답 변환과 validation 진입점 중심으로 얇게 유지합니다.

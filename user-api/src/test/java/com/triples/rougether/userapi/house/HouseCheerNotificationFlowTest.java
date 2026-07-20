@@ -1,6 +1,10 @@
 package com.triples.rougether.userapi.house;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
@@ -10,10 +14,6 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doThrow;
-
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -28,8 +28,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-// 응원 커밋 후 알림 발송 흐름(#173) - AFTER_COMMIT 리스너가 실제 커밋 경계에서 알림 내역을 남기는지 검증(테스트 트랜잭션 없음).
-// push 는 stub sender(테스트 프로필) 비동기 best-effort 라 내역 row 존재까지만 확인한다.
+// 응원-알림 정합성(#173)을 실제 커밋 경계로 검증(테스트 트랜잭션 없음).
+// 알림 내역은 응원과 같은 트랜잭션에서 동기 저장(spec 계약)이라 원자적이고, push 만 커밋 후 비동기(stub sender)다.
 @SpringBootTest
 class HouseCheerNotificationFlowTest {
 
@@ -52,7 +52,7 @@ class HouseCheerNotificationFlowTest {
 
     @AfterEach
     void cleanUp() {
-        // 테스트 트랜잭션이 없어 직접 정리함. 알림은 리스너가 만들어 id 추적이 안 되니 대상 유저 기준으로 지운다.
+        // 테스트 트랜잭션이 없어 직접 정리함. 알림은 리스너가 아닌 진입점이 만들어 대상 유저 기준으로 지운다.
         if (targetUserId != null) {
             jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", targetUserId);
         }
@@ -76,27 +76,35 @@ class HouseCheerNotificationFlowTest {
         }
     }
 
-    @Test
-    void 응원이_커밋되면_대상에게_FRIEND_CHEER_알림_내역이_남는다() {
-        User sender = userRepository.save(User.signUp("cheer-flow-sender@rougether.dev"));
+    private HouseMember prepareMembers(String senderEmail, String targetEmail, String houseName, String code) {
+        User sender = userRepository.save(User.signUp(senderEmail));
         senderId = sender.getId();
-        User target = userRepository.save(User.signUp("cheer-flow-target@rougether.dev"));
+        User target = userRepository.save(User.signUp(targetEmail));
         targetUserId = target.getId();
         House house = houseRepository.save(House.create(
-                sender, "응원 알림 하우스", null, null, 4, "CHEER456", Instant.now().plus(Duration.ofDays(7))));
+                sender, houseName, null, null, 4, code, Instant.now().plus(Duration.ofDays(7))));
         houseId = house.getId();
         senderMembershipId = houseMemberRepository
                 .save(HouseMember.create(house, sender, HouseMemberRole.OWNER)).getId();
         HouseMember targetMember = houseMemberRepository
                 .save(HouseMember.create(house, target, HouseMemberRole.MEMBER));
         targetMembershipId = targetMember.getId();
+        return targetMember;
+    }
+
+    @Test
+    void 응원이_커밋되면_대상에게_FRIEND_CHEER_알림_내역이_남는다() {
+        HouseMember targetMember = prepareMembers(
+                "cheer-flow-sender@rougether.dev", "cheer-flow-target@rougether.dev", "응원 알림 하우스", "CHEER456");
 
         HouseCheerResponse response = houseCheerService.cheer(
-                sender.getId(), house.getId(), targetMember.getId(), "best");
+                senderId, houseId, targetMember.getId(), "best");
         cheerId = response.cheerId();
 
-        // 리스너가 알림 전용 executor 에서 비동기 실행되므로 내역 생성을 폴링으로 기다린다(push 도 비동기).
-        List<Map<String, Object>> rows = awaitNotificationRows(targetUserId, 1);
+        // 내역은 응원과 같은 트랜잭션에서 동기 저장되므로 반환 직후 존재한다(push 만 비동기).
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT type, ref_id, title, body FROM notification WHERE user_id = ?", targetUserId);
+        assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("type")).isEqualTo("FRIEND_CHEER");
         assertThat(((Number) rows.get(0).get("ref_id")).longValue()).isEqualTo(cheerId);
         assertThat(rows.get(0).get("title")).isEqualTo("응원이 도착했어요");
@@ -104,57 +112,21 @@ class HouseCheerNotificationFlowTest {
         assertThat(rows.get(0).get("body")).isEqualTo("집 친구님: 오늘도 최고!");
     }
 
-    // 비동기 리스너 완료 대기 - 기대 개수가 될 때까지 최대 5초 폴링.
-    private List<Map<String, Object>> awaitNotificationRows(Long userId, int expected) {
-        long deadline = System.currentTimeMillis() + 5_000;
-        List<Map<String, Object>> rows = List.of();
-        while (System.currentTimeMillis() < deadline) {
-            rows = jdbcTemplate.queryForList(
-                    "SELECT type, ref_id, title, body FROM notification WHERE user_id = ?", userId);
-            if (rows.size() >= expected) {
-                return rows;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(rows).hasSize(expected);
-        return rows;
-    }
-
     @Test
-    void 알림_발송이_실패해도_응원_요청은_성공하고_응원은_저장된다() {
-        User sender = userRepository.save(User.signUp("cheer-fail-sender@rougether.dev"));
-        senderId = sender.getId();
-        User target = userRepository.save(User.signUp("cheer-fail-target@rougether.dev"));
-        targetUserId = target.getId();
-        House house = houseRepository.save(House.create(
-                sender, "응원 실패 하우스", null, null, 4, "CHEER567", Instant.now().plus(Duration.ofDays(7))));
-        houseId = house.getId();
-        senderMembershipId = houseMemberRepository
-                .save(HouseMember.create(house, sender, HouseMemberRole.OWNER)).getId();
-        HouseMember targetMember = houseMemberRepository
-                .save(HouseMember.create(house, target, HouseMemberRole.MEMBER));
-        targetMembershipId = targetMember.getId();
+    void 알림_내역_저장이_실패하면_응원도_함께_롤백된다() {
+        HouseMember targetMember = prepareMembers(
+                "cheer-fail-sender@rougether.dev", "cheer-fail-target@rougether.dev", "응원 실패 하우스", "CHEER567");
 
         doThrow(new RuntimeException("알림 저장 실패")).when(notificationService)
                 .send(anyLong(), any(), any(), any(), anyLong());
 
-        // 알림(비동기·별도 트랜잭션) 실패가 이미 커밋된 응원 요청으로 전파되면 안 된다
-        HouseCheerResponse response = houseCheerService.cheer(
-                sender.getId(), house.getId(), targetMember.getId(), "support");
-        cheerId = response.cheerId();
+        // 내역 저장은 응원과 원자적(spec: 내역 동기 저장) - 반쪽 성공(응원만 저장) 상태를 만들지 않는다
+        assertThatThrownBy(() -> houseCheerService.cheer(
+                senderId, houseId, targetMember.getId(), "support"))
+                .isInstanceOf(RuntimeException.class);
 
-        assertThat(houseMemberCheerRepository.findById(cheerId)).isPresent();
-        // 비동기 리스너가 돌 시간을 준 뒤에도 알림 내역이 없어야 한다
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT id FROM house_member_cheers WHERE sender_user_id = ?", senderId)).isEmpty();
         assertThat(jdbcTemplate.queryForList(
                 "SELECT id FROM notification WHERE user_id = ?", targetUserId)).isEmpty();
     }

@@ -15,22 +15,19 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
-import com.triples.rougether.userapi.house.service.HouseCheerService.HouseCheerSentEvent;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
-// 응원 저장 규칙(#173)을 실제 DB 로 검증. 알림 발송(AFTER_COMMIT)은 커밋이 없는 이 테스트에선
-// 이벤트 발행 여부까지만 확인하고, 실제 발송은 HouseCheerNotificationFlowTest 가 커밋 경계로 검증한다.
+// 응원 저장 규칙(#173)을 실제 DB 로 검증. 알림 내역은 같은 트랜잭션에서 동기 저장되므로 여기서 함께 확인한다
+// (push 발송은 커밋 후 비동기 - 진입점 자체 테스트가 커버).
 @SpringBootTest
 @Transactional
-@RecordApplicationEvents
 class HouseCheerIntegrationTest {
 
     @Autowired private HouseCheerService houseCheerService;
@@ -38,7 +35,7 @@ class HouseCheerIntegrationTest {
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private UserRepository userRepository;
-    @Autowired private ApplicationEvents applicationEvents;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private User sender;
     private User targetUser;
@@ -56,7 +53,7 @@ class HouseCheerIntegrationTest {
     }
 
     @Test
-    void 응원을_저장하고_알림_이벤트를_발행한다() {
+    void 응원을_저장하고_알림_내역을_함께_남긴다() {
         HouseCheerResponse response = houseCheerService.cheer(
                 sender.getId(), house.getId(), targetMember.getId(), "support");
 
@@ -64,11 +61,13 @@ class HouseCheerIntegrationTest {
         assertThat(response.targetUserId()).isEqualTo(targetUser.getId());
         assertThat(response.type()).isEqualTo("support");
         assertThat(houseMemberCheerRepository.findById(response.cheerId())).isPresent();
-        assertThat(applicationEvents.stream(HouseCheerSentEvent.class))
+        // 알림 내역이 같은 트랜잭션에서 동기 저장된다 (FRIEND_CHEER, refId=cheerId)
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT type, ref_id FROM notification WHERE user_id = ?", targetUser.getId()))
                 .singleElement()
-                .satisfies(event -> {
-                    assertThat(event.cheerId()).isEqualTo(response.cheerId());
-                    assertThat(event.targetUserId()).isEqualTo(targetUser.getId());
+                .satisfies(row -> {
+                    assertThat(row.get("type")).isEqualTo("FRIEND_CHEER");
+                    assertThat(((Number) row.get("ref_id")).longValue()).isEqualTo(response.cheerId());
                 });
     }
 

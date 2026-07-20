@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -10,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.domain.house.entity.CheerType;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberCheer;
@@ -18,19 +18,18 @@ import com.triples.rougether.domain.house.repository.HouseMemberCheerRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
-import com.triples.rougether.userapi.house.service.HouseCheerService.HouseCheerSentEvent;
+import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,7 +43,7 @@ class HouseCheerServiceTest {
     @Mock private HouseRepository houseRepository;
     @Mock private HouseMemberRepository houseMemberRepository;
     @Mock private HouseMemberCheerRepository houseMemberCheerRepository;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private NotificationService notificationService;
     @InjectMocks private HouseCheerService houseCheerService;
 
     private House aliveHouse() {
@@ -131,7 +130,7 @@ class HouseCheerServiceTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
         verify(houseMemberCheerRepository, never()).saveAndFlush(any());
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -153,7 +152,7 @@ class HouseCheerServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -179,13 +178,9 @@ class HouseCheerServiceTest {
         assertThat(response.targetUserId()).isEqualTo(TARGET_USER_ID);
         assertThat(response.type()).isEqualTo("support");
 
-        ArgumentCaptor<HouseCheerSentEvent> captor = ArgumentCaptor.forClass(HouseCheerSentEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        HouseCheerSentEvent event = captor.getValue();
-        assertThat(event.cheerId()).isEqualTo(31L);
-        assertThat(event.targetUserId()).isEqualTo(TARGET_USER_ID);
-        assertThat(event.senderName()).isEqualTo("진형");
-        assertThat(event.type()).isEqualTo(CheerType.SUPPORT);
+        // 알림 진입점을 같은 트랜잭션에서 직접 호출한다 - 내역 저장은 응원과 원자적(spec 계약)
+        verify(notificationService).send(
+                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!", 31L);
     }
 
     @Test
@@ -205,9 +200,8 @@ class HouseCheerServiceTest {
 
         houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support");
 
-        ArgumentCaptor<HouseCheerSentEvent> captor = ArgumentCaptor.forClass(HouseCheerSentEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().senderName()).isEqualTo("집 친구");
+        verify(notificationService).send(
+                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "집 친구님: 응원해요!", 31L);
     }
 
     @Test
