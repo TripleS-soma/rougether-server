@@ -16,7 +16,8 @@ public record NotificationListResponse(
     public record NotificationItem(
             @Schema(description = "알림 ID. 알림 읽음 처리(PATCH /api/v1/notifications/{notificationId}/read)의 notificationId 로 사용", example = "12")
             Long notificationId,
-            @Schema(description = "알림 종류: HOUSE_KICK(집에서 내보내짐), ROUTINE_REMINDER(루틴 리마인드)", example = "ROUTINE_REMINDER")
+            @Schema(description = "알림 종류: HOUSE_KICK(집에서 내보내짐), ROUTINE_REMINDER(루틴 리마인드), "
+                    + "FRIEND_CHEER(집 멤버 응원 도착)", example = "ROUTINE_REMINDER")
             NotificationType type,
             @Schema(description = "알림 제목", example = "루틴 리마인드")
             String title,
