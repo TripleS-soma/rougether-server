@@ -529,6 +529,9 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.level").value(2))
                 .andExpect(jsonPath("$.goals[0].code").value("morning_routine"))
                 .andExpect(jsonPath("$.isMember").value(false))
-                .andExpect(jsonPath("$.isFull").value(false));
+                .andExpect(jsonPath("$.isFull").value(false))
+                // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
+                .andExpect(jsonPath("$.myRole").doesNotExist())
+                .andExpect(jsonPath("$.inviteCode").doesNotExist());
     }
 }
