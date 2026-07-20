@@ -10,6 +10,7 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
+import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
@@ -100,6 +101,19 @@ public class HouseController {
     public HouseDetailResponse detail(@CurrentUser AuthUser user,
                                       @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId) {
         return houseQueryService.getHouseDetail(user.id(), houseId);
+    }
+
+    // 비구성원용 미리보기. 상세와 달리 구성원 검증 없음(전체공개), myRole·inviteCode 없음.
+    @Operation(summary = "집 미리보기 (비구성원 가능)",
+            description = "탐색 목록에서 선택한 집을 참여 전에 살펴봅니다. 로그인한 회원 누구나(해당 집 비구성원·강퇴 이력자 포함) 조회할 수 있습니다. "
+                    + "구성원용 상세와 동일한 집 정보(이름·소개·커버·인원·레벨·목표)를 내려주되, 구성원 전용 필드(myRole·inviteCode)는 없습니다. "
+                    + "isMember 가 true 면 요청자가 이미 이 집의 활성 구성원이므로 상세 화면으로 전환하고, "
+                    + "isFull 이 true 면 정원 초과라 참여할 수 없으니 가입 버튼을 비활성화합니다. "
+                    + "단체 출석률 필드는 출석 저장 구조(#168) 구현 후 추가될 예정입니다.")
+    @GetMapping("/{houseId}/preview")
+    public HousePreviewDetailResponse preview(@CurrentUser AuthUser user,
+                                              @Parameter(description = "집 ID. GET /api/v1/houses (탐색 목록) 응답의 houseId 값") @PathVariable Long houseId) {
+        return houseQueryService.getPreview(user.id(), houseId);
     }
 
     @Operation(summary = "구성원 목록 조회",

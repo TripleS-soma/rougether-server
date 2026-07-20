@@ -22,6 +22,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
+import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
@@ -33,6 +34,7 @@ import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.HouseController;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -506,5 +508,30 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.name").value("아침 루틴 하우스"))
                 .andExpect(jsonPath("$.currentMemberCount").value(3))
                 .andExpect(jsonPath("$.inviteExpired").value(false));
+    }
+
+    @Test
+    void 집_미리보기_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseQueryService.getPreview(7L, 1L)).thenReturn(new HousePreviewDetailResponse(
+                1L, "아침 루틴 하우스", "같이 아침 루틴 지켜요", "house/cover.png",
+                4, 3, 2,
+                List.of(new HouseListResponse.GoalSummary(5L, "morning_routine", "아침 루틴")),
+                false, false));
+
+        mockMvc.perform(get("/api/v1/houses/1/preview"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.name").value("아침 루틴 하우스"))
+                .andExpect(jsonPath("$.description").value("같이 아침 루틴 지켜요"))
+                .andExpect(jsonPath("$.currentMemberCount").value(3))
+                .andExpect(jsonPath("$.maxMembers").value(4))
+                .andExpect(jsonPath("$.level").value(2))
+                .andExpect(jsonPath("$.goals[0].code").value("morning_routine"))
+                .andExpect(jsonPath("$.isMember").value(false))
+                .andExpect(jsonPath("$.isFull").value(false))
+                // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
+                .andExpect(jsonPath("$.myRole").doesNotExist())
+                .andExpect(jsonPath("$.inviteCode").doesNotExist());
     }
 }

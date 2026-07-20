@@ -13,6 +13,7 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse.MemberSummary;
+import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
@@ -56,6 +57,22 @@ public class HouseQueryService {
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
         return HouseDetailResponse.of(house, me.getRole(), goals);
+    }
+
+    // 미리보기 - 비구성원 포함 로그인 회원 누구나(집 정보는 전체공개 정책, #169).
+    // KICKED 이력자도 조회는 허용한다(가입 시도는 기존대로 HOUSE_KICKED_MEMBER 거부).
+    @Transactional(readOnly = true)
+    public HousePreviewDetailResponse getPreview(Long userId, Long houseId) {
+        House house = houseRepository.findById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        boolean isMember = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .isPresent();
+        List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
+                .map(HouseQueryService::toGoalSummary)
+                .toList();
+        return HousePreviewDetailResponse.of(house, goals, isMember);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
