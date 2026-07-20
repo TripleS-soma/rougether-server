@@ -13,12 +13,14 @@ import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.service.HouseCheerNotificationListener;
 import com.triples.rougether.userapi.house.service.HouseCheerService.HouseCheerSentEvent;
 import com.triples.rougether.userapi.notification.service.NotificationService;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
-// 알림 발송 실패(내역 저장·커밋 예외)가 이미 커밋된 응원 요청으로 전파되지 않는지 검증.
+// 알림의 어떤 실패(제출 거부·내역 저장·커밋 예외)도 이미 커밋된 응원 요청으로 전파되지 않는지 검증.
+// executor 로 동기 실행(Runnable::run)을 주입해 비동기 타이밍 없이 검증한다.
 class HouseCheerNotificationListenerTest {
 
     private final NotificationService notificationService = mock(NotificationService.class);
@@ -28,7 +30,7 @@ class HouseCheerNotificationListenerTest {
     @BeforeEach
     void setUp() {
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
-        listener = new HouseCheerNotificationListener(notificationService, transactionManager);
+        listener = new HouseCheerNotificationListener(notificationService, transactionManager, Runnable::run);
     }
 
     @Test
@@ -43,10 +45,22 @@ class HouseCheerNotificationListenerTest {
 
     @Test
     void 새_트랜잭션_커밋_실패도_예외를_전파하지_않는다() {
-        // 커밋은 TransactionTemplate.execute 블록 안에서 일어나므로 커밋 예외도 리스너 try/catch 가 잡는다
+        // 커밋은 TransactionTemplate.execute 블록 안에서 일어나므로 커밋 예외도 try/catch 가 잡는다
         doThrow(new RuntimeException("커밋 실패")).when(transactionManager).commit(any());
 
         assertThatCode(() -> listener.onCheerSent(
+                new HouseCheerSentEvent(31L, 8L, "진형", CheerType.SUPPORT)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void executor_제출이_거부돼도_예외를_전파하지_않는다() {
+        // @Async 프록시 제출과 달리 본문에서 직접 제출하므로 거부 예외도 리스너 try/catch 가 잡는다
+        HouseCheerNotificationListener rejectingListener = new HouseCheerNotificationListener(
+                notificationService, transactionManager,
+                task -> { throw new RejectedExecutionException("큐 포화"); });
+
+        assertThatCode(() -> rejectingListener.onCheerSent(
                 new HouseCheerSentEvent(31L, 8L, "진형", CheerType.SUPPORT)))
                 .doesNotThrowAnyException();
     }
