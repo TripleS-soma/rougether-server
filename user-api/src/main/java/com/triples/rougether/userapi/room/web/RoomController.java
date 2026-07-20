@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.room.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
+import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
@@ -54,5 +55,24 @@ public class RoomController {
     public RoomResponse updateSlots(@CurrentUser AuthUser user,
                                     @Valid @RequestBody RoomSlotUpdateRequest request) {
         return roomCommandService.updateSlots(user.id(), request);
+    }
+
+    // 자유배치 저장. surface 슬롯 + placements 를 한 트랜잭션으로 저장하고 방을 FREE_V1 으로 전환.
+    @Operation(summary = "내 방 자유배치 저장",
+            description = "가구 자유배치(placements)와 surface 슬롯(wallpaper/floor/background)을 한 번에 저장하고 "
+                    + "저장 후의 방 전체 상태(내 방 조회와 동일 형식)를 반환합니다. "
+                    + "placements 는 전체 교체 방식이라 요청에 없는 기존 배치는 삭제되고, "
+                    + "surfaceSlots 는 포함된 slotType 만 갱신하는 부분 갱신입니다(null 이면 해당 슬롯 비우기). "
+                    + "첫 저장 시 방이 SLOT_V1 에서 FREE_V1 으로 전환되며, 이후 구버전 슬롯 저장 API 로는 "
+                    + "positioned 가구를 저장할 수 없습니다(409 ROOM_LAYOUT_FORMAT_CONFLICT). "
+                    + "baseRevision 은 내 방 조회 응답의 layoutRevision 값을 그대로 보내며, 서버 값과 다르면 "
+                    + "다른 기기에서 먼저 저장된 것이므로 409 ROOM_LAYOUT_REVISION_CONFLICT 를 반환합니다. "
+                    + "좌표는 방 렌더 영역 전체 기준 0.0~1.0 정규화이고 겹침 검증은 하지 않습니다. "
+                    + "같은 가구(userItemId)는 방에 1개만 배치할 수 있습니다. "
+                    + "방이 아직 없으면 자동 생성 후 저장합니다(이때 baseRevision 은 0).")
+    @PutMapping("/me/layout")
+    public RoomResponse updateLayout(@CurrentUser AuthUser user,
+                                     @Valid @RequestBody RoomLayoutUpdateRequest request) {
+        return roomCommandService.updateLayout(user.id(), request);
     }
 }

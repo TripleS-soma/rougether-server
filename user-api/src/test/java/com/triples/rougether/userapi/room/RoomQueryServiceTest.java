@@ -14,6 +14,7 @@ import com.triples.rougether.domain.character.repository.UserCharacterRepository
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -33,6 +34,7 @@ class RoomQueryServiceTest {
 
     @Mock private PersonalRoomRepository personalRoomRepository;
     @Mock private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
+    @Mock private RoomItemPlacementRepository roomItemPlacementRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
@@ -49,6 +51,7 @@ class RoomQueryServiceTest {
         when(saved.getUpdatedAt()).thenReturn(Instant.EPOCH);
         when(personalRoomRepository.save(any(PersonalRoom.class))).thenReturn(saved);
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
 
@@ -58,6 +61,7 @@ class RoomQueryServiceTest {
         assertThat(response.roomUserId()).isEqualTo(userId);
         assertThat(response.growthLevel()).isZero();
         assertThat(response.slots()).isEmpty();
+        assertThat(response.placements()).isEmpty();
         assertThat(response.streak().currentCount()).isZero();
         assertThat(response.streak().longestCount()).isZero();
     }
@@ -71,6 +75,7 @@ class RoomQueryServiceTest {
         when(existing.getUpdatedAt()).thenReturn(Instant.EPOCH);
         when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(existing));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         Streak streak = mock(Streak.class);
         when(streak.getCurrentCount()).thenReturn(3);
         when(streak.getLongestCount()).thenReturn(7);
@@ -94,6 +99,7 @@ class RoomQueryServiceTest {
         when(room.getUpdatedAt()).thenReturn(Instant.EPOCH);
         when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
         Character character = mock(Character.class);
         when(character.getId()).thenReturn(5L);

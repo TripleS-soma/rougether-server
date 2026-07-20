@@ -8,7 +8,8 @@ import java.util.List;
 
 // PUT /api/v1/rooms/me/slots 요청. 슬롯별 배치 지정.
 // userItemId 가 null 이면 해당 슬롯을 비운다(배치 해제).
-public record RoomSlotUpdateRequest(@NotNull @Valid List<SlotAssignment> slots) {
+// 목록의 null 원소는 validation 에서 400 으로 거부한다(서비스 NPE→500 방지).
+public record RoomSlotUpdateRequest(@NotNull @Valid List<@NotNull SlotAssignment> slots) {
 
     public record SlotAssignment(
             @Schema(description = "슬롯 타입. 허용값 11종 — surface 3종: wallpaper(벽지)/floor(바닥)/background(배경), "
