@@ -196,6 +196,26 @@ class RoomLayoutServiceTest {
     }
 
     @Test
+    void 경계값_좌표0과1_scale최소최대_rotation360은_허용한다() {
+        PersonalRoom room = realRoom();
+        UserItem item77 = ownedItem(77L);
+        UserItem item78 = ownedItem(78L);
+        when(personalRoomRepository.findWithLockById(USER_ID)).thenReturn(Optional.of(room));
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(USER_ID)).thenReturn(List.of(item77, item78));
+        stubAssemble();
+
+        // 같은 좌표(겹침) + 경계값 전부 허용 - outOfRange 부호 회귀 방지
+        roomCommandService.updateLayout(USER_ID, new RoomLayoutUpdateRequest(
+                0, List.of(), List.of(
+                        new PlacementItem(77L, new BigDecimal("0.0"), new BigDecimal("1.0"),
+                                0, new BigDecimal("0.1"), -360, false),
+                        new PlacementItem(78L, new BigDecimal("0.0"), new BigDecimal("1.0"),
+                                1, new BigDecimal("5.0"), 360, true))));
+
+        verify(roomItemPlacementRepository).saveAll(anyList());
+    }
+
+    @Test
     void scale_rotation_flipped_생략시_기본값으로_저장한다() {
         PersonalRoom room = realRoom();
         UserItem item = ownedItem(77L);

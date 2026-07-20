@@ -147,6 +147,37 @@ class RoomLayoutIntegrationTest {
     }
 
     @Test
+    void 전환_전_positioned_슬롯_row는_전환_후에도_유지되어_slots로_함께_내려간다() {
+        // SLOT_V1 상태에서 positioned 슬롯을 채운 뒤 자유배치로 전환 - 구버전 표시 fallback 계약 검증
+        roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
+                List.of(new SlotAssignment("topLeft", chairCopy1.getId()))));
+
+        RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
+                0, List.of(), List.of(placement(chairCopy2.getId(), "0.40", "0.40", 0))));
+
+        assertThat(response.layoutFormat()).isEqualTo(RoomLayoutFormat.FREE_V1);
+        // 정본은 placements 지만 기존 positioned 슬롯 row 는 삭제되지 않고 slots 로 계속 노출된다
+        assertThat(response.slots()).hasSize(1);
+        assertThat(response.slots().get(0).slotType()).isEqualTo("topLeft");
+        assertThat(response.placements()).hasSize(1);
+    }
+
+    @Test
+    void 경계값과_동일_좌표_겹침_배치를_허용한다() {
+        // 좌표 0.0/1.0, scale 0.1/5.0, rotation ±360 은 전부 허용 경계값이고, 겹침 검증은 하지 않는다(팀 확정)
+        RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
+                0, List.of(), List.of(
+                        new PlacementItem(chairCopy1.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
+                                0, new BigDecimal("0.1"), -360, false),
+                        new PlacementItem(chairCopy2.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
+                                1, new BigDecimal("5.0"), 360, true))));
+
+        assertThat(response.placements()).hasSize(2);
+        assertThat(response.placements().get(0).positionY()).isEqualByComparingTo(new BigDecimal("1.0"));
+        assertThat(response.placements().get(1).positionY()).isEqualByComparingTo(new BigDecimal("1.0"));
+    }
+
+    @Test
     void SLOT_V1_방의_기존_슬롯_저장과_조회는_동작이_변하지_않는다() {
         RoomResponse saved = roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
                 List.of(new SlotAssignment("topLeft", chairCopy1.getId()))));
