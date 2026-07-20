@@ -152,4 +152,23 @@ class RoomControllerTest {
                         .content("{\"surfaceSlots\":[],\"placements\":[]}"))
                 .andExpect(status().isBadRequest());
     }
+
+    // 목록의 null 원소는 서비스 NPE(500) 대신 validation 400 으로 거부되어야 한다
+    @Test
+    void 자유배치_placements에_null_원소가_있으면_400() throws Exception {
+        authAsUser1();
+        mockMvc.perform(put("/api/v1/rooms/me/layout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"baseRevision\":0,\"surfaceSlots\":[null],\"placements\":[null]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 슬롯_저장에_null_원소가_있으면_400() throws Exception {
+        authAsUser1();
+        mockMvc.perform(put("/api/v1/rooms/me/slots")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slots\":[null]}"))
+                .andExpect(status().isBadRequest());
+    }
 }

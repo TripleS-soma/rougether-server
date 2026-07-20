@@ -15,9 +15,10 @@ public record RoomLayoutUpdateRequest(
         @NotNull Integer baseRevision,
         @Schema(description = "surface 슬롯 배치(wallpaper/floor/background 만 허용). 포함된 slotType 만 갱신하는 "
                 + "부분 갱신이며 userItemId 를 null 로 보내면 해당 슬롯을 비움. positioned 슬롯 타입은 거부됨")
-        @NotNull @Valid List<SurfaceSlotAssignment> surfaceSlots,
-        @Schema(description = "자유배치 가구 전체 목록 (전체 교체 — 요청에 없는 기존 배치는 삭제됨)")
-        @NotNull @Valid List<PlacementItem> placements) {
+        @NotNull @Valid List<@NotNull SurfaceSlotAssignment> surfaceSlots,
+        @Schema(description = "자유배치 가구 전체 목록 (전체 교체 — 요청에 없는 기존 배치는 삭제됨). "
+                + "아이템 종류(placementType)와의 매칭은 슬롯 저장과 동일하게 서버가 강제하지 않고 클라이언트가 맞춰 배치")
+        @NotNull @Valid List<@NotNull PlacementItem> placements) {
 
     public record SurfaceSlotAssignment(
             @Schema(description = "surface 슬롯 타입. 허용값 3종: wallpaper(벽지)/floor(바닥)/background(배경)",
