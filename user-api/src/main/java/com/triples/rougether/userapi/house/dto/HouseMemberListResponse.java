@@ -22,7 +22,11 @@ public record HouseMemberListResponse(List<MemberSummary> items) {
             @Schema(description = "상태 (목록엔 ACTIVE 만 노출). ACTIVE(활동 중), LEFT(탈퇴 — 재참여 가능), KICKED(강퇴 — 재참여 불가)", example = "ACTIVE")
             HouseMemberStatus status,
             @Schema(description = "가입 시각. 목록은 이 값 오름차순(가입순) 정렬")
-            Instant joinedAt) {
+            Instant joinedAt,
+            @Schema(description = "마지막 접속 시각 (UTC). 로그인 또는 refresh 재발급 성공 시 갱신되며 "
+                    + "access token TTL(30분) 단위 해상도라 실시간 접속중 표시가 아닌 \"N분/시간 전 접속\" 표시 용도. "
+                    + "갱신 이력이 없으면 null")
+            Instant lastAccessedAt) {
 
         public static MemberSummary of(HouseMember member) {
             return new MemberSummary(
@@ -31,7 +35,8 @@ public record HouseMemberListResponse(List<MemberSummary> items) {
                     member.getUser().getNickname(),
                     member.getRole(),
                     member.getStatus(),
-                    member.getJoinedAt());
+                    member.getJoinedAt(),
+                    member.getUser().getLastAccessedAt());
         }
     }
 }
