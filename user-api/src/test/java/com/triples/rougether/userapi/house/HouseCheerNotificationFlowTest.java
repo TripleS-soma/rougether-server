@@ -95,15 +95,34 @@ class HouseCheerNotificationFlowTest {
                 sender.getId(), house.getId(), targetMember.getId(), "best");
         cheerId = response.cheerId();
 
-        // AFTER_COMMIT 리스너는 요청 스레드에서 동기 실행되므로 반환 직후 내역이 존재해야 한다(push 만 비동기).
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT type, ref_id, title, body FROM notification WHERE user_id = ?", targetUserId);
-        assertThat(rows).hasSize(1);
+        // 리스너가 알림 전용 executor 에서 비동기 실행되므로 내역 생성을 폴링으로 기다린다(push 도 비동기).
+        List<Map<String, Object>> rows = awaitNotificationRows(targetUserId, 1);
         assertThat(rows.get(0).get("type")).isEqualTo("FRIEND_CHEER");
         assertThat(((Number) rows.get(0).get("ref_id")).longValue()).isEqualTo(cheerId);
         assertThat(rows.get(0).get("title")).isEqualTo("응원이 도착했어요");
         // 온보딩 전(닉네임 null) 보낸이는 "집 친구"로 표시
         assertThat(rows.get(0).get("body")).isEqualTo("집 친구님: 오늘도 최고!");
+    }
+
+    // 비동기 리스너 완료 대기 - 기대 개수가 될 때까지 최대 5초 폴링.
+    private List<Map<String, Object>> awaitNotificationRows(Long userId, int expected) {
+        long deadline = System.currentTimeMillis() + 5_000;
+        List<Map<String, Object>> rows = List.of();
+        while (System.currentTimeMillis() < deadline) {
+            rows = jdbcTemplate.queryForList(
+                    "SELECT type, ref_id, title, body FROM notification WHERE user_id = ?", userId);
+            if (rows.size() >= expected) {
+                return rows;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        assertThat(rows).hasSize(expected);
+        return rows;
     }
 
     @Test
@@ -124,12 +143,18 @@ class HouseCheerNotificationFlowTest {
         doThrow(new RuntimeException("알림 저장 실패")).when(notificationService)
                 .send(anyLong(), any(), any(), any(), anyLong());
 
-        // 알림(REQUIRES_NEW 새 트랜잭션) 실패가 이미 커밋된 응원 요청으로 전파되면 안 된다
+        // 알림(비동기·별도 트랜잭션) 실패가 이미 커밋된 응원 요청으로 전파되면 안 된다
         HouseCheerResponse response = houseCheerService.cheer(
                 sender.getId(), house.getId(), targetMember.getId(), "support");
         cheerId = response.cheerId();
 
         assertThat(houseMemberCheerRepository.findById(cheerId)).isPresent();
+        // 비동기 리스너가 돌 시간을 준 뒤에도 알림 내역이 없어야 한다
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         assertThat(jdbcTemplate.queryForList(
                 "SELECT id FROM notification WHERE user_id = ?", targetUserId)).isEmpty();
     }
