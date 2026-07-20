@@ -71,7 +71,9 @@ public class RoomCommandService {
     public RoomResponse updateSlots(Long userId, RoomSlotUpdateRequest request) {
         validateNoDuplicateSlotType(request);
 
-        PersonalRoom room = personalRoomRepository.findById(userId)
+        // updateLayout 과 같은 방 행 락 - 락 없이 읽으면 동시 FREE_V1 전환을 통과한 슬롯 저장이
+        // 정본에 반영되지 않는 positioned row 를 남길 수 있다(성공했는데 화면에 없는 유실).
+        PersonalRoom room = personalRoomRepository.findWithLockById(userId)
                 .orElseGet(() -> personalRoomRepository.save(
                         PersonalRoom.create(userRepository.getReferenceById(userId))));
 
@@ -86,6 +88,11 @@ public class RoomCommandService {
 
         for (RoomSlotUpdateRequest.SlotAssignment assignment : request.slots()) {
             applyAssignment(userId, room, ownedItems, assignment.slotType(), assignment.userItemId());
+        }
+
+        // 슬롯 저장도 revision 을 올려 다른 기기(새 앱)가 stale baseRevision 으로 덮어쓰지 못하게 한다.
+        if (!request.slots().isEmpty()) {
+            room.increaseLayoutRevision();
         }
 
         return assemble(userId, room);
@@ -179,10 +186,12 @@ public class RoomCommandService {
             throw new BusinessException(RoomErrorCode.DUPLICATE_PLACEMENT_ITEM);
         }
         for (PlacementItem item : placements) {
+            int rotation = rotationOrDefault(item);
+            // Math.abs 는 Integer.MIN_VALUE 에서 오버플로로 음수를 반환해 검증을 통과시키므로 직접 비교한다.
             if (outOfRange(item.positionX(), POSITION_MIN, POSITION_MAX)
                     || outOfRange(item.positionY(), POSITION_MIN, POSITION_MAX)
                     || outOfRange(scaleOrDefault(item), SCALE_MIN, SCALE_MAX)
-                    || Math.abs(rotationOrDefault(item)) > ROTATION_LIMIT_DEG) {
+                    || rotation < -ROTATION_LIMIT_DEG || rotation > ROTATION_LIMIT_DEG) {
                 throw new BusinessException(RoomErrorCode.INVALID_PLACEMENT);
             }
         }

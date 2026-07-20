@@ -68,7 +68,7 @@ public class RoomController {
                     + "baseRevision 은 내 방 조회 응답의 layoutRevision 값을 그대로 보내며, 서버 값과 다르면 "
                     + "다른 기기에서 먼저 저장된 것이므로 409 ROOM_LAYOUT_REVISION_CONFLICT 를 반환합니다. "
                     + "좌표는 방 렌더 영역 전체 기준 0.0~1.0 정규화이고 겹침 검증은 하지 않습니다. "
-                    + "같은 가구를 여러 개 배치하려면 사본(userItemId)을 여러 개 소유해야 합니다. "
+                    + "같은 가구(userItemId)는 방에 1개만 배치할 수 있습니다. "
                     + "방이 아직 없으면 자동 생성 후 저장합니다(이때 baseRevision 은 0).")
     @PutMapping("/me/layout")
     public RoomResponse updateLayout(@CurrentUser AuthUser user,

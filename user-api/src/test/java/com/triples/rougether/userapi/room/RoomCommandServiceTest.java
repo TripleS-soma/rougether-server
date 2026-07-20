@@ -63,7 +63,7 @@ class RoomCommandServiceTest {
     void 소유한_아이템을_빈_슬롯에_배치하면_저장한다() {
         Long userId = 1L;
         PersonalRoom room = stubbedRoom(userId);
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(room));
         UserItem item = ownedItem(10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of(item));
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.empty());
@@ -81,7 +81,7 @@ class RoomCommandServiceTest {
     void 이미_배치된_슬롯이면_새로_저장하지_않고_교체한다() {
         Long userId = 1L;
         PersonalRoom room = stubbedRoom(userId);
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(room));
         UserItem item = ownedItem(20L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of(item));
         RoomSurfaceSlot existing = mock(RoomSurfaceSlot.class);
@@ -100,7 +100,7 @@ class RoomCommandServiceTest {
     @Test
     void 소유하지_않은_아이템_배치는_거부한다() {
         Long userId = 1L;
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(mock(PersonalRoom.class)));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(mock(PersonalRoom.class)));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of()); // 소유 없음
 
         assertThatThrownBy(() -> roomCommandService.updateSlots(
@@ -113,7 +113,7 @@ class RoomCommandServiceTest {
     @Test
     void 정의되지_않은_슬롯타입은_거부한다() {
         Long userId = 1L;
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(mock(PersonalRoom.class)));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(mock(PersonalRoom.class)));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of());
 
         // midCenter 는 캐릭터 자리라 슬롯 집합에 없다 (프론트 FurnitureSlot 과 동일).
@@ -140,7 +140,7 @@ class RoomCommandServiceTest {
     void userItemId가_null이면_해당_슬롯을_비운다() {
         Long userId = 1L;
         PersonalRoom room = stubbedRoom(userId);
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(room));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of());
         RoomSurfaceSlot existing = mock(RoomSurfaceSlot.class);
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "topLeft")).thenReturn(Optional.of(existing));
@@ -161,7 +161,7 @@ class RoomCommandServiceTest {
         Long userId = 1L;
         PersonalRoom room = mock(PersonalRoom.class);
         when(room.isFreeLayout()).thenReturn(true);
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(room));
 
         assertThatThrownBy(() -> roomCommandService.updateSlots(
                 userId, new RoomSlotUpdateRequest(List.of(
@@ -179,7 +179,7 @@ class RoomCommandServiceTest {
         Long userId = 1L;
         PersonalRoom room = stubbedRoom(userId);
         when(room.isFreeLayout()).thenReturn(true);
-        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(room));
         UserItem item = ownedItem(10L);
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(userId)).thenReturn(List.of(item));
         when(roomSurfaceSlotRepository.findByRoomUserIdAndSlotType(userId, "wallpaper")).thenReturn(Optional.empty());
@@ -191,5 +191,7 @@ class RoomCommandServiceTest {
         roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(List.of(new SlotAssignment("wallpaper", 10L))));
 
         verify(roomSurfaceSlotRepository).save(any(RoomSurfaceSlot.class));
+        // 슬롯 저장도 revision 을 올려 다른 기기의 stale baseRevision 저장을 막는다
+        verify(room).increaseLayoutRevision();
     }
 }

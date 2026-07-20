@@ -30,7 +30,7 @@ public record RoomLayoutUpdateRequest(
 
     public record PlacementItem(
             @Schema(description = "배치할 보유 아이템 ID. GET /api/v1/me/items (인벤토리) 응답의 userItemId 값. "
-                    + "같은 값을 한 요청에 중복 지정할 수 없음(같은 가구 여러 개는 사본을 여러 개 소유)", example = "77")
+                    + "같은 값을 한 요청에 중복 지정할 수 없음(같은 가구는 방에 1개만 배치)", example = "77")
             @NotNull Long userItemId,
             @Schema(description = "X 좌표 (방 렌더 영역 기준 0.0~1.0 정규화)", example = "0.32")
             @NotNull BigDecimal positionX,

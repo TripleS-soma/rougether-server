@@ -181,6 +181,14 @@ class RoomLayoutServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(RoomErrorCode.INVALID_PLACEMENT));
+
+        // Math.abs 오버플로 회귀 - Integer.MIN_VALUE 도 범위 밖으로 거부되어야 한다
+        assertThatThrownBy(() -> roomCommandService.updateLayout(USER_ID, new RoomLayoutUpdateRequest(
+                0, List.of(), List.of(new PlacementItem(
+                        77L, new BigDecimal("0.5"), new BigDecimal("0.5"), 0, null, Integer.MIN_VALUE, null)))))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(RoomErrorCode.INVALID_PLACEMENT));
     }
 
     @Test

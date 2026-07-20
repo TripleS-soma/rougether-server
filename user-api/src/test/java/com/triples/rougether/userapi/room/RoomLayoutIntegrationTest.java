@@ -50,8 +50,8 @@ class RoomLayoutIntegrationTest {
     @Autowired private UserItemRepository userItemRepository;
 
     private Long userId;
-    private UserItem chairCopy1;
-    private UserItem chairCopy2;
+    private UserItem chairOwned;
+    private UserItem tableOwned;
     private UserItem wallpaperOwned;
 
     @BeforeEach
@@ -59,13 +59,15 @@ class RoomLayoutIntegrationTest {
         User me = userRepository.save(User.signUp("room-layout-test@rougether.dev"));
         userId = me.getId();
         Theme theme = themeRepository.save(new Theme("layout_test_theme", "자유배치 테마", "themes/layout.png", true));
+        // user_items 는 UNIQUE(user_id, item_id)(V8) - 같은 가구를 두 개 소유할 수 없어 서로 다른 아이템 2종으로 다중 배치를 검증한다.
         Item chair = itemRepository.save(new Item(theme, "furniture", "positioned", null, null,
                 "자유배치 의자", CurrencyType.DIAMOND, 100, "items/layout/chair.png", false, true));
+        Item table = itemRepository.save(new Item(theme, "furniture", "positioned", null, null,
+                "자유배치 테이블", CurrencyType.DIAMOND, 100, "items/layout/table.png", false, true));
         Item wallpaper = itemRepository.save(new Item(theme, "wallpaper", "surface_slot", "wallpaper", null,
                 "자유배치 벽지", CurrencyType.DIAMOND, 100, "items/layout/wall.png", false, true));
-        // 같은 가구 다중 배치는 사본 다중 소유로 표현한다(user_items 는 사본별 row).
-        chairCopy1 = userItemRepository.save(UserItem.create(me, chair));
-        chairCopy2 = userItemRepository.save(UserItem.create(me, chair));
+        chairOwned = userItemRepository.save(UserItem.create(me, chair));
+        tableOwned = userItemRepository.save(UserItem.create(me, table));
         wallpaperOwned = userItemRepository.save(UserItem.create(me, wallpaper));
     }
 
@@ -79,15 +81,15 @@ class RoomLayoutIntegrationTest {
         RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
                 0,
                 List.of(new SurfaceSlotAssignment("wallpaper", wallpaperOwned.getId())),
-                List.of(placement(chairCopy1.getId(), "0.32", "0.68", 3),
-                        placement(chairCopy2.getId(), "0.50", "0.20", 1))));
+                List.of(placement(chairOwned.getId(), "0.32", "0.68", 3),
+                        placement(tableOwned.getId(), "0.50", "0.20", 1))));
 
         assertThat(response.layoutFormat()).isEqualTo(RoomLayoutFormat.FREE_V1);
         assertThat(response.layoutRevision()).isEqualTo(1);
         // placements 는 zIndex 오름차순, surface 슬롯은 slots 로 유지
         assertThat(response.placements()).hasSize(2);
-        assertThat(response.placements().get(0).userItemId()).isEqualTo(chairCopy2.getId());
-        assertThat(response.placements().get(1).userItemId()).isEqualTo(chairCopy1.getId());
+        assertThat(response.placements().get(0).userItemId()).isEqualTo(tableOwned.getId());
+        assertThat(response.placements().get(1).userItemId()).isEqualTo(chairOwned.getId());
         assertThat(response.placements().get(1).positionX()).isEqualByComparingTo(new BigDecimal("0.32"));
         assertThat(response.placements().get(1).scale()).isEqualByComparingTo(new BigDecimal("1.1"));
         assertThat(response.placements().get(1).rotationDeg()).isEqualTo(15);
@@ -103,11 +105,11 @@ class RoomLayoutIntegrationTest {
     @Test
     void 같은_아이템_재배치는_unique_충돌_없이_전체_교체된다() {
         roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                0, List.of(), List.of(placement(chairCopy1.getId(), "0.10", "0.10", 0))));
+                0, List.of(), List.of(placement(chairOwned.getId(), "0.10", "0.10", 0))));
 
         // 같은 (room, userItem) 조합을 다시 보냄 - delete 가 insert 보다 먼저 flush 되어야 통과한다.
         RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                1, List.of(), List.of(placement(chairCopy1.getId(), "0.90", "0.90", 5))));
+                1, List.of(), List.of(placement(chairOwned.getId(), "0.90", "0.90", 5))));
 
         assertThat(response.layoutRevision()).isEqualTo(2);
         List<RoomItemPlacement> placements = roomItemPlacementRepository.findByRoomUserIdWithItem(userId);
@@ -119,10 +121,10 @@ class RoomLayoutIntegrationTest {
     @Test
     void baseRevision이_다르면_409_충돌로_거부한다() {
         roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                0, List.of(), List.of(placement(chairCopy1.getId(), "0.10", "0.10", 0))));
+                0, List.of(), List.of(placement(chairOwned.getId(), "0.10", "0.10", 0))));
 
         assertThatThrownBy(() -> roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                0, List.of(), List.of(placement(chairCopy1.getId(), "0.20", "0.20", 0)))))
+                0, List.of(), List.of(placement(chairOwned.getId(), "0.20", "0.20", 0)))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(RoomErrorCode.LAYOUT_REVISION_CONFLICT));
@@ -131,10 +133,10 @@ class RoomLayoutIntegrationTest {
     @Test
     void FREE_V1_방에_positioned_포함_슬롯_저장은_409이고_surface만은_허용된다() {
         roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                0, List.of(), List.of(placement(chairCopy1.getId(), "0.10", "0.10", 0))));
+                0, List.of(), List.of(placement(chairOwned.getId(), "0.10", "0.10", 0))));
 
         assertThatThrownBy(() -> roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
-                List.of(new SlotAssignment("topLeft", chairCopy2.getId())))))
+                List.of(new SlotAssignment("topLeft", tableOwned.getId())))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(RoomErrorCode.LAYOUT_FORMAT_CONFLICT));
@@ -149,11 +151,12 @@ class RoomLayoutIntegrationTest {
     @Test
     void 전환_전_positioned_슬롯_row는_전환_후에도_유지되어_slots로_함께_내려간다() {
         // SLOT_V1 상태에서 positioned 슬롯을 채운 뒤 자유배치로 전환 - 구버전 표시 fallback 계약 검증
-        roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
-                List.of(new SlotAssignment("topLeft", chairCopy1.getId()))));
+        RoomResponse afterSlots = roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
+                List.of(new SlotAssignment("topLeft", chairOwned.getId()))));
 
+        // 슬롯 저장도 revision 을 올리므로 전환은 최신 revision 을 baseRevision 으로 보낸다
         RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
-                0, List.of(), List.of(placement(chairCopy2.getId(), "0.40", "0.40", 0))));
+                afterSlots.layoutRevision(), List.of(), List.of(placement(tableOwned.getId(), "0.40", "0.40", 0))));
 
         assertThat(response.layoutFormat()).isEqualTo(RoomLayoutFormat.FREE_V1);
         // 정본은 placements 지만 기존 positioned 슬롯 row 는 삭제되지 않고 slots 로 계속 노출된다
@@ -167,9 +170,9 @@ class RoomLayoutIntegrationTest {
         // 좌표 0.0/1.0, scale 0.1/5.0, rotation ±360 은 전부 허용 경계값이고, 겹침 검증은 하지 않는다(팀 확정)
         RoomResponse response = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
                 0, List.of(), List.of(
-                        new PlacementItem(chairCopy1.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
+                        new PlacementItem(chairOwned.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
                                 0, new BigDecimal("0.1"), -360, false),
-                        new PlacementItem(chairCopy2.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
+                        new PlacementItem(tableOwned.getId(), new BigDecimal("0.0"), new BigDecimal("1.0"),
                                 1, new BigDecimal("5.0"), 360, true))));
 
         assertThat(response.placements()).hasSize(2);
@@ -180,12 +183,13 @@ class RoomLayoutIntegrationTest {
     @Test
     void SLOT_V1_방의_기존_슬롯_저장과_조회는_동작이_변하지_않는다() {
         RoomResponse saved = roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
-                List.of(new SlotAssignment("topLeft", chairCopy1.getId()))));
+                List.of(new SlotAssignment("topLeft", chairOwned.getId()))));
 
-        // positioned 저장이 그대로 되고, additive 필드는 기본값으로 내려간다(구버전 앱은 무시)
+        // positioned 저장이 그대로 되고, additive 필드가 함께 내려간다(구버전 앱은 무시).
+        // 슬롯 저장도 revision 을 올린다 - 다른 기기의 stale baseRevision 전환을 막기 위함.
         assertThat(saved.slots()).hasSize(1);
         assertThat(saved.layoutFormat()).isEqualTo(RoomLayoutFormat.SLOT_V1);
-        assertThat(saved.layoutRevision()).isZero();
+        assertThat(saved.layoutRevision()).isEqualTo(1);
         assertThat(saved.placements()).isEmpty();
 
         RoomResponse queried = roomQueryService.getMyRoom(userId);
