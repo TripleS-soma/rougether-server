@@ -118,7 +118,8 @@ public class HouseController {
 
     @Operation(summary = "구성원 목록 조회",
             description = "참여 중인 집의 구성원 목록을 가입한 순서(가입 시각 오름차순)로 반환합니다. 해당 집의 활성(ACTIVE) 구성원만 조회할 수 있습니다. "
-                    + "활성 구성원만 노출되며 탈퇴·강퇴한 구성원은 포함되지 않습니다. 생성자(OWNER)가 첫 번째로 옵니다.")
+                    + "활성 구성원만 노출되며 탈퇴·강퇴한 구성원은 포함되지 않습니다. 생성자(OWNER)가 첫 번째로 옵니다. "
+                    + "lastAccessedAt 으로 멤버별 마지막 접속 시각을 표시할 수 있습니다(로그인·refresh 시 갱신, 30분 단위 해상도).")
     @GetMapping("/{houseId}/members")
     public HouseMemberListResponse members(@CurrentUser AuthUser user,
                                            @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId) {

@@ -77,6 +77,8 @@ class HouseMembersServiceTest {
         assertThat(response.items().get(1).userId()).isEqualTo(8L);
         assertThat(response.items().get(1).role()).isEqualTo(HouseMemberRole.MEMBER);
         assertThat(response.items().get(1).status()).isEqualTo(HouseMemberStatus.ACTIVE);
+        // 마지막 접속 시각은 user 에서 그대로 내려간다 (갱신 이력 없으면 null)
+        assertThat(response.items().get(0).lastAccessedAt()).isNull();
     }
 
     @Test

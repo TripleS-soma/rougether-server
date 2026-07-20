@@ -336,7 +336,8 @@ class HouseControllerTest {
         authAsUser7();
         when(houseQueryService.getMembers(7L, 1L)).thenReturn(new HouseMemberListResponse(java.util.List.of(
                 new HouseMemberListResponse.MemberSummary(10L, 7L, "진형", HouseMemberRole.OWNER,
-                        HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T00:00:00Z")))));
+                        HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T00:00:00Z"),
+                        Instant.parse("2026-07-20T05:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/houses/1/members"))
                 .andExpect(status().isOk())
@@ -344,7 +345,8 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.items[0].userId").value(7))
                 .andExpect(jsonPath("$.items[0].nickname").value("진형"))
                 .andExpect(jsonPath("$.items[0].role").value("OWNER"))
-                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"));
+                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.items[0].lastAccessedAt").value("2026-07-20T05:00:00Z"));
     }
 
     @Test
