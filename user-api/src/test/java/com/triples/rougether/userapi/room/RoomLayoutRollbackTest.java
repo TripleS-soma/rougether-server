@@ -2,8 +2,9 @@ package com.triples.rougether.userapi.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 
-import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -20,7 +21,6 @@ import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.PlacementItem;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlotAssignment;
-import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
 import java.math.BigDecimal;
@@ -29,9 +29,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-// surface + placements 단일 트랜잭션 정합성 - 뒤 단계(placements 소유 검증) 실패 시
-// 앞 단계(surface 슬롯 저장)까지 전부 롤백되는지 실제 커밋 경계로 검증(테스트 트랜잭션 없음).
+// surface + placements 단일 트랜잭션 정합성 - 뒤 단계(placements insert)가 실패하면
+// 앞 단계(surface 슬롯 저장·bulk delete)까지 전부 롤백되는지 실제 커밋 경계로 검증(테스트 트랜잭션 없음).
 @SpringBootTest
 class RoomLayoutRollbackTest {
 
@@ -39,16 +40,20 @@ class RoomLayoutRollbackTest {
     @Autowired private RoomQueryService roomQueryService;
     @Autowired private PersonalRoomRepository personalRoomRepository;
     @Autowired private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
-    @Autowired private RoomItemPlacementRepository roomItemPlacementRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private ThemeRepository themeRepository;
     @Autowired private ItemRepository itemRepository;
     @Autowired private UserItemRepository userItemRepository;
 
+    @MockitoSpyBean
+    private RoomItemPlacementRepository roomItemPlacementRepository;
+
     private Long userId;
     private Long themeId;
-    private Long itemId;
-    private Long userItemId;
+    private Long wallpaperItemId;
+    private Long chairItemId;
+    private Long wallpaperUserItemId;
+    private Long chairUserItemId;
 
     @AfterEach
     void cleanUp() {
@@ -58,11 +63,17 @@ class RoomLayoutRollbackTest {
             roomSurfaceSlotRepository.deleteAll(roomSurfaceSlotRepository.findByRoomUserId(userId));
             personalRoomRepository.deleteById(userId);
         }
-        if (userItemId != null) {
-            userItemRepository.deleteById(userItemId);
+        if (wallpaperUserItemId != null) {
+            userItemRepository.deleteById(wallpaperUserItemId);
         }
-        if (itemId != null) {
-            itemRepository.deleteById(itemId);
+        if (chairUserItemId != null) {
+            userItemRepository.deleteById(chairUserItemId);
+        }
+        if (wallpaperItemId != null) {
+            itemRepository.deleteById(wallpaperItemId);
+        }
+        if (chairItemId != null) {
+            itemRepository.deleteById(chairItemId);
         }
         if (themeId != null) {
             themeRepository.deleteById(themeId);
@@ -73,28 +84,33 @@ class RoomLayoutRollbackTest {
     }
 
     @Test
-    void placements_검증이_실패하면_surface_슬롯_변경까지_전부_롤백된다() {
+    void placements_저장이_실패하면_surface_슬롯_변경까지_전부_롤백된다() {
         User me = userRepository.save(User.signUp("room-layout-rollback@rougether.dev"));
         userId = me.getId();
         Theme theme = themeRepository.save(new Theme("layout_rb_theme", "롤백 테마", "themes/rb.png", true));
         themeId = theme.getId();
         Item wallpaper = itemRepository.save(new Item(theme, "wallpaper", "surface_slot", "wallpaper", null,
                 "롤백 벽지", CurrencyType.DIAMOND, 100, "items/rb/wall.png", false, true));
-        itemId = wallpaper.getId();
-        UserItem owned = userItemRepository.save(UserItem.create(me, wallpaper));
-        userItemId = owned.getId();
+        wallpaperItemId = wallpaper.getId();
+        Item chair = itemRepository.save(new Item(theme, "furniture", "positioned", null, null,
+                "롤백 의자", CurrencyType.DIAMOND, 100, "items/rb/chair.png", false, true));
+        chairItemId = chair.getId();
+        UserItem ownedWallpaper = userItemRepository.save(UserItem.create(me, wallpaper));
+        wallpaperUserItemId = ownedWallpaper.getId();
+        UserItem ownedChair = userItemRepository.save(UserItem.create(me, chair));
+        chairUserItemId = ownedChair.getId();
 
         roomQueryService.getMyRoom(userId); // 방 선생성(커밋) - 롤백 대상을 layout 저장분으로 한정
 
-        // surface 는 소유 아이템으로 정상, placements 에 미소유 id → 소유 검증은 surface 반영 뒤에 실패한다
+        // 검증·소유 확인·surface upsert·bulk delete 를 모두 통과한 뒤 insert 단계에서 터뜨림
+        doThrow(new RuntimeException("placements 저장 실패")).when(roomItemPlacementRepository).saveAll(anyList());
+
         assertThatThrownBy(() -> roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
                 0,
-                List.of(new SurfaceSlotAssignment("wallpaper", owned.getId())),
-                List.of(new PlacementItem(999999L, new BigDecimal("0.5"), new BigDecimal("0.5"),
+                List.of(new SurfaceSlotAssignment("wallpaper", ownedWallpaper.getId())),
+                List.of(new PlacementItem(ownedChair.getId(), new BigDecimal("0.5"), new BigDecimal("0.5"),
                         0, null, null, null)))))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(RoomErrorCode.ITEM_NOT_OWNED));
+                .isInstanceOf(RuntimeException.class);
 
         // 단일 트랜잭션이므로 surface 저장·전환·revision 증가 전부 롤백
         assertThat(roomSurfaceSlotRepository.findByRoomUserId(userId)).isEmpty();

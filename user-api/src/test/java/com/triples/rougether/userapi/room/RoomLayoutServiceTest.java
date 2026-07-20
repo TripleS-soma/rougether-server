@@ -134,6 +134,8 @@ class RoomLayoutServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(RoomErrorCode.ITEM_NOT_OWNED));
+        // 소유 검증은 쓰기(delete·saveAll)보다 앞에서 실패해야 한다.
+        verify(roomItemPlacementRepository, never()).deleteByRoomUserId(any());
         verify(roomItemPlacementRepository, never()).saveAll(anyList());
     }
 

@@ -107,6 +107,12 @@ public class RoomCommandService {
         validatePlacements(request.placements());
 
         Map<Long, UserItem> ownedItems = ownedItemsOf(userId);
+        // 소유 검증을 쓰기(surface upsert·delete)보다 앞에 둬 실패 시 불필요한 delete+rollback 을 피한다.
+        for (PlacementItem item : request.placements()) {
+            if (!ownedItems.containsKey(item.userItemId())) {
+                throw new BusinessException(RoomErrorCode.ITEM_NOT_OWNED);
+            }
+        }
 
         for (SurfaceSlotAssignment assignment : request.surfaceSlots()) {
             applyAssignment(userId, room, ownedItems, assignment.slotType(), assignment.userItemId());
@@ -117,12 +123,8 @@ public class RoomCommandService {
         roomItemPlacementRepository.deleteByRoomUserId(userId);
         List<RoomItemPlacement> placements = new ArrayList<>();
         for (PlacementItem item : request.placements()) {
-            UserItem userItem = ownedItems.get(item.userItemId());
-            if (userItem == null) {
-                throw new BusinessException(RoomErrorCode.ITEM_NOT_OWNED);
-            }
             placements.add(RoomItemPlacement.place(
-                    room, userItem, item.positionX(), item.positionY(), item.zIndex(),
+                    room, ownedItems.get(item.userItemId()), item.positionX(), item.positionY(), item.zIndex(),
                     scaleOrDefault(item), rotationOrDefault(item), Boolean.TRUE.equals(item.flipped())));
         }
         roomItemPlacementRepository.saveAll(placements);
