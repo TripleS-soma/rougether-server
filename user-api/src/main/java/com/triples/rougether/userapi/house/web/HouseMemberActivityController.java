@@ -2,31 +2,43 @@ package com.triples.rougether.userapi.house.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
+import com.triples.rougether.userapi.house.dto.HouseCheerRequest;
+import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
+import com.triples.rougether.userapi.house.service.HouseCheerService;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-// 같은 집 멤버 활동 열람 - 방/그날 현황(루틴+투두)/완료 내역. 요청자·대상 모두 그 집의 ACTIVE 구성원이어야 한다(본인도 조회 가능).
-@Tag(name = "House Member Activity", description = "같은 집 멤버의 방·그날 현황(루틴+투두)·완료 내역 열람 API")
+// 같은 집 멤버 활동 열람·응원 - 방/그날 현황(루틴+투두)/완료 내역/응원 보내기.
+// 요청자·대상 모두 그 집의 ACTIVE 구성원이어야 한다(열람은 본인도 가능, 응원은 본인 불가).
+@Tag(name = "House Member Activity", description = "같은 집 멤버의 방·그날 현황(루틴+투두)·완료 내역 열람과 응원 API")
 @RestController
 @RequestMapping("/api/v1/houses/{houseId}/members/{membershipId}")
 public class HouseMemberActivityController {
 
     private final HouseMemberActivityService houseMemberActivityService;
+    private final HouseCheerService houseCheerService;
 
-    public HouseMemberActivityController(HouseMemberActivityService houseMemberActivityService) {
+    public HouseMemberActivityController(HouseMemberActivityService houseMemberActivityService,
+                                         HouseCheerService houseCheerService) {
         this.houseMemberActivityService = houseMemberActivityService;
+        this.houseCheerService = houseCheerService;
     }
 
     @Operation(summary = "집 멤버 방 조회",
@@ -83,5 +95,23 @@ public class HouseMemberActivityController {
             @Parameter(description = "조회 종료일(YYYY-MM-DD). 미지정 시 오늘(KST)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return houseMemberActivityService.getMemberRoutineCompletions(user.id(), houseId, membershipId, from, to);
+    }
+
+    // 원탭 응원. 저장 커밋 후 대상에게 push 알림(FRIEND_CHEER)이 발송된다.
+    @Operation(summary = "집 멤버에게 응원 보내기",
+            description = "같은 집 멤버에게 원탭 응원을 보냅니다. 요청자와 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 하고, "
+                    + "자기 자신에게는 보낼 수 없습니다(400 HOUSE_CHEER_SELF). "
+                    + "type 은 great(잘하고 있어!)/support(응원해요!)/best(오늘도 최고!) 3종이며, "
+                    + "같은 대상에게 같은 타입은 하루(KST) 1회만 보낼 수 있습니다(초과 시 409 HOUSE_CHEER_DUPLICATED). "
+                    + "저장이 확정되면 대상에게 push 알림(응원이 도착했어요)이 발송됩니다 — 알림 실패는 응원 성공에 영향을 주지 않습니다.")
+    @PostMapping("/cheer")
+    @ResponseStatus(HttpStatus.CREATED)
+    public HouseCheerResponse cheer(
+            @CurrentUser AuthUser user,
+            @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값") @PathVariable Long houseId,
+            @Parameter(description = "응원 대상 구성원의 membership ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 membershipId 값")
+            @PathVariable Long membershipId,
+            @Valid @RequestBody HouseCheerRequest request) {
+        return houseCheerService.cheer(user.id(), houseId, membershipId, request.type());
     }
 }
