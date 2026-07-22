@@ -2,8 +2,11 @@ package com.triples.rougether.adminapi.itemslot.service;
 
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceListResponse;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceRow;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
+import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
 import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
 import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
@@ -16,6 +19,8 @@ import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -30,6 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ItemSlotService {
 
     private static final String PLACEMENT_POSITIONED = "positioned";
+    private static final String PLACEMENT_SURFACE = "surface_slot";
+    private static final BigDecimal MIN_DEFAULT_SCALE = new BigDecimal("0.50");
+    private static final BigDecimal MAX_DEFAULT_SCALE = new BigDecimal("2.00");
+    private static final String DEFAULT_SCALE_RANGE_MESSAGE =
+            "기본 크기 배율은 0.50 이상 2.00 이하의 숫자여야 합니다.";
     // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (10연 = x5 는 user-api GachaService 가 계산)
     private static final int ITEM_GACHA_COST_COIN = 250;
 
@@ -59,6 +69,15 @@ public class ItemSlotService {
         return new ItemSlotListResponse(rows);
     }
 
+    @Transactional(readOnly = true)
+    public RoomPreviewSurfaceListResponse getActiveSurfaceItems() {
+        List<RoomPreviewSurfaceRow> rows = itemRepository.findByPlacementTypeWithTheme(PLACEMENT_SURFACE).stream()
+                .filter(item -> item.isActive() && item.getTheme().isActive())
+                .map(RoomPreviewSurfaceRow::of)
+                .toList();
+        return new RoomPreviewSurfaceListResponse(rows);
+    }
+
     @Transactional
     public ItemSlotRow updateSlot(Long itemId, String slot) {
         Item item = itemRepository.findById(itemId)
@@ -71,6 +90,24 @@ public class ItemSlotService {
             throw new IllegalArgumentException("positioned 슬롯 코드가 아닙니다: " + slot);
         }
         item.updateDefaultSlot(normalized);
+        return ItemSlotRow.of(item, findActiveItemEntries(itemId));
+    }
+
+    @Transactional
+    public ItemSlotRow updateDefaultScale(Long itemId, BigDecimal defaultScale) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemDefaultScaleInvalidException("아이템을 찾을 수 없습니다: " + itemId));
+        if (!PLACEMENT_POSITIONED.equals(item.getPlacementType())) {
+            throw new ItemDefaultScaleInvalidException(
+                    "positioned 아이템만 기본 크기 배율을 변경할 수 있습니다.");
+        }
+        if (defaultScale == null
+                || defaultScale.compareTo(MIN_DEFAULT_SCALE) < 0
+                || defaultScale.compareTo(MAX_DEFAULT_SCALE) > 0) {
+            throw new ItemDefaultScaleInvalidException(DEFAULT_SCALE_RANGE_MESSAGE);
+        }
+
+        item.updateDefaultScale(defaultScale.setScale(2, RoundingMode.HALF_UP));
         return ItemSlotRow.of(item, findActiveItemEntries(itemId));
     }
 

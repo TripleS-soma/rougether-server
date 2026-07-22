@@ -1,11 +1,14 @@
 package com.triples.rougether.adminapi.itemslot.web;
 
+import com.triples.rougether.adminapi.itemslot.dto.ItemDefaultScaleUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemRarityUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotUpdateRequest;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
+import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
 import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
 import com.triples.rougether.adminapi.itemslot.service.ItemSlotService;
 import com.triples.rougether.common.error.ErrorResponse;
@@ -37,10 +40,21 @@ public class ItemSlotController {
         return itemSlotService.getPositionedItems();
     }
 
+    @GetMapping("/surfaces")
+    public RoomPreviewSurfaceListResponse getSurfaces() {
+        return itemSlotService.getActiveSurfaceItems();
+    }
+
     @PutMapping("/{itemId}/slot")
     public ItemSlotRow updateSlot(@PathVariable Long itemId,
                                   @RequestBody ItemSlotUpdateRequest request) {
         return itemSlotService.updateSlot(itemId, request.slot());
+    }
+
+    @PutMapping("/{itemId}/default-scale")
+    public ItemSlotRow updateDefaultScale(@PathVariable Long itemId,
+                                          @RequestBody ItemDefaultScaleUpdateRequest request) {
+        return itemSlotService.updateDefaultScale(itemId, request.defaultScale());
     }
 
     @PutMapping("/{itemId}/rarity")
@@ -52,6 +66,12 @@ public class ItemSlotController {
     @PostMapping("/slots/import")
     public SlotImportResult importSlots(@RequestBody List<SlotAssignmentDto> assignments) {
         return itemSlotService.importSlots(assignments);
+    }
+
+    @ExceptionHandler(ItemDefaultScaleInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDefaultScale(ItemDefaultScaleInvalidException exception) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("ITEM_DEFAULT_SCALE_INVALID", exception.getMessage()));
     }
 
     @ExceptionHandler(ItemRarityInvalidException.class)

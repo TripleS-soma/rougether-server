@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rougether Admin · 가구 관리</title>
+    <title>Rougether Admin · 가구 크기 스튜디오</title>
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -31,40 +31,153 @@
         </div>
     </header>
 
-    <main class="app-main app-main--wide">
-        <div class="upload-card">
-            <div class="upload-head">
-                <h2>가구 관리</h2>
-                <p>positioned 가구의 뽑기 등급과 방에 처음 배치될 기본 슬롯을 관리합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다. 변경 즉시 저장됩니다.</p>
+    <main class="app-main app-main--studio">
+        <div class="studio-heading">
+            <div>
+                <span class="studio-eyebrow">FURNITURE DESIGN SYSTEM</span>
+                <h2>가구 크기 스튜디오</h2>
+                <p>앱의 실제 방 렌더러 기준으로 기본 크기·슬롯·뽑기 등급을 확인하고 조정합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다.</p>
             </div>
-
-            <div class="slot-toolbar">
-                <input type="search" id="filter" class="slot-search"
-                       placeholder="이름·테마·asset key 검색">
-                <label class="filter-toggle" for="animated-only">
-                    <input type="checkbox" id="animated-only">
-                    <span>움짤만 보기</span>
-                </label>
-                <span class="slot-count" id="count"></span>
+            <div class="renderer-contract" aria-label="모바일 Room.tsx 화면 규격">
+                <strong id="contract-title">모바일 Room renderer contract 불러오는 중</strong>
+                <span id="contract-summary">규격을 불러온 뒤 편집을 시작합니다.</span>
             </div>
+        </div>
 
-            <div class="alert alert-error" id="error" hidden></div>
+        <div class="alert alert-error studio-error" id="error" role="alert" hidden></div>
 
-            <div class="slot-table-wrap">
-                <table class="slot-table">
-                    <thead>
-                    <tr>
-                        <th></th>
-                        <th>아이템</th>
-                        <th>테마</th>
-                        <th>뽑기 등급</th>
-                        <th>기본 슬롯</th>
-                        <th class="slot-status-col"></th>
-                    </tr>
-                    </thead>
-                    <tbody id="rows"></tbody>
-                </table>
-            </div>
+        <div class="studio-layout">
+            <section class="studio-panel catalog-panel" aria-labelledby="catalog-title">
+                <div class="panel-heading-row">
+                    <div>
+                        <h3 id="catalog-title">가구 카탈로그</h3>
+                        <p>아이템을 선택하면 오른쪽 방에 바로 합성됩니다.</p>
+                    </div>
+                    <span class="slot-count" id="count"></span>
+                </div>
+
+                <div class="slot-toolbar studio-toolbar">
+                    <input type="search" id="filter" class="slot-search"
+                           placeholder="이름·테마·asset key 검색" aria-label="가구 검색">
+                    <label class="filter-toggle" for="animated-only">
+                        <input type="checkbox" id="animated-only">
+                        <span>움짤만 보기</span>
+                    </label>
+                </div>
+
+                <div class="theme-filters" id="theme-filters" aria-label="테마 필터"></div>
+                <div class="furniture-grid" id="catalog-grid"></div>
+                <div class="catalog-empty" id="catalog-empty" hidden>
+                    조건에 맞는 가구가 없습니다.
+                </div>
+            </section>
+
+            <aside class="studio-panel preview-panel" aria-labelledby="preview-title">
+                <div class="panel-heading-row preview-heading">
+                    <div>
+                        <h3 id="preview-title">라이브 룸 미리보기</h3>
+                        <p>모바일 <code>Room</code>이 소비하는 동일 JSON 규격과 실제 CDN 에셋으로 합성합니다.</p>
+                    </div>
+                    <div class="preview-tabs" role="tablist" aria-label="미리보기 방식">
+                        <button type="button" class="preview-tab active" id="free-tab"
+                                role="tab" aria-selected="true" aria-controls="room-preview">FREE_V1</button>
+                        <button type="button" class="preview-tab" id="slot-tab"
+                                role="tab" aria-selected="false" aria-controls="room-preview">SLOT_V1</button>
+                        <button type="button" class="preview-tab" id="single-tab"
+                                role="tab" aria-selected="false" aria-controls="single-preview">단독 보기</button>
+                    </div>
+                </div>
+
+                <div class="preview-fixture-controls" aria-label="룸 기준 에셋">
+                    <label><span>배경</span><select id="preview-background"></select></label>
+                    <label><span>벽지</span><select id="preview-wallpaper"></select></label>
+                    <label><span>바닥</span><select id="preview-floor"></select></label>
+                    <label><span>캐릭터</span><select id="preview-character"></select></label>
+                </div>
+
+                <div id="room-preview" class="room-preview" role="tabpanel" aria-labelledby="free-tab">
+                    <div class="room-stage" aria-label="모바일 Room.tsx 좌표를 재현한 방 렌더 영역">
+                        <img id="room-background" class="room-surface room-background" alt="">
+                        <img id="room-wallpaper" class="room-surface room-wall" alt="">
+                        <img id="room-floor" class="room-surface room-floor" alt="">
+                        <div class="room-midline" aria-hidden="true"></div>
+                        <div id="preview-furniture" class="room-furniture free-preview-anchor">
+                            <img id="preview-furniture-image" alt="">
+                        </div>
+                        <img id="room-character" class="room-character" alt="">
+                        <span class="room-band-label wall-label">벽 50%</span>
+                        <span class="room-band-label floor-label">바닥 50%</span>
+                    </div>
+                    <p class="room-source-note" id="room-source-note">
+                        Room renderer contract를 불러오는 중입니다.
+                    </p>
+                </div>
+
+                <div id="single-preview" class="single-preview" role="tabpanel"
+                     aria-labelledby="single-tab" hidden>
+                    <button type="button" id="single-image-button" class="single-image-button"
+                            aria-label="이미지 크게 보기">
+                        <img id="single-preview-image" alt="">
+                    </button>
+                    <p>투명 여백과 원본 프레임을 단독으로 확인합니다.</p>
+                </div>
+
+                <section class="scale-inspector" aria-labelledby="selected-item-name">
+                    <div class="selected-item-head">
+                        <div class="selected-item-copy">
+                            <span class="selected-theme" id="selected-theme">아이템을 선택하세요</span>
+                            <h4 id="selected-item-name">가구 없음</h4>
+                            <code id="selected-item-key"></code>
+                        </div>
+                        <span class="draft-status" id="draft-status">저장됨</span>
+                    </div>
+
+                    <div class="scale-control-block">
+                        <div class="scale-label-row">
+                            <label for="scale-range">렌더 스케일</label>
+                            <div class="scale-number-wrap">
+                                <input type="number" id="scale-number" min="0.50" max="2.00" step="0.01"
+                                       inputmode="decimal" aria-label="기본 렌더 스케일">
+                                <span>×</span>
+                            </div>
+                        </div>
+                        <div class="scale-range-row">
+                            <span>0.50</span>
+                            <input type="range" id="scale-range" min="0.50" max="2.00" step="0.01">
+                            <span>2.00</span>
+                        </div>
+                        <div class="scale-quick-actions">
+                            <button type="button" id="scale-minus">−0.10</button>
+                            <button type="button" id="scale-plus">+0.10</button>
+                            <button type="button" id="scale-reset">1.00으로 초기화</button>
+                        </div>
+                        <div class="scale-metric" id="scale-metric">
+                            Room renderer contract를 불러오는 중입니다.
+                        </div>
+                    </div>
+
+                    <div class="item-operations">
+                        <label>
+                            <span>기본 슬롯</span>
+                            <select id="selected-slot" class="slot-select"></select>
+                        </label>
+                        <label>
+                            <span>뽑기 등급</span>
+                            <select id="selected-rarity" class="slot-select rarity-select"></select>
+                        </label>
+                    </div>
+
+                    <div class="inspector-footer">
+                        <div>
+                            <strong id="operation-status" aria-live="polite"></strong>
+                            <p>새로 배치하는 가구의 초기 크기입니다. 기존 방 배치에는 소급되지 않습니다.</p>
+                        </div>
+                        <button type="button" class="btn-primary scale-save" id="scale-save">
+                            기본 크기 저장
+                        </button>
+                    </div>
+                </section>
+            </aside>
         </div>
     </main>
 
@@ -88,136 +201,625 @@
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
 
-        // RoomSlotType 의 positioned 계열 코드와 동일해야 한다 (midCenter 는 캐릭터 자리라 없음, 프론트 FurnitureSlot 과 일치).
-        const SLOTS = [
-            ['topLeft', '상단 왼쪽'], ['topCenter', '상단 중앙'], ['topRight', '상단 오른쪽'],
-            ['midLeft', '중단 왼쪽'], ['midRight', '중단 오른쪽'],
-            ['bottomLeft', '하단 왼쪽'], ['bottomCenter', '하단 중앙'], ['bottomRight', '하단 오른쪽']
-        ];
+        const SUPPORTED_ROOM_CONTRACT_VERSION = 1;
+        const SLOT_LABELS = {
+            topLeft: '상단 왼쪽',
+            topCenter: '상단 중앙',
+            topRight: '상단 오른쪽',
+            midLeft: '중단 왼쪽',
+            midRight: '중단 오른쪽',
+            bottomLeft: '하단 왼쪽',
+            bottomCenter: '하단 중앙',
+            bottomRight: '하단 오른쪽'
+        };
         const RARITIES = ['일반', '희귀', '전설'];
 
-        const tbody = document.getElementById('rows');
+        const catalogGrid = document.getElementById('catalog-grid');
+        const catalogEmpty = document.getElementById('catalog-empty');
+        const themeFilters = document.getElementById('theme-filters');
         const filterInput = document.getElementById('filter');
         const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
+        const previewFurniture = document.getElementById('preview-furniture');
+        const previewFurnitureImage = document.getElementById('preview-furniture-image');
+        const roomBackground = document.getElementById('room-background');
+        const roomWallpaper = document.getElementById('room-wallpaper');
+        const roomFloor = document.getElementById('room-floor');
+        const roomCharacter = document.getElementById('room-character');
+        const previewBackground = document.getElementById('preview-background');
+        const previewWallpaper = document.getElementById('preview-wallpaper');
+        const previewFloor = document.getElementById('preview-floor');
+        const previewCharacter = document.getElementById('preview-character');
+        const contractTitle = document.getElementById('contract-title');
+        const contractSummary = document.getElementById('contract-summary');
+        const singlePreviewImage = document.getElementById('single-preview-image');
+        const singleImageButton = document.getElementById('single-image-button');
+        const selectedTheme = document.getElementById('selected-theme');
+        const selectedItemName = document.getElementById('selected-item-name');
+        const selectedItemKey = document.getElementById('selected-item-key');
+        const selectedSlot = document.getElementById('selected-slot');
+        const selectedRarity = document.getElementById('selected-rarity');
+        const scaleRange = document.getElementById('scale-range');
+        const scaleNumber = document.getElementById('scale-number');
+        const scaleMetric = document.getElementById('scale-metric');
+        const scaleSave = document.getElementById('scale-save');
+        const draftStatus = document.getElementById('draft-status');
+        const operationStatus = document.getElementById('operation-status');
+        const freeTab = document.getElementById('free-tab');
+        const slotTab = document.getElementById('slot-tab');
+        const singleTab = document.getElementById('single-tab');
+        const roomPreview = document.getElementById('room-preview');
+        const roomStage = roomPreview.querySelector('.room-stage');
+        const singlePreview = document.getElementById('single-preview');
+        const roomSourceNote = document.getElementById('room-source-note');
         const previewDialog = document.getElementById('image-preview-dialog');
         const previewImage = document.getElementById('image-preview-image');
         const previewTitle = document.getElementById('image-preview-title');
         const previewKey = document.getElementById('image-preview-key');
         const previewClose = document.getElementById('image-preview-close');
+
         let items = [];
+        let surfaces = [];
+        let characters = [];
+        let roomContract = null;
+        let selectedId = null;
+        let selectedThemeName = '전체';
+        let draftScale = 1.00;
+        const draftScales = new Map();
+        let previewMode = 'free';
         let previewOpener = null;
+        let busy = false;
 
         init();
 
         async function init() {
+            setControlsDisabled(true);
             try {
-                const res = await fetch('/admin/items/slots');
-                if (!res.ok) {
-                    showError('목록 조회 실패 (HTTP ' + res.status + ')');
-                    return;
-                }
-                items = (await res.json()).items;
-                render();
-            } catch (err) {
-                showError('목록 조회 중 오류: ' + err.message);
+                const [contract, itemList, surfaceList, characterList] = await Promise.all([
+                    getJson('/contracts/room-render-contract.v1.json'),
+                    getJson('/admin/items/slots'),
+                    getJson('/admin/items/surfaces'),
+                    getJson('/admin/characters')
+                ]);
+                validateRoomContract(contract);
+                roomContract = contract;
+                items = itemList.items.map((item) => ({
+                    ...item,
+                    defaultScale: Number(item.defaultScale ?? 1)
+                }));
+                surfaces = surfaceList.items;
+                characters = characterList;
+                applyRoomContract();
+                buildPreviewAssetControls();
+                buildThemeFilters();
+                selectedId = (items.find((item) => item.animated) ?? items[0])?.id ?? null;
+                renderCatalog();
+                renderInspector();
+            } catch (error) {
+                showError('스튜디오 초기화 실패: ' + error.message);
+                catalogEmpty.hidden = false;
+            } finally {
+                setControlsDisabled(!currentItem());
             }
         }
 
-        function render() {
+        async function getJson(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(url + ' HTTP ' + response.status);
+            return response.json();
+        }
+
+        function validateRoomContract(contract) {
+            if (contract?.id !== 'rougether-room-renderer'
+                || contract.version !== SUPPORTED_ROOM_CONTRACT_VERSION) {
+                throw new Error('지원하지 않는 Room renderer contract입니다.');
+            }
+            const slots = contract.furniture?.slots;
+            if (!slots || Object.keys(SLOT_LABELS).some((slot) => !slots[slot])) {
+                throw new Error('Room renderer contract의 슬롯 좌표가 불완전합니다.');
+            }
+        }
+
+        function applyRoomContract() {
+            const wall = roomContract.surfaces.wallpaper;
+            const floor = roomContract.surfaces.floor;
+            const character = roomContract.character;
+            roomStage.style.aspectRatio = roomContract.room.aspectRatio;
+            roomStage.style.borderRadius = roomContract.room.borderRadiusPx + 'px';
+            roomStage.style.setProperty('--wall-height', percent(wall.height));
+            roomStage.style.setProperty(
+                '--furniture-padding', roomContract.furniture.imagePaddingPx + 'px');
+            roomStage.style.setProperty(
+                '--furniture-radius', roomContract.furniture.borderRadiusPx + 'px');
+            setRect(roomBackground, roomContract.surfaces.background);
+            setRect(roomWallpaper, wall);
+            setRect(roomFloor, floor);
+            roomCharacter.style.left = percent(character.centerX - character.width / 2);
+            roomCharacter.style.bottom = percent(character.bottom);
+            roomCharacter.style.width = percent(character.width);
+            roomCharacter.style.height = percent(character.height);
+
+            const editorScale = roomContract.furniture.editorScale;
+            [scaleRange, scaleNumber].forEach((input) => {
+                input.min = editorScale.min;
+                input.max = editorScale.max;
+                input.step = editorScale.step;
+            });
+            contractTitle.textContent = '모바일 Room renderer contract v' + roomContract.version;
+            contractSummary.textContent = '1:1 · 벽/바닥 '
+                + Math.round(wall.height * 100) + ':' + Math.round(floor.height * 100)
+                + ' · FREE ' + Math.round(roomContract.furniture.baseWidth * 100) + '%'
+                + ' · 캐릭터 ' + Math.round(character.width * 100) + '%';
+        }
+
+        function buildPreviewAssetControls() {
+            const fixture = roomContract.referenceFixture;
+            buildSurfaceSelect(previewBackground, 'background', fixture.surfaces.background);
+            buildSurfaceSelect(previewWallpaper, 'wallpaper', fixture.surfaces.wallpaper);
+            buildSurfaceSelect(previewFloor, 'floor', fixture.surfaces.floor);
+
+            const characterOptions = [
+                { code: fixture.character.id, name: fixture.character.name },
+                ...characters.filter((character) => character.code !== fixture.character.id)
+            ];
+            previewCharacter.replaceChildren(...characterOptions.map((character) => {
+                const option = new Option(character.name + ' (' + character.code + ')', character.code);
+                return option;
+            }));
+            previewCharacter.value = fixture.character.id;
+            renderPreviewAssets();
+        }
+
+        function buildSurfaceSelect(select, kind, fixtureSurface) {
+            const options = [
+                { ...fixtureSurface, themeName: 'RN 기준 fixture', themeCode: '__reference__' },
+                ...surfaces.filter((surface) =>
+                    surface.surfaceSlotType === kind && surface.assetKey !== fixtureSurface.assetKey)
+            ];
+            select.replaceChildren(...options.map((surface) => {
+                const option = new Option(
+                    surface.themeName + ' · ' + surface.name,
+                    surface.assetKey);
+                option.dataset.themeName = surface.themeName;
+                option.dataset.themeCode = surface.themeCode;
+                option.dataset.name = surface.name;
+                return option;
+            }));
+            select.value = fixtureSurface.assetKey;
+        }
+
+        function selectPreviewTheme(themeCode) {
+            [previewBackground, previewWallpaper, previewFloor].forEach((select) => {
+                select.value = select.options[0]?.value ?? '';
+                const match = [...select.options]
+                    .find((option) => option.dataset.themeCode === themeCode);
+                if (match) select.value = match.value;
+            });
+        }
+
+        function renderPreviewAssets() {
+            setPreviewImage(roomBackground, previewBackground);
+            setPreviewImage(roomWallpaper, previewWallpaper);
+            setPreviewImage(roomFloor, previewFloor);
+            const characterCode = previewCharacter.value;
+            roomCharacter.src = assetUrl(
+                'characters/' + characterCode + '/animations/idle.webp');
+            roomCharacter.alt = previewCharacter.selectedOptions[0]?.textContent + ' 캐릭터';
+        }
+
+        function setPreviewImage(image, select) {
+            image.src = assetUrl(select.value);
+            image.alt = select.selectedOptions[0]?.dataset.name ?? '';
+        }
+
+        function setRect(element, rect) {
+            element.style.top = percent(rect.top);
+            element.style.left = percent(rect.left);
+            element.style.width = percent(rect.width);
+            element.style.height = percent(rect.height);
+        }
+
+        function percent(value) {
+            return (value * 100) + '%';
+        }
+
+        function currentItem() {
+            return items.find((item) => item.id === selectedId) ?? null;
+        }
+
+        function visibleItems() {
             const keyword = filterInput.value.trim().toLowerCase();
-            const animatedOnly = animatedOnlyInput.checked;
-            const visible = items.filter((item) =>
+            return items.filter((item) =>
                 (!keyword || [item.name, item.themeName, item.assetKey]
                     .join(' ').toLowerCase().includes(keyword)) &&
-                (!animatedOnly || item.animated));
+                (!animatedOnlyInput.checked || item.animated) &&
+                (selectedThemeName === '전체' || item.themeName === selectedThemeName));
+        }
 
-            tbody.replaceChildren(...visible.map(buildRow));
+        function buildThemeFilters() {
+            const themes = ['전체', ...new Set(items.map((item) => item.themeName).filter(Boolean))];
+            themeFilters.replaceChildren(...themes.map((theme) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'theme-filter' + (theme === selectedThemeName ? ' active' : '');
+                button.textContent = theme;
+                button.addEventListener('click', () => {
+                    selectedThemeName = theme;
+                    buildThemeFilters();
+                    renderCatalog();
+                });
+                return button;
+            }));
+        }
+
+        function renderCatalog() {
+            const visible = visibleItems();
+            if (visible.length && !visible.some((item) => item.id === selectedId)) {
+                selectItem(visible[0].id, false);
+            }
+            catalogGrid.replaceChildren(...visible.map(buildCard));
+            catalogEmpty.hidden = visible.length > 0;
             countEl.textContent = visible.length + ' / ' + items.length + '개';
         }
 
-        function buildRow(item) {
-            const tr = document.createElement('tr');
+        function buildCard(item) {
+            const card = document.createElement('article');
+            card.className = 'furniture-card' + (item.id === selectedId ? ' selected' : '');
 
-            const thumbCell = document.createElement('td');
-            const thumbButton = document.createElement('button');
-            thumbButton.type = 'button';
-            thumbButton.className = 'slot-thumb-button';
-            thumbButton.setAttribute('aria-label', item.name + ' 이미지 크게 보기');
-            thumbButton.title = '클릭해서 크게 보기';
-            const img = document.createElement('img');
-            img.className = 'slot-thumb';
-            img.loading = 'lazy';
-            img.alt = item.name;
-            img.src = s3BaseUrl + '/' + item.assetKey;
-            thumbButton.appendChild(img);
-            thumbButton.addEventListener('click', () => openImagePreview(item, thumbButton));
-            thumbCell.appendChild(thumbButton);
+            const selectButton = document.createElement('button');
+            selectButton.type = 'button';
+            selectButton.className = 'furniture-card-select';
+            selectButton.setAttribute('aria-pressed', String(item.id === selectedId));
+            selectButton.setAttribute('aria-label', item.name + ' 선택');
+            selectButton.addEventListener('click', () => selectItem(item.id));
 
-            const nameCell = document.createElement('td');
-            const nameEl = document.createElement('div');
-            nameEl.className = 'slot-name';
-            nameEl.textContent = item.name;
+            const media = document.createElement('span');
+            media.className = 'furniture-card-media';
+            const image = document.createElement('img');
+            image.loading = 'lazy';
+            image.alt = '';
+            image.src = assetUrl(item.assetKey);
+            media.appendChild(image);
             if (item.animated) {
                 const badge = document.createElement('span');
-                badge.className = 'item-badge';
+                badge.className = 'item-badge card-badge';
                 badge.textContent = '움짤';
-                nameEl.appendChild(badge);
+                media.appendChild(badge);
             }
-            const keyEl = document.createElement('div');
-            keyEl.className = 'slot-key';
-            keyEl.textContent = item.assetKey;
-            nameCell.append(nameEl, keyEl);
 
-            const themeCell = document.createElement('td');
-            themeCell.textContent = item.themeName;
+            const copy = document.createElement('span');
+            copy.className = 'furniture-card-copy';
+            const name = document.createElement('strong');
+            name.textContent = item.name;
+            const theme = document.createElement('span');
+            theme.textContent = item.themeName;
+            const scale = document.createElement('span');
+            scale.className = 'card-scale';
+            scale.textContent = Number(item.defaultScale).toFixed(2) + '×';
+            copy.append(name, theme, scale);
+            selectButton.append(media, copy);
 
-            const rarityCell = document.createElement('td');
-            const raritySelect = document.createElement('select');
-            raritySelect.className = 'slot-select rarity-select';
+            const zoom = document.createElement('button');
+            zoom.type = 'button';
+            zoom.className = 'card-zoom';
+            zoom.textContent = '크게 보기';
+            zoom.setAttribute('aria-label', item.name + ' 이미지 크게 보기');
+            zoom.addEventListener('click', () => openImagePreview(item, zoom));
+            card.append(selectButton, zoom);
+            return card;
+        }
+
+        function selectItem(itemId, rerender = true) {
+            selectedId = itemId;
+            renderInspector();
+            if (rerender) renderCatalog();
+        }
+
+        function renderInspector() {
+            const item = currentItem();
+            if (!item) {
+                renderReferenceFixture();
+                setControlsDisabled(true);
+                return;
+            }
+            selectedTheme.textContent = item.themeName;
+            selectedItemName.textContent = item.name;
+            selectedItemKey.textContent = item.assetKey;
+            previewFurnitureImage.src = assetUrl(item.assetKey);
+            previewFurnitureImage.alt = item.name;
+            singlePreviewImage.src = assetUrl(item.assetKey);
+            singlePreviewImage.alt = item.name + ' 단독 이미지';
+            selectPreviewTheme(item.themeCode);
+            renderPreviewAssets();
+            draftScale = draftScales.get(item.id) ?? Number(item.defaultScale);
+            populateSlotSelect(item);
+            populateRaritySelect(item);
+            renderScale();
+            showOperationStatus('');
+            setControlsDisabled(false);
+        }
+
+        function renderReferenceFixture() {
+            if (!roomContract) return;
+            const fixture = roomContract.referenceFixture.furniture;
+            selectedTheme.textContent = 'RN 기준 fixture';
+            selectedItemName.textContent = fixture.name;
+            selectedItemKey.textContent = fixture.assetKey;
+            previewFurnitureImage.src = assetUrl(fixture.assetKey);
+            previewFurnitureImage.alt = fixture.name;
+            singlePreviewImage.src = assetUrl(fixture.assetKey);
+            singlePreviewImage.alt = fixture.name + ' 단독 이미지';
+            draftStatus.textContent = '읽기 전용 fixture';
+            draftStatus.classList.remove('dirty');
+            renderReferenceFixtureGeometry(fixture);
+        }
+
+        function renderReferenceFixtureGeometry(fixture) {
+            const normalized = Number(fixture.defaultScale ?? 1);
+            const freeMode = previewMode === 'free';
+            const rect = freeMode
+                ? {
+                    left: roomContract.furniture.previewCenter.x
+                        - roomContract.furniture.baseWidth / 2,
+                    top: roomContract.furniture.previewCenter.y
+                        - roomContract.furniture.baseWidth / 2,
+                    width: roomContract.furniture.baseWidth
+                }
+                : roomContract.furniture.slots[fixture.slot];
+            const baseWidth = rect.width * 100;
+            previewFurniture.className = freeMode
+                ? 'room-furniture free-preview-anchor'
+                : 'room-furniture slot-preview-anchor';
+            previewFurniture.style.left = percent(rect.left);
+            previewFurniture.style.top = percent(rect.top);
+            previewFurniture.style.width = percent(rect.width);
+            previewFurniture.style.transform = freeMode ? 'scale(' + normalized + ')' : 'none';
+            scaleMetric.textContent = 'RN 기준 fixture · '
+                + (freeMode ? 'FREE_V1 ' : 'SLOT_V1 ')
+                + baseWidth.toFixed(0) + '% 박스 · 읽기 전용';
+            roomSourceNote.textContent = 'Room contract v' + roomContract.version
+                + ': 모바일과 동일한 referenceFixture 가구로 DB와 무관하게 규격을 비교합니다.';
+        }
+
+        function populateSlotSelect(item) {
+            selectedSlot.replaceChildren(new Option('— 미지정 —', ''));
+            Object.keys(roomContract.furniture.slots).forEach((code) =>
+                selectedSlot.add(new Option(SLOT_LABELS[code] + ' (' + code + ')', code)));
+            selectedSlot.value = item.defaultSlot ?? '';
+        }
+
+        function populateRaritySelect(item) {
+            selectedRarity.replaceChildren();
             if (!item.rarityEditable) {
                 const unregistered = new Option('— 뽑기 미등록 —', '', true, true);
                 unregistered.disabled = true;
-                raritySelect.add(unregistered);
+                selectedRarity.add(unregistered);
             } else if (item.rarityConflict) {
                 const mixed = new Option('— 혼합 —', '', true, true);
                 mixed.disabled = true;
-                raritySelect.add(mixed);
+                selectedRarity.add(mixed);
             } else if (!item.rarity) {
                 const unset = new Option('— 미설정 —', '', true, true);
                 unset.disabled = true;
-                raritySelect.add(unset);
+                selectedRarity.add(unset);
             }
-            RARITIES.forEach((rarity) => raritySelect.add(new Option(rarity, rarity)));
-            if (item.rarity) raritySelect.value = item.rarity;
-            raritySelect.title = rarityTitle(item);
-            rarityCell.appendChild(raritySelect);
+            RARITIES.forEach((rarity) => selectedRarity.add(new Option(rarity, rarity)));
+            if (item.rarity) selectedRarity.value = item.rarity;
+            selectedRarity.title = rarityTitle(item);
+            selectedRarity.disabled = false;
+        }
 
-            const slotCell = document.createElement('td');
-            const slotSelect = document.createElement('select');
-            slotSelect.className = 'slot-select';
-            const none = new Option('— 미지정 —', '');
-            slotSelect.add(none);
-            SLOTS.forEach(([code, label]) => slotSelect.add(new Option(label + ' (' + code + ')', code)));
-            slotSelect.value = item.defaultSlot ?? '';
-            slotCell.appendChild(slotSelect);
+        function setDraftScale(value) {
+            if (!Number.isFinite(value)) return;
+            const range = roomContract.furniture.editorScale;
+            draftScale = Math.min(range.max, Math.max(range.min, value));
+            const item = currentItem();
+            if (item && Math.abs(Number(draftScale.toFixed(2)) - Number(item.defaultScale)) > 0.0001) {
+                draftScales.set(item.id, draftScale);
+            } else if (item) {
+                draftScales.delete(item.id);
+            }
+            renderScale();
+        }
 
-            const statusCell = document.createElement('td');
-            statusCell.className = 'slot-status';
+        function renderScale() {
+            const item = currentItem();
+            if (!item) {
+                if (roomContract) {
+                    renderReferenceFixtureGeometry(roomContract.referenceFixture.furniture);
+                }
+                return;
+            }
+            const normalized = Number(draftScale.toFixed(2));
+            scaleRange.value = normalized;
+            scaleNumber.value = normalized.toFixed(2);
+            const slotRects = roomContract.furniture.slots;
+            const hasStoredSlot = Boolean(item.defaultSlot && slotRects[item.defaultSlot]);
+            const slot = hasStoredSlot ? item.defaultSlot : 'bottomCenter';
+            const freeMode = previewMode === 'free';
+            const rect = freeMode
+                ? {
+                    left: roomContract.furniture.previewCenter.x
+                        - roomContract.furniture.baseWidth / 2,
+                    top: roomContract.furniture.previewCenter.y
+                        - roomContract.furniture.baseWidth / 2,
+                    width: roomContract.furniture.baseWidth
+                }
+                : slotRects[slot];
+            const baseWidth = rect.width * 100;
+            previewFurniture.className = freeMode
+                ? 'room-furniture free-preview-anchor'
+                : 'room-furniture slot-preview-anchor';
+            previewFurniture.style.left = percent(rect.left);
+            previewFurniture.style.top = percent(rect.top);
+            previewFurniture.style.width = percent(rect.width);
+            previewFurniture.style.transform = freeMode ? 'scale(' + normalized + ')' : 'none';
+            scaleMetric.textContent = freeMode
+                ? 'FREE_V1 기준 가구 폭 ' + baseWidth.toFixed(0) + '% × ' + normalized.toFixed(2)
+                    + ' = ' + (baseWidth * normalized).toFixed(1) + '% · 중심 고정'
+                : 'SLOT_V1 기준 가구 폭 ' + baseWidth + '% 고정 · 기본 크기는 새 FREE_V1에만 적용'
+                    + (!hasStoredSlot ? ' · 미지정은 하단 중앙으로 미리보기' : '');
+            roomSourceNote.textContent = freeMode
+                ? 'Room contract v' + roomContract.version + ': ' + baseWidth.toFixed(0)
+                    + '% 박스 · 중심 좌표 고정 transform scale · 내부 여백 '
+                    + roomContract.furniture.imagePaddingPx + 'px · 보라 테두리는 관리자 가이드'
+                : 'Room contract v' + roomContract.version
+                    + ': defaultSlot의 정규화 좌표·폭 사용 · 보라 테두리는 관리자 가이드';
+            const dirty = Math.abs(normalized - Number(item.defaultScale)) > 0.0001;
+            draftStatus.textContent = dirty ? '저장되지 않은 변경사항' : '저장됨';
+            draftStatus.classList.toggle('dirty', dirty);
+            scaleSave.disabled = busy || !dirty;
+        }
 
-            raritySelect.addEventListener('change', () =>
-                saveRarity(item, raritySelect, slotSelect, statusCell));
-            slotSelect.addEventListener('change', () =>
-                saveSlot(item, slotSelect, raritySelect, statusCell));
+        async function saveDefaultScale() {
+            const item = currentItem();
+            if (!item || busy) return;
+            setBusy(true, '기본 크기 저장 중…');
+            try {
+                const updated = await putJson('/admin/items/' + item.id + '/default-scale', {
+                    defaultScale: Number(draftScale.toFixed(2))
+                });
+                item.defaultScale = Number(updated.defaultScale);
+                draftScales.delete(item.id);
+                renderCatalog();
+                if (selectedId === item.id) {
+                    draftScale = item.defaultScale;
+                    renderScale();
+                }
+                showOperationStatus('기본 크기 저장됨', 'ok');
+            } catch (error) {
+                if (selectedId === item.id) renderScale();
+                showOperationStatus('저장 실패', 'err');
+                showError(item.name + ' 기본 크기 저장 실패: ' + error.message);
+            } finally {
+                if (selectedId !== item.id && currentItem()) {
+                    draftScale = draftScales.get(currentItem().id)
+                        ?? Number(currentItem().defaultScale);
+                }
+                setBusy(false);
+            }
+        }
 
-            tr.append(thumbCell, nameCell, themeCell, rarityCell, slotCell, statusCell);
-            return tr;
+        async function saveSlot() {
+            const item = currentItem();
+            if (!item || busy) return;
+            const previous = item.defaultSlot ?? '';
+            setBusy(true, '슬롯 저장 중…');
+            try {
+                const updated = await putJson('/admin/items/' + item.id + '/slot', {
+                    slot: selectedSlot.value || null
+                });
+                item.defaultSlot = updated.defaultSlot;
+                if (selectedId === item.id) {
+                    selectedSlot.value = updated.defaultSlot ?? '';
+                    renderScale();
+                }
+                showOperationStatus('기본 슬롯 저장됨', 'ok');
+            } catch (error) {
+                if (selectedId === item.id) selectedSlot.value = previous;
+                showOperationStatus('슬롯 저장 실패', 'err');
+                showError(item.name + ' 슬롯 저장 실패: ' + error.message);
+            } finally {
+                if (selectedId !== item.id && currentItem()) {
+                    draftScale = draftScales.get(currentItem().id)
+                        ?? Number(currentItem().defaultScale);
+                }
+                setBusy(false);
+            }
+        }
+
+        async function saveRarity() {
+            const item = currentItem();
+            if (!item || busy || !selectedRarity.value) return;
+            const wasUnregistered = !item.rarityEditable;
+            const previous = item.rarityConflict ? '' : (item.rarity ?? '');
+            setBusy(true, wasUnregistered ? '테마 뽑기 풀 등록 중…' : '등급 저장 중…');
+            try {
+                const updated = await putJson('/admin/items/' + item.id + '/rarity', {
+                    rarity: selectedRarity.value
+                });
+                item.rarity = updated.rarity;
+                item.rarityEditable = updated.rarityEditable;
+                item.rarityConflict = updated.rarityConflict;
+                if (selectedId === item.id) populateRaritySelect(item);
+                showOperationStatus(
+                    wasUnregistered ? '테마 뽑기 풀에 등록됨' : '뽑기 등급 저장됨',
+                    'ok');
+            } catch (error) {
+                if (selectedId === item.id) selectedRarity.value = previous;
+                showOperationStatus('등급 저장 실패', 'err');
+                showError(item.name + ' 등급 저장 실패: ' + error.message);
+            } finally {
+                if (selectedId !== item.id && currentItem()) {
+                    draftScale = draftScales.get(currentItem().id)
+                        ?? Number(currentItem().defaultScale);
+                }
+                setBusy(false);
+            }
+        }
+
+        async function putJson(url, body) {
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) throw new Error(await errorMessage(response));
+            return response.json();
+        }
+
+        function setBusy(next, message = '') {
+            busy = next;
+            [catalogGrid, themeFilters].forEach((container) => {
+                if (next) container.setAttribute('inert', '');
+                else container.removeAttribute('inert');
+                container.querySelectorAll('button').forEach((button) => {
+                    button.disabled = next;
+                });
+            });
+            catalogGrid.setAttribute('aria-busy', String(next));
+            filterInput.disabled = next;
+            animatedOnlyInput.disabled = next;
+            freeTab.disabled = next;
+            slotTab.disabled = next;
+            singleTab.disabled = next;
+            [previewBackground, previewWallpaper, previewFloor, previewCharacter]
+                .forEach((select) => { select.disabled = next; });
+            setControlsDisabled(next);
+            if (message) showOperationStatus(message);
+            renderScale();
+        }
+
+        function setControlsDisabled(disabled) {
+            scaleRange.disabled = disabled;
+            scaleNumber.disabled = disabled;
+            selectedSlot.disabled = disabled;
+            selectedRarity.disabled = disabled;
+            document.getElementById('scale-minus').disabled = disabled;
+            document.getElementById('scale-plus').disabled = disabled;
+            document.getElementById('scale-reset').disabled = disabled;
+            if (disabled) scaleSave.disabled = true;
+        }
+
+        function setPreviewMode(mode) {
+            if (mode !== 'single') previewMode = mode;
+            const roomActive = mode !== 'single';
+            roomPreview.hidden = !roomActive;
+            singlePreview.hidden = roomActive;
+            freeTab.classList.toggle('active', mode === 'free');
+            slotTab.classList.toggle('active', mode === 'slot');
+            singleTab.classList.toggle('active', !roomActive);
+            freeTab.setAttribute('aria-selected', String(mode === 'free'));
+            slotTab.setAttribute('aria-selected', String(mode === 'slot'));
+            singleTab.setAttribute('aria-selected', String(!roomActive));
+            roomPreview.setAttribute('aria-labelledby', previewMode === 'slot' ? 'slot-tab' : 'free-tab');
+            renderScale();
         }
 
         function openImagePreview(item, opener) {
             previewOpener = opener;
-            previewImage.src = s3BaseUrl + '/' + item.assetKey;
+            previewImage.src = assetUrl(item.assetKey);
             previewImage.alt = item.name + ' 큰 이미지';
             previewTitle.textContent = item.name;
             previewKey.textContent = item.assetKey;
@@ -229,64 +831,8 @@
             if (previewDialog.open) previewDialog.close();
         }
 
-        async function saveSlot(item, slotSelect, raritySelect, statusCell) {
-            const previous = item.defaultSlot ?? '';
-            const next = slotSelect.value;
-            setSaving(slotSelect, raritySelect, statusCell);
-            try {
-                const res = await fetch('/admin/items/' + item.id + '/slot', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
-                    body: JSON.stringify({ slot: next || null })
-                });
-                if (!res.ok) {
-                    throw new Error(await errorMessage(res));
-                }
-                const updated = await res.json();
-                item.defaultSlot = updated.defaultSlot;
-                showSaved(statusCell);
-            } catch (err) {
-                slotSelect.value = previous;
-                showSaveFailed(statusCell);
-                showError(item.name + ' 저장 실패: ' + err.message);
-            } finally {
-                slotSelect.disabled = false;
-                raritySelect.disabled = false;
-            }
-        }
-
-        async function saveRarity(item, raritySelect, slotSelect, statusCell) {
-            const previous = item.rarityConflict ? '' : (item.rarity ?? '');
-            const next = raritySelect.value;
-            if (!next) return;
-            setSaving(slotSelect, raritySelect, statusCell);
-            try {
-                const res = await fetch('/admin/items/' + item.id + '/rarity', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
-                    body: JSON.stringify({ rarity: next })
-                });
-                if (!res.ok) {
-                    throw new Error(await errorMessage(res));
-                }
-                const updated = await res.json();
-                item.rarity = updated.rarity;
-                item.rarityEditable = updated.rarityEditable;
-                item.rarityConflict = updated.rarityConflict;
-                Array.from(raritySelect.options)
-                    .filter((option) => option.value === '')
-                    .forEach((option) => option.remove());
-                raritySelect.value = updated.rarity ?? '';
-                raritySelect.title = rarityTitle(item);
-                showSaved(statusCell);
-            } catch (err) {
-                raritySelect.value = previous;
-                showSaveFailed(statusCell);
-                showError(item.name + ' 등급 저장 실패: ' + err.message);
-            } finally {
-                slotSelect.disabled = false;
-                raritySelect.disabled = false;
-            }
+        function assetUrl(assetKey) {
+            return s3BaseUrl.replace(/\/$/, '') + '/' + assetKey.replace(/^\//, '');
         }
 
         function rarityTitle(item) {
@@ -295,22 +841,9 @@
                 : '등급을 선택하면 테마 뽑기 풀에 등록됩니다. 테마 머신이 없으면 새로 만듭니다.';
         }
 
-        function setSaving(slotSelect, raritySelect, statusCell) {
-            slotSelect.disabled = true;
-            raritySelect.disabled = true;
-            statusCell.textContent = '저장 중…';
-            statusCell.className = 'slot-status';
-        }
-
-        function showSaved(statusCell) {
-            statusCell.textContent = '저장됨';
-            statusCell.className = 'slot-status ok';
-            setTimeout(() => { statusCell.textContent = ''; }, 1500);
-        }
-
-        function showSaveFailed(statusCell) {
-            statusCell.textContent = '실패';
-            statusCell.className = 'slot-status err';
+        function showOperationStatus(message, state = '') {
+            operationStatus.textContent = message;
+            operationStatus.className = state;
         }
 
         async function errorMessage(response) {
@@ -322,14 +855,31 @@
             }
         }
 
-        function showError(msg) {
-            errorBox.textContent = msg;
+        function showError(message) {
+            errorBox.textContent = message;
             errorBox.hidden = false;
-            setTimeout(() => { errorBox.hidden = true; }, 4000);
+            window.setTimeout(() => { errorBox.hidden = true; }, 5000);
         }
 
-        filterInput.addEventListener('input', render);
-        animatedOnlyInput.addEventListener('change', render);
+        filterInput.addEventListener('input', renderCatalog);
+        animatedOnlyInput.addEventListener('change', renderCatalog);
+        scaleRange.addEventListener('input', () => setDraftScale(Number(scaleRange.value)));
+        scaleNumber.addEventListener('change', () => setDraftScale(Number(scaleNumber.value)));
+        document.getElementById('scale-minus').addEventListener('click', () => setDraftScale(draftScale - 0.10));
+        document.getElementById('scale-plus').addEventListener('click', () => setDraftScale(draftScale + 0.10));
+        document.getElementById('scale-reset').addEventListener('click', () => setDraftScale(1.00));
+        scaleSave.addEventListener('click', saveDefaultScale);
+        selectedSlot.addEventListener('change', saveSlot);
+        selectedRarity.addEventListener('change', saveRarity);
+        [previewBackground, previewWallpaper, previewFloor, previewCharacter]
+            .forEach((select) => select.addEventListener('change', renderPreviewAssets));
+        freeTab.addEventListener('click', () => setPreviewMode('free'));
+        slotTab.addEventListener('click', () => setPreviewMode('slot'));
+        singleTab.addEventListener('click', () => setPreviewMode('single'));
+        singleImageButton.addEventListener('click', () => {
+            const item = currentItem();
+            if (item) openImagePreview(item, singleImageButton);
+        });
         previewClose.addEventListener('click', closeImagePreview);
         previewDialog.addEventListener('click', (event) => {
             if (event.target === previewDialog) closeImagePreview();

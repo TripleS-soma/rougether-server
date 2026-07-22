@@ -9,12 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
+import com.triples.rougether.userapi.shop.dto.ItemListResponse;
 import com.triples.rougether.userapi.shop.dto.ItemResponse;
-import com.triples.rougether.userapi.shop.dto.MyItemListResponse;
+import com.triples.rougether.userapi.shop.service.ShopCommandService;
 import com.triples.rougether.userapi.shop.service.ShopQueryService;
-import com.triples.rougether.userapi.shop.web.MyItemController;
+import com.triples.rougether.userapi.shop.web.ShopController;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,9 +23,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(MyItemController.class)
+@WebMvcTest(ShopController.class)
 @AutoConfigureMockMvc(addFilters = false)
-class MyItemControllerTest {
+class ShopControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -34,31 +34,28 @@ class MyItemControllerTest {
     private ShopQueryService shopQueryService;
 
     @MockitoBean
+    private ShopCommandService shopCommandService;
+
+    @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
 
-    // security 컨텍스트의 JwtAuthenticationFilter 가 의존 — slice 테스트에서 mock 필요.
     @MockitoBean
     private TokenService tokenService;
 
     @Test
-    void 인벤토리_응답_계약() throws Exception {
+    void 상점_아이템_응답에_defaultScale을_숫자로_직렬화한다() throws Exception {
         when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
         when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
                 .thenReturn(new AuthUser(7L, null));
-        when(shopQueryService.getMyItems(7L, "furniture")).thenReturn(new MyItemListResponse(List.of(
-                new MyItemListResponse.MyItemSummary(77L, 1L, "인벤 의자", "items/inv/chair.png",
-                        "furniture", "positioned", null, null, "midRight", new BigDecimal("1.24"),
-                        new ItemResponse.ThemeSummary(3L, "inv_test_theme", "인벤토리 테마", null),
-                        Instant.parse("2026-07-05T00:00:00Z")))));
+        when(shopQueryService.getItems(7L, null)).thenReturn(new ItemListResponse(List.of(
+                new ItemResponse(1L, "인벤 의자", "items/inv/chair.png", "positioned",
+                        null, null, "midRight", new BigDecimal("1.24"), "furniture", "DIAMOND", 100,
+                        false, new ItemResponse.ThemeSummary(3L, "inv_test_theme", "인벤토리 테마", null),
+                        false))));
 
-        mockMvc.perform(get("/api/v1/me/items").param("categoryCode", "furniture"))
+        mockMvc.perform(get("/api/v1/items"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].userItemId").value(77))
-                .andExpect(jsonPath("$.items[0].itemId").value(1))
-                .andExpect(jsonPath("$.items[0].name").value("인벤 의자"))
-                .andExpect(jsonPath("$.items[0].placementType").value("positioned"))
-                .andExpect(jsonPath("$.items[0].defaultSlot").value("midRight"))
-                .andExpect(jsonPath("$.items[0].defaultScale").value(1.24))
-                .andExpect(jsonPath("$.items[0].theme.code").value("inv_test_theme"));
+                .andExpect(jsonPath("$.items[0].id").value(1))
+                .andExpect(jsonPath("$.items[0].defaultScale").value(1.24));
     }
 }
