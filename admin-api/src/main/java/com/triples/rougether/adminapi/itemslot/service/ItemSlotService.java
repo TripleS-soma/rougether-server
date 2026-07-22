@@ -233,10 +233,10 @@ public class ItemSlotService {
     }
 
     private static void validateDefaultPosition(BigDecimal x, BigDecimal y) {
-        if ((x == null) != (y == null)) {
-            throw new ItemRenderDefaultsInvalidException(DEFAULT_POSITION_PAIR_MESSAGE);
-        }
-        if (x == null) {
+        if (x == null || y == null) {
+            if (x != null || y != null) {
+                throw new ItemRenderDefaultsInvalidException(DEFAULT_POSITION_PAIR_MESSAGE);
+            }
             return;
         }
         if (x.compareTo(MIN_DEFAULT_POSITION) < 0
