@@ -4,6 +4,7 @@ import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -38,10 +39,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("update Notification n set n.isRead = true where n.user.id = :userId and n.isRead = false")
     int markAllReadByUserId(@Param("userId") Long userId);
 
-    // 리마인드 batch Step2 reader: 이전 실행의 잔존 PENDING도 자연 회수됨. cursorId(id > cursorId)로 커서 페이징함 -
+    // 리마인드 batch 발송 reader: 이전 실행의 잔존 PENDING도 자연 회수됨. cursorId(id > cursorId)로 커서 페이징함 -
     // writer가 처리된 알림을 PENDING에서 빼내는 쿼리라 offset 페이징이면 처리 도중 결과셋이 줄어 못 읽는 구간이 생김
-    List<Notification> findByTypeAndPushStatusAndIdGreaterThanOrderByIdAsc(
-            NotificationType type, PushStatus pushStatus, Long cursorId, Pageable pageable);
+    List<Notification> findByTypeInAndPushStatusAndIdGreaterThanOrderByIdAsc(
+            Collection<NotificationType> types, PushStatus pushStatus, Long cursorId, Pageable pageable);
 
     // Step2 writer: 발송 결과 반영. 조회 후 mutate 대신 단일 UPDATE로 커밋
     @Modifying
