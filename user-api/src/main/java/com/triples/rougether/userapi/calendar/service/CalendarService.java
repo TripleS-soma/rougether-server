@@ -14,6 +14,8 @@ import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,9 +36,12 @@ public class CalendarService {
 
     @Transactional(readOnly = true)
     public CalendarDayResponse day(Long userId, LocalDate date) {
-        // 과거는 실제 기록(완료 log)에서, 오늘·미래는 live 재계산에서 소싱함
-        if (date.isBefore(LocalDate.now(KST))) {
+        LocalDate yesterday = LocalDate.now(KST).minusDays(1);
+        if (date.isBefore(yesterday)) {
             return pastDay(userId, date);
+        }
+        if (date.isEqual(yesterday)) {
+            return recalculatedDay(userId, date);
         }
         return liveDay(userId, date);
     }
@@ -74,6 +79,34 @@ public class CalendarService {
                 .collect(Collectors.toSet());
 
         return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
+    }
+
+    private CalendarDayResponse recalculatedDay(Long userId, LocalDate date) {
+        List<Routine> routines = new ArrayList<>(routineLogRepository
+                .findAllWithRoutineForDay(userId, date)
+                .stream()
+                .filter(log -> log.getStatus() == RoutineLogStatus.COMPLETED)
+                .map(RoutineLog::getRoutine)
+                .toList());
+        Set<Long> completedRoutineIds = routines.stream()
+                .map(Routine::getId)
+                .collect(Collectors.toSet());
+
+        Set<Long> seenLineages = routines.stream()
+                .map(CalendarService::lineageKey)
+                .collect(Collectors.toCollection(HashSet::new));
+        for (Routine routine : routineRepository.findEffectiveOnDay(userId, date)) {
+            if (agendaAssembler.isRoutineTargetOn(routine, date)
+                    && seenLineages.add(lineageKey(routine))) {
+                routines.add(routine);
+            }
+        }
+
+        return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
+    }
+
+    private static Long lineageKey(Routine routine) {
+        return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
     }
 
     // 마감일이 정확히 그날인 투두만
