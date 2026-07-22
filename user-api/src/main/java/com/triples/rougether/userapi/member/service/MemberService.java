@@ -50,9 +50,9 @@ public class MemberService {
     // 커밋 실패 시 남는 S3 orphan 은 지우지 않는다(교체·삭제 시에도 동일, 정리는 후속).
     @Transactional
     public ProfileImageResponse updateProfileImage(Long userId, MultipartFile file) {
-        byte[] content = validateProfileImage(file);
+        validateProfileImage(file);
         User user = findUser(userId);
-        String key = assetStorageService.upload(content, file.getContentType(), PROFILE_IMAGE_KIND);
+        String key = assetStorageService.upload(readBytes(file), file.getContentType(), PROFILE_IMAGE_KIND);
         user.changeProfileImage(key);
         return new ProfileImageResponse(key);
     }
@@ -62,7 +62,7 @@ public class MemberService {
         findUser(userId).removeProfileImage();
     }
 
-    private byte[] validateProfileImage(MultipartFile file) {
+    private void validateProfileImage(MultipartFile file) {
         // contentType null 가드 필수 — Set.of().contains(null)은 NPE라 곧장 contains 못 함
         String contentType = file == null ? null : file.getContentType();
         if (file == null || file.isEmpty() || contentType == null
@@ -70,12 +70,6 @@ public class MemberService {
                 || file.getSize() > MAX_IMAGE_SIZE_BYTES) {
             throw new BusinessException(MemberErrorCode.MEMBER_PROFILE_IMAGE_INVALID);
         }
-        byte[] content = readBytes(file);
-        // 선언된 Content-Type 은 클라이언트 임의값이라 실제 바이트(매직 넘버)와 대조함
-        if (!matchesMagicBytes(content, contentType)) {
-            throw new BusinessException(MemberErrorCode.MEMBER_PROFILE_IMAGE_INVALID);
-        }
-        return content;
     }
 
     private byte[] readBytes(MultipartFile file) {
@@ -85,29 +79,6 @@ public class MemberService {
             // 전송 중 끊긴 multipart 등 읽기 실패도 클라이언트 입력 문제로 취급함
             throw new BusinessException(MemberErrorCode.MEMBER_PROFILE_IMAGE_INVALID);
         }
-    }
-
-    private boolean matchesMagicBytes(byte[] content, String contentType) {
-        return switch (contentType) {
-            case "image/png" -> hasBytesAt(content, 0, 0x89, 'P', 'N', 'G');
-            case "image/jpeg" -> hasBytesAt(content, 0, 0xFF, 0xD8, 0xFF);
-            // WEBP 는 RIFF 컨테이너: 0~3 "RIFF" + 8~11 "WEBP" (4~7은 크기 필드)
-            case "image/webp" -> hasBytesAt(content, 0, 'R', 'I', 'F', 'F')
-                    && hasBytesAt(content, 8, 'W', 'E', 'B', 'P');
-            default -> false;
-        };
-    }
-
-    private boolean hasBytesAt(byte[] content, int offset, int... expected) {
-        if (content.length < offset + expected.length) {
-            return false;
-        }
-        for (int i = 0; i < expected.length; i++) {
-            if ((content[offset + i] & 0xFF) != expected[i]) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private User findUser(Long userId) {
