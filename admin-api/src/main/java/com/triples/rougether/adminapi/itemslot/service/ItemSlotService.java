@@ -2,6 +2,7 @@ package com.triples.rougether.adminapi.itemslot.service;
 
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceRow;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
 import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ItemSlotService {
 
     private static final String PLACEMENT_POSITIONED = "positioned";
+    private static final String PLACEMENT_SURFACE = "surface_slot";
     private static final BigDecimal MIN_DEFAULT_SCALE = new BigDecimal("0.50");
     private static final BigDecimal MAX_DEFAULT_SCALE = new BigDecimal("2.00");
     private static final String DEFAULT_SCALE_RANGE_MESSAGE =
@@ -51,6 +53,14 @@ public class ItemSlotService {
                 .map(item -> ItemSlotRow.of(item, entriesByItemId.getOrDefault(item.getId(), List.of())))
                 .toList();
         return new ItemSlotListResponse(rows);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomPreviewSurfaceRow> getActiveSurfaceItems() {
+        return itemRepository.findByPlacementTypeWithTheme(PLACEMENT_SURFACE).stream()
+                .filter(Item::isActive)
+                .map(RoomPreviewSurfaceRow::of)
+                .toList();
     }
 
     @Transactional

@@ -267,6 +267,8 @@ class ItemSlotTest {
     void 슬롯_목록은_positioned_아이템만_내려준다() throws Exception {
         mockMvc.perform(get("/admin/items/slots"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].themeCode")
+                        .value("slot_test_theme"))
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].themeName")
                         .value("슬롯 테스트 테마"))
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarity")
@@ -282,6 +284,44 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/no-pool-chair.png')].rarityEditable")
                         .value(false))
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')]").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 룸_미리보기_표면_목록은_활성_카탈로그만_내려준다() throws Exception {
+        itemRepository.save(new Item(
+                positionedItem.getTheme(), "floor", "surface_slot", "floor", null,
+                "비활성 바닥", CurrencyType.COIN, 100,
+                "items/slot-test/inactive-floor.png", false, false));
+
+        mockMvc.perform(get("/admin/items/surfaces"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
+                        .value("slot_test_theme"))
+                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeName")
+                        .value("슬롯 테스트 테마"))
+                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].surfaceSlotType")
+                        .value("wallpaper"))
+                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/inactive-floor.png')]").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 동일한_테마_이름이_있어도_표면은_themeCode로_구분된다() throws Exception {
+        Theme sameNameTheme = themeRepository.save(
+                new Theme("slot_test_theme_other", "슬롯 테스트 테마", null, true));
+        itemRepository.save(new Item(
+                sameNameTheme, "wallpaper", "surface_slot", "wallpaper", null,
+                "다른 테마 벽지", CurrencyType.COIN, 100,
+                "items/slot-test/other-theme-wallpaper.png", false, true));
+
+        mockMvc.perform(get("/admin/items/surfaces"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
+                        .value("slot_test_theme"))
+                .andExpect(jsonPath(
+                        "$[?(@.assetKey == 'items/slot-test/other-theme-wallpaper.png')].themeCode")
+                        .value("slot_test_theme_other"));
     }
 
     @Test
@@ -400,8 +440,16 @@ class ItemSlotTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("가구 크기 스튜디오")))
                 .andExpect(content().string(containsString("라이브 룸 미리보기")))
-                .andExpect(content().string(containsString("모바일 Room.tsx geometry 동기화")))
-                .andExpect(content().string(containsString("SLOT_META")))
+                .andExpect(content().string(containsString("모바일 Room renderer contract 불러오는 중")))
+                .andExpect(content().string(containsString("/contracts/room-render-contract.v1.json")))
+                .andExpect(content().string(containsString("/admin/items/surfaces")))
+                .andExpect(content().string(containsString("/admin/characters")))
+                .andExpect(content().string(containsString("validateRoomContract")))
+                .andExpect(content().string(containsString("renderReferenceFixture")))
+                .andExpect(content().string(containsString("selectPreviewTheme(item.themeCode)")))
+                .andExpect(content().string(containsString("room-background")))
+                .andExpect(content().string(containsString("room-wallpaper")))
+                .andExpect(content().string(containsString("room-character")))
                 .andExpect(content().string(containsString("free-preview-anchor")))
                 .andExpect(content().string(containsString("FREE_V1")))
                 .andExpect(content().string(containsString("SLOT_V1")))
@@ -411,13 +459,27 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("selectedId === item.id")))
                 .andExpect(content().string(containsString("const draftScales = new Map()")))
                 .andExpect(content().string(containsString("setControlsDisabled(!currentItem())")))
-                .andExpect(content().string(containsString("previewFurniture.style.width = baseWidth + '%'")))
+                .andExpect(content().string(containsString("previewFurniture.style.width = percent(rect.width)")))
                 .andExpect(content().string(containsString("previewFurniture.style.transform = freeMode")))
                 .andExpect(content().string(containsString("기본 크기는 새 FREE_V1에만 적용")))
                 .andExpect(content().string(containsString("움짤만 보기")))
                 .andExpect(content().string(containsString("뽑기 등급")))
                 .andExpect(content().string(containsString("image-preview-dialog")))
                 .andExpect(content().string(containsString("이미지 크게 보기")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 모바일_Room_렌더_계약_JSON을_제공한다() throws Exception {
+        mockMvc.perform(get("/contracts/room-render-contract.v1.json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("rougether-room-renderer"))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.furniture.baseWidth").value(0.28))
+                .andExpect(jsonPath("$.furniture.slots.bottomLeft.width").value(0.24))
+                .andExpect(jsonPath("$.character.width").value(0.42))
+                .andExpect(jsonPath("$.referenceFixture.character.animations.idle")
+                        .value("characters/cat/animations/idle.webp"));
     }
 
     @Test
