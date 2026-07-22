@@ -2,6 +2,7 @@ package com.triples.rougether.adminapi.itemslot.service;
 
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceRow;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
@@ -69,11 +70,12 @@ public class ItemSlotService {
     }
 
     @Transactional(readOnly = true)
-    public List<RoomPreviewSurfaceRow> getActiveSurfaceItems() {
-        return itemRepository.findByPlacementTypeWithTheme(PLACEMENT_SURFACE).stream()
-                .filter(Item::isActive)
+    public RoomPreviewSurfaceListResponse getActiveSurfaceItems() {
+        List<RoomPreviewSurfaceRow> rows = itemRepository.findByPlacementTypeWithTheme(PLACEMENT_SURFACE).stream()
+                .filter(item -> item.isActive() && item.getTheme().isActive())
                 .map(RoomPreviewSurfaceRow::of)
                 .toList();
+        return new RoomPreviewSurfaceListResponse(rows);
     }
 
     @Transactional

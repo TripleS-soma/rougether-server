@@ -5,7 +5,7 @@ import com.triples.rougether.adminapi.itemslot.dto.ItemRarityUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotUpdateRequest;
-import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceRow;
+import com.triples.rougether.adminapi.itemslot.dto.RoomPreviewSurfaceListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
 import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
@@ -41,7 +41,7 @@ public class ItemSlotController {
     }
 
     @GetMapping("/surfaces")
-    public List<RoomPreviewSurfaceRow> getSurfaces() {
+    public RoomPreviewSurfaceListResponse getSurfaces() {
         return itemSlotService.getActiveSurfaceItems();
     }
 

@@ -293,16 +293,25 @@ class ItemSlotTest {
                 positionedItem.getTheme(), "floor", "surface_slot", "floor", null,
                 "비활성 바닥", CurrencyType.COIN, 100,
                 "items/slot-test/inactive-floor.png", false, false));
+        Theme inactiveTheme = themeRepository.save(
+                new Theme("inactive_surface_theme", "비활성 표면 테마", null, false));
+        itemRepository.save(new Item(
+                inactiveTheme, "background", "surface_slot", "background", null,
+                "비활성 테마 배경", CurrencyType.COIN, 100,
+                "items/slot-test/inactive-theme-background.png", false, true));
 
         mockMvc.perform(get("/admin/items/surfaces"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
                         .value("slot_test_theme"))
-                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeName")
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeName")
                         .value("슬롯 테스트 테마"))
-                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].surfaceSlotType")
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')].surfaceSlotType")
                         .value("wallpaper"))
-                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/inactive-floor.png')]").isEmpty());
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/inactive-floor.png')]").isEmpty())
+                .andExpect(jsonPath(
+                        "$.items[?(@.assetKey == 'items/slot-test/inactive-theme-background.png')]")
+                        .isEmpty());
     }
 
     @Test
@@ -317,10 +326,10 @@ class ItemSlotTest {
 
         mockMvc.perform(get("/admin/items/surfaces"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')].themeCode")
                         .value("slot_test_theme"))
                 .andExpect(jsonPath(
-                        "$[?(@.assetKey == 'items/slot-test/other-theme-wallpaper.png')].themeCode")
+                        "$.items[?(@.assetKey == 'items/slot-test/other-theme-wallpaper.png')].themeCode")
                         .value("slot_test_theme_other"));
     }
 
@@ -570,6 +579,7 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("모바일 Room renderer contract 불러오는 중")))
                 .andExpect(content().string(containsString("/contracts/room-render-contract.v1.json")))
                 .andExpect(content().string(containsString("/admin/items/surfaces")))
+                .andExpect(content().string(containsString("surfaces = surfaceList.items")))
                 .andExpect(content().string(containsString("/admin/characters")))
                 .andExpect(content().string(containsString("validateRoomContract")))
                 .andExpect(content().string(containsString("renderReferenceFixture")))
