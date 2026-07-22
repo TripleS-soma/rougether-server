@@ -20,10 +20,6 @@ public record ItemSlotRow(
         boolean rarityConflict,
         boolean animated) {
 
-    public static ItemSlotRow of(Item item) {
-        return of(item, List.of());
-    }
-
     public static ItemSlotRow of(Item item, List<GachaPoolEntry> activeItemEntries) {
         String firstRarity = activeItemEntries.isEmpty() ? null : activeItemEntries.getFirst().getRarity();
         boolean rarityConflict = activeItemEntries.stream()

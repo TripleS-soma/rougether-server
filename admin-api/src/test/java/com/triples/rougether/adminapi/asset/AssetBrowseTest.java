@@ -50,6 +50,25 @@ class AssetBrowseTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 캐릭터_애니메이션도_움짤로_분류한다() throws Exception {
+        given(storage.list("characters")).willReturn(List.of(
+                new AssetSummary("characters/cat/animations/idle.webp", 1024L, Instant.EPOCH),
+                new AssetSummary("characters/cat/animations/pose-cycle.webp", 1024L, Instant.EPOCH),
+                new AssetSummary("characters/cat/animations/wave.webp", 1024L, Instant.EPOCH),
+                new AssetSummary("characters/cat/animations/run.webp", 1024L, Instant.EPOCH),
+                new AssetSummary("characters/cat/base.webp", 1024L, Instant.EPOCH)));
+
+        mockMvc.perform(get("/admin/assets").param("kind", "characters"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].animated").value(true))
+                .andExpect(jsonPath("$.items[1].animated").value(true))
+                .andExpect(jsonPath("$.items[2].animated").value(true))
+                .andExpect(jsonPath("$.items[3].animated").value(false))
+                .andExpect(jsonPath("$.items[4].animated").value(false));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 허용안된_kind면_400() throws Exception {
         mockMvc.perform(get("/admin/assets").param("kind", "etc"))
                 .andExpect(status().isBadRequest());
