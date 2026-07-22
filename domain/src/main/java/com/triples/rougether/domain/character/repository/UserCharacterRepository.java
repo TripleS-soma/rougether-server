@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.character.repository;
 
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +20,14 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     // 착용(대표) 캐릭터. 단일 착용(is_selected 는 동시에 1개만 true).
     Optional<UserCharacter> findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(Long userId);
+
+    // 여러 사용자의 착용 캐릭터를 한 번에 조회(집 미리보기 memberRooms 등 배치 렌더용). character fetch join 으로 N+1 회피.
+    @Query("""
+            select uc from UserCharacter uc
+            join fetch uc.character
+            where uc.user.id in :userIds and uc.selected = true and uc.deletedAt is null
+            """)
+    List<UserCharacter> findSelectedByUserIdIn(@Param("userIds") Collection<Long> userIds);
 
     // 보유 캐릭터 목록용: character 를 fetch join 해 N+1 회피. 마스터 정렬(sort_order) 순.
     // 회수(비활성) 캐릭터는 에셋이 내려가 표시 불가라 목록에서 제외한다 — 보유 레코드 자체는 유지

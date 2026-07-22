@@ -109,7 +109,9 @@ public class HouseController {
                     + "구성원용 상세와 동일한 집 정보(이름·소개·커버·인원·레벨·목표)를 내려주되, 구성원 전용 필드(myRole·inviteCode)는 없습니다. "
                     + "isMember 가 true 면 요청자가 이미 이 집의 활성 구성원이므로 상세 화면으로 전환하고, "
                     + "isFull 이 true 면 정원 초과라 참여할 수 없으니 가입 버튼을 비활성화합니다. "
-                    + "단체 출석률 필드는 출석 저장 구조(#168) 구현 후 추가될 예정입니다.")
+                    + "memberRooms 로 구성원별(가입순, ACTIVE 만) 방 렌더 데이터(성장 레벨·layoutFormat·착용 캐릭터·슬롯·자유배치)를 "
+                    + "내려주므로 구성원 타일에 실제 방을 그릴 수 있습니다. 방을 아직 만들지 않은 구성원은 room 이 null 입니다. "
+                    + "스트릭·마지막 접속 시각 같은 활동 정보는 구성원 전용이라 포함되지 않습니다.")
     @GetMapping("/{houseId}/preview")
     public HousePreviewDetailResponse preview(@CurrentUser AuthUser user,
                                               @Parameter(description = "집 ID. GET /api/v1/houses (탐색 목록) 응답의 houseId 값") @PathVariable Long houseId) {
