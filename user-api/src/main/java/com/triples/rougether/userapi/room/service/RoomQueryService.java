@@ -12,9 +12,11 @@ import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +61,20 @@ public class RoomQueryService {
         PersonalRoom room = personalRoomRepository.findById(roomUserId)
                 .orElseThrow(() -> new BusinessException(RoomErrorCode.ROOM_NOT_FOUND));
         return assemble(room, roomUserId);
+    }
+
+    // 타인 방의 렌더 데이터만 조회(집 미리보기 등 비구성원 노출 자리) - 없으면 empty, lazy 생성 없음.
+    // streak 같은 활동 정보는 조회하지 않는다(공개 범위 밖).
+    @Transactional(readOnly = true)
+    public Optional<RoomRenderResponse> findRenderOf(Long roomUserId) {
+        return personalRoomRepository.findById(roomUserId)
+                .map(room -> RoomRenderResponse.of(
+                        room,
+                        roomSurfaceSlotRepository.findByRoomUserIdWithItem(roomUserId),
+                        roomItemPlacementRepository.findByRoomUserIdWithItem(roomUserId),
+                        userCharacterRepository
+                                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(roomUserId)
+                                .orElse(null)));
     }
 
     private RoomResponse assemble(PersonalRoom room, Long userId) {

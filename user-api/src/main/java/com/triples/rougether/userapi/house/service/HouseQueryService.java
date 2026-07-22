@@ -14,10 +14,12 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse.MemberSummary;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
+import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse.MemberRoomSummary;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.room.service.RoomQueryService;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,12 +36,15 @@ public class HouseQueryService {
     private final HouseRepository houseRepository;
     private final HouseGoalRepository houseGoalRepository;
     private final HouseMemberRepository houseMemberRepository;
+    private final RoomQueryService roomQueryService;
 
     public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository,
-                             HouseMemberRepository houseMemberRepository) {
+                             HouseMemberRepository houseMemberRepository,
+                             RoomQueryService roomQueryService) {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.houseMemberRepository = houseMemberRepository;
+        this.roomQueryService = roomQueryService;
     }
 
     // 집 상세 - ACTIVE 구성원만 조회 가능. 초대코드는 소유자에게만 내려간다.
@@ -72,7 +77,16 @@ public class HouseQueryService {
         List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
-        return HousePreviewDetailResponse.of(house, goals, isMember);
+        // 구성원 타일 렌더용 방 데이터(#177). 방 렌더는 미리보기를 통해 전체공개로 확정 -
+        // 활동 정보(streak·lastAccessedAt)는 구성원 전용이라 렌더 부분집합만 내린다.
+        // 정원 최대 10명이라 구성원별 개별 조회로 충분(IN 배치 최적화는 후속).
+        List<MemberRoomSummary> memberRooms = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE).stream()
+                .map(member -> MemberRoomSummary.of(
+                        member,
+                        roomQueryService.findRenderOf(member.getUser().getId()).orElse(null)))
+                .toList();
+        return HousePreviewDetailResponse.of(house, goals, isMember, memberRooms);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).

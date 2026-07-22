@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.house;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,8 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
@@ -519,7 +522,11 @@ class HouseControllerTest {
                 1L, "아침 루틴 하우스", "같이 아침 루틴 지켜요", "house/cover.png",
                 4, 3, 2,
                 List.of(new HouseListResponse.GoalSummary(5L, "morning_routine", "아침 루틴")),
-                false, false));
+                false, false,
+                List.of(
+                        new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
+                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1, null, List.of(), List.of())),
+                        new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null))));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))
                 .andExpect(status().isOk())
@@ -532,8 +539,19 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.goals[0].code").value("morning_routine"))
                 .andExpect(jsonPath("$.isMember").value(false))
                 .andExpect(jsonPath("$.isFull").value(false))
+                // 구성원 타일 렌더용 memberRooms(#177) - 방 미생성 구성원은 room null
+                .andExpect(jsonPath("$.memberRooms[0].membershipId").value(12))
+                .andExpect(jsonPath("$.memberRooms[0].nickname").value("진형"))
+                .andExpect(jsonPath("$.memberRooms[0].room.growthLevel").value(1))
+                .andExpect(jsonPath("$.memberRooms[0].room.layoutFormat").value("FREE_V1"))
+                .andExpect(jsonPath("$.memberRooms[1].room").value(nullValue()))
                 // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
                 .andExpect(jsonPath("$.myRole").doesNotExist())
-                .andExpect(jsonPath("$.inviteCode").doesNotExist());
+                .andExpect(jsonPath("$.inviteCode").doesNotExist())
+                // 방 렌더 부분집합 밖의 값(활동 정보·편집용 값)은 미리보기로 새지 않아야 한다
+                .andExpect(jsonPath("$.memberRooms[0].room.streak").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.layoutRevision").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].lastAccessedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].userId").doesNotExist());
     }
 }
