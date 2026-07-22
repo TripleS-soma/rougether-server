@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.room.repository;
 
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -18,6 +19,17 @@ public interface RoomItemPlacementRepository extends JpaRepository<RoomItemPlace
             order by p.zIndex asc, p.id asc
             """)
     List<RoomItemPlacement> findByRoomUserIdWithItem(@Param("roomUserId") Long roomUserId);
+
+    // 여러 방의 자유배치를 한 번에 조회(집 미리보기 memberRooms 등 배치 렌더용) - 방별 반복 조회(N+1) 회피.
+    // 방별 zIndex 오름차순은 단건 조회와 동일하게 유지(호출부는 방 기준 grouping 후 그대로 사용).
+    @Query("""
+            select p from RoomItemPlacement p
+            join fetch p.userItem ui
+            join fetch ui.item
+            where p.room.userId in :roomUserIds
+            order by p.room.userId asc, p.zIndex asc, p.id asc
+            """)
+    List<RoomItemPlacement> findByRoomUserIdInWithItem(@Param("roomUserIds") Collection<Long> roomUserIds);
 
     // 전체 교체 저장의 선행 삭제. flushAutomatically 로 이 삭제가 이후 insert 보다 먼저 DB 에 반영되어
     // 같은 (room_user_id, user_item_id) 재배치가 unique 충돌 없이 통과한다.

@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
 import java.util.List;
 import java.util.Map;
@@ -79,12 +80,13 @@ public class HouseQueryService {
                 .toList();
         // 구성원 타일 렌더용 방 데이터(#177). 방 렌더는 미리보기를 통해 전체공개로 확정 -
         // 활동 정보(streak·lastAccessedAt)는 구성원 전용이라 렌더 부분집합만 내린다.
-        // 정원 최대 10명이라 구성원별 개별 조회로 충분(IN 배치 최적화는 후속).
-        List<MemberRoomSummary> memberRooms = houseMemberRepository
-                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE).stream()
-                .map(member -> MemberRoomSummary.of(
-                        member,
-                        roomQueryService.findRenderOf(member.getUser().getId()).orElse(null)))
+        // 방 데이터는 구성원 수와 무관하게 배치 조회(고정 4쿼리)로 한 번에 가져온다.
+        List<HouseMember> activeMembers = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE);
+        Map<Long, RoomRenderResponse> renders = roomQueryService.findRendersOf(
+                activeMembers.stream().map(member -> member.getUser().getId()).toList());
+        List<MemberRoomSummary> memberRooms = activeMembers.stream()
+                .map(member -> MemberRoomSummary.of(member, renders.get(member.getUser().getId())))
                 .toList();
         return HousePreviewDetailResponse.of(house, goals, isMember, memberRooms);
     }

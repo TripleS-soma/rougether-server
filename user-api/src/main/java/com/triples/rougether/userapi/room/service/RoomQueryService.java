@@ -15,8 +15,11 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,18 +66,36 @@ public class RoomQueryService {
         return assemble(room, roomUserId);
     }
 
-    // 타인 방의 렌더 데이터만 조회(집 미리보기 등 비구성원 노출 자리) - 없으면 empty, lazy 생성 없음.
-    // streak 같은 활동 정보는 조회하지 않는다(공개 범위 밖).
+    // 여러 사용자의 방 렌더 데이터를 한 번에 조회(집 미리보기 등 비구성원 노출 자리).
+    // 방 없는 사용자는 결과 map 에 없다 - lazy 생성 없음, streak 같은 활동 정보는 조회하지 않는다(공개 범위 밖).
+    // 사용자 수와 무관하게 고정 4쿼리(방·슬롯·자유배치·캐릭터) - 사용자별 반복 조회(N+1)를 만들지 않는다.
     @Transactional(readOnly = true)
-    public Optional<RoomRenderResponse> findRenderOf(Long roomUserId) {
-        return personalRoomRepository.findById(roomUserId)
-                .map(room -> RoomRenderResponse.of(
+    public Map<Long, RoomRenderResponse> findRendersOf(Collection<Long> roomUserIds) {
+        if (roomUserIds.isEmpty()) {
+            return Map.of();
+        }
+        List<PersonalRoom> rooms = personalRoomRepository.findAllById(roomUserIds);
+        if (rooms.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> withRoom = rooms.stream().map(PersonalRoom::getUserId).toList();
+        Map<Long, List<RoomSurfaceSlot>> slotsByUser = roomSurfaceSlotRepository
+                .findByRoomUserIdInWithItem(withRoom).stream()
+                .collect(Collectors.groupingBy(slot -> slot.getRoom().getUserId()));
+        // groupingBy 는 조회 순서를 보존하므로 방별 zIndex 오름차순이 유지된다
+        Map<Long, List<RoomItemPlacement>> placementsByUser = roomItemPlacementRepository
+                .findByRoomUserIdInWithItem(withRoom).stream()
+                .collect(Collectors.groupingBy(placement -> placement.getRoom().getUserId()));
+        Map<Long, UserCharacter> characterByUser = userCharacterRepository
+                .findSelectedByUserIdIn(withRoom).stream()
+                .collect(Collectors.toMap(uc -> uc.getUser().getId(), Function.identity()));
+        return rooms.stream().collect(Collectors.toMap(
+                PersonalRoom::getUserId,
+                room -> RoomRenderResponse.of(
                         room,
-                        roomSurfaceSlotRepository.findByRoomUserIdWithItem(roomUserId),
-                        roomItemPlacementRepository.findByRoomUserIdWithItem(roomUserId),
-                        userCharacterRepository
-                                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(roomUserId)
-                                .orElse(null)));
+                        slotsByUser.getOrDefault(room.getUserId(), List.of()),
+                        placementsByUser.getOrDefault(room.getUserId(), List.of()),
+                        characterByUser.get(room.getUserId()))));
     }
 
     private RoomResponse assemble(PersonalRoom room, Long userId) {

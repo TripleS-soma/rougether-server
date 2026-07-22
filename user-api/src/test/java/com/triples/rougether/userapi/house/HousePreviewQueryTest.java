@@ -179,7 +179,10 @@ class HousePreviewQueryTest {
         assertThat(first.room().placements()).singleElement()
                 .satisfies(placement -> assertThat(placement.assetKey()).isEqualTo("items/preview/chair.png"));
         assertThat(first.room().slots()).singleElement()
-                .satisfies(slot -> assertThat(slot.slotType()).isEqualTo("wallpaper"));
+                .satisfies(slot -> {
+                    assertThat(slot.slotType()).isEqualTo("wallpaper");
+                    assertThat(slot.assetKey()).isEqualTo("items/preview/wall.png");
+                });
         assertThat(first.room().character().code()).isEqualTo("preview_cat");
         // 방 미생성 구성원은 room null - 프론트는 기본 방 타일로 표시
         MemberRoomSummary noRoom = response.memberRooms().get(1);

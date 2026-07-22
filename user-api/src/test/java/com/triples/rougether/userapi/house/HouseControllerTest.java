@@ -36,6 +36,7 @@ import com.triples.rougether.userapi.house.service.HouseJoinService;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.HouseController;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -525,7 +526,12 @@ class HouseControllerTest {
                 false, false,
                 List.of(
                         new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
-                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1, null, List.of(), List.of())),
+                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1, null,
+                                        List.of(new RoomRenderResponse.RenderSlot(
+                                                "wallpaper", "items/preview/wall.png")),
+                                        List.of(new RoomRenderResponse.RenderPlacement(
+                                                "items/preview/chair.png", new BigDecimal("0.32"),
+                                                new BigDecimal("0.68"), 3, new BigDecimal("1.1"), 15, false)))),
                         new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null))));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))
@@ -544,13 +550,19 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].nickname").value("진형"))
                 .andExpect(jsonPath("$.memberRooms[0].room.growthLevel").value(1))
                 .andExpect(jsonPath("$.memberRooms[0].room.layoutFormat").value("FREE_V1"))
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].assetKey").value("items/preview/wall.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].assetKey").value("items/preview/chair.png"))
                 .andExpect(jsonPath("$.memberRooms[1].room").value(nullValue()))
                 // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
                 .andExpect(jsonPath("$.myRole").doesNotExist())
                 .andExpect(jsonPath("$.inviteCode").doesNotExist())
-                // 방 렌더 부분집합 밖의 값(활동 정보·편집용 값)은 미리보기로 새지 않아야 한다
+                // 방 렌더 부분집합 밖의 값(활동 정보·편집용 값·소유 식별자·배치 시각)은 미리보기로 새지 않아야 한다
                 .andExpect(jsonPath("$.memberRooms[0].room.streak").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].room.layoutRevision").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].savedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].updatedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].lastAccessedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].userId").doesNotExist());
     }
