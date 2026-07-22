@@ -15,6 +15,7 @@ import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
+import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -33,13 +34,16 @@ public class ItemSlotService {
     private static final int ITEM_GACHA_COST_COIN = 250;
 
     private final ItemRepository itemRepository;
+    private final ThemeRepository themeRepository;
     private final GachaRepository gachaRepository;
     private final GachaPoolEntryRepository gachaPoolEntryRepository;
 
     public ItemSlotService(ItemRepository itemRepository,
+                           ThemeRepository themeRepository,
                            GachaRepository gachaRepository,
                            GachaPoolEntryRepository gachaPoolEntryRepository) {
         this.itemRepository = itemRepository;
+        this.themeRepository = themeRepository;
         this.gachaRepository = gachaRepository;
         this.gachaPoolEntryRepository = gachaPoolEntryRepository;
     }
@@ -93,8 +97,18 @@ public class ItemSlotService {
     }
 
     // 미등록 아이템을 테마의 활성 머신 전부에 등록. 머신이 없으면 스펙 기본값(COIN 250, 1회)으로 새로 만듦.
+    // 테마 행 락으로 동시 등록을 직렬화 — 같은 테마의 연속 클릭이 겹쳐도 머신/엔트리가 중복 생성되지 않는다.
     private List<GachaPoolEntry> registerToThemeGachas(Item item, String rarity) {
-        Theme theme = item.getTheme();
+        Theme theme = themeRepository.findWithLockById(item.getTheme().getId())
+                .orElseThrow(() -> new ItemRarityInvalidException("theme 이 없습니다: " + item.getTheme().getId()));
+
+        // 락 대기 중 다른 요청이 먼저 등록했을 수 있으므로 재확인
+        List<GachaPoolEntry> alreadyRegistered = findActiveItemEntries(item.getId());
+        if (!alreadyRegistered.isEmpty()) {
+            alreadyRegistered.forEach(entry -> entry.updateRarity(rarity));
+            return alreadyRegistered;
+        }
+
         List<Gacha> themeGachas = gachaRepository.findByThemeIdAndActiveIsTrue(theme.getId());
         if (themeGachas.isEmpty()) {
             themeGachas = List.of(gachaRepository.save(new Gacha(

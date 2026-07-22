@@ -320,6 +320,40 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 비활성_머신의_엔트리는_미등록으로_취급되어_활성_머신에_새로_등록된다() throws Exception {
+        Theme retiredTheme = themeRepository.save(new Theme("retired_gacha_theme", "비활성 머신 테마", null, true));
+        Item item = itemRepository.save(new Item(
+                retiredTheme, "furniture", "positioned", null, null,
+                "비활성 머신 가구", CurrencyType.COIN, 100, "items/retired-gacha/lamp.png", false, true));
+        Long retiredGachaId = insertGacha(retiredTheme.getId(), "retired_gacha", "비활성 머신", false);
+        insertItemPoolEntry(retiredGachaId, item.getId(), "일반");
+
+        // 비활성 머신의 잔존 엔트리만 있으면 목록에서 미등록으로 표시
+        mockMvc.perform(get("/admin/items/slots"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/retired-gacha/lamp.png')].rarityEditable")
+                        .value(false));
+
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", item.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rarity").value("희귀"))
+                .andExpect(jsonPath("$.rarityEditable").value(true));
+
+        // 비활성 머신의 엔트리는 건드리지 않고, 새 활성 머신에 등록된다
+        String retiredRarity = jdbcTemplate.queryForObject(
+                "SELECT rarity FROM gacha_pool_entries WHERE gacha_id = ?", String.class, retiredGachaId);
+        assertThat(retiredRarity).isEqualTo("일반");
+
+        Integer activeGachaCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM gacha WHERE theme_id = ? AND is_active = TRUE", Integer.class,
+                retiredTheme.getId());
+        assertThat(activeGachaCount).isEqualTo(1);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 미등록_아이템도_허용되지_않은_등급은_400이고_등록되지_않는다() throws Exception {
         mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -367,12 +401,16 @@ class ItemSlotTest {
     }
 
     private Long insertGacha(Long themeId, String code, String name) {
+        return insertGacha(themeId, code, name, true);
+    }
+
+    private Long insertGacha(Long themeId, String code, String name, boolean active) {
         jdbcTemplate.update("""
                 INSERT INTO gacha
                     (code, name, cost_currency_type, cost_amount, draw_count,
                      starts_at, ends_at, is_active, created_at, updated_at, theme_id)
-                VALUES (?, ?, 'COIN', 100, 1, NULL, NULL, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
-                """, code, name, themeId);
+                VALUES (?, ?, 'COIN', 100, 1, NULL, NULL, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+                """, code, name, active, themeId);
         return jdbcTemplate.queryForObject(
                 "SELECT id FROM gacha WHERE code = ?", Long.class, code);
     }
