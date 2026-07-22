@@ -4,13 +4,17 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.service.NotificationService;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,16 +23,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class HouseJoinService {
 
+    private static final String JOINED_NOTIFICATION_TITLE = "새 멤버 입주";
+    // 온보딩 전(닉네임 null) 멤버의 알림 표시명 - 응원 알림(#174)과 같은 표기
+    private static final String FALLBACK_MEMBER_NAME = "집 친구";
+
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public HouseJoinService(HouseRepository houseRepository,
                             HouseMemberRepository houseMemberRepository,
-                            UserRepository userRepository) {
+                            UserRepository userRepository,
+                            NotificationService notificationService) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -71,6 +82,10 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
 
+        // 수신 대상은 신규 멤버를 뺀 기존 활성 멤버 - 재활성화/신규 등록 전에 확정해야 본인이 섞이지 않음.
+        List<HouseMember> recipients = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(house.getId(), HouseMemberStatus.ACTIVE);
+
         HouseMember member;
         if (existing != null) {
             // LEFT 이력 재가입 - uq_house_member 제약상 새 row 대신 재활성화.
@@ -81,7 +96,25 @@ public class HouseJoinService {
                     HouseMember.create(house, userRepository.getReferenceById(userId), HouseMemberRole.MEMBER));
         }
         house.increaseMemberCount();
+        notifyMemberJoined(recipients, member);
         return member;
+    }
+
+    // 입주 알림 - 가입과 같은 트랜잭션에서 동기 저장(응원 #174 패턴). push 만 커밋 후 비동기로 나감.
+    private void notifyMemberJoined(List<HouseMember> recipients, HouseMember joined) {
+        if (recipients.isEmpty()) {
+            return;
+        }
+        String nickname = joined.getUser().getNickname() != null
+                ? joined.getUser().getNickname()
+                : FALLBACK_MEMBER_NAME;
+        String body = nickname + "님이 집에 입주했어요.";
+        recipients.forEach(recipient -> notificationService.send(
+                recipient.getUser().getId(),
+                NotificationType.HOUSE_MEMBER_JOINED,
+                JOINED_NOTIFICATION_TITLE,
+                body,
+                joined.getId()));
     }
 
     @Transactional(readOnly = true)
