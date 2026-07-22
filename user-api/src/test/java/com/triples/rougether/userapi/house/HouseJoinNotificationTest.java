@@ -12,6 +12,7 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ class HouseJoinNotificationTest {
     private static final String TITLE = "새 멤버 입주";
 
     @Autowired private HouseJoinService houseJoinService;
+    @Autowired private HouseMemberCommandService houseMemberCommandService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private UserRepository userRepository;
@@ -125,6 +127,24 @@ class HouseJoinNotificationTest {
         Long membershipId = houseJoinService.join(joiner.getId(), house.getId()).membershipId();
 
         assertJoinedNotification(notificationsOf(owner.getId()).get(0), membershipId, "집 친구");
+    }
+
+    @Test
+    void 탈퇴했던_멤버의_재가입도_입주로_보고_발송한다() {
+        User owner = newUser("join-noti6-owner@rougether.dev", "집주인6");
+        User rejoiner = newUser("join-noti6-rejoiner@rougether.dev", "돌아온사람");
+        House house = houseWithOwner(owner, "JOINNT06");
+        Long membershipId = houseJoinService.join(rejoiner.getId(), house.getId()).membershipId();
+        houseMemberCommandService.leave(rejoiner.getId(), house.getId());
+        jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", owner.getId());
+
+        // 재활성화(새 row 아님)여도 입주 알림 대상 - refId 는 기존 membershipId 그대로
+        Long rejoinedMembershipId = houseJoinService.join(rejoiner.getId(), house.getId()).membershipId();
+
+        assertThat(rejoinedMembershipId).isEqualTo(membershipId);
+        assertThat(notificationsOf(owner.getId())).hasSize(1);
+        assertJoinedNotification(notificationsOf(owner.getId()).get(0), membershipId, "돌아온사람");
+        assertThat(notificationsOf(rejoiner.getId())).isEmpty();
     }
 
     @Test
