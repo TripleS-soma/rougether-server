@@ -35,7 +35,7 @@
         <div class="upload-card">
             <div class="upload-head">
                 <h2>가구 관리</h2>
-                <p>positioned 가구의 뽑기 등급과 방에 처음 배치될 기본 슬롯을 관리합니다. 변경 즉시 저장됩니다.</p>
+                <p>positioned 가구의 뽑기 등급과 방에 처음 배치될 기본 슬롯을 관리합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다. 변경 즉시 저장됩니다.</p>
             </div>
 
             <div class="slot-toolbar">
@@ -177,24 +177,21 @@
             const raritySelect = document.createElement('select');
             raritySelect.className = 'slot-select rarity-select';
             if (!item.rarityEditable) {
-                raritySelect.add(new Option('— 뽑기 미등록 —', ''));
-                raritySelect.disabled = true;
-            } else {
-                if (item.rarityConflict) {
-                    const mixed = new Option('— 혼합 —', '', true, true);
-                    mixed.disabled = true;
-                    raritySelect.add(mixed);
-                } else if (!item.rarity) {
-                    const unset = new Option('— 미설정 —', '', true, true);
-                    unset.disabled = true;
-                    raritySelect.add(unset);
-                }
-                RARITIES.forEach((rarity) => raritySelect.add(new Option(rarity, rarity)));
-                if (item.rarity) raritySelect.value = item.rarity;
+                const unregistered = new Option('— 뽑기 미등록 —', '', true, true);
+                unregistered.disabled = true;
+                raritySelect.add(unregistered);
+            } else if (item.rarityConflict) {
+                const mixed = new Option('— 혼합 —', '', true, true);
+                mixed.disabled = true;
+                raritySelect.add(mixed);
+            } else if (!item.rarity) {
+                const unset = new Option('— 미설정 —', '', true, true);
+                unset.disabled = true;
+                raritySelect.add(unset);
             }
-            raritySelect.title = item.rarityEditable
-                ? '변경하면 이 아이템이 포함된 모든 활성 뽑기 풀에 반영됩니다.'
-                : '활성 뽑기 풀에 등록된 아이템만 등급을 변경할 수 있습니다.';
+            RARITIES.forEach((rarity) => raritySelect.add(new Option(rarity, rarity)));
+            if (item.rarity) raritySelect.value = item.rarity;
+            raritySelect.title = rarityTitle(item);
             rarityCell.appendChild(raritySelect);
 
             const slotCell = document.createElement('td');
@@ -254,7 +251,7 @@
                 showError(item.name + ' 저장 실패: ' + err.message);
             } finally {
                 slotSelect.disabled = false;
-                raritySelect.disabled = !item.rarityEditable;
+                raritySelect.disabled = false;
             }
         }
 
@@ -280,6 +277,7 @@
                     .filter((option) => option.value === '')
                     .forEach((option) => option.remove());
                 raritySelect.value = updated.rarity ?? '';
+                raritySelect.title = rarityTitle(item);
                 showSaved(statusCell);
             } catch (err) {
                 raritySelect.value = previous;
@@ -287,8 +285,14 @@
                 showError(item.name + ' 등급 저장 실패: ' + err.message);
             } finally {
                 slotSelect.disabled = false;
-                raritySelect.disabled = !item.rarityEditable;
+                raritySelect.disabled = false;
             }
+        }
+
+        function rarityTitle(item) {
+            return item.rarityEditable
+                ? '변경하면 이 아이템이 포함된 모든 활성 뽑기 풀에 반영됩니다.'
+                : '등급을 선택하면 테마 뽑기 풀에 등록됩니다. 테마 머신이 없으면 새로 만듭니다.';
         }
 
         function setSaving(slotSelect, raritySelect, statusCell) {
