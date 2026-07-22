@@ -12,6 +12,7 @@ import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.shop.dto.ItemListResponse;
 import com.triples.rougether.userapi.shop.dto.ItemResponse;
 import com.triples.rougether.userapi.shop.service.ShopQueryService;
+import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,7 @@ class ShopQueryServiceTest {
         when(item.getAssetKey()).thenReturn("items/test/item-" + id + ".png");
         when(item.getPlacementType()).thenReturn("positioned");
         when(item.getDefaultSlot()).thenReturn(defaultSlot);
+        when(item.getDefaultScale()).thenReturn(new BigDecimal("1.25"));
         return item;
     }
 
@@ -52,6 +54,8 @@ class ShopQueryServiceTest {
         assertThat(response.items()).hasSize(2);
         assertThat(response.items().get(0).defaultSlot()).isEqualTo("bottomCenter");
         assertThat(response.items().get(1).defaultSlot()).isNull();
+        assertThat(response.items()).extracting(ItemResponse::defaultScale)
+                .allSatisfy(defaultScale -> assertThat(defaultScale).isEqualByComparingTo("1.25"));
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.triples.rougether.adminapi.asset.AssetKeyClassifier;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
 import com.triples.rougether.domain.shop.entity.Item;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -14,6 +15,7 @@ public record ItemSlotRow(
         String assetKey,
         String themeName,
         String defaultSlot,
+        BigDecimal defaultScale,
         @JsonInclude(JsonInclude.Include.NON_NULL)
         String rarity,
         boolean rarityEditable,
@@ -31,6 +33,7 @@ public record ItemSlotRow(
                 item.getAssetKey(),
                 item.getTheme().getName(),
                 item.getDefaultSlot(),
+                item.getDefaultScale(),
                 rarity,
                 !activeItemEntries.isEmpty(),
                 rarityConflict,

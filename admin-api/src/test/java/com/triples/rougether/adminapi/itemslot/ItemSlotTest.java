@@ -15,6 +15,7 @@ import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -124,6 +125,116 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.defaultSlot").doesNotExist());
 
         assertThat(itemRepository.findById(positionedItem.getId()).orElseThrow().getDefaultSlot()).isNull();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 새_아이템과_DB의_defaultScale_기본값은_1_00이다() throws Exception {
+        assertThat(positionedItem.getDefaultScale()).isEqualByComparingTo("1.00");
+
+        jdbcTemplate.update("""
+                INSERT INTO items
+                    (theme_id, category_code, placement_type, surface_slot_type, character_slot_type,
+                     name, purchase_currency_type, price_amount, asset_key, is_limited, is_active)
+                VALUES (?, 'furniture', 'positioned', NULL, NULL,
+                        'DB 기본 배율 의자', 'COIN', 100, 'items/slot-test/db-default-chair.png', FALSE, TRUE)
+                """, positionedItem.getTheme().getId());
+
+        BigDecimal databaseDefault = jdbcTemplate.queryForObject(
+                "SELECT default_scale FROM items WHERE asset_key = 'items/slot-test/db-default-chair.png'",
+                BigDecimal.class);
+        assertThat(databaseDefault).isEqualByComparingTo("1.00");
+
+        mockMvc.perform(get("/admin/items/slots"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].defaultScale")
+                        .value(1.0));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 기본_크기_배율을_HALF_UP_두_자리로_정규화해_저장한다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultScale\": 1.235}").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.defaultScale").value(1.24));
+
+        itemRepository.flush();
+        BigDecimal persisted = jdbcTemplate.queryForObject(
+                "SELECT default_scale FROM items WHERE id = ?", BigDecimal.class, positionedItem.getId());
+        assertThat(persisted).isEqualByComparingTo("1.24");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 기본_크기_배율의_양쪽_경계값을_허용한다() throws Exception {
+        for (String defaultScale : new String[]{"0.50", "2.00"}) {
+            mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"defaultScale\": " + defaultScale + "}").with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.defaultScale").value(Double.parseDouble(defaultScale)));
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 기본_크기_배율은_반올림_전_원본값으로_범위를_검증한다() throws Exception {
+        for (String defaultScale : new String[]{"0.499", "2.001"}) {
+            mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"defaultScale\": " + defaultScale + "}").with(csrf()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ITEM_DEFAULT_SCALE_INVALID"))
+                    .andExpect(jsonPath("$.message")
+                            .value("기본 크기 배율은 0.50 이상 2.00 이하의 숫자여야 합니다."));
+        }
+
+        assertThat(positionedItem.getDefaultScale()).isEqualByComparingTo("1.00");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void null_기본_크기_배율은_구체적인_400_오류를_반환한다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultScale\": null}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_DEFAULT_SCALE_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("기본 크기 배율은 0.50 이상 2.00 이하의 숫자여야 합니다."));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void surface_아이템의_기본_크기_배율은_변경할_수_없다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/default-scale", surfaceItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultScale\": 1.25}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_DEFAULT_SCALE_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("positioned 아이템만 기본 크기 배율을 변경할 수 있습니다."));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 기본_크기_배율_변경은_CSRF_토큰이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultScale\": 1.25}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(positionedItem.getDefaultScale()).isEqualByComparingTo("1.00");
+    }
+
+    @Test
+    void 기본_크기_배율_변경은_인증이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/default-scale", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultScale\": 1.25}").with(csrf()))
+                .andExpect(status().is3xxRedirection());
     }
 
     @Test
@@ -284,10 +395,25 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 슬롯_편집_페이지가_렌더링된다() throws Exception {
+    void 가구_크기_스튜디오와_실제_룸_미리보기가_렌더링된다() throws Exception {
         mockMvc.perform(get("/item-slots"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("가구 관리")))
+                .andExpect(content().string(containsString("가구 크기 스튜디오")))
+                .andExpect(content().string(containsString("라이브 룸 미리보기")))
+                .andExpect(content().string(containsString("모바일 Room.tsx geometry 동기화")))
+                .andExpect(content().string(containsString("SLOT_META")))
+                .andExpect(content().string(containsString("free-preview-anchor")))
+                .andExpect(content().string(containsString("FREE_V1")))
+                .andExpect(content().string(containsString("SLOT_V1")))
+                .andExpect(content().string(containsString("/default-scale")))
+                .andExpect(content().string(containsString("container.setAttribute('inert', '')")))
+                .andExpect(content().string(containsString("button.disabled = next")))
+                .andExpect(content().string(containsString("selectedId === item.id")))
+                .andExpect(content().string(containsString("const draftScales = new Map()")))
+                .andExpect(content().string(containsString("setControlsDisabled(!currentItem())")))
+                .andExpect(content().string(containsString("previewFurniture.style.width = baseWidth + '%'")))
+                .andExpect(content().string(containsString("previewFurniture.style.transform = freeMode")))
+                .andExpect(content().string(containsString("기본 크기는 새 FREE_V1에만 적용")))
                 .andExpect(content().string(containsString("움짤만 보기")))
                 .andExpect(content().string(containsString("뽑기 등급")))
                 .andExpect(content().string(containsString("image-preview-dialog")))
