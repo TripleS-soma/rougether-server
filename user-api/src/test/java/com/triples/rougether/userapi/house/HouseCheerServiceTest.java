@@ -113,7 +113,7 @@ class HouseCheerServiceTest {
     }
 
     @Test
-    void 같은_날_같은_타입_중복이면_409로_거부한다() {
+    void 같은_날_같은_타입_한도를_다_쓰면_409로_거부한다() {
         House house = aliveHouse();
         when(houseRepository.findById(HOUSE_ID)).thenReturn(Optional.of(house));
         HouseMember me = requester("진형");
@@ -122,13 +122,13 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(true);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(5);
 
         assertThatThrownBy(() -> houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
+                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
         verify(houseMemberCheerRepository, never()).saveAndFlush(any());
         verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
     }
@@ -143,15 +143,15 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(4);
         when(houseMemberCheerRepository.saveAndFlush(any()))
-                .thenThrow(new DataIntegrityViolationException("uq_house_member_cheer"));
+                .thenThrow(new DataIntegrityViolationException("uq_house_member_cheer_seq"));
 
         assertThatThrownBy(() -> houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
+                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
         verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
     }
 
@@ -165,8 +165,8 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(0);
         HouseMemberCheer cheer = savedCheer(TARGET_USER_ID);
         when(houseMemberCheerRepository.saveAndFlush(any())).thenReturn(cheer);
 
@@ -193,8 +193,8 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(0);
         HouseMemberCheer cheer = savedCheer(TARGET_USER_ID);
         when(houseMemberCheerRepository.saveAndFlush(any())).thenReturn(cheer);
 

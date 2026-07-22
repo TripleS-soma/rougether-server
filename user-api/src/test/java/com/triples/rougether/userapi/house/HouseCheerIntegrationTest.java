@@ -72,16 +72,18 @@ class HouseCheerIntegrationTest {
     }
 
     @Test
-    void 같은_날_같은_타입은_한_번만_보낼_수_있고_다른_타입은_허용된다() {
-        houseCheerService.cheer(sender.getId(), house.getId(), targetMember.getId(), "support");
+    void 같은_날_같은_타입은_5회까지만_보낼_수_있고_다른_타입은_별도_한도다() {
+        for (int i = 0; i < 5; i++) {
+            houseCheerService.cheer(sender.getId(), house.getId(), targetMember.getId(), "support");
+        }
 
         assertThatThrownBy(() -> houseCheerService.cheer(
                 sender.getId(), house.getId(), targetMember.getId(), "support"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
+                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
 
-        // 타입이 다르면 같은 날에도 허용 (대상당 하루 최대 타입 수만큼)
+        // 타입이 다르면 같은 날에도 허용 (타입별로 하루 5회씩)
         HouseCheerResponse best = houseCheerService.cheer(
                 sender.getId(), house.getId(), targetMember.getId(), "best");
         assertThat(best.type()).isEqualTo("best");
