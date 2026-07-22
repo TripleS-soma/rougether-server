@@ -25,7 +25,7 @@ public class RoutineDayEndTrigger {
     private final Job routineDayEndJob;
     private final DayEndCatchUpPlanner dayEndCatchUpPlanner;
 
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     public void triggerDayEnd() {
         runPendingDates();
     }
