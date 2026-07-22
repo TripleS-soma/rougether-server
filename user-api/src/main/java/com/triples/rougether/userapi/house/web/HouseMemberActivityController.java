@@ -102,7 +102,7 @@ public class HouseMemberActivityController {
             description = "같은 집 멤버에게 원탭 응원을 보냅니다. 요청자와 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 하고, "
                     + "자기 자신에게는 보낼 수 없습니다(400 HOUSE_CHEER_SELF). "
                     + "type 은 great(잘하고 있어!)/support(응원해요!)/best(오늘도 최고!) 3종이며, "
-                    + "같은 대상에게 같은 타입은 하루(KST) 1회만 보낼 수 있습니다(초과 시 409 HOUSE_CHEER_DUPLICATED). "
+                    + "같은 대상에게 같은 타입은 하루(KST) 5회까지 보낼 수 있습니다(초과 시 409 HOUSE_CHEER_LIMIT_EXCEEDED). "
                     + "저장이 확정되면 대상에게 push 알림(응원이 도착했어요)이 발송됩니다 — 알림 실패는 응원 성공에 영향을 주지 않습니다.")
     @PostMapping("/cheer")
     @ResponseStatus(HttpStatus.CREATED)

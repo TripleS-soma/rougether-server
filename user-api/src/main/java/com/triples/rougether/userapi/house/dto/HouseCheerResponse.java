@@ -16,7 +16,7 @@ public record HouseCheerResponse(
         Long targetUserId,
         @Schema(description = "응원 타입", example = "support")
         String type,
-        @Schema(description = "응원 날짜 (KST). 같은 대상에게 같은 타입은 하루 1회", example = "2026-07-20")
+        @Schema(description = "응원 날짜 (KST). 같은 대상에게 같은 타입은 하루 5회", example = "2026-07-20")
         LocalDate cheerDate) {
 
     public static HouseCheerResponse of(HouseMemberCheer cheer, Long houseId, Long targetMembershipId) {

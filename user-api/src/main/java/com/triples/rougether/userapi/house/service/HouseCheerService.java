@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class HouseCheerService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 도배 방지: 같은 대상에게 같은 타입은 하루(KST) 5회까지
+    private static final int DAILY_LIMIT_PER_TYPE = 5;
     private static final String NOTIFICATION_TITLE = "응원이 도착했어요";
     // 온보딩 전(닉네임 null) 보낸이의 알림 표시명
     private static final String FALLBACK_SENDER_NAME = "집 친구";
@@ -66,18 +68,19 @@ public class HouseCheerService {
         }
 
         LocalDate today = LocalDate.now(KST);
-        if (houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                userId, target.getUser().getId(), type.code(), today)) {
-            throw new BusinessException(HouseErrorCode.HOUSE_CHEER_DUPLICATED);
+        int sentToday = houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                userId, target.getUser().getId(), type.code(), today);
+        if (sentToday >= DAILY_LIMIT_PER_TYPE) {
+            throw new BusinessException(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED);
         }
 
         HouseMemberCheer cheer;
         try {
-            // 동시 요청은 사전 검사를 둘 다 통과할 수 있어 UNIQUE 충돌을 409 로 변환한다(즉시 flush 로 이 지점에서 감지).
-            cheer = houseMemberCheerRepository.saveAndFlush(
-                    HouseMemberCheer.send(house, requester.getUser(), target.getUser(), type, today));
+            // 동시 요청은 같은 daily_seq 를 계산할 수 있어 UNIQUE 충돌을 409 로 변환한다(즉시 flush 로 이 지점에서 감지).
+            cheer = houseMemberCheerRepository.saveAndFlush(HouseMemberCheer.send(
+                    house, requester.getUser(), target.getUser(), type, today, sentToday + 1));
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(HouseErrorCode.HOUSE_CHEER_DUPLICATED);
+            throw new BusinessException(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED);
         }
 
         String senderName = requester.getUser().getNickname() != null

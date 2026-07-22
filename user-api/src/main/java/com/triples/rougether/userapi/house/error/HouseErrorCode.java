@@ -30,7 +30,7 @@ public enum HouseErrorCode implements ErrorCode {
     HOUSE_ALREADY_MEMBER("HOUSE_ALREADY_MEMBER", "이미 참여 중인 집입니다.", 409),
     HOUSE_CHEER_TYPE_INVALID("HOUSE_CHEER_TYPE_INVALID", "유효하지 않은 응원 타입입니다.", 400),
     HOUSE_CHEER_SELF("HOUSE_CHEER_SELF", "자기 자신에게는 응원을 보낼 수 없습니다.", 400),
-    HOUSE_CHEER_DUPLICATED("HOUSE_CHEER_DUPLICATED", "오늘은 이미 같은 응원을 보냈습니다.", 409);
+    HOUSE_CHEER_LIMIT_EXCEEDED("HOUSE_CHEER_LIMIT_EXCEEDED", "같은 응원은 하루 5회까지 보낼 수 있습니다.", 409);
 
     private final String code;
     private final String message;
