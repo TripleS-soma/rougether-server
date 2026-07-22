@@ -11,6 +11,8 @@ public record MeResponse(
         String nickname,
         @Schema(description = "한줄 소개 — 설정하지 않으면 null", example = "루틴을 사랑하는 사람")
         String bio,
+        @Schema(description = "프로필 사진 asset key (CDN base URL 과 조합해 이미지 URL 로 사용) — 미등록이면 null이며 기본 이미지를 표시", example = "profile/0b6f4c1e-8d1a-4c6e-9f2b-3a5d7e9c1b2d.png")
+        String profileImageKey,
         @Schema(description = "마지막 접속 시각(UTC) — 로그인 또는 refresh 재발급 성공 시 갱신되며 이력이 없으면 null", example = "2026-07-05T03:34:56Z")
         Instant lastAccessedAt,
         @Schema(description = "온보딩 진행 요약 — completed로 온보딩 화면 진입 여부 판단에 사용")
