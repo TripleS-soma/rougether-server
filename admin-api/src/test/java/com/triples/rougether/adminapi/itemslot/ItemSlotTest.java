@@ -289,7 +289,9 @@ class ItemSlotTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("가구 관리")))
                 .andExpect(content().string(containsString("움짤만 보기")))
-                .andExpect(content().string(containsString("뽑기 등급")));
+                .andExpect(content().string(containsString("뽑기 등급")))
+                .andExpect(content().string(containsString("image-preview-dialog")))
+                .andExpect(content().string(containsString("이미지 크게 보기")));
     }
 
     @Test

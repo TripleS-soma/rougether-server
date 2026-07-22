@@ -68,6 +68,21 @@
         </div>
     </main>
 
+    <dialog id="image-preview-dialog" class="image-preview-dialog" aria-labelledby="image-preview-title"
+            aria-describedby="image-preview-key">
+        <div class="image-preview-panel">
+            <button type="button" id="image-preview-close" class="image-preview-close"
+                    aria-label="큰 이미지 닫기">&times;</button>
+            <div class="image-preview-stage">
+                <img id="image-preview-image" alt="">
+            </div>
+            <div class="image-preview-meta">
+                <strong id="image-preview-title"></strong>
+                <code id="image-preview-key"></code>
+            </div>
+        </div>
+    </dialog>
+
     <script th:inline="javascript">
         const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
@@ -86,7 +101,13 @@
         const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
+        const previewDialog = document.getElementById('image-preview-dialog');
+        const previewImage = document.getElementById('image-preview-image');
+        const previewTitle = document.getElementById('image-preview-title');
+        const previewKey = document.getElementById('image-preview-key');
+        const previewClose = document.getElementById('image-preview-close');
         let items = [];
+        let previewOpener = null;
 
         init();
 
@@ -120,12 +141,19 @@
             const tr = document.createElement('tr');
 
             const thumbCell = document.createElement('td');
+            const thumbButton = document.createElement('button');
+            thumbButton.type = 'button';
+            thumbButton.className = 'slot-thumb-button';
+            thumbButton.setAttribute('aria-label', item.name + ' 이미지 크게 보기');
+            thumbButton.title = '클릭해서 크게 보기';
             const img = document.createElement('img');
             img.className = 'slot-thumb';
             img.loading = 'lazy';
             img.alt = item.name;
             img.src = s3BaseUrl + '/' + item.assetKey;
-            thumbCell.appendChild(img);
+            thumbButton.appendChild(img);
+            thumbButton.addEventListener('click', () => openImagePreview(item, thumbButton));
+            thumbCell.appendChild(thumbButton);
 
             const nameCell = document.createElement('td');
             const nameEl = document.createElement('div');
@@ -188,6 +216,20 @@
 
             tr.append(thumbCell, nameCell, themeCell, rarityCell, slotCell, statusCell);
             return tr;
+        }
+
+        function openImagePreview(item, opener) {
+            previewOpener = opener;
+            previewImage.src = s3BaseUrl + '/' + item.assetKey;
+            previewImage.alt = item.name + ' 큰 이미지';
+            previewTitle.textContent = item.name;
+            previewKey.textContent = item.assetKey;
+            previewDialog.showModal();
+            previewClose.focus();
+        }
+
+        function closeImagePreview() {
+            if (previewDialog.open) previewDialog.close();
         }
 
         async function saveSlot(item, slotSelect, raritySelect, statusCell) {
@@ -284,6 +326,15 @@
 
         filterInput.addEventListener('input', render);
         animatedOnlyInput.addEventListener('change', render);
+        previewClose.addEventListener('click', closeImagePreview);
+        previewDialog.addEventListener('click', (event) => {
+            if (event.target === previewDialog) closeImagePreview();
+        });
+        previewDialog.addEventListener('close', () => {
+            previewImage.removeAttribute('src');
+            previewOpener?.focus();
+            previewOpener = null;
+        });
     </script>
 </body>
 </html>
