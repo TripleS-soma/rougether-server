@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -45,12 +47,21 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
     }
 
-    // 필수 쿼리 파라미터 누락·타입 불일치(예: date 미전달, 잘못된 날짜 형식)는 클라이언트 잘못 → 400.
+    // 필수 쿼리 파라미터·multipart 파트 누락, 타입 불일치(예: date 미전달, file 파트 누락)는 클라이언트 잘못 → 400.
     @ExceptionHandler({MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class})
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestPartException.class})
     public ResponseEntity<ErrorResponse> handleBadRequestParam(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
+    }
+
+    // multipart 컨테이너 한도(spring.servlet.multipart.*) 초과는 컨트롤러 진입 전에 터짐.
+    // 도메인 검증(예: 프로필 사진 10MB)까지 못 가는 크기라도 클라이언트 입력 문제 → 400.
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("FILE_TOO_LARGE", "업로드 파일이 허용 크기를 초과했습니다."));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

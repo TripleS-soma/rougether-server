@@ -95,6 +95,13 @@ class MemberControllerTest {
     }
 
     @Test
+    void 프로필_사진_file_파트가_누락되면_400으로_응답한다() throws Exception {
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/me/profile-image"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     void 프로필_사진_삭제는_인증_사용자_본인_기준으로_204를_반환한다() throws Exception {
         mockMvc.perform(delete("/api/v1/me/profile-image"))
                 .andExpect(status().isNoContent());

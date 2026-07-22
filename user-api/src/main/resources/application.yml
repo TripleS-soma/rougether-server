@@ -14,7 +14,8 @@ spring:
     enabled: true
     locations: classpath:db/migration
   # 프로필 사진 업로드. 10MB 규칙은 서비스 검증(MEMBER_PROFILE_IMAGE_INVALID)이 담당하므로
-  # 컨테이너 한도는 그보다 여유 있게 잡아 400 응답 경로가 항상 서비스를 거치게 한다.
+  # 컨테이너 한도는 그보다 여유 있게 잡는다. 이 한도(12MB)를 넘는 요청은 컨트롤러 진입 전에
+  # MaxUploadSizeExceededException → FILE_TOO_LARGE(400)로 매핑된다.
   servlet:
     multipart:
       max-file-size: 12MB
