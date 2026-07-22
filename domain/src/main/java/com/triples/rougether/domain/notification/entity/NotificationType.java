@@ -4,5 +4,6 @@ public enum NotificationType {
     HOUSE_KICK,
     ROUTINE_REMINDER,
     TODO_REMINDER,
-    FRIEND_CHEER
+    FRIEND_CHEER,
+    HOUSE_MISSION_ACHIEVED
 }

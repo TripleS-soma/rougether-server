@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.entity.HouseMission;
 import com.triples.rougether.domain.house.entity.HouseMissionParticipant;
 import com.triples.rougether.domain.house.entity.HouseMissionStatus;
@@ -11,6 +12,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
@@ -18,6 +20,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -35,20 +38,24 @@ public class HouseMissionService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     // 미션 달성 보상 - 집 성장 포인트 고정 지급 (개인 재화 없음, 팀 확정 2026-07-05)
     private static final int GROWTH_POINTS_PER_MISSION = 100;
+    private static final String ACHIEVED_NOTIFICATION_TITLE = "단체 미션 달성!";
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final HouseMissionRepository houseMissionRepository;
     private final HouseMissionParticipantRepository participantRepository;
+    private final NotificationService notificationService;
 
     public HouseMissionService(HouseRepository houseRepository,
                                HouseMemberRepository houseMemberRepository,
                                HouseMissionRepository houseMissionRepository,
-                               HouseMissionParticipantRepository participantRepository) {
+                               HouseMissionParticipantRepository participantRepository,
+                               NotificationService notificationService) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseMissionRepository = houseMissionRepository;
         this.participantRepository = participantRepository;
+        this.notificationService = notificationService;
     }
 
     // 미션 등록 - 소유자 전용. MVP 는 DAILY_MEMBER_RATE/WEEKLY_MEMBER_COUNT 2종만 허용.
@@ -139,9 +146,13 @@ public class HouseMissionService {
         participant.contribute(1);
         // JPQL 실행 전 auto-flush 로 이번 +1 이 합산에 반영된다.
         long currentValue = participantRepository.sumContributionByMissionId(missionId);
+        boolean achieved = currentValue >= mission.getTargetValue();
+        // 이번 +1 로 처음 도달한 순간에만 1회 발송. 미션 행 락 하 판정이라 별도 dedupe 쿼리가 필요없음
+        if (achieved && currentValue - 1 < mission.getTargetValue()) {
+            notifyAchieved(houseId, mission);
+        }
         return new HouseMissionContributeResponse(
-                missionId, participant.getContributionValue(), currentValue,
-                currentValue >= mission.getTargetValue());
+                missionId, participant.getContributionValue(), currentValue, achieved);
     }
 
     // 보상 받기 - 구성원 누구나 최초 1회. 미션 행 락으로 동시 claim 이중 지급을 막고,
@@ -172,6 +183,18 @@ public class HouseMissionService {
         return new HouseMissionClaimResponse(
                 missionId, mission.getStatus(), GROWTH_POINTS_PER_MISSION,
                 house.getGrowthPoints(), house.getLevel());
+    }
+
+    // 목표 도달 알림 - 집 활성 멤버 전원(마지막 기여자 본인 포함). 기여와 같은 트랜잭션에서 동기 저장(응원 #174 패턴).
+    private void notifyAchieved(Long houseId, HouseMission mission) {
+        String body = "'" + mission.getTitle() + "' 미션이 목표를 달성했어요. 보상을 받아보세요!";
+        houseMemberRepository.findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE)
+                .forEach(member -> notificationService.send(
+                        member.getUser().getId(),
+                        NotificationType.HOUSE_MISSION_ACHIEVED,
+                        ACHIEVED_NOTIFICATION_TITLE,
+                        body,
+                        mission.getId()));
     }
 
     private House requireHouse(Long houseId) {
