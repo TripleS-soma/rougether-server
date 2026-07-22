@@ -98,18 +98,21 @@ public class ItemSlotService {
 
     // 미등록 아이템을 테마의 활성 머신 전부에 등록. 머신이 없으면 스펙 기본값(COIN 250, 1회)으로 새로 만듦.
     // 테마 행 락으로 동시 등록을 직렬화 — 같은 테마의 연속 클릭이 겹쳐도 머신/엔트리가 중복 생성되지 않는다.
+    // 락 이후 재확인은 locking read 로만 한다 — REPEATABLE READ 에선 일반 조회가 락 이전 스냅샷을 읽어
+    // 선행 커밋(머신/엔트리)을 못 보고 중복 생성할 수 있다.
     private List<GachaPoolEntry> registerToThemeGachas(Item item, String rarity) {
         Theme theme = themeRepository.findWithLockById(item.getTheme().getId())
                 .orElseThrow(() -> new ItemRarityInvalidException("theme 이 없습니다: " + item.getTheme().getId()));
 
         // 락 대기 중 다른 요청이 먼저 등록했을 수 있으므로 재확인
-        List<GachaPoolEntry> alreadyRegistered = findActiveItemEntries(item.getId());
+        List<GachaPoolEntry> alreadyRegistered =
+                gachaPoolEntryRepository.findActiveItemEntriesForUpdate(item.getId());
         if (!alreadyRegistered.isEmpty()) {
             alreadyRegistered.forEach(entry -> entry.updateRarity(rarity));
             return alreadyRegistered;
         }
 
-        List<Gacha> themeGachas = gachaRepository.findByThemeIdAndActiveIsTrue(theme.getId());
+        List<Gacha> themeGachas = gachaRepository.findActiveByThemeIdForUpdate(theme.getId());
         if (themeGachas.isEmpty()) {
             themeGachas = List.of(gachaRepository.save(new Gacha(
                     theme.getCode(), theme.getName() + " 뽑기",
