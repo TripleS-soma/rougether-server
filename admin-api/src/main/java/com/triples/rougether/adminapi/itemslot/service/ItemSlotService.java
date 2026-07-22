@@ -8,6 +8,7 @@ import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
 import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
 import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
+import com.triples.rougether.adminapi.itemslot.error.ItemRenderDefaultsInvalidException;
 import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
 import com.triples.rougether.domain.gacha.entity.GachaRarity;
@@ -38,8 +39,14 @@ public class ItemSlotService {
     private static final String PLACEMENT_SURFACE = "surface_slot";
     private static final BigDecimal MIN_DEFAULT_SCALE = new BigDecimal("0.50");
     private static final BigDecimal MAX_DEFAULT_SCALE = new BigDecimal("2.00");
+    private static final BigDecimal MIN_DEFAULT_POSITION = BigDecimal.ZERO;
+    private static final BigDecimal MAX_DEFAULT_POSITION = BigDecimal.ONE;
     private static final String DEFAULT_SCALE_RANGE_MESSAGE =
             "기본 크기 배율은 0.50 이상 2.00 이하의 숫자여야 합니다.";
+    private static final String DEFAULT_POSITION_PAIR_MESSAGE =
+            "기본 위치 X와 Y는 둘 다 입력하거나 둘 다 비워야 합니다.";
+    private static final String DEFAULT_POSITION_RANGE_MESSAGE =
+            "기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다.";
     // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (10연 = x5 는 user-api GachaService 가 계산)
     private static final int ITEM_GACHA_COST_COIN = 250;
 
@@ -108,6 +115,28 @@ public class ItemSlotService {
         }
 
         item.updateDefaultScale(defaultScale.setScale(2, RoundingMode.HALF_UP));
+        return ItemSlotRow.of(item, findActiveItemEntries(itemId));
+    }
+
+    @Transactional
+    public ItemSlotRow updateRenderDefaults(Long itemId,
+                                            BigDecimal defaultScale,
+                                            BigDecimal defaultPositionX,
+                                            BigDecimal defaultPositionY) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemRenderDefaultsInvalidException("아이템을 찾을 수 없습니다: " + itemId));
+        if (!PLACEMENT_POSITIONED.equals(item.getPlacementType())) {
+            throw new ItemRenderDefaultsInvalidException(
+                    "positioned 아이템만 FREE 기본 렌더링 값을 변경할 수 있습니다.");
+        }
+
+        validateDefaultScale(defaultScale);
+        validateDefaultPosition(defaultPositionX, defaultPositionY);
+
+        BigDecimal normalizedScale = defaultScale.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal normalizedX = normalizePosition(defaultPositionX);
+        BigDecimal normalizedY = normalizePosition(defaultPositionY);
+        item.updateRenderDefaults(normalizedScale, normalizedX, normalizedY);
         return ItemSlotRow.of(item, findActiveItemEntries(itemId));
     }
 
@@ -193,6 +222,33 @@ public class ItemSlotService {
 
     private static String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private static void validateDefaultScale(BigDecimal defaultScale) {
+        if (defaultScale == null
+                || defaultScale.compareTo(MIN_DEFAULT_SCALE) < 0
+                || defaultScale.compareTo(MAX_DEFAULT_SCALE) > 0) {
+            throw new ItemRenderDefaultsInvalidException(DEFAULT_SCALE_RANGE_MESSAGE);
+        }
+    }
+
+    private static void validateDefaultPosition(BigDecimal x, BigDecimal y) {
+        if ((x == null) != (y == null)) {
+            throw new ItemRenderDefaultsInvalidException(DEFAULT_POSITION_PAIR_MESSAGE);
+        }
+        if (x == null) {
+            return;
+        }
+        if (x.compareTo(MIN_DEFAULT_POSITION) < 0
+                || x.compareTo(MAX_DEFAULT_POSITION) > 0
+                || y.compareTo(MIN_DEFAULT_POSITION) < 0
+                || y.compareTo(MAX_DEFAULT_POSITION) > 0) {
+            throw new ItemRenderDefaultsInvalidException(DEFAULT_POSITION_RANGE_MESSAGE);
+        }
+    }
+
+    private static BigDecimal normalizePosition(BigDecimal position) {
+        return position == null ? null : position.setScale(5, RoundingMode.HALF_UP);
     }
 
     private List<GachaPoolEntry> findActiveItemEntries(Long itemId) {

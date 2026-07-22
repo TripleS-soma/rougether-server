@@ -73,6 +73,13 @@ public class Item {
     @Column(name = "default_scale", precision = 4, scale = 2, nullable = false)
     private BigDecimal defaultScale = DEFAULT_SCALE;
 
+    // FREE_V1 새 배치의 중심점 기준 기본 위치. 둘 다 null 이면 클라이언트 공통 중심점을 사용한다.
+    @Column(name = "default_position_x", precision = 6, scale = 5)
+    private BigDecimal defaultPositionX;
+
+    @Column(name = "default_position_y", precision = 6, scale = 5)
+    private BigDecimal defaultPositionY;
+
     public Item(Theme theme, String categoryCode, String placementType, String surfaceSlotType,
                 String characterSlotType, String name, CurrencyType purchaseCurrencyType,
                 Integer priceAmount, String assetKey, boolean limited, boolean active) {
@@ -97,5 +104,14 @@ public class Item {
     // admin 에서 기본 렌더링 배율 조정.
     public void updateDefaultScale(BigDecimal defaultScale) {
         this.defaultScale = defaultScale;
+    }
+
+    // admin 에서 FREE_V1 새 배치의 기본 렌더링 값을 한 번에 조정.
+    public void updateRenderDefaults(BigDecimal defaultScale,
+                                     BigDecimal defaultPositionX,
+                                     BigDecimal defaultPositionY) {
+        this.defaultScale = defaultScale;
+        this.defaultPositionX = defaultPositionX;
+        this.defaultPositionY = defaultPositionY;
     }
 }

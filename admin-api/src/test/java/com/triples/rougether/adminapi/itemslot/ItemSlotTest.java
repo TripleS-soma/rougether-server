@@ -1,7 +1,10 @@
 package com.triples.rougether.adminapi.itemslot;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,11 +19,13 @@ import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import java.math.BigDecimal;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -131,6 +136,8 @@ class ItemSlotTest {
     @WithMockUser(roles = "ADMIN")
     void 새_아이템과_DB의_defaultScale_기본값은_1_00이다() throws Exception {
         assertThat(positionedItem.getDefaultScale()).isEqualByComparingTo("1.00");
+        assertThat(positionedItem.getDefaultPositionX()).isNull();
+        assertThat(positionedItem.getDefaultPositionY()).isNull();
 
         jdbcTemplate.update("""
                 INSERT INTO items
@@ -140,15 +147,44 @@ class ItemSlotTest {
                         'DB 기본 배율 의자', 'COIN', 100, 'items/slot-test/db-default-chair.png', FALSE, TRUE)
                 """, positionedItem.getTheme().getId());
 
-        BigDecimal databaseDefault = jdbcTemplate.queryForObject(
-                "SELECT default_scale FROM items WHERE asset_key = 'items/slot-test/db-default-chair.png'",
-                BigDecimal.class);
-        assertThat(databaseDefault).isEqualByComparingTo("1.00");
+        Map<String, Object> databaseDefaults = jdbcTemplate.queryForMap(
+                """
+                SELECT default_scale, default_position_x, default_position_y
+                FROM items
+                WHERE asset_key = 'items/slot-test/db-default-chair.png'
+                """);
+        assertThat((BigDecimal) databaseDefaults.get("default_scale")).isEqualByComparingTo("1.00");
+        assertThat(databaseDefaults.get("default_position_x")).isNull();
+        assertThat(databaseDefaults.get("default_position_y")).isNull();
 
         mockMvc.perform(get("/admin/items/slots"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].defaultScale")
-                        .value(1.0));
+                        .value(1.0))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].defaultPositionX")
+                        .value(everyItem(nullValue())))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].defaultPositionY")
+                        .value(everyItem(nullValue())));
+    }
+
+    @Test
+    void DB는_기본_위치의_X_Y_한쪽만_저장하는_것을_거부한다() {
+        itemRepository.flush();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE items SET default_position_x = 0.25, default_position_y = NULL WHERE id = ?",
+                positionedItem.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void DB는_기본_위치의_0_1_범위를_강제한다() {
+        itemRepository.flush();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE items SET default_position_x = -0.01, default_position_y = 1.01 WHERE id = ?",
+                positionedItem.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -164,6 +200,141 @@ class ItemSlotTest {
         BigDecimal persisted = jdbcTemplate.queryForObject(
                 "SELECT default_scale FROM items WHERE id = ?", BigDecimal.class, positionedItem.getId());
         assertThat(persisted).isEqualByComparingTo("1.24");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void FREE_기본_크기와_중심_좌표를_한번에_정규화해_저장한다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.235,
+                                  "defaultPositionX": 0.123456,
+                                  "defaultPositionY": 0.987654
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.defaultScale").value(1.24))
+                .andExpect(jsonPath("$.defaultPositionX").value(0.12346))
+                .andExpect(jsonPath("$.defaultPositionY").value(0.98765));
+
+        itemRepository.flush();
+        Map<String, Object> persisted = jdbcTemplate.queryForMap(
+                "SELECT default_scale, default_position_x, default_position_y FROM items WHERE id = ?",
+                positionedItem.getId());
+        assertThat((BigDecimal) persisted.get("default_scale")).isEqualByComparingTo("1.24");
+        assertThat((BigDecimal) persisted.get("default_position_x")).isEqualByComparingTo("0.12346");
+        assertThat((BigDecimal) persisted.get("default_position_y")).isEqualByComparingTo("0.98765");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void FREE_기본_위치는_0과_1_경계를_허용하고_둘_다_null이면_공통_기본값으로_초기화한다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.20,
+                                  "defaultPositionX": 0,
+                                  "defaultPositionY": 1
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.defaultPositionX").value(0.0))
+                .andExpect(jsonPath("$.defaultPositionY").value(1.0));
+
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.20,
+                                  "defaultPositionX": null,
+                                  "defaultPositionY": null
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.defaultPositionX").doesNotExist())
+                .andExpect(jsonPath("$.defaultPositionY").doesNotExist());
+
+        assertThat(positionedItem.getDefaultPositionX()).isNull();
+        assertThat(positionedItem.getDefaultPositionY()).isNull();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void FREE_기본_위치는_X와_Y를_한쪽만_비울_수_없다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.20,
+                                  "defaultPositionX": 0.5,
+                                  "defaultPositionY": null
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RENDER_DEFAULTS_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("기본 위치 X와 Y는 둘 다 입력하거나 둘 다 비워야 합니다."));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void FREE_기본_위치는_반올림_전_원본값으로_범위를_검증하고_실패시_배율도_바꾸지_않는다() throws Exception {
+        positionedItem.updateRenderDefaults(
+                new BigDecimal("1.10"), new BigDecimal("0.40"), new BigDecimal("0.60"));
+
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.80,
+                                  "defaultPositionX": -0.000001,
+                                  "defaultPositionY": 0.5
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RENDER_DEFAULTS_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다."));
+
+        assertThat(positionedItem.getDefaultScale()).isEqualByComparingTo("1.10");
+        assertThat(positionedItem.getDefaultPositionX()).isEqualByComparingTo("0.40");
+        assertThat(positionedItem.getDefaultPositionY()).isEqualByComparingTo("0.60");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void surface_아이템의_FREE_기본_렌더링_값은_변경할_수_없다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", surfaceItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.25,
+                                  "defaultPositionX": 0.5,
+                                  "defaultPositionY": 0.5
+                                }
+                                """).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RENDER_DEFAULTS_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("positioned 아이템만 FREE 기본 렌더링 값을 변경할 수 있습니다."));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void FREE_기본_렌더링_값_변경은_CSRF_토큰이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/render-defaults", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultScale": 1.25,
+                                  "defaultPositionX": 0.5,
+                                  "defaultPositionY": 0.5
+                                }
+                                """))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -587,17 +758,25 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("room-background")))
                 .andExpect(content().string(containsString("room-wallpaper")))
                 .andExpect(content().string(containsString("room-character")))
-                .andExpect(content().string(containsString("free-preview-anchor")))
+                .andExpect(content().string(containsString("preview-furniture-layer")))
                 .andExpect(content().string(containsString("FREE_V1")))
                 .andExpect(content().string(containsString("SLOT_V1")))
-                .andExpect(content().string(containsString("/default-scale")))
+                .andExpect(content().string(containsString("/render-defaults")))
+                .andExpect(content().string(containsString("const draftDefaults = new Map()")))
+                .andExpect(content().string(containsString("let scenePlacements = []")))
+                .andExpect(content().string(containsString("let activePreviewTab = 'free'")))
+                .andExpect(content().string(containsString("beginFurnitureDrag")))
+                .andExpect(content().string(containsString("setPointerCapture")))
+                .andExpect(content().string(containsString("position-x")))
+                .andExpect(content().string(containsString("newPlacementCenter")))
+                .andExpect(content().string(containsString("선택 가구 추가")))
+                .andExpect(content().string(containsString("모두 비우기")))
                 .andExpect(content().string(containsString("container.setAttribute('inert', '')")))
                 .andExpect(content().string(containsString("button.disabled = next")))
                 .andExpect(content().string(containsString("selectedId === item.id")))
-                .andExpect(content().string(containsString("const draftScales = new Map()")))
+                .andExpect(content().string(containsString("activePreviewTab !== 'free'")))
                 .andExpect(content().string(containsString("setControlsDisabled(!currentItem())")))
-                .andExpect(content().string(containsString("previewFurniture.style.width = percent(rect.width)")))
-                .andExpect(content().string(containsString("previewFurniture.style.transform = freeMode")))
+                .andExpect(content().string(containsString("translate(-50%, -50%) scale(")))
                 .andExpect(content().string(containsString("기본 크기는 새 FREE_V1에만 적용")))
                 .andExpect(content().string(containsString("움짤만 보기")))
                 .andExpect(content().string(containsString("뽑기 등급")))

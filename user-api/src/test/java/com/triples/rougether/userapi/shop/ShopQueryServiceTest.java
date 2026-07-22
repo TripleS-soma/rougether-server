@@ -36,6 +36,8 @@ class ShopQueryServiceTest {
         when(item.getPlacementType()).thenReturn("positioned");
         when(item.getDefaultSlot()).thenReturn(defaultSlot);
         when(item.getDefaultScale()).thenReturn(new BigDecimal("1.25"));
+        when(item.getDefaultPositionX()).thenReturn(new BigDecimal("0.35"));
+        when(item.getDefaultPositionY()).thenReturn(new BigDecimal("0.65"));
         return item;
     }
 
@@ -56,6 +58,10 @@ class ShopQueryServiceTest {
         assertThat(response.items().get(1).defaultSlot()).isNull();
         assertThat(response.items()).extracting(ItemResponse::defaultScale)
                 .allSatisfy(defaultScale -> assertThat(defaultScale).isEqualByComparingTo("1.25"));
+        assertThat(response.items()).extracting(ItemResponse::defaultPositionX)
+                .allSatisfy(x -> assertThat(x).isEqualByComparingTo("0.35"));
+        assertThat(response.items()).extracting(ItemResponse::defaultPositionY)
+                .allSatisfy(y -> assertThat(y).isEqualByComparingTo("0.65"));
     }
 
     @Test

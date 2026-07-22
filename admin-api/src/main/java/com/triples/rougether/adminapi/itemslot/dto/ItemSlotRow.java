@@ -18,6 +18,8 @@ public record ItemSlotRow(
         String themeName,
         String defaultSlot,
         BigDecimal defaultScale,
+        BigDecimal defaultPositionX,
+        BigDecimal defaultPositionY,
         @JsonInclude(JsonInclude.Include.NON_NULL)
         String rarity,
         boolean rarityEditable,
@@ -38,6 +40,8 @@ public record ItemSlotRow(
                 item.getTheme().getName(),
                 item.getDefaultSlot(),
                 item.getDefaultScale(),
+                item.getDefaultPositionX(),
+                item.getDefaultPositionY(),
                 rarity,
                 !activeItemEntries.isEmpty(),
                 rarityConflict,

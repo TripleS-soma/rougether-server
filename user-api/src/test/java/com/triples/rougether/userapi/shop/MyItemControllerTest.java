@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.shop;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,8 +49,14 @@ class MyItemControllerTest {
         when(shopQueryService.getMyItems(7L, "furniture")).thenReturn(new MyItemListResponse(List.of(
                 new MyItemListResponse.MyItemSummary(77L, 1L, "인벤 의자", "items/inv/chair.png",
                         "furniture", "positioned", null, null, "midRight", new BigDecimal("1.24"),
+                        new BigDecimal("0.35"), new BigDecimal("0.65"),
                         new ItemResponse.ThemeSummary(3L, "inv_test_theme", "인벤토리 테마", null),
-                        Instant.parse("2026-07-05T00:00:00Z")))));
+                        Instant.parse("2026-07-05T00:00:00Z")),
+                new MyItemListResponse.MyItemSummary(78L, 2L, "공통 위치 의자",
+                        "items/inv/default-chair.png", "furniture", "positioned", null, null,
+                        "bottomCenter", BigDecimal.ONE, null, null,
+                        new ItemResponse.ThemeSummary(3L, "inv_test_theme", "인벤토리 테마", null),
+                        Instant.parse("2026-07-04T00:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/me/items").param("categoryCode", "furniture"))
                 .andExpect(status().isOk())
@@ -59,6 +66,10 @@ class MyItemControllerTest {
                 .andExpect(jsonPath("$.items[0].placementType").value("positioned"))
                 .andExpect(jsonPath("$.items[0].defaultSlot").value("midRight"))
                 .andExpect(jsonPath("$.items[0].defaultScale").value(1.24))
-                .andExpect(jsonPath("$.items[0].theme.code").value("inv_test_theme"));
+                .andExpect(jsonPath("$.items[0].defaultPositionX").value(0.35))
+                .andExpect(jsonPath("$.items[0].defaultPositionY").value(0.65))
+                .andExpect(jsonPath("$.items[0].theme.code").value("inv_test_theme"))
+                .andExpect(jsonPath("$.items[1].defaultPositionX").value(nullValue()))
+                .andExpect(jsonPath("$.items[1].defaultPositionY").value(nullValue()));
     }
 }

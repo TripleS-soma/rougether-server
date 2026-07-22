@@ -36,6 +36,12 @@ public record MyItemListResponse(List<MyItemSummary> items) {
             String defaultSlot,
             @Schema(description = "새 자유배치의 초기 렌더링 배율 (0.50~2.00, 기존 배치 비소급)", example = "1.25")
             BigDecimal defaultScale,
+            @Schema(description = "새 FREE_V1 배치의 중심점 기준 기본 X 좌표 (0~1, null 이면 공통 기본값)",
+                    example = "0.5", nullable = true)
+            BigDecimal defaultPositionX,
+            @Schema(description = "새 FREE_V1 배치의 중심점 기준 기본 Y 좌표 (0~1, null 이면 공통 기본값)",
+                    example = "0.55", nullable = true)
+            BigDecimal defaultPositionY,
             @Schema(description = "소속 테마 정보")
             ItemResponse.ThemeSummary theme,
             @Schema(description = "획득 시각 (상점 구매·뽑기 지급 시각. 목록은 이 값 내림차순 정렬)")
@@ -55,6 +61,8 @@ public record MyItemListResponse(List<MyItemSummary> items) {
                     item.getCharacterSlotType(),
                     item.getDefaultSlot(),
                     item.getDefaultScale(),
+                    item.getDefaultPositionX(),
+                    item.getDefaultPositionY(),
                     new ItemResponse.ThemeSummary(theme.getId(), theme.getCode(), theme.getName(),
                             theme.getCoverImageKey()),
                     userItem.getAcquiredAt());
