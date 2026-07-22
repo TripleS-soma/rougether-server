@@ -1,6 +1,8 @@
 package com.triples.rougether.infra.fcm;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.ApnsConfig;
+import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
@@ -43,10 +45,7 @@ public class FirebaseFcmSender implements FcmSender {
     }
 
     private FcmSendResult sendChunk(List<String> tokens, String title, String body) {
-        MulticastMessage message = MulticastMessage.builder()
-                .addAllTokens(tokens)
-                .setNotification(Notification.builder().setTitle(title).setBody(body).build())
-                .build();
+        MulticastMessage message = buildMessage(tokens, title, body);
 
         BatchResponse batchResponse;
         try {
@@ -73,6 +72,17 @@ public class FirebaseFcmSender implements FcmSender {
             }
         }
         return new FcmSendResult(successCount, invalidTokens);
+    }
+
+    // iOS는 aps.sound를 명시하지 않으면 알림이 무음으로 도착함 — APNs 릴레이용 기본 사운드를 지정함.
+    static MulticastMessage buildMessage(List<String> tokens, String title, String body) {
+        return MulticastMessage.builder()
+                .addAllTokens(tokens)
+                .setNotification(Notification.builder().setTitle(title).setBody(body).build())
+                .setApnsConfig(ApnsConfig.builder()
+                        .setAps(Aps.builder().setSound("default").build())
+                        .build())
+                .build();
     }
 
     static List<List<String>> partition(List<String> tokens, int size) {

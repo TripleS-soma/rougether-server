@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 public class RoutineReminderTrigger {
 
     private final JobOperator jobOperator;
-    private final Job routineReminderJob;
+    private final Job reminderJob;
     private final Clock clock;
 
     @Scheduled(cron = "0 */5 * * * *", zone = "Asia/Seoul")
@@ -31,11 +31,11 @@ public class RoutineReminderTrigger {
                 .addString(RoutineReminderJobConfig.TARGET_MINUTE_PARAM, targetMinute)
                 .toJobParameters();
         try {
-            jobOperator.start(routineReminderJob, jobParameters);
+            jobOperator.start(reminderJob, jobParameters);
         } catch (JobInstanceAlreadyCompleteException e) {
-            log.debug("루틴 리마인드 batch 같은 분 재실행 스킵 - targetMinute={}", targetMinute);
+            log.debug("리마인드 batch 같은 분 재실행 스킵 - targetMinute={}", targetMinute);
         } catch (Exception e) {
-            log.warn("루틴 리마인드 batch 실행 실패 - targetMinute={}", targetMinute, e);
+            log.warn("리마인드 batch 실행 실패 - targetMinute={}", targetMinute, e);
         }
     }
 }

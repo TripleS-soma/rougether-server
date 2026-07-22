@@ -36,7 +36,7 @@
             <div>
                 <span class="studio-eyebrow">FURNITURE DESIGN SYSTEM</span>
                 <h2>가구 크기 스튜디오</h2>
-                <p>앱의 실제 방 렌더러 기준으로 기본 크기·슬롯·뽑기 등급을 확인하고 조정합니다.</p>
+                <p>앱의 실제 방 렌더러 기준으로 기본 크기·슬롯·뽑기 등급을 확인하고 조정합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다.</p>
             </div>
             <div class="renderer-contract" aria-label="모바일 Room.tsx 화면 규격">
                 <strong id="contract-title">모바일 Room renderer contract 불러오는 중</strong>
@@ -592,11 +592,10 @@
         function populateRaritySelect(item) {
             selectedRarity.replaceChildren();
             if (!item.rarityEditable) {
-                selectedRarity.add(new Option('— 뽑기 미등록 —', ''));
-                selectedRarity.disabled = true;
-                return;
-            }
-            if (item.rarityConflict) {
+                const unregistered = new Option('— 뽑기 미등록 —', '', true, true);
+                unregistered.disabled = true;
+                selectedRarity.add(unregistered);
+            } else if (item.rarityConflict) {
                 const mixed = new Option('— 혼합 —', '', true, true);
                 mixed.disabled = true;
                 selectedRarity.add(mixed);
@@ -606,7 +605,8 @@
                 selectedRarity.add(unset);
             }
             RARITIES.forEach((rarity) => selectedRarity.add(new Option(rarity, rarity)));
-            selectedRarity.value = item.rarity ?? '';
+            if (item.rarity) selectedRarity.value = item.rarity;
+            selectedRarity.title = rarityTitle(item);
             selectedRarity.disabled = false;
         }
 
@@ -732,8 +732,9 @@
         async function saveRarity() {
             const item = currentItem();
             if (!item || busy || !selectedRarity.value) return;
+            const wasUnregistered = !item.rarityEditable;
             const previous = item.rarityConflict ? '' : (item.rarity ?? '');
-            setBusy(true, '등급 저장 중…');
+            setBusy(true, wasUnregistered ? '테마 뽑기 풀 등록 중…' : '등급 저장 중…');
             try {
                 const updated = await putJson('/admin/items/' + item.id + '/rarity', {
                     rarity: selectedRarity.value
@@ -742,7 +743,9 @@
                 item.rarityEditable = updated.rarityEditable;
                 item.rarityConflict = updated.rarityConflict;
                 if (selectedId === item.id) populateRaritySelect(item);
-                showOperationStatus('뽑기 등급 저장됨', 'ok');
+                showOperationStatus(
+                    wasUnregistered ? '테마 뽑기 풀에 등록됨' : '뽑기 등급 저장됨',
+                    'ok');
             } catch (error) {
                 if (selectedId === item.id) selectedRarity.value = previous;
                 showOperationStatus('등급 저장 실패', 'err');
@@ -792,7 +795,7 @@
             scaleRange.disabled = disabled;
             scaleNumber.disabled = disabled;
             selectedSlot.disabled = disabled;
-            selectedRarity.disabled = disabled || !(currentItem()?.rarityEditable);
+            selectedRarity.disabled = disabled;
             document.getElementById('scale-minus').disabled = disabled;
             document.getElementById('scale-plus').disabled = disabled;
             document.getElementById('scale-reset').disabled = disabled;
@@ -830,6 +833,12 @@
 
         function assetUrl(assetKey) {
             return s3BaseUrl.replace(/\/$/, '') + '/' + assetKey.replace(/^\//, '');
+        }
+
+        function rarityTitle(item) {
+            return item.rarityEditable
+                ? '변경하면 이 아이템이 포함된 모든 활성 뽑기 풀에 반영됩니다.'
+                : '등급을 선택하면 테마 뽑기 풀에 등록됩니다. 테마 머신이 없으면 새로 만듭니다.';
         }
 
         function showOperationStatus(message, state = '') {
