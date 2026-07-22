@@ -101,6 +101,10 @@ public class ItemSlotService {
     // 락 이후 재확인은 locking read 로만 한다 — REPEATABLE READ 에선 일반 조회가 락 이전 스냅샷을 읽어
     // 선행 커밋(머신/엔트리)을 못 보고 중복 생성할 수 있다.
     private List<GachaPoolEntry> registerToThemeGachas(Item item, String rarity) {
+        // 비활성 콘텐츠가 유료 뽑기로 배출되지 않게 등록 자체를 거부 (기존 엔트리의 등급 변경은 허용)
+        if (!item.isActive() || !item.getTheme().isActive()) {
+            throw new ItemRarityInvalidException("비활성 아이템/테마는 뽑기 풀에 등록할 수 없습니다: " + item.getId());
+        }
         Theme theme = themeRepository.findWithLockById(item.getTheme().getId())
                 .orElseThrow(() -> new ItemRarityInvalidException("theme 이 없습니다: " + item.getTheme().getId()));
 

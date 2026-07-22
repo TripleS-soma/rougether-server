@@ -354,6 +354,33 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 비활성_아이템이나_비활성_테마는_뽑기_풀에_등록할_수_없다() throws Exception {
+        Item inactiveItem = itemRepository.save(new Item(
+                positionedItemWithoutPool.getTheme(), "furniture", "positioned", null, null,
+                "비활성 가구", CurrencyType.COIN, 100, "items/slot-test/inactive-chair.png", false, false));
+
+        Theme inactiveTheme = themeRepository.save(new Theme("inactive_theme", "비활성 테마", null, false));
+        Item itemOfInactiveTheme = itemRepository.save(new Item(
+                inactiveTheme, "furniture", "positioned", null, null,
+                "비활성 테마 가구", CurrencyType.COIN, 100, "items/slot-test/inactive-theme-chair.png",
+                false, true));
+
+        for (Item target : new Item[]{inactiveItem, itemOfInactiveTheme}) {
+            mockMvc.perform(put("/admin/items/{itemId}/rarity", target.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+
+            Integer entryCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM gacha_pool_entries WHERE item_id = ?", Integer.class,
+                    target.getId());
+            assertThat(entryCount).isZero();
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 미등록_아이템도_허용되지_않은_등급은_400이고_등록되지_않는다() throws Exception {
         mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
                         .contentType(MediaType.APPLICATION_JSON)
