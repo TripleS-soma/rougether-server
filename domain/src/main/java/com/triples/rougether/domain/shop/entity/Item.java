@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +22,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "items")
 public class Item {
+
+    private static final BigDecimal DEFAULT_SCALE = new BigDecimal("1.00");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -67,6 +70,9 @@ public class Item {
     @Column(name = "default_slot", length = 40)
     private String defaultSlot;
 
+    @Column(name = "default_scale", precision = 4, scale = 2, nullable = false)
+    private BigDecimal defaultScale = DEFAULT_SCALE;
+
     public Item(Theme theme, String categoryCode, String placementType, String surfaceSlotType,
                 String characterSlotType, String name, CurrencyType purchaseCurrencyType,
                 Integer priceAmount, String assetKey, boolean limited, boolean active) {
@@ -86,5 +92,10 @@ public class Item {
     // admin 에서 배치 슬롯 조정.
     public void updateDefaultSlot(String defaultSlot) {
         this.defaultSlot = defaultSlot;
+    }
+
+    // admin 에서 기본 렌더링 배율 조정.
+    public void updateDefaultScale(BigDecimal defaultScale) {
+        this.defaultScale = defaultScale;
     }
 }

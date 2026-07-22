@@ -4,6 +4,7 @@ import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,6 +34,8 @@ public record MyItemListResponse(List<MyItemSummary> items) {
             @Schema(description = "positioned 가구의 기본 배치 슬롯 (topLeft/topCenter/topRight/midLeft/midRight/"
                     + "bottomLeft/bottomCenter/bottomRight, surface 아이템은 null)", example = "bottomCenter")
             String defaultSlot,
+            @Schema(description = "새 자유배치의 초기 렌더링 배율 (0.50~2.00, 기존 배치 비소급)", example = "1.25")
+            BigDecimal defaultScale,
             @Schema(description = "소속 테마 정보")
             ItemResponse.ThemeSummary theme,
             @Schema(description = "획득 시각 (상점 구매·뽑기 지급 시각. 목록은 이 값 내림차순 정렬)")
@@ -51,6 +54,7 @@ public record MyItemListResponse(List<MyItemSummary> items) {
                     item.getSurfaceSlotType(),
                     item.getCharacterSlotType(),
                     item.getDefaultSlot(),
+                    item.getDefaultScale(),
                     new ItemResponse.ThemeSummary(theme.getId(), theme.getCode(), theme.getName(),
                             theme.getCoverImageKey()),
                     userItem.getAcquiredAt());
