@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +40,13 @@ class ItemSlotTest {
     @Autowired
     ItemRepository itemRepository;
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     private Item positionedItem;
     private Item surfaceItem;
+    private Item animatedItem;
+    private Item positionedItemWithoutPool;
 
     @BeforeEach
     void setUp() {
@@ -51,6 +57,18 @@ class ItemSlotTest {
         surfaceItem = itemRepository.save(new Item(
                 theme, "wallpaper", "surface_slot", "wallpaper", null,
                 "테스트 벽지", CurrencyType.COIN, 100, "items/slot-test/wallpaper.png", false, true));
+        animatedItem = itemRepository.save(new Item(
+                theme, "furniture", "positioned", null, null,
+                "움직이는 미니 오븐", CurrencyType.COIN, 100,
+                "items/slot-test/mini-oven-animated-v1.webp", false, true));
+        positionedItemWithoutPool = itemRepository.save(new Item(
+                theme, "furniture", "positioned", null, null,
+                "뽑기 미등록 의자", CurrencyType.COIN, 100,
+                "items/slot-test/no-pool-chair.png", false, true));
+
+        Long gachaId = insertGacha(theme.getId(), "slot_test_gacha", "슬롯 테스트 뽑기");
+        insertItemPoolEntry(gachaId, positionedItem.getId(), "일반");
+        insertItemPoolEntry(gachaId, animatedItem.getId(), "희귀");
     }
 
     @Test
@@ -140,7 +158,128 @@ class ItemSlotTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].themeName")
                         .value("슬롯 테스트 테마"))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarity")
+                        .value("일반"))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarityEditable")
+                        .value(true))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarityConflict")
+                        .value(false))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].animated")
+                        .value(false))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/mini-oven-animated-v1.webp')].animated")
+                        .value(true))
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/no-pool-chair.png')].rarityEditable")
+                        .value(false))
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/wallpaper.png')]").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 등급_변경은_아이템의_모든_활성_ITEM_풀을_한_트랜잭션에서_통일한다() throws Exception {
+        Long secondGachaId = insertGacha(
+                positionedItem.getTheme().getId(), "slot_test_gacha_2", "두 번째 슬롯 테스트 뽑기");
+        insertItemPoolEntry(secondGachaId, positionedItem.getId(), "희귀");
+        insertItemPoolEntry(secondGachaId, positionedItem.getId(), "희귀", false);
+
+        for (String rarity : new String[]{"일반", "희귀", "전설"}) {
+            mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItem.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"rarity\": \"" + rarity + "\"}").with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.rarity").value(rarity))
+                    .andExpect(jsonPath("$.rarityEditable").value(true))
+                    .andExpect(jsonPath("$.rarityConflict").value(false));
+        }
+
+        Integer legendaryCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM gacha_pool_entries
+                WHERE item_id = ? AND reward_type = 'ITEM' AND is_active = TRUE AND rarity = '전설'
+                """, Integer.class, positionedItem.getId());
+        assertThat(legendaryCount).isEqualTo(2);
+
+        String inactiveRarity = jdbcTemplate.queryForObject("""
+                SELECT rarity FROM gacha_pool_entries
+                WHERE item_id = ? AND reward_type = 'ITEM' AND is_active = FALSE
+                """, String.class, positionedItem.getId());
+        assertThat(inactiveRarity).isEqualTo("희귀");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 서로_다른_활성_풀_등급은_목록에서_혼합으로_표시한다() throws Exception {
+        Long secondGachaId = insertGacha(
+                positionedItem.getTheme().getId(), "slot_test_gacha_2", "두 번째 슬롯 테스트 뽑기");
+        insertItemPoolEntry(secondGachaId, positionedItem.getId(), "희귀");
+
+        mockMvc.perform(get("/admin/items/slots"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarity")
+                        .doesNotExist())
+                .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarityConflict")
+                        .value(true));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 허용되지_않은_등급은_400이고_기존_등급을_유지한다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"EPIC\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+
+        String rarity = jdbcTemplate.queryForObject("""
+                SELECT rarity FROM gacha_pool_entries
+                WHERE item_id = ? AND reward_type = 'ITEM' AND is_active = TRUE
+                """, String.class, positionedItem.getId());
+        assertThat(rarity).isEqualTo("일반");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 비어있는_등급은_400이다() throws Exception {
+        for (String body : new String[]{"{\"rarity\": null}", "{\"rarity\": \"\"}"}) {
+            mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItem.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body).with(csrf()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void surface_아이템은_등급을_지정할_수_없다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", surfaceItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 활성_뽑기_풀에_없는_아이템은_등급을_지정할_수_없다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 등급_변경은_CSRF_토큰이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}"))
+                .andExpect(status().isForbidden());
+
+        String rarity = jdbcTemplate.queryForObject("""
+                SELECT rarity FROM gacha_pool_entries
+                WHERE item_id = ? AND reward_type = 'ITEM' AND is_active = TRUE
+                """, String.class, positionedItem.getId());
+        assertThat(rarity).isEqualTo("일반");
     }
 
     @Test
@@ -148,12 +287,38 @@ class ItemSlotTest {
     void 슬롯_편집_페이지가_렌더링된다() throws Exception {
         mockMvc.perform(get("/item-slots"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("기본 슬롯 편집")));
+                .andExpect(content().string(containsString("가구 관리")))
+                .andExpect(content().string(containsString("움짤만 보기")))
+                .andExpect(content().string(containsString("뽑기 등급")));
     }
 
     @Test
     void 미인증이면_접근_불가() throws Exception {
         mockMvc.perform(get("/admin/items/slots"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    private Long insertGacha(Long themeId, String code, String name) {
+        jdbcTemplate.update("""
+                INSERT INTO gacha
+                    (code, name, cost_currency_type, cost_amount, draw_count,
+                     starts_at, ends_at, is_active, created_at, updated_at, theme_id)
+                VALUES (?, ?, 'COIN', 100, 1, NULL, NULL, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+                """, code, name, themeId);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM gacha WHERE code = ?", Long.class, code);
+    }
+
+    private void insertItemPoolEntry(Long gachaId, Long itemId, String rarity) {
+        insertItemPoolEntry(gachaId, itemId, rarity, true);
+    }
+
+    private void insertItemPoolEntry(Long gachaId, Long itemId, String rarity, boolean active) {
+        jdbcTemplate.update("""
+                INSERT INTO gacha_pool_entries
+                    (gacha_id, reward_type, item_id, character_id, currency_type,
+                     reward_amount, rarity, weight, is_active)
+                VALUES (?, 'ITEM', ?, NULL, NULL, NULL, ?, 1, ?)
+                """, gachaId, itemId, rarity, active);
     }
 }

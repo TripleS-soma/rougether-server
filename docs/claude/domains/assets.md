@@ -13,3 +13,4 @@
 ## 구현 노트
 
 - 캐릭터 애니메이션: `characters/{code}/animations/{idle|pose-cycle|wave}.webp` (애니메이션 WebP) 규칙으로 S3 에 적재한다. API 는 이 key 를 DB 저장 없이 code 로 파생해 내려주므로(`CharacterAnimations.of`), **새 캐릭터를 카탈로그에 등록하기 전에 애니메이션 3종 적재가 전제 조건**이다 — 빠지면 프론트에서 해당 캐릭터 애니메이션이 404 가 된다. 포맷은 애니메이션 WebP 로 확정(2026-07-15) — APNG 는 RN Android 미재생이라 전환했고, 원본 APNG(.png)는 S3 에 보존돼 있다. 신규 제작 시 APNG 로 만들어도 Pillow 로 일괄 변환해 .webp 로 적재한다.
+- 가구 애니메이션: `items/{theme}/furniture/{slug}-animated-v{N}.webp` 규칙으로 S3 에 적재한다. 관리자 페이지의 `움짤만 보기` 필터도 이 명명 규칙을 기준으로 분류한다. 정적 WebP와 구분해야 하므로 확장자만으로 애니메이션 여부를 판단하지 않는다.

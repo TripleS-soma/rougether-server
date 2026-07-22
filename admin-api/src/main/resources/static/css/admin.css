@@ -286,7 +286,30 @@ body {
 }
 .slot-search:focus { border-color: var(--primary); background: var(--surface); }
 .slot-count { flex-shrink: 0; font-size: 13px; color: var(--text-soft); }
+.filter-toggle {
+    flex-shrink: 0;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    user-select: none;
+}
+.filter-toggle:has(input:checked) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+}
+.filter-toggle input { accent-color: var(--primary); }
 
+.slot-table-wrap { overflow-x: auto; }
 .slot-table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 14px; }
 .slot-table th {
     text-align: left;
@@ -308,6 +331,17 @@ body {
     display: block;
 }
 .slot-name { font-weight: 600; }
+.item-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    font-size: 10px;
+    font-weight: 750;
+    vertical-align: 1px;
+}
 .slot-key { font-size: 11.5px; color: var(--text-soft); margin-top: 2px; word-break: break-all; }
 
 .slot-select {
@@ -325,6 +359,7 @@ body {
 }
 .slot-select:focus { border-color: var(--primary); }
 .slot-select:disabled { opacity: .55; cursor: default; }
+.rarity-select { min-width: 128px; }
 
 .slot-status-col { width: 72px; }
 .slot-status { font-size: 12.5px; font-weight: 700; color: var(--text-soft); }
@@ -368,8 +403,20 @@ body {
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
     overflow: hidden;
+    position: relative;
 }
 .asset-thumb { max-width: 100%; max-height: 100%; object-fit: contain; }
+.asset-animated-badge {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary-strong) 88%, transparent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 750;
+}
 .asset-key {
     font-size: 12px; font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -382,4 +429,6 @@ body {
     .app-main { padding: 28px 18px; }
     .upload-card { padding: 24px; }
     .result { flex-direction: column; }
+    .slot-toolbar { flex-wrap: wrap; }
+    .slot-search { min-width: 100%; }
 }

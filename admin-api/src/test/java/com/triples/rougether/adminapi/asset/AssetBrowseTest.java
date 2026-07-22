@@ -34,13 +34,18 @@ class AssetBrowseTest {
     void kind별_에셋_목록을_내려준다() throws Exception {
         given(storage.list("items")).willReturn(List.of(
                 new AssetSummary("items/bakery/chair.png", 1024L, Instant.EPOCH),
-                new AssetSummary("items/bakery/table.png", 2048L, Instant.EPOCH)));
+                new AssetSummary("items/bakery/static-preview.webp", 1536L, Instant.EPOCH),
+                new AssetSummary("items/bakery/bakery-mini-oven-animated-v1.webp", 2048L, Instant.EPOCH)));
 
         mockMvc.perform(get("/admin/assets").param("kind", "items"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].key").value("items/bakery/chair.png"))
                 .andExpect(jsonPath("$.items[0].size").value(1024))
-                .andExpect(jsonPath("$.items[1].key").value("items/bakery/table.png"));
+                .andExpect(jsonPath("$.items[0].animated").value(false))
+                .andExpect(jsonPath("$.items[1].animated").value(false))
+                .andExpect(jsonPath("$.items[2].key")
+                        .value("items/bakery/bakery-mini-oven-animated-v1.webp"))
+                .andExpect(jsonPath("$.items[2].animated").value(true));
     }
 
     @Test
@@ -55,7 +60,8 @@ class AssetBrowseTest {
     void 에셋_조회_페이지가_렌더링된다() throws Exception {
         mockMvc.perform(get("/assets"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("에셋 조회")));
+                .andExpect(content().string(containsString("에셋 조회")))
+                .andExpect(content().string(containsString("움짤만 보기")));
     }
 
     @Test

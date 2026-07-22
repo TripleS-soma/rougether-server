@@ -1,10 +1,12 @@
 package com.triples.rougether.adminapi.itemslot.web;
 
+import com.triples.rougether.adminapi.itemslot.dto.ItemRarityUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
+import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
 import com.triples.rougether.adminapi.itemslot.service.ItemSlotService;
 import com.triples.rougether.common.error.ErrorResponse;
 import java.util.List;
@@ -18,7 +20,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// 어드민 아이템 기본 슬롯 관리. 목록/단건 변경은 편집 화면(/item-slots)이, 벌크 적재는 seed 스크립트(curl)가 호출.
+// 어드민 가구 관리. 화면(/item-slots)에서 기본 슬롯과 뽑기 등급을 변경하고,
+// 기본 슬롯 벌크 적재는 seed 스크립트(curl)가 호출한다.
 @RestController
 @RequestMapping("/admin/items")
 public class ItemSlotController {
@@ -40,9 +43,21 @@ public class ItemSlotController {
         return itemSlotService.updateSlot(itemId, request.slot());
     }
 
+    @PutMapping("/{itemId}/rarity")
+    public ItemSlotRow updateRarity(@PathVariable Long itemId,
+                                    @RequestBody ItemRarityUpdateRequest request) {
+        return itemSlotService.updateRarity(itemId, request.rarity());
+    }
+
     @PostMapping("/slots/import")
     public SlotImportResult importSlots(@RequestBody List<SlotAssignmentDto> assignments) {
         return itemSlotService.importSlots(assignments);
+    }
+
+    @ExceptionHandler(ItemRarityInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRarity(ItemRarityInvalidException exception) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("ITEM_RARITY_INVALID", exception.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

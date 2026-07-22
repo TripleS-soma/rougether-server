@@ -18,7 +18,7 @@
         <nav class="app-nav">
             <a th:href="@{/}">에셋 업로드</a>
             <a th:href="@{/assets}" class="active">에셋 조회</a>
-            <a th:href="@{/item-slots}">슬롯 편집</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
             <a th:href="@{/users}">유저 관리</a>
         </nav>
         <div class="header-right">
@@ -46,6 +46,10 @@
 
             <div class="slot-toolbar">
                 <input type="search" id="filter" class="slot-search" placeholder="key 검색 (예: bakery, chair)">
+                <label class="filter-toggle" for="animated-only">
+                    <input type="checkbox" id="animated-only">
+                    <span>움짤만 보기</span>
+                </label>
                 <span class="slot-count" id="count"></span>
             </div>
 
@@ -60,6 +64,7 @@
 
         const grid = document.getElementById('grid');
         const filterInput = document.getElementById('filter');
+        const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
         const tabs = document.getElementById('tabs');
@@ -103,9 +108,10 @@
 
         function render() {
             const keyword = filterInput.value.trim().toLowerCase();
-            const visible = keyword
-                ? assets.filter((a) => a.key.toLowerCase().includes(keyword))
-                : assets;
+            const animatedOnly = animatedOnlyInput.checked;
+            const visible = assets.filter((asset) =>
+                (!keyword || asset.key.toLowerCase().includes(keyword)) &&
+                (!animatedOnly || asset.animated));
 
             grid.replaceChildren(...visible.map(buildCard));
             countEl.textContent = visible.length + ' / ' + assets.length + '개';
@@ -123,6 +129,12 @@
             img.alt = asset.key;
             img.src = s3BaseUrl + '/' + asset.key;
             thumbWrap.appendChild(img);
+            if (asset.animated) {
+                const badge = document.createElement('span');
+                badge.className = 'asset-animated-badge';
+                badge.textContent = '움짤';
+                thumbWrap.appendChild(badge);
+            }
 
             const keyEl = document.createElement('div');
             keyEl.className = 'asset-key';
@@ -164,6 +176,7 @@
         }
 
         filterInput.addEventListener('input', render);
+        animatedOnlyInput.addEventListener('change', render);
     </script>
 </body>
 </html>
