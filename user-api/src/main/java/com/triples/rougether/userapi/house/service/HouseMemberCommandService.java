@@ -6,33 +6,23 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 구성원 관리 명령(양도·탈퇴·강퇴). 소유권 양도는 role 전환 2건 + owner_user_id 갱신을 단일 트랜잭션으로.
 @Service
+@RequiredArgsConstructor
 public class HouseMemberCommandService {
-
-    private static final String LEFT_NOTIFICATION_TITLE = "멤버 퇴거";
-    // 온보딩 전(닉네임 null) 멤버의 알림 표시명 - 응원 알림(#174)과 같은 표기
-    private static final String FALLBACK_MEMBER_NAME = "집 친구";
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final NotificationService notificationService;
-
-    public HouseMemberCommandService(HouseRepository houseRepository,
-                                     HouseMemberRepository houseMemberRepository,
-                                     NotificationService notificationService) {
-        this.houseRepository = houseRepository;
-        this.houseMemberRepository = houseMemberRepository;
-        this.notificationService = notificationService;
-    }
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
@@ -95,16 +85,9 @@ public class HouseMemberCommandService {
         if (recipients.isEmpty()) {
             return;
         }
-        String nickname = left.getUser().getNickname() != null
-                ? left.getUser().getNickname()
-                : FALLBACK_MEMBER_NAME;
-        String body = nickname + "님이 집을 떠났어요.";
+        var content = NotificationMessages.houseMemberLeft(left.getUser().getNickname());
         recipients.forEach(recipient -> notificationService.send(
-                recipient.getUser().getId(),
-                NotificationType.HOUSE_MEMBER_LEFT,
-                LEFT_NOTIFICATION_TITLE,
-                body,
-                left.getId()));
+                recipient.getUser().getId(), content, left.getId()));
     }
 
     // 강퇴 - 소유자 전용. KICKED 전환으로 재가입까지 차단한다. 알림 발송은 알림 도메인 의존(후속).

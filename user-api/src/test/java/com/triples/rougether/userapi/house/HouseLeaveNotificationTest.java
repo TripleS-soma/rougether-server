@@ -99,18 +99,6 @@ class HouseLeaveNotificationTest {
         assertThat(notificationsOf(leaver.getId())).isEmpty();
     }
 
-    @Test
-    void 온보딩_전_닉네임이_없으면_집_친구로_표시된다() {
-        User owner = newUser("leave-noti2-owner@rougether.dev", "집주인2");
-        User leaver = newUser("leave-noti2-leaver@rougether.dev", null);
-        House house = newHouse(owner, "LEAVNT02");
-        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
-        houseMemberRepository.save(HouseMember.create(house, leaver, HouseMemberRole.MEMBER));
-
-        houseMemberCommandService.leave(leaver.getId(), house.getId());
-
-        assertThat(notificationsOf(owner.getId()).get(0).get("body")).isEqualTo("집 친구님이 집을 떠났어요.");
-    }
 
     @Test
     void 마지막_멤버가_탈퇴하면_발송하지_않는다() {

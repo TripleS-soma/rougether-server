@@ -8,39 +8,27 @@ import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 초대코드 참여(즉시가입) + 참여 전 미리보기.
 // 정원 검사와 구성원 수 증가는 house 행 락 아래 같은 트랜잭션에서 처리해 동시 참여 초과를 막는다.
 @Service
+@RequiredArgsConstructor
 public class HouseJoinService {
-
-    private static final String JOINED_NOTIFICATION_TITLE = "새 멤버 입주";
-    // 온보딩 전(닉네임 null) 멤버의 알림 표시명 - 응원 알림(#174)과 같은 표기
-    private static final String FALLBACK_MEMBER_NAME = "집 친구";
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
-
-    public HouseJoinService(HouseRepository houseRepository,
-                            HouseMemberRepository houseMemberRepository,
-                            UserRepository userRepository,
-                            NotificationService notificationService) {
-        this.houseRepository = houseRepository;
-        this.houseMemberRepository = houseMemberRepository;
-        this.userRepository = userRepository;
-        this.notificationService = notificationService;
-    }
 
     @Transactional
     public HouseJoinResponse joinByCode(Long userId, String inviteCode) {
@@ -105,16 +93,9 @@ public class HouseJoinService {
         if (recipients.isEmpty()) {
             return;
         }
-        String nickname = joined.getUser().getNickname() != null
-                ? joined.getUser().getNickname()
-                : FALLBACK_MEMBER_NAME;
-        String body = nickname + "님이 집에 입주했어요.";
+        var content = NotificationMessages.houseMemberJoined(joined.getUser().getNickname());
         recipients.forEach(recipient -> notificationService.send(
-                recipient.getUser().getId(),
-                NotificationType.HOUSE_MEMBER_JOINED,
-                JOINED_NOTIFICATION_TITLE,
-                body,
-                joined.getId()));
+                recipient.getUser().getId(), content, joined.getId()));
     }
 
     @Transactional(readOnly = true)

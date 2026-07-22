@@ -143,7 +143,7 @@ class HouseMissionAchievedNotificationTest {
         Long missionId = createMission(1);
 
         doThrow(new RuntimeException("알림 저장 실패")).when(notificationService)
-                .send(anyLong(), any(), any(), any(), anyLong());
+                .send(anyLong(), any(), anyLong());
 
         assertThatThrownBy(() -> houseMissionService.contribute(ownerId, houseId, missionId))
                 .isInstanceOf(RuntimeException.class);

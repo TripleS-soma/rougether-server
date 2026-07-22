@@ -19,6 +19,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.notification.entity.NotificationType;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
@@ -130,7 +131,7 @@ class HouseCheerServiceTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
         verify(houseMemberCheerRepository, never()).saveAndFlush(any());
-        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
+        verify(notificationService, never()).send(anyLong(), any(), anyLong());
     }
 
     @Test
@@ -152,7 +153,7 @@ class HouseCheerServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
-        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
+        verify(notificationService, never()).send(anyLong(), any(), anyLong());
     }
 
     @Test
@@ -179,30 +180,10 @@ class HouseCheerServiceTest {
         assertThat(response.type()).isEqualTo("support");
 
         // 알림 진입점을 같은 트랜잭션에서 직접 호출한다 - 내역 저장은 응원과 원자적(spec 계약)
-        verify(notificationService).send(
-                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!", 31L);
+        verify(notificationService).send(TARGET_USER_ID, new NotificationContent(
+                NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!"), 31L);
     }
 
-    @Test
-    void 온보딩_전_보낸이는_알림_표시명이_집친구다() {
-        House house = aliveHouse();
-        when(houseRepository.findById(HOUSE_ID)).thenReturn(Optional.of(house));
-        HouseMember me = requester(null);
-        when(houseMemberRepository.findByHouseIdAndUserId(HOUSE_ID, SENDER_ID))
-                .thenReturn(Optional.of(me));
-        HouseMember other = target(TARGET_USER_ID);
-        when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
-                .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(0);
-        HouseMemberCheer cheer = savedCheer(TARGET_USER_ID);
-        when(houseMemberCheerRepository.saveAndFlush(any())).thenReturn(cheer);
-
-        houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support");
-
-        verify(notificationService).send(
-                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "집 친구님: 응원해요!", 31L);
-    }
 
     @Test
     void 비구성원은_응원을_보낼_수_없다() {

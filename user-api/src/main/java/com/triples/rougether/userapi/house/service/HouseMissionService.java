@@ -12,7 +12,6 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
@@ -20,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,36 +27,25 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 단체 미션 - 생성(소유자)/목록·상세(구성원)/기여(수행 체크, 하루 1회)/보상(claim, 성장 포인트 +100).
 @Service
+@RequiredArgsConstructor
 public class HouseMissionService {
 
     // 하루 1회 기여 판정 기준 타임존 (서비스 기준 KST, 하드코딩 +9 금지)
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     // 미션 달성 보상 - 집 성장 포인트 고정 지급 (개인 재화 없음, 팀 확정 2026-07-05)
     private static final int GROWTH_POINTS_PER_MISSION = 100;
-    private static final String ACHIEVED_NOTIFICATION_TITLE = "단체 미션 달성!";
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final HouseMissionRepository houseMissionRepository;
     private final HouseMissionParticipantRepository participantRepository;
     private final NotificationService notificationService;
-
-    public HouseMissionService(HouseRepository houseRepository,
-                               HouseMemberRepository houseMemberRepository,
-                               HouseMissionRepository houseMissionRepository,
-                               HouseMissionParticipantRepository participantRepository,
-                               NotificationService notificationService) {
-        this.houseRepository = houseRepository;
-        this.houseMemberRepository = houseMemberRepository;
-        this.houseMissionRepository = houseMissionRepository;
-        this.participantRepository = participantRepository;
-        this.notificationService = notificationService;
-    }
 
     // 미션 등록 - 소유자 전용. MVP 는 DAILY_MEMBER_RATE/WEEKLY_MEMBER_COUNT 2종만 허용.
     @Transactional
@@ -187,14 +176,9 @@ public class HouseMissionService {
 
     // 목표 도달 알림 - 집 활성 멤버 전원(마지막 기여자 본인 포함). 기여와 같은 트랜잭션에서 동기 저장(응원 #174 패턴).
     private void notifyAchieved(Long houseId, HouseMission mission) {
-        String body = "'" + mission.getTitle() + "' 미션이 목표를 달성했어요. 보상을 받아보세요!";
+        var content = NotificationMessages.houseMissionAchieved(mission.getTitle());
         houseMemberRepository.findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE)
-                .forEach(member -> notificationService.send(
-                        member.getUser().getId(),
-                        NotificationType.HOUSE_MISSION_ACHIEVED,
-                        ACHIEVED_NOTIFICATION_TITLE,
-                        body,
-                        mission.getId()));
+                .forEach(member -> notificationService.send(member.getUser().getId(), content, mission.getId()));
     }
 
     private House requireHouse(Long houseId) {

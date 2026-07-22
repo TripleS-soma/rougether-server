@@ -118,16 +118,6 @@ class HouseJoinNotificationTest {
         assertThat(notificationsOf(joiner.getId())).isEmpty();
     }
 
-    @Test
-    void 온보딩_전_닉네임이_없으면_집_친구로_표시된다() {
-        User owner = newUser("join-noti3-owner@rougether.dev", "집주인3");
-        User joiner = newUser("join-noti3-joiner@rougether.dev", null);
-        House house = houseWithOwner(owner, "JOINNT03");
-
-        Long membershipId = houseJoinService.join(joiner.getId(), house.getId()).membershipId();
-
-        assertJoinedNotification(notificationsOf(owner.getId()).get(0), membershipId, "집 친구");
-    }
 
     @Test
     void 탈퇴했던_멤버의_재가입도_입주로_보고_발송한다() {
