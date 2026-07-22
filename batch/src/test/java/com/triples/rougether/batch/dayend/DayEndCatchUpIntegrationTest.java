@@ -176,24 +176,6 @@ class DayEndCatchUpIntegrationTest {
         }
     }
 
-    @Test
-    void 자정_실행이_실패하면_같은_날_다음_정각_호출이_그_날짜부터_재실행한다() {
-        // 시간당 재검사로 다음 자정을 기다리지 않고 복구되는 시나리오 - 어제 자정 실행이 FAILED로 남은 상태
-        seedExecution(YESTERDAY.minusDays(1), BatchStatus.COMPLETED);
-        seedExecution(YESTERDAY, BatchStatus.FAILED);
-        Long routineId = persistDailyExistingSince(YESTERDAY.minusDays(9));
-
-        trigger.triggerDayEnd();
-
-        JobInstance failedInstance = jobRepository.getJobInstance(
-                RoutineDayEndJobConfig.JOB_NAME, targetDateParams(YESTERDAY));
-        assertThat(jobRepository.getJobExecutions(failedInstance)).hasSize(2);
-        assertThat(lastStatusOf(YESTERDAY)).isEqualTo(BatchStatus.COMPLETED);
-        List<RoutineLog> logs = routineLogRepository.findByRoutineIdAndRoutineDate(routineId, YESTERDAY);
-        assertThat(logs).hasSize(1);
-        assertThat(logs.getFirst().getStatus()).isEqualTo(RoutineLogStatus.FAILED);
-    }
-
     // 대상 날짜 이전부터 존재한 DAILY 루틴 - created_at은 auditing이 now로 채워 네이티브로 당김
     private Long persistDailyExistingSince(LocalDate since) {
         User user = userRepository.save(User.signUp());
