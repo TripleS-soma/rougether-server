@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.calendar.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -49,6 +50,8 @@ class CalendarServiceIntegrationTest {
     private static final LocalDate PAST = LocalDate.of(2026, 6, 29);
     // 오늘(KST) — 오늘·미래 경로(live 재계산) 검증용
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    // 어제(KST) — D-1 재계산 경로 검증용
+    private static final LocalDate YESTERDAY = TODAY.minusDays(1);
 
     @Autowired
     private RoutineRepository routineRepository;
@@ -413,6 +416,136 @@ class CalendarServiceIntegrationTest {
         assertThat(summary.remainingCount()).isEqualTo(2);
     }
 
+    // --- D-1(어제): 그날 유효했던 버전으로 재계산하는 경로 ---
+
+    @Test
+    void 어제는_FAIL_로그가_아직_없어도_미완료_루틴이_노출된다() {
+        // day-end 배치 전(자정~배치 완료 사이) 상태 — 로그 단독이면 통째로 비는 구간
+        Long routineId = persistRoutine("어제 미완료 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+
+        List<TodayRoutineItem> routines = service.day(userId, YESTERDAY)
+                .categories().get(0).routines();
+
+        assertThat(routines).extracting(TodayRoutineItem::title)
+                .containsExactly("어제 미완료 루틴");
+        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(false);
+    }
+
+    @Test
+    void 어제_재계산_결과는_배치가_다_쓴_그저께_로그_단독_결과와_일치한다() {
+        LocalDate dayBeforeYesterday = TODAY.minusDays(2);
+        Long done = persistRoutine("완료 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        Long failed = persistRoutine("실패 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        Long notYetWritten = persistRoutine("배치 미처리 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        backdateCreatedAt(done, 20);
+        backdateCreatedAt(failed, 20);
+        backdateCreatedAt(notYetWritten, 20);
+
+        // 그저께: 배치가 세 건을 다 씀 / 어제: FAIL 을 쓰다 만 상태(재계산이 메워야 하는 구간)
+        persistCompletedLog(done, dayBeforeYesterday);
+        persistFailedLog(failed, dayBeforeYesterday);
+        persistFailedLog(notYetWritten, dayBeforeYesterday);
+        persistCompletedLog(done, YESTERDAY);
+        persistFailedLog(failed, YESTERDAY);
+
+        List<TodayRoutineItem> recalculated = service.day(userId, YESTERDAY)
+                .categories().get(0).routines();
+        List<TodayRoutineItem> logOnly = service.day(userId, dayBeforeYesterday)
+                .categories().get(0).routines();
+
+        // 배치가 덜 끝난 어제도 다 끝난 그저께와 같은 답 — 미처리분을 재계산이 메움
+        assertThat(recalculated).extracting(TodayRoutineItem::title, TodayRoutineItem::completed)
+                .containsExactlyInAnyOrderElementsOf(
+                        logOnly.stream()
+                                .map(r -> tuple(r.title(), r.completed()))
+                                .toList());
+        assertThat(recalculated).extracting(TodayRoutineItem::title, TodayRoutineItem::completed)
+                .containsExactlyInAnyOrder(
+                        tuple("완료 루틴", true),
+                        tuple("실패 루틴", false),
+                        tuple("배치 미처리 루틴", false));
+
+        var summary = service.day(userId, YESTERDAY).summary();
+        assertThat(summary).isEqualTo(service.day(userId, dayBeforeYesterday).summary());
+        assertThat(summary.completedCount()).isEqualTo(1);
+        assertThat(summary.remainingCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 어제_완료한_뒤_어제_중에_버전이_분기돼도_한_건으로만_완료_노출된다() {
+        Long routineId = persistRoutine("분기 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+        persistCompletedLog(routineId, YESTERDAY);
+
+        // 완료 log 는 옛 버전을, findEffectiveOnDay 는 새 버전을 가리키게 만듦.
+        // 계보로 dedup 하지 않으면 완료본·재계산본이 각각 잡혀 2건이 되고 summary 도 틀어짐
+        RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
+                userRepository);
+        routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
+                "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY))), null, null, null));
+        em.flush();
+        em.clear();
+        // 새 버전이 어제 유효했던 것으로 잡히도록 분기 시점을 어제 안으로 당김
+        backdateVersionBranch(routineId);
+
+        CalendarDayResponse response = service.day(userId, YESTERDAY);
+        List<TodayRoutineItem> routines = response.categories().get(0).routines();
+
+        assertThat(routines).hasSize(1);
+        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(true);
+        assertThat(response.summary().completedCount()).isEqualTo(1);
+        assertThat(response.summary().remainingCount()).isZero();
+        assertThat(response.summary().progressRate()).isEqualTo(1.0);
+    }
+
+    @Test
+    void 자정_이후_루틴을_수정해도_어제는_어제_시점_유효_버전으로_노출된다() {
+        String yesterdayToken = weekdayToken(YESTERDAY);
+        Long routineId = persistRoutine("옛 제목", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"" + yesterdayToken + "\"]}", null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+
+        // 자정이 지난 뒤(=오늘) 제목·스케줄 변경 → 새 버전으로 분기, 옛 버전은 오늘 닫힘
+        RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
+                userRepository);
+        routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
+                "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY.plusDays(3)))),
+                null, null, null));
+        em.flush();
+        em.clear();
+
+        // 어제 유효했던 건 닫힌 옛 버전 — 오늘 만들어진 새 버전은 어제 조회에 끼면 안 됨
+        CalendarDayResponse response = service.day(userId, YESTERDAY);
+        assertThat(routineTitles(response)).containsExactly("옛 제목");
+        assertThat(response.summary().completedCount()).isZero();
+        assertThat(response.summary().remainingCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 그저께_이전은_재계산하지_않고_로그_단독_동작을_유지한다() {
+        LocalDate dayBeforeYesterday = TODAY.minusDays(2);
+        Long routineId = persistRoutine("로그 없는 루틴", RoutineStatus.ACTIVE, "DAILY",
+                null, null, null, null, null);
+        backdateCreatedAt(routineId, 20);
+
+        // 같은 루틴이 두 날짜 모두 대상이지만 로그는 어느 쪽에도 없음
+        CalendarDayResponse pastResponse = service.day(userId, dayBeforeYesterday);
+        assertThat(pastResponse.categories()).isEmpty();
+        assertThat(pastResponse.summary().remainingCount()).isZero();
+
+        // 경계 반대편(D-1)은 재계산으로 노출되므로 분기가 실제로 갈린다
+        CalendarDayResponse yesterdayResponse = service.day(userId, YESTERDAY);
+        assertThat(routineTitles(yesterdayResponse)).containsExactly("로그 없는 루틴");
+        assertThat(yesterdayResponse.summary().completedCount()).isZero();
+        assertThat(yesterdayResponse.summary().remainingCount()).isEqualTo(1);
+    }
+
     private List<String> routineTitles(CalendarDayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.routines().stream())
@@ -440,7 +573,10 @@ class CalendarServiceIntegrationTest {
         if (status != RoutineStatus.ACTIVE) {
             ReflectionTestUtils.setField(routine, "status", status);
         }
-        return routineRepository.save(routine).getId();
+        // 계보 루트 backfill — RoutineService.create 와 같은 상태로 맞춰야 버전 분기 판정이 실제와 같음
+        Routine saved = routineRepository.save(routine);
+        saved.assignOriginToSelf();
+        return saved.getId();
     }
 
     private void persistCompletedLog(Long routineId, LocalDate date) {
@@ -467,6 +603,18 @@ class CalendarServiceIntegrationTest {
     private Category persistCategory(String name) {
         return categoryRepository.save(
                 Category.create(user, name, "#FFFFFF", null, 0, PrivacyScope.PRIVATE));
+    }
+
+    // 방금 일어난 버전 분기를 "어제 중에 일어난 것"으로 만듦 — 옛 버전 닫힘·새 버전 생성 시각을
+    // 하루씩 당기면 어제 유효했던 건 새 버전이 되고 완료 log 는 옛 버전을 가리키는 상태가 됨
+    private void backdateVersionBranch(Long oldVersionId) {
+        em.flush();
+        em.createNativeQuery("update routines set deleted_at = deleted_at - interval 1 day"
+                + " where id = " + oldVersionId).executeUpdate();
+        em.createNativeQuery("update routines set created_at = created_at - interval 1 day"
+                + " where origin_routine_id = " + oldVersionId + " and deleted_at is null")
+                .executeUpdate();
+        em.clear();
     }
 
     // created_at은 auditing이 now로 채우고 updatable=false라 JPA로 못 바꿈 → 네이티브로 N일 과거로 당김
