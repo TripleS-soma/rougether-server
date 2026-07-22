@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rougether Admin · 기본 슬롯 편집</title>
+    <title>Rougether Admin · 가구 관리</title>
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -20,7 +20,7 @@
         <nav class="app-nav">
             <a th:href="@{/}">에셋 업로드</a>
             <a th:href="@{/assets}">에셋 조회</a>
-            <a th:href="@{/item-slots}" class="active">슬롯 편집</a>
+            <a th:href="@{/item-slots}" class="active">가구 관리</a>
             <a th:href="@{/users}">유저 관리</a>
         </nav>
         <div class="header-right">
@@ -34,32 +34,54 @@
     <main class="app-main app-main--wide">
         <div class="upload-card">
             <div class="upload-head">
-                <h2>가구 기본 슬롯 편집</h2>
-                <p>positioned 가구가 방에 처음 배치될 슬롯(3x3 앵커)을 지정합니다. 변경 즉시 저장됩니다.</p>
+                <h2>가구 관리</h2>
+                <p>positioned 가구의 뽑기 등급과 방에 처음 배치될 기본 슬롯을 관리합니다. 변경 즉시 저장됩니다.</p>
             </div>
 
             <div class="slot-toolbar">
                 <input type="search" id="filter" class="slot-search"
                        placeholder="이름·테마·asset key 검색">
+                <label class="filter-toggle" for="animated-only">
+                    <input type="checkbox" id="animated-only">
+                    <span>움짤만 보기</span>
+                </label>
                 <span class="slot-count" id="count"></span>
             </div>
 
             <div class="alert alert-error" id="error" hidden></div>
 
-            <table class="slot-table">
-                <thead>
-                <tr>
-                    <th></th>
-                    <th>아이템</th>
-                    <th>테마</th>
-                    <th>기본 슬롯</th>
-                    <th class="slot-status-col"></th>
-                </tr>
-                </thead>
-                <tbody id="rows"></tbody>
-            </table>
+            <div class="slot-table-wrap">
+                <table class="slot-table">
+                    <thead>
+                    <tr>
+                        <th></th>
+                        <th>아이템</th>
+                        <th>테마</th>
+                        <th>뽑기 등급</th>
+                        <th>기본 슬롯</th>
+                        <th class="slot-status-col"></th>
+                    </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
         </div>
     </main>
+
+    <dialog id="image-preview-dialog" class="image-preview-dialog" aria-labelledby="image-preview-title"
+            aria-describedby="image-preview-key">
+        <div class="image-preview-panel">
+            <button type="button" id="image-preview-close" class="image-preview-close"
+                    aria-label="큰 이미지 닫기">&times;</button>
+            <div class="image-preview-stage">
+                <img id="image-preview-image" alt="">
+            </div>
+            <div class="image-preview-meta">
+                <strong id="image-preview-title"></strong>
+                <code id="image-preview-key"></code>
+            </div>
+        </div>
+    </dialog>
 
     <script th:inline="javascript">
         const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
@@ -72,12 +94,20 @@
             ['midLeft', '중단 왼쪽'], ['midRight', '중단 오른쪽'],
             ['bottomLeft', '하단 왼쪽'], ['bottomCenter', '하단 중앙'], ['bottomRight', '하단 오른쪽']
         ];
+        const RARITIES = ['일반', '희귀', '전설'];
 
         const tbody = document.getElementById('rows');
         const filterInput = document.getElementById('filter');
+        const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
+        const previewDialog = document.getElementById('image-preview-dialog');
+        const previewImage = document.getElementById('image-preview-image');
+        const previewTitle = document.getElementById('image-preview-title');
+        const previewKey = document.getElementById('image-preview-key');
+        const previewClose = document.getElementById('image-preview-close');
         let items = [];
+        let previewOpener = null;
 
         init();
 
@@ -97,10 +127,11 @@
 
         function render() {
             const keyword = filterInput.value.trim().toLowerCase();
-            const visible = keyword
-                ? items.filter((item) =>
-                    [item.name, item.themeName, item.assetKey].join(' ').toLowerCase().includes(keyword))
-                : items;
+            const animatedOnly = animatedOnlyInput.checked;
+            const visible = items.filter((item) =>
+                (!keyword || [item.name, item.themeName, item.assetKey]
+                    .join(' ').toLowerCase().includes(keyword)) &&
+                (!animatedOnly || item.animated));
 
             tbody.replaceChildren(...visible.map(buildRow));
             countEl.textContent = visible.length + ' / ' + items.length + '개';
@@ -110,17 +141,30 @@
             const tr = document.createElement('tr');
 
             const thumbCell = document.createElement('td');
+            const thumbButton = document.createElement('button');
+            thumbButton.type = 'button';
+            thumbButton.className = 'slot-thumb-button';
+            thumbButton.setAttribute('aria-label', item.name + ' 이미지 크게 보기');
+            thumbButton.title = '클릭해서 크게 보기';
             const img = document.createElement('img');
             img.className = 'slot-thumb';
             img.loading = 'lazy';
             img.alt = item.name;
             img.src = s3BaseUrl + '/' + item.assetKey;
-            thumbCell.appendChild(img);
+            thumbButton.appendChild(img);
+            thumbButton.addEventListener('click', () => openImagePreview(item, thumbButton));
+            thumbCell.appendChild(thumbButton);
 
             const nameCell = document.createElement('td');
             const nameEl = document.createElement('div');
             nameEl.className = 'slot-name';
             nameEl.textContent = item.name;
+            if (item.animated) {
+                const badge = document.createElement('span');
+                badge.className = 'item-badge';
+                badge.textContent = '움짤';
+                nameEl.appendChild(badge);
+            }
             const keyEl = document.createElement('div');
             keyEl.className = 'slot-key';
             keyEl.textContent = item.assetKey;
@@ -129,30 +173,69 @@
             const themeCell = document.createElement('td');
             themeCell.textContent = item.themeName;
 
-            const selectCell = document.createElement('td');
-            const select = document.createElement('select');
-            select.className = 'slot-select';
+            const rarityCell = document.createElement('td');
+            const raritySelect = document.createElement('select');
+            raritySelect.className = 'slot-select rarity-select';
+            if (!item.rarityEditable) {
+                raritySelect.add(new Option('— 뽑기 미등록 —', ''));
+                raritySelect.disabled = true;
+            } else {
+                if (item.rarityConflict) {
+                    const mixed = new Option('— 혼합 —', '', true, true);
+                    mixed.disabled = true;
+                    raritySelect.add(mixed);
+                } else if (!item.rarity) {
+                    const unset = new Option('— 미설정 —', '', true, true);
+                    unset.disabled = true;
+                    raritySelect.add(unset);
+                }
+                RARITIES.forEach((rarity) => raritySelect.add(new Option(rarity, rarity)));
+                if (item.rarity) raritySelect.value = item.rarity;
+            }
+            raritySelect.title = item.rarityEditable
+                ? '변경하면 이 아이템이 포함된 모든 활성 뽑기 풀에 반영됩니다.'
+                : '활성 뽑기 풀에 등록된 아이템만 등급을 변경할 수 있습니다.';
+            rarityCell.appendChild(raritySelect);
+
+            const slotCell = document.createElement('td');
+            const slotSelect = document.createElement('select');
+            slotSelect.className = 'slot-select';
             const none = new Option('— 미지정 —', '');
-            select.add(none);
-            SLOTS.forEach(([code, label]) => select.add(new Option(label + ' (' + code + ')', code)));
-            select.value = item.defaultSlot ?? '';
-            selectCell.appendChild(select);
+            slotSelect.add(none);
+            SLOTS.forEach(([code, label]) => slotSelect.add(new Option(label + ' (' + code + ')', code)));
+            slotSelect.value = item.defaultSlot ?? '';
+            slotCell.appendChild(slotSelect);
 
             const statusCell = document.createElement('td');
             statusCell.className = 'slot-status';
 
-            select.addEventListener('change', () => saveSlot(item, select, statusCell));
+            raritySelect.addEventListener('change', () =>
+                saveRarity(item, raritySelect, slotSelect, statusCell));
+            slotSelect.addEventListener('change', () =>
+                saveSlot(item, slotSelect, raritySelect, statusCell));
 
-            tr.append(thumbCell, nameCell, themeCell, selectCell, statusCell);
+            tr.append(thumbCell, nameCell, themeCell, rarityCell, slotCell, statusCell);
             return tr;
         }
 
-        async function saveSlot(item, select, statusCell) {
+        function openImagePreview(item, opener) {
+            previewOpener = opener;
+            previewImage.src = s3BaseUrl + '/' + item.assetKey;
+            previewImage.alt = item.name + ' 큰 이미지';
+            previewTitle.textContent = item.name;
+            previewKey.textContent = item.assetKey;
+            previewDialog.showModal();
+            previewClose.focus();
+        }
+
+        function closeImagePreview() {
+            if (previewDialog.open) previewDialog.close();
+        }
+
+        async function saveSlot(item, slotSelect, raritySelect, statusCell) {
             const previous = item.defaultSlot ?? '';
-            const next = select.value;
-            select.disabled = true;
-            statusCell.textContent = '저장 중…';
-            statusCell.className = 'slot-status';
+            const next = slotSelect.value;
+            setSaving(slotSelect, raritySelect, statusCell);
             try {
                 const res = await fetch('/admin/items/' + item.id + '/slot', {
                     method: 'PUT',
@@ -160,20 +243,78 @@
                     body: JSON.stringify({ slot: next || null })
                 });
                 if (!res.ok) {
-                    throw new Error('HTTP ' + res.status);
+                    throw new Error(await errorMessage(res));
                 }
                 const updated = await res.json();
                 item.defaultSlot = updated.defaultSlot;
-                statusCell.textContent = '저장됨';
-                statusCell.classList.add('ok');
-                setTimeout(() => { statusCell.textContent = ''; }, 1500);
+                showSaved(statusCell);
             } catch (err) {
-                select.value = previous;
-                statusCell.textContent = '실패';
-                statusCell.classList.add('err');
+                slotSelect.value = previous;
+                showSaveFailed(statusCell);
                 showError(item.name + ' 저장 실패: ' + err.message);
             } finally {
-                select.disabled = false;
+                slotSelect.disabled = false;
+                raritySelect.disabled = !item.rarityEditable;
+            }
+        }
+
+        async function saveRarity(item, raritySelect, slotSelect, statusCell) {
+            const previous = item.rarityConflict ? '' : (item.rarity ?? '');
+            const next = raritySelect.value;
+            if (!next) return;
+            setSaving(slotSelect, raritySelect, statusCell);
+            try {
+                const res = await fetch('/admin/items/' + item.id + '/rarity', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify({ rarity: next })
+                });
+                if (!res.ok) {
+                    throw new Error(await errorMessage(res));
+                }
+                const updated = await res.json();
+                item.rarity = updated.rarity;
+                item.rarityEditable = updated.rarityEditable;
+                item.rarityConflict = updated.rarityConflict;
+                Array.from(raritySelect.options)
+                    .filter((option) => option.value === '')
+                    .forEach((option) => option.remove());
+                raritySelect.value = updated.rarity ?? '';
+                showSaved(statusCell);
+            } catch (err) {
+                raritySelect.value = previous;
+                showSaveFailed(statusCell);
+                showError(item.name + ' 등급 저장 실패: ' + err.message);
+            } finally {
+                slotSelect.disabled = false;
+                raritySelect.disabled = !item.rarityEditable;
+            }
+        }
+
+        function setSaving(slotSelect, raritySelect, statusCell) {
+            slotSelect.disabled = true;
+            raritySelect.disabled = true;
+            statusCell.textContent = '저장 중…';
+            statusCell.className = 'slot-status';
+        }
+
+        function showSaved(statusCell) {
+            statusCell.textContent = '저장됨';
+            statusCell.className = 'slot-status ok';
+            setTimeout(() => { statusCell.textContent = ''; }, 1500);
+        }
+
+        function showSaveFailed(statusCell) {
+            statusCell.textContent = '실패';
+            statusCell.className = 'slot-status err';
+        }
+
+        async function errorMessage(response) {
+            try {
+                const body = await response.json();
+                return body.message || ('HTTP ' + response.status);
+            } catch {
+                return 'HTTP ' + response.status;
             }
         }
 
@@ -184,6 +325,16 @@
         }
 
         filterInput.addEventListener('input', render);
+        animatedOnlyInput.addEventListener('change', render);
+        previewClose.addEventListener('click', closeImagePreview);
+        previewDialog.addEventListener('click', (event) => {
+            if (event.target === previewDialog) closeImagePreview();
+        });
+        previewDialog.addEventListener('close', () => {
+            previewImage.removeAttribute('src');
+            previewOpener?.focus();
+            previewOpener = null;
+        });
     </script>
 </body>
 </html>

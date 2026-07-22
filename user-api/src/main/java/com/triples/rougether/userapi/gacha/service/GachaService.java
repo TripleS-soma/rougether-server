@@ -6,6 +6,7 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
+import com.triples.rougether.domain.gacha.entity.GachaRarity;
 import com.triples.rougether.domain.gacha.entity.RewardType;
 import com.triples.rougether.domain.gacha.repository.GachaPoolEntryRepository;
 import com.triples.rougether.domain.gacha.repository.GachaRepository;
@@ -118,7 +119,8 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.EMPTY_POOL);
         }
         Map<String, List<GachaPoolEntry>> byRarity = pool.stream()
-                .collect(Collectors.groupingBy(e -> e.getRarity() == null ? "일반" : e.getRarity()));
+                .collect(Collectors.groupingBy(
+                        entry -> entry.getRarity() == null ? GachaRarity.NORMAL : entry.getRarity()));
 
         Set<Long> ownedItemIds = userItemRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
                 .map(ui -> ui.getItem().getId())
@@ -197,7 +199,9 @@ public class GachaService {
     // 등급 pool 이 비면(예: 캐릭터 뽑기처럼 rarity 미부여) 전체 pool 에서 균등.
     private GachaPoolEntry pickEntry(List<GachaPoolEntry> pool, Map<String, List<GachaPoolEntry>> byRarity) {
         int roll = random.nextInt(100);
-        String rarity = roll < TIER_NORMAL_MAX ? "일반" : roll < TIER_RARE_MAX ? "희귀" : "전설";
+        String rarity = roll < TIER_NORMAL_MAX
+                ? GachaRarity.NORMAL
+                : roll < TIER_RARE_MAX ? GachaRarity.RARE : GachaRarity.LEGENDARY;
         List<GachaPoolEntry> tier = byRarity.getOrDefault(rarity, pool);
         if (tier.isEmpty()) {
             tier = pool;

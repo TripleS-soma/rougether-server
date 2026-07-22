@@ -59,4 +59,11 @@ public class GachaPoolEntry {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    public void updateRarity(String rarity) {
+        if (!GachaRarity.isSupported(rarity)) {
+            throw new IllegalArgumentException("지원하지 않는 뽑기 등급입니다: " + rarity);
+        }
+        this.rarity = rarity;
+    }
 }
