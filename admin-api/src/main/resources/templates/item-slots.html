@@ -66,6 +66,13 @@
                 </div>
 
                 <div class="theme-filters" id="theme-filters" aria-label="테마 필터"></div>
+                <div class="theme-batch-bar">
+                    <div>
+                        <strong id="theme-batch-summary">테마를 선택하면 전체 가구를 한 번에 불러올 수 있습니다.</strong>
+                        <span>저장 위치가 없는 가구는 겹치지 않도록 미리보기용 위치 초안을 만듭니다.</span>
+                    </div>
+                    <button type="button" id="scene-load-theme" disabled>테마 전체로 교체</button>
+                </div>
                 <div class="furniture-grid" id="catalog-grid"></div>
                 <div class="catalog-empty" id="catalog-empty" hidden>
                     조건에 맞는 가구가 없습니다.
@@ -243,10 +250,14 @@
             bottomRight: '하단 오른쪽'
         };
         const RARITIES = ['일반', '희귀', '전설'];
+        const RELOGIN_MESSAGE = '로그인 세션이 만료되었거나 연결이 끊겼습니다. '
+            + '페이지를 새로고침한 뒤 다시 로그인해주세요.';
 
         const catalogGrid = document.getElementById('catalog-grid');
         const catalogEmpty = document.getElementById('catalog-empty');
         const themeFilters = document.getElementById('theme-filters');
+        const themeBatchSummary = document.getElementById('theme-batch-summary');
+        const sceneLoadTheme = document.getElementById('scene-load-theme');
         const filterInput = document.getElementById('filter');
         const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
@@ -303,7 +314,7 @@
         let characters = [];
         let roomContract = null;
         let selectedId = null;
-        let selectedThemeName = '전체';
+        let selectedThemeCode = 'all';
         let draftScale = 1.00;
         const draftDefaults = new Map();
         let scenePlacements = [];
@@ -350,7 +361,7 @@
         }
 
         async function getJson(url) {
-            const response = await fetch(url);
+            const response = await fetchWithSession(url);
             if (!response.ok) throw new Error(url + ' HTTP ' + response.status);
             return response.json();
         }
@@ -526,6 +537,73 @@
             }
         }
 
+        function selectedThemeItems() {
+            if (selectedThemeCode === 'all') return [];
+            return items.filter((item) => item.themeCode === selectedThemeCode);
+        }
+
+        function themeGridPositions(count) {
+            if (count === 0) return [];
+            const columns = Math.min(4, Math.ceil(Math.sqrt(count)));
+            const rows = Math.ceil(count / columns);
+            return Array.from({ length: count }, (_, index) => {
+                const row = Math.floor(index / columns);
+                const rowStart = row * columns;
+                const columnsInRow = Math.min(columns, count - rowStart);
+                const column = index - rowStart;
+                const x = columnsInRow === 1
+                    ? 0.5
+                    : 0.16 + (column / (columnsInRow - 1)) * 0.68;
+                const y = rows === 1
+                    ? 0.62
+                    : 0.20 + (row / (rows - 1)) * 0.64;
+                return { x, y };
+            });
+        }
+
+        function loadSelectedThemeScene() {
+            if (busy || activePreviewTab !== 'free') return;
+            const themeItems = selectedThemeItems();
+            if (themeItems.length === 0) return;
+
+            const itemsWithoutPosition = themeItems.filter((item) => !currentDraft(item).explicitPosition);
+            const autoPositions = themeGridPositions(itemsWithoutPosition.length);
+            let autoPositionIndex = 0;
+            scenePlacements = [];
+
+            themeItems.forEach((item) => {
+                let draft = currentDraft(item);
+                if (!draft.explicitPosition) {
+                    const autoPosition = autoPositions[autoPositionIndex++];
+                    const position = clampPosition(autoPosition.x, autoPosition.y, draft.scale);
+                    draft = saveDraft(item, {
+                        ...draft,
+                        x: position.x,
+                        y: position.y,
+                        explicitPosition: true
+                    });
+                }
+                const position = clampPosition(draft.x, draft.y, draft.scale);
+                scenePlacements.push({
+                    itemId: item.id,
+                    scale: draft.scale,
+                    x: position.x,
+                    y: position.y,
+                    explicitPosition: draft.explicitPosition,
+                    z: nextSceneZ++
+                });
+            });
+
+            selectedId = themeItems[0].id;
+            renderInspector();
+            renderCatalog();
+            const themeName = themeItems[0].themeName ?? selectedThemeCode;
+            const autoMessage = itemsWithoutPosition.length > 0
+                ? ' · 위치 미설정 ' + itemsWithoutPosition.length + '개는 저장 전 초안으로 자동 배치'
+                : '';
+            showOperationStatus(themeName + ' ' + themeItems.length + '개 불러옴' + autoMessage, 'ok');
+        }
+
         function removeSelectedFromScene() {
             if (!currentItem()) return;
             scenePlacements = scenePlacements.filter((entry) => entry.itemId !== selectedId);
@@ -684,6 +762,7 @@
             sceneAdd.disabled = busy || !currentItem() || placed || activePreviewTab !== 'free';
             sceneRemove.disabled = busy || !placed || activePreviewTab !== 'free';
             sceneClear.disabled = busy || scenePlacements.length === 0 || activePreviewTab !== 'free';
+            updateThemeBatchAction();
         }
 
         function visibleItems() {
@@ -692,23 +771,53 @@
                 (!keyword || [item.name, item.themeName, item.assetKey]
                     .join(' ').toLowerCase().includes(keyword)) &&
                 (!animatedOnlyInput.checked || item.animated) &&
-                (selectedThemeName === '전체' || item.themeName === selectedThemeName));
+                (selectedThemeCode === 'all' || item.themeCode === selectedThemeCode));
         }
 
         function buildThemeFilters() {
-            const themes = ['전체', ...new Set(items.map((item) => item.themeName).filter(Boolean))];
+            const themeMap = new Map();
+            items.forEach((item) => {
+                if (item.themeCode && !themeMap.has(item.themeCode)) {
+                    themeMap.set(item.themeCode, item.themeName ?? item.themeCode);
+                }
+            });
+            const themes = [
+                { code: 'all', name: '전체' },
+                ...Array.from(themeMap, ([code, name]) => ({ code, name }))
+            ];
             themeFilters.replaceChildren(...themes.map((theme) => {
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'theme-filter' + (theme === selectedThemeName ? ' active' : '');
-                button.textContent = theme;
+                button.className = 'theme-filter'
+                    + (theme.code === selectedThemeCode ? ' active' : '');
+                button.textContent = theme.name;
+                button.dataset.themeCode = theme.code;
                 button.addEventListener('click', () => {
-                    selectedThemeName = theme;
+                    selectedThemeCode = theme.code;
                     buildThemeFilters();
                     renderCatalog();
                 });
                 return button;
             }));
+            updateThemeBatchAction();
+        }
+
+        function updateThemeBatchAction() {
+            const themeItems = selectedThemeItems();
+            const canLoad = themeItems.length > 0 && activePreviewTab === 'free' && !busy;
+            sceneLoadTheme.disabled = !canLoad;
+            if (themeItems.length === 0) {
+                themeBatchSummary.textContent =
+                    '테마를 선택하면 전체 가구를 한 번에 불러올 수 있습니다.';
+                sceneLoadTheme.textContent = '테마 전체로 교체';
+                return;
+            }
+            const themeName = themeItems[0].themeName ?? selectedThemeCode;
+            const placedCount = themeItems.filter((item) =>
+                scenePlacements.some((entry) => entry.itemId === item.id)).length;
+            themeBatchSummary.textContent = themeName + ' · ' + themeItems.length
+                + '개 가구 · 현재 ' + placedCount + '개 배치';
+            sceneLoadTheme.textContent = themeName + ' 전체로 교체';
         }
 
         function renderCatalog() {
@@ -1079,13 +1188,34 @@
         }
 
         async function putJson(url, body) {
-            const response = await fetch(url, {
+            const response = await fetchWithSession(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
                 body: JSON.stringify(body)
             });
             if (!response.ok) throw new Error(await errorMessage(response));
             return response.json();
+        }
+
+        async function fetchWithSession(url, options) {
+            let response;
+            try {
+                response = await fetch(url, options);
+            } catch (error) {
+                if (error instanceof TypeError) throw new Error(RELOGIN_MESSAGE);
+                throw error;
+            }
+            let responsePath = '';
+            try {
+                responsePath = new URL(response.url, window.location.href).pathname;
+            } catch {
+                responsePath = '';
+            }
+            if (response.status === 401 || response.status === 403
+                || (response.redirected && responsePath === '/login')) {
+                throw new Error(RELOGIN_MESSAGE);
+            }
+            return response;
         }
 
         function setBusy(next, message = '') {
@@ -1201,6 +1331,7 @@
             const item = currentItem();
             if (item) addItemToScene(item);
         });
+        sceneLoadTheme.addEventListener('click', loadSelectedThemeScene);
         sceneRemove.addEventListener('click', removeSelectedFromScene);
         sceneClear.addEventListener('click', clearScene);
         scaleSave.addEventListener('click', saveRenderDefaults);
