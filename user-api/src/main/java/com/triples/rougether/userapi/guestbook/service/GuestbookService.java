@@ -55,11 +55,11 @@ public class GuestbookService {
     // 방명록 작성 - 방 주인 본인도 자기 방에 쓸 수 있다.
     @Transactional
     public GuestbookCreateResponse write(Long userId, Long roomOwnerId, GuestbookCreateRequest request) {
-        // 금칙어 차단 (#209)
+        SameHouseContext context = requireSameHouseMembers(userId, roomOwnerId, request.houseId());
+        // 금칙어 차단 (#209) - 인가 확인 후 콘텐츠 검증 (다른 적용 지점과 순서 통일)
         if (bannedWordChecker.containsBannedWord(request.content())) {
             throw new BusinessException(HouseErrorCode.GUESTBOOK_CONTENT_BANNED);
         }
-        SameHouseContext context = requireSameHouseMembers(userId, roomOwnerId, request.houseId());
         RoomGuestbook guestbook = roomGuestbookRepository.save(RoomGuestbook.write(
                 context.roomOwner(), context.house(), context.author(), request.content()));
         return GuestbookCreateResponse.of(guestbook);

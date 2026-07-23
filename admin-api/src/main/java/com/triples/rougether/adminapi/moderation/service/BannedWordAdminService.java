@@ -67,13 +67,10 @@ public class BannedWordAdminService {
                 skipped.add(normalized);
                 continue;
             }
-            try {
-                // 동시 import 경합 대비 - UNIQUE 충돌은 skip 으로 흡수해 배치 전체 실패(500)를 막는다
-                bannedWordRepository.saveAndFlush(BannedWord.of(normalized));
-                added++;
-            } catch (DataIntegrityViolationException e) {
-                skipped.add(normalized);
-            }
+            // 동시 import 경합은 UNIQUE 가 커밋 시점에 거른다 - 트랜잭션 내 catch-후-계속은
+            // rollback-only 로 커밋이 깨지므로 쓰지 않는다(관리자 1인 순차 실행 전제, 재실행 멱등).
+            bannedWordRepository.save(BannedWord.of(normalized));
+            added++;
         }
         return new BannedWordImportResult(added, skipped.size(), List.copyOf(invalid));
     }

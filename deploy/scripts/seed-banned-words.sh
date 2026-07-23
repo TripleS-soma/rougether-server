@@ -14,6 +14,15 @@ set -euo pipefail
 
 BASE_URL="${1:-http://localhost:8081}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+
+# 원격 http 는 비밀번호가 평문 전송된다 - dev 어드민에 TLS 가 없는 동안의 의식적 opt-in 만 허용
+# (tools/admin-asset-mcp 의 ADMIN_ALLOW_HTTP 정책과 동일).
+if [[ "$BASE_URL" == http://* && "$BASE_URL" != http://localhost* && "$BASE_URL" != http://127.0.0.1* ]]; then
+    if [[ "${ADMIN_ALLOW_HTTP:-}" != "1" ]]; then
+        echo "원격 http URL($BASE_URL)은 관리자 비밀번호가 평문 전송됩니다. 의도한 것이면 ADMIN_ALLOW_HTTP=1 을 함께 설정하세요." >&2
+        exit 1
+    fi
+fi
 SEED_FILE="$(cd "$(dirname "$0")/../seed" && pwd)/banned_words.json"
 
 if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
