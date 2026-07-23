@@ -774,6 +774,12 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("loadSelectedThemeScene")))
                 .andExpect(content().string(containsString("themeGridPositions")))
                 .andExpect(content().string(containsString("테마 전체로 교체")))
+                .andExpect(content().string(containsString("FREE 미리보기 방향")))
+                .andExpect(content().string(containsString("rotation-number")))
+                .andExpect(content().string(containsString("flip-horizontal")))
+                .andExpect(content().string(containsString("placementTransform")))
+                .andExpect(content().string(containsString("toggleSelectedFlip")))
+                .andExpect(content().string(containsString("미리보기 배치에만 적용")))
                 .andExpect(content().string(containsString("모두 비우기")))
                 .andExpect(content().string(containsString("container.setAttribute('inert', '')")))
                 .andExpect(content().string(containsString("button.disabled = next")))
@@ -788,6 +794,17 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("뽑기 등급")))
                 .andExpect(content().string(containsString("image-preview-dialog")))
                 .andExpect(content().string(containsString("이미지 크게 보기")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 룸_미리보기는_사각_가이드_대신_선택_윤곽과_반전을_표현한다() throws Exception {
+        mockMvc.perform(get("/css/admin.css"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(".room-furniture.selected img")))
+                .andExpect(content().string(containsString("drop-shadow")))
+                .andExpect(content().string(containsString(".room-furniture.flipped img")))
+                .andExpect(content().string(containsString("transform: scaleX(-1)")));
     }
 
     @Test
