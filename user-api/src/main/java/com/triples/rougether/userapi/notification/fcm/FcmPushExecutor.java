@@ -28,6 +28,7 @@ public class FcmPushExecutor {
                 .map(UserDeviceToken::getToken)
                 .toList();
         if (tokens.isEmpty()) {
+            log.warn("FCM 발송 실패 - notificationId={}, userId={}, 등록된 디바이스 토큰 없음", notificationId, userId);
             notificationPushStatusService.markFailed(notificationId);
             return;
         }
@@ -48,6 +49,8 @@ public class FcmPushExecutor {
         if (result.successCount() > 0) {
             notificationPushStatusService.markSent(notificationId);
         } else {
+            log.warn("FCM 발송 실패 - notificationId={}, userId={}, tokenCount={}, invalidTokenCount={}",
+                    notificationId, userId, tokens.size(), result.invalidTokens().size());
             notificationPushStatusService.markFailed(notificationId);
         }
     }

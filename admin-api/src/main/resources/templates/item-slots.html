@@ -36,7 +36,7 @@
             <div>
                 <span class="studio-eyebrow">FURNITURE DESIGN SYSTEM</span>
                 <h2>가구 크기 스튜디오</h2>
-                <p>앱의 실제 방 렌더러 기준으로 기본 크기·슬롯·뽑기 등급을 확인하고 조정합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다.</p>
+                <p>앱의 실제 방 렌더러 기준으로 FREE 기본 크기·위치, 슬롯, 뽑기 등급을 확인하고 조정합니다. 미등록 가구는 등급을 선택하면 테마 뽑기 풀에 바로 등록됩니다.</p>
             </div>
             <div class="renderer-contract" aria-label="모바일 Room.tsx 화면 규격">
                 <strong id="contract-title">모바일 Room renderer contract 불러오는 중</strong>
@@ -51,7 +51,7 @@
                 <div class="panel-heading-row">
                     <div>
                         <h3 id="catalog-title">가구 카탈로그</h3>
-                        <p>아이템을 선택하면 오른쪽 방에 바로 합성됩니다.</p>
+                        <p>아이템을 선택하면 오른쪽 방에 추가됩니다. 서로 다른 가구를 여러 개 놓을 수 있습니다.</p>
                     </div>
                     <span class="slot-count" id="count"></span>
                 </div>
@@ -66,6 +66,13 @@
                 </div>
 
                 <div class="theme-filters" id="theme-filters" aria-label="테마 필터"></div>
+                <div class="theme-batch-bar">
+                    <div>
+                        <strong id="theme-batch-summary">테마를 선택하면 전체 가구를 한 번에 불러올 수 있습니다.</strong>
+                        <span>저장 위치가 없는 가구는 한눈에 확인하도록 위치 초안으로 고르게 펼칩니다.</span>
+                    </div>
+                    <button type="button" id="scene-load-theme" disabled>테마 전체로 교체</button>
+                </div>
                 <div class="furniture-grid" id="catalog-grid"></div>
                 <div class="catalog-empty" id="catalog-empty" hidden>
                     조건에 맞는 가구가 없습니다.
@@ -101,12 +108,19 @@
                         <img id="room-wallpaper" class="room-surface room-wall" alt="">
                         <img id="room-floor" class="room-surface room-floor" alt="">
                         <div class="room-midline" aria-hidden="true"></div>
-                        <div id="preview-furniture" class="room-furniture free-preview-anchor">
-                            <img id="preview-furniture-image" alt="">
-                        </div>
+                        <div id="preview-furniture-layer" class="room-furniture-layer"
+                             aria-label="미리보기 가구 배치 영역"></div>
                         <img id="room-character" class="room-character" alt="">
                         <span class="room-band-label wall-label">벽 50%</span>
                         <span class="room-band-label floor-label">바닥 50%</span>
+                    </div>
+                    <div class="scene-toolbar" id="scene-toolbar">
+                        <span id="scene-count">0개 배치</span>
+                        <div>
+                            <button type="button" id="scene-add">선택 가구 추가</button>
+                            <button type="button" id="scene-remove">방에서 빼기</button>
+                            <button type="button" id="scene-clear">모두 비우기</button>
+                        </div>
                     </div>
                     <p class="room-source-note" id="room-source-note">
                         Room renderer contract를 불러오는 중입니다.
@@ -156,6 +170,58 @@
                         </div>
                     </div>
 
+                    <div class="position-control-block" id="position-controls">
+                        <div class="position-heading-row">
+                            <div>
+                                <strong>FREE 기본 위치</strong>
+                                <span>가구 중심점 기준 정규화 좌표</span>
+                            </div>
+                            <button type="button" id="position-reset">공통 위치 사용</button>
+                        </div>
+                        <div class="position-inputs">
+                            <label>
+                                <span>X · 좌우</span>
+                                <input type="number" id="position-x" min="0" max="1" step="0.01"
+                                       inputmode="decimal" aria-label="FREE 기본 X 좌표">
+                            </label>
+                            <label>
+                                <span>Y · 상하</span>
+                                <input type="number" id="position-y" min="0" max="1" step="0.01"
+                                       inputmode="decimal" aria-label="FREE 기본 Y 좌표">
+                            </label>
+                        </div>
+                        <p id="position-status">방 안의 가구를 끌거나 숫자로 위치를 조정하세요.</p>
+                    </div>
+
+                    <div class="transform-control-block" id="transform-controls">
+                        <div class="transform-heading-row">
+                            <div>
+                                <strong>FREE 미리보기 방향</strong>
+                                <span>실제 방 배치의 회전·좌우 반전 확인</span>
+                            </div>
+                            <output id="transform-status" aria-live="polite">0° · 기본 방향</output>
+                        </div>
+                        <div class="transform-actions">
+                            <button type="button" id="rotate-left" aria-label="선택 가구 왼쪽으로 15도 회전">
+                                ↺ 15°
+                            </button>
+                            <label>
+                                <span>회전 각도</span>
+                                <span class="rotation-number-wrap">
+                                    <input type="number" id="rotation-number" min="-360" max="360" step="1"
+                                           inputmode="numeric" aria-label="선택 가구 회전 각도">
+                                    <span>°</span>
+                                </span>
+                            </label>
+                            <button type="button" id="rotate-right" aria-label="선택 가구 오른쪽으로 15도 회전">
+                                ↻ 15°
+                            </button>
+                            <button type="button" id="rotation-reset">0° 초기화</button>
+                            <button type="button" id="flip-horizontal" aria-pressed="false">좌우 반전</button>
+                        </div>
+                        <p>회전·반전은 현재 미리보기 배치에만 적용되며 기본 크기·위치 저장에는 포함되지 않습니다.</p>
+                    </div>
+
                     <div class="item-operations">
                         <label>
                             <span>기본 슬롯</span>
@@ -170,10 +236,10 @@
                     <div class="inspector-footer">
                         <div>
                             <strong id="operation-status" aria-live="polite"></strong>
-                            <p>새로 배치하는 가구의 초기 크기입니다. 기존 방 배치에는 소급되지 않습니다.</p>
+                            <p>새 FREE 배치의 초기 크기·위치입니다. 기존 방 배치에는 소급되지 않습니다.</p>
                         </div>
                         <button type="button" class="btn-primary scale-save" id="scale-save">
-                            기본 크기 저장
+                            기본 크기·위치 저장
                         </button>
                     </div>
                 </section>
@@ -213,16 +279,19 @@
             bottomRight: '하단 오른쪽'
         };
         const RARITIES = ['일반', '희귀', '전설'];
+        const RELOGIN_MESSAGE = '로그인 세션이 만료되었거나 연결이 끊겼습니다. '
+            + '페이지를 새로고침한 뒤 다시 로그인해주세요.';
 
         const catalogGrid = document.getElementById('catalog-grid');
         const catalogEmpty = document.getElementById('catalog-empty');
         const themeFilters = document.getElementById('theme-filters');
+        const themeBatchSummary = document.getElementById('theme-batch-summary');
+        const sceneLoadTheme = document.getElementById('scene-load-theme');
         const filterInput = document.getElementById('filter');
         const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
-        const previewFurniture = document.getElementById('preview-furniture');
-        const previewFurnitureImage = document.getElementById('preview-furniture-image');
+        const previewFurnitureLayer = document.getElementById('preview-furniture-layer');
         const roomBackground = document.getElementById('room-background');
         const roomWallpaper = document.getElementById('room-wallpaper');
         const roomFloor = document.getElementById('room-floor');
@@ -244,6 +313,23 @@
         const scaleNumber = document.getElementById('scale-number');
         const scaleMetric = document.getElementById('scale-metric');
         const scaleSave = document.getElementById('scale-save');
+        const positionControls = document.getElementById('position-controls');
+        const positionX = document.getElementById('position-x');
+        const positionY = document.getElementById('position-y');
+        const positionStatus = document.getElementById('position-status');
+        const positionReset = document.getElementById('position-reset');
+        const transformControls = document.getElementById('transform-controls');
+        const transformStatus = document.getElementById('transform-status');
+        const rotationNumber = document.getElementById('rotation-number');
+        const rotateLeft = document.getElementById('rotate-left');
+        const rotateRight = document.getElementById('rotate-right');
+        const rotationReset = document.getElementById('rotation-reset');
+        const flipHorizontal = document.getElementById('flip-horizontal');
+        const sceneToolbar = document.getElementById('scene-toolbar');
+        const sceneCount = document.getElementById('scene-count');
+        const sceneAdd = document.getElementById('scene-add');
+        const sceneRemove = document.getElementById('scene-remove');
+        const sceneClear = document.getElementById('scene-clear');
         const draftStatus = document.getElementById('draft-status');
         const operationStatus = document.getElementById('operation-status');
         const freeTab = document.getElementById('free-tab');
@@ -264,10 +350,13 @@
         let characters = [];
         let roomContract = null;
         let selectedId = null;
-        let selectedThemeName = '전체';
+        let selectedThemeCode = 'all';
         let draftScale = 1.00;
-        const draftScales = new Map();
+        const draftDefaults = new Map();
+        let scenePlacements = [];
+        let nextSceneZ = 1;
         let previewMode = 'free';
+        let activePreviewTab = 'free';
         let previewOpener = null;
         let busy = false;
 
@@ -286,7 +375,9 @@
                 roomContract = contract;
                 items = itemList.items.map((item) => ({
                     ...item,
-                    defaultScale: Number(item.defaultScale ?? 1)
+                    defaultScale: Number(item.defaultScale ?? 1),
+                    defaultPositionX: nullableNumber(item.defaultPositionX),
+                    defaultPositionY: nullableNumber(item.defaultPositionY)
                 }));
                 surfaces = surfaceList.items;
                 characters = characterList;
@@ -294,6 +385,7 @@
                 buildPreviewAssetControls();
                 buildThemeFilters();
                 selectedId = (items.find((item) => item.animated) ?? items[0])?.id ?? null;
+                if (currentItem()) addItemToScene(currentItem(), false);
                 renderCatalog();
                 renderInspector();
             } catch (error) {
@@ -305,7 +397,7 @@
         }
 
         async function getJson(url) {
-            const response = await fetch(url);
+            const response = await fetchWithSession(url);
             if (!response.ok) throw new Error(url + ' HTTP ' + response.status);
             return response.json();
         }
@@ -424,8 +516,347 @@
             return (value * 100) + '%';
         }
 
+        function nullableNumber(value) {
+            return value === null || value === undefined ? null : Number(value);
+        }
+
         function currentItem() {
             return items.find((item) => item.id === selectedId) ?? null;
+        }
+
+        function currentDraft(item = currentItem()) {
+            if (!item) return null;
+            const savedX = nullableNumber(item.defaultPositionX);
+            const savedY = nullableNumber(item.defaultPositionY);
+            const explicitPosition = Number.isFinite(savedX) && Number.isFinite(savedY);
+            const center = roomContract.furniture.newPlacementCenter;
+            return draftDefaults.get(item.id) ?? {
+                scale: Number(item.defaultScale),
+                x: explicitPosition ? savedX : center.x,
+                y: explicitPosition ? savedY : center.y,
+                explicitPosition
+            };
+        }
+
+        function saveDraft(item, next) {
+            const draft = {
+                scale: Number(next.scale),
+                x: Number(next.x),
+                y: Number(next.y),
+                explicitPosition: Boolean(next.explicitPosition)
+            };
+            draftDefaults.set(item.id, draft);
+            const placement = scenePlacements.find((entry) => entry.itemId === item.id);
+            if (placement) Object.assign(placement, draft);
+            return draft;
+        }
+
+        function addItemToScene(item, rerender = true) {
+            const existing = scenePlacements.find((entry) => entry.itemId === item.id);
+            if (existing) {
+                existing.z = nextSceneZ++;
+            } else {
+                const draft = currentDraft(item);
+                const position = clampPosition(draft.x, draft.y, draft.scale);
+                scenePlacements.push({
+                    itemId: item.id,
+                    scale: draft.scale,
+                    x: position.x,
+                    y: position.y,
+                    explicitPosition: draft.explicitPosition,
+                    rotationDeg: 0,
+                    flipped: false,
+                    z: nextSceneZ++
+                });
+            }
+            if (rerender) {
+                renderScene();
+                renderCatalog();
+            }
+        }
+
+        function selectedThemeItems() {
+            if (selectedThemeCode === 'all') return [];
+            return items.filter((item) => item.themeCode === selectedThemeCode);
+        }
+
+        function themeGridPositions(count) {
+            if (count === 0) return [];
+            const columns = Math.min(4, Math.ceil(Math.sqrt(count)));
+            const rows = Math.ceil(count / columns);
+            return Array.from({ length: count }, (_, index) => {
+                const row = Math.floor(index / columns);
+                const rowStart = row * columns;
+                const columnsInRow = Math.min(columns, count - rowStart);
+                const column = index - rowStart;
+                const x = columnsInRow === 1
+                    ? 0.5
+                    : 0.16 + (column / (columnsInRow - 1)) * 0.68;
+                const y = rows === 1
+                    ? 0.62
+                    : 0.20 + (row / (rows - 1)) * 0.64;
+                return { x, y };
+            });
+        }
+
+        function loadSelectedThemeScene() {
+            if (busy || activePreviewTab !== 'free') return;
+            const themeItems = selectedThemeItems();
+            if (themeItems.length === 0) return;
+
+            const itemsWithoutPosition = themeItems.filter((item) => !currentDraft(item).explicitPosition);
+            const autoPositions = themeGridPositions(itemsWithoutPosition.length);
+            let autoPositionIndex = 0;
+            scenePlacements = [];
+
+            themeItems.forEach((item) => {
+                let draft = currentDraft(item);
+                if (!draft.explicitPosition) {
+                    const autoPosition = autoPositions[autoPositionIndex++];
+                    const position = clampPosition(autoPosition.x, autoPosition.y, draft.scale);
+                    draft = saveDraft(item, {
+                        ...draft,
+                        x: position.x,
+                        y: position.y,
+                        explicitPosition: true
+                    });
+                }
+                const position = clampPosition(draft.x, draft.y, draft.scale);
+                scenePlacements.push({
+                    itemId: item.id,
+                    scale: draft.scale,
+                    x: position.x,
+                    y: position.y,
+                    explicitPosition: draft.explicitPosition,
+                    rotationDeg: 0,
+                    flipped: false,
+                    z: nextSceneZ++
+                });
+            });
+
+            selectedId = themeItems[0].id;
+            renderInspector();
+            renderCatalog();
+            const themeName = themeItems[0].themeName ?? selectedThemeCode;
+            const autoMessage = itemsWithoutPosition.length > 0
+                ? ' · 위치 미설정 ' + itemsWithoutPosition.length + '개는 저장 전 초안으로 자동 배치'
+                : '';
+            showOperationStatus(themeName + ' ' + themeItems.length + '개 불러옴' + autoMessage, 'ok');
+        }
+
+        function removeSelectedFromScene() {
+            if (!currentItem()) return;
+            scenePlacements = scenePlacements.filter((entry) => entry.itemId !== selectedId);
+            renderScene();
+            renderCatalog();
+            updateSceneControls();
+        }
+
+        function clearScene() {
+            scenePlacements = [];
+            renderScene();
+            renderCatalog();
+            updateSceneControls();
+        }
+
+        function clampPosition(x, y, scale, rotationDeg = 0) {
+            const radians = clampRotation(rotationDeg) * Math.PI / 180;
+            const rotatedWidthRatio = Math.abs(Math.cos(radians)) + Math.abs(Math.sin(radians));
+            const half = Math.min(
+                0.5,
+                roomContract.furniture.baseWidth * Number(scale) * rotatedWidthRatio / 2);
+            return {
+                x: Math.min(1 - half, Math.max(half, Number(x))),
+                y: Math.min(1 - half, Math.max(half, Number(y)))
+            };
+        }
+
+        function renderScene() {
+            previewFurnitureLayer.replaceChildren();
+            const item = currentItem();
+            if (!item || !roomContract) {
+                updateSceneControls();
+                return;
+            }
+
+            if (previewMode === 'slot') {
+                previewFurnitureLayer.appendChild(buildSlotPreviewNode(item));
+            } else {
+                scenePlacements
+                    .slice()
+                    .sort((a, b) => a.z - b.z)
+                    .forEach((placement) => {
+                        const placedItem = items.find((entry) => entry.id === placement.itemId);
+                        if (placedItem) previewFurnitureLayer.appendChild(
+                            buildFreePreviewNode(placedItem, placement));
+                    });
+            }
+            updateSceneControls();
+        }
+
+        function buildFreePreviewNode(item, placement) {
+            const renderPosition = clampPosition(
+                placement.x, placement.y, placement.scale, placement.rotationDeg);
+            const node = document.createElement('button');
+            node.type = 'button';
+            node.className = 'room-furniture room-furniture--free'
+                + (item.id === selectedId ? ' selected' : '');
+            node.dataset.itemId = item.id;
+            node.setAttribute('aria-label', item.name + ' 위치 이동');
+            node.setAttribute('aria-pressed', String(item.id === selectedId));
+            node.style.left = percent(renderPosition.x);
+            node.style.top = percent(renderPosition.y);
+            node.style.width = percent(roomContract.furniture.baseWidth);
+            node.style.zIndex = String(placement.z + 2);
+            node.style.transform = placementTransform(placement);
+            node.classList.toggle('flipped', placement.flipped);
+            node.appendChild(furnitureImage(item));
+            node.addEventListener('click', () => selectItem(item.id, true, false));
+            node.addEventListener('pointerdown', (event) => beginFurnitureDrag(event, node, placement));
+            node.addEventListener('keydown', (event) => moveFurnitureWithKeyboard(event, placement));
+            return node;
+        }
+
+        function buildSlotPreviewNode(item) {
+            const slotRects = roomContract.furniture.slots;
+            const rect = slotRects[item.defaultSlot] ?? slotRects.bottomCenter;
+            const node = document.createElement('div');
+            node.className = 'room-furniture room-furniture--slot selected';
+            node.style.left = percent(rect.left);
+            node.style.top = percent(rect.top);
+            node.style.width = percent(rect.width);
+            node.appendChild(furnitureImage(item));
+            return node;
+        }
+
+        function furnitureImage(item) {
+            const image = document.createElement('img');
+            image.src = assetUrl(item.assetKey);
+            image.alt = item.name;
+            image.draggable = false;
+            return image;
+        }
+
+        function placementTransform(placement) {
+            return 'translate(-50%, -50%) scale(' + placement.scale + ') rotate('
+                + clampRotation(placement.rotationDeg) + 'deg)';
+        }
+
+        function clampRotation(value) {
+            if (!Number.isFinite(Number(value))) return 0;
+            return Math.min(360, Math.max(-360, Math.round(Number(value))));
+        }
+
+        function currentScenePlacement() {
+            return scenePlacements.find((entry) => entry.itemId === selectedId) ?? null;
+        }
+
+        function setSelectedRotation(value) {
+            const placement = currentScenePlacement();
+            if (!placement || busy || activePreviewTab !== 'free') return;
+            placement.rotationDeg = clampRotation(value);
+            renderScene();
+        }
+
+        function toggleSelectedFlip() {
+            const placement = currentScenePlacement();
+            if (!placement || busy || activePreviewTab !== 'free') return;
+            placement.flipped = !placement.flipped;
+            renderScene();
+        }
+
+        function beginFurnitureDrag(event, node, placement) {
+            if (previewMode !== 'free' || busy || event.button !== 0) return;
+            event.preventDefault();
+            selectedId = placement.itemId;
+            placement.z = nextSceneZ++;
+            node.style.zIndex = String(placement.z + 2);
+            node.classList.add('selected', 'dragging');
+            node.setPointerCapture(event.pointerId);
+
+            const move = (moveEvent) => {
+                const rect = roomStage.getBoundingClientRect();
+                const position = clampPosition(
+                    (moveEvent.clientX - rect.left) / rect.width,
+                    (moveEvent.clientY - rect.top) / rect.height,
+                    placement.scale,
+                    placement.rotationDeg);
+                placement.x = position.x;
+                placement.y = position.y;
+                placement.explicitPosition = true;
+                const item = currentItem();
+                saveDraft(item, placement);
+                node.style.left = percent(position.x);
+                node.style.top = percent(position.y);
+                positionX.value = position.x.toFixed(5);
+                positionY.value = position.y.toFixed(5);
+                positionStatus.textContent = '드래그 중 · X ' + position.x.toFixed(3)
+                    + ' / Y ' + position.y.toFixed(3);
+            };
+            const end = () => {
+                node.classList.remove('dragging');
+                node.removeEventListener('pointermove', move);
+                node.removeEventListener('pointerup', end);
+                node.removeEventListener('pointercancel', end);
+                renderInspector();
+                renderCatalog();
+            };
+            node.addEventListener('pointermove', move);
+            node.addEventListener('pointerup', end);
+            node.addEventListener('pointercancel', end);
+        }
+
+        function moveFurnitureWithKeyboard(event, placement) {
+            const direction = {
+                ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+                ArrowUp: [0, -1], ArrowDown: [0, 1]
+            }[event.key];
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+                event.preventDefault();
+                selectedId = placement.itemId;
+                removeSelectedFromScene();
+                return;
+            }
+            if (!direction) return;
+            event.preventDefault();
+            const step = event.shiftKey ? 0.05 : 0.01;
+            const next = clampPosition(
+                placement.x + direction[0] * step,
+                placement.y + direction[1] * step,
+                placement.scale,
+                placement.rotationDeg);
+            placement.x = next.x;
+            placement.y = next.y;
+            placement.explicitPosition = true;
+            selectedId = placement.itemId;
+            saveDraft(currentItem(), placement);
+            renderInspector();
+            renderCatalog();
+        }
+
+        function updateSceneControls() {
+            const placed = scenePlacements.some((entry) => entry.itemId === selectedId);
+            sceneCount.textContent = scenePlacements.length + '개 배치';
+            sceneAdd.disabled = busy || !currentItem() || placed || activePreviewTab !== 'free';
+            sceneRemove.disabled = busy || !placed || activePreviewTab !== 'free';
+            sceneClear.disabled = busy || scenePlacements.length === 0 || activePreviewTab !== 'free';
+            updateTransformControls();
+            updateThemeBatchAction();
+        }
+
+        function updateTransformControls() {
+            const placement = currentScenePlacement();
+            const enabled = Boolean(placement) && !busy && activePreviewTab === 'free';
+            const rotation = placement ? clampRotation(placement.rotationDeg) : 0;
+            const flipped = Boolean(placement?.flipped);
+            rotationNumber.value = String(rotation);
+            [rotationNumber, rotateLeft, rotateRight, rotationReset, flipHorizontal]
+                .forEach((control) => { control.disabled = !enabled; });
+            flipHorizontal.setAttribute('aria-pressed', String(flipped));
+            flipHorizontal.classList.toggle('active', flipped);
+            transformStatus.textContent = placement
+                ? rotation + '° · ' + (flipped ? '좌우 반전' : '기본 방향')
+                : '가구를 방에 배치하세요';
         }
 
         function visibleItems() {
@@ -434,30 +865,57 @@
                 (!keyword || [item.name, item.themeName, item.assetKey]
                     .join(' ').toLowerCase().includes(keyword)) &&
                 (!animatedOnlyInput.checked || item.animated) &&
-                (selectedThemeName === '전체' || item.themeName === selectedThemeName));
+                (selectedThemeCode === 'all' || item.themeCode === selectedThemeCode));
         }
 
         function buildThemeFilters() {
-            const themes = ['전체', ...new Set(items.map((item) => item.themeName).filter(Boolean))];
+            const themeMap = new Map();
+            items.forEach((item) => {
+                if (item.themeCode && !themeMap.has(item.themeCode)) {
+                    themeMap.set(item.themeCode, item.themeName ?? item.themeCode);
+                }
+            });
+            const themes = [
+                { code: 'all', name: '전체' },
+                ...Array.from(themeMap, ([code, name]) => ({ code, name }))
+            ];
             themeFilters.replaceChildren(...themes.map((theme) => {
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'theme-filter' + (theme === selectedThemeName ? ' active' : '');
-                button.textContent = theme;
+                button.className = 'theme-filter'
+                    + (theme.code === selectedThemeCode ? ' active' : '');
+                button.textContent = theme.name;
+                button.dataset.themeCode = theme.code;
                 button.addEventListener('click', () => {
-                    selectedThemeName = theme;
+                    selectedThemeCode = theme.code;
                     buildThemeFilters();
                     renderCatalog();
                 });
                 return button;
             }));
+            updateThemeBatchAction();
+        }
+
+        function updateThemeBatchAction() {
+            const themeItems = selectedThemeItems();
+            const canLoad = themeItems.length > 0 && activePreviewTab === 'free' && !busy;
+            sceneLoadTheme.disabled = !canLoad;
+            if (themeItems.length === 0) {
+                themeBatchSummary.textContent =
+                    '테마를 선택하면 전체 가구를 한 번에 불러올 수 있습니다.';
+                sceneLoadTheme.textContent = '테마 전체로 교체';
+                return;
+            }
+            const themeName = themeItems[0].themeName ?? selectedThemeCode;
+            const placedCount = themeItems.filter((item) =>
+                scenePlacements.some((entry) => entry.itemId === item.id)).length;
+            themeBatchSummary.textContent = themeName + ' · ' + themeItems.length
+                + '개 가구 · 현재 ' + placedCount + '개 배치';
+            sceneLoadTheme.textContent = themeName + ' 전체로 교체';
         }
 
         function renderCatalog() {
             const visible = visibleItems();
-            if (visible.length && !visible.some((item) => item.id === selectedId)) {
-                selectItem(visible[0].id, false);
-            }
             catalogGrid.replaceChildren(...visible.map(buildCard));
             catalogEmpty.hidden = visible.length > 0;
             countEl.textContent = visible.length + ' / ' + items.length + '개';
@@ -465,7 +923,10 @@
 
         function buildCard(item) {
             const card = document.createElement('article');
-            card.className = 'furniture-card' + (item.id === selectedId ? ' selected' : '');
+            const placed = scenePlacements.some((entry) => entry.itemId === item.id);
+            card.className = 'furniture-card'
+                + (item.id === selectedId ? ' selected' : '')
+                + (placed ? ' in-room' : '');
 
             const selectButton = document.createElement('button');
             selectButton.type = 'button';
@@ -496,7 +957,8 @@
             theme.textContent = item.themeName;
             const scale = document.createElement('span');
             scale.className = 'card-scale';
-            scale.textContent = Number(item.defaultScale).toFixed(2) + '×';
+            scale.textContent = Number(item.defaultScale).toFixed(2) + '×'
+                + (placed ? ' · 방에 배치됨' : '');
             copy.append(name, theme, scale);
             selectButton.append(media, copy);
 
@@ -510,8 +972,10 @@
             return card;
         }
 
-        function selectItem(itemId, rerender = true) {
+        function selectItem(itemId, rerender = true, addToScene = true) {
             selectedId = itemId;
+            const item = currentItem();
+            if (addToScene && item && activePreviewTab === 'free') addItemToScene(item, false);
             renderInspector();
             if (rerender) renderCatalog();
         }
@@ -526,13 +990,11 @@
             selectedTheme.textContent = item.themeName;
             selectedItemName.textContent = item.name;
             selectedItemKey.textContent = item.assetKey;
-            previewFurnitureImage.src = assetUrl(item.assetKey);
-            previewFurnitureImage.alt = item.name;
             singlePreviewImage.src = assetUrl(item.assetKey);
             singlePreviewImage.alt = item.name + ' 단독 이미지';
             selectPreviewTheme(item.themeCode);
             renderPreviewAssets();
-            draftScale = draftScales.get(item.id) ?? Number(item.defaultScale);
+            draftScale = currentDraft(item).scale;
             populateSlotSelect(item);
             populateRaritySelect(item);
             renderScale();
@@ -546,8 +1008,6 @@
             selectedTheme.textContent = 'RN 기준 fixture';
             selectedItemName.textContent = fixture.name;
             selectedItemKey.textContent = fixture.assetKey;
-            previewFurnitureImage.src = assetUrl(fixture.assetKey);
-            previewFurnitureImage.alt = fixture.name;
             singlePreviewImage.src = assetUrl(fixture.assetKey);
             singlePreviewImage.alt = fixture.name + ' 단독 이미지';
             draftStatus.textContent = '읽기 전용 fixture';
@@ -568,13 +1028,25 @@
                 }
                 : roomContract.furniture.slots[fixture.slot];
             const baseWidth = rect.width * 100;
-            previewFurniture.className = freeMode
-                ? 'room-furniture free-preview-anchor'
-                : 'room-furniture slot-preview-anchor';
-            previewFurniture.style.left = percent(rect.left);
-            previewFurniture.style.top = percent(rect.top);
-            previewFurniture.style.width = percent(rect.width);
-            previewFurniture.style.transform = freeMode ? 'scale(' + normalized + ')' : 'none';
+            const node = document.createElement('div');
+            node.className = 'room-furniture ' + (freeMode
+                ? 'room-furniture--free selected'
+                : 'room-furniture--slot selected');
+            node.style.left = freeMode
+                ? percent(roomContract.furniture.previewCenter.x)
+                : percent(rect.left);
+            node.style.top = freeMode
+                ? percent(roomContract.furniture.previewCenter.y)
+                : percent(rect.top);
+            node.style.width = percent(rect.width);
+            node.style.transform = freeMode
+                ? 'translate(-50%, -50%) scale(' + normalized + ')'
+                : 'none';
+            const image = document.createElement('img');
+            image.src = assetUrl(fixture.assetKey);
+            image.alt = fixture.name;
+            node.appendChild(image);
+            previewFurnitureLayer.replaceChildren(node);
             scaleMetric.textContent = 'RN 기준 fixture · '
                 + (freeMode ? 'FREE_V1 ' : 'SLOT_V1 ')
                 + baseWidth.toFixed(0) + '% 박스 · 읽기 전용';
@@ -615,11 +1087,44 @@
             const range = roomContract.furniture.editorScale;
             draftScale = Math.min(range.max, Math.max(range.min, value));
             const item = currentItem();
-            if (item && Math.abs(Number(draftScale.toFixed(2)) - Number(item.defaultScale)) > 0.0001) {
-                draftScales.set(item.id, draftScale);
-            } else if (item) {
-                draftScales.delete(item.id);
-            }
+            if (!item) return;
+            const draft = currentDraft(item);
+            const position = clampPosition(draft.x, draft.y, draftScale);
+            saveDraft(item, {
+                ...draft,
+                scale: draftScale,
+                x: position.x,
+                y: position.y
+            });
+            renderScale();
+        }
+
+        function setDraftPosition(x, y) {
+            const item = currentItem();
+            if (!item || !Number.isFinite(x) || !Number.isFinite(y)) return;
+            const draft = currentDraft(item);
+            const position = clampPosition(x, y, draft.scale);
+            saveDraft(item, {
+                ...draft,
+                x: position.x,
+                y: position.y,
+                explicitPosition: true
+            });
+            renderScale();
+        }
+
+        function resetDraftPosition() {
+            const item = currentItem();
+            if (!item) return;
+            const draft = currentDraft(item);
+            const center = roomContract.furniture.newPlacementCenter;
+            const position = clampPosition(center.x, center.y, draft.scale);
+            saveDraft(item, {
+                ...draft,
+                x: position.x,
+                y: position.y,
+                explicitPosition: false
+            });
             renderScale();
         }
 
@@ -631,71 +1136,91 @@
                 }
                 return;
             }
-            const normalized = Number(draftScale.toFixed(2));
+            let draft = currentDraft(item);
+            const normalized = Number(draft.scale.toFixed(2));
+            draftScale = normalized;
+            const position = clampPosition(draft.x, draft.y, normalized);
+            if (position.x !== draft.x || position.y !== draft.y) {
+                draft = saveDraft(item, { ...draft, ...position });
+            }
             scaleRange.value = normalized;
             scaleNumber.value = normalized.toFixed(2);
             const slotRects = roomContract.furniture.slots;
             const hasStoredSlot = Boolean(item.defaultSlot && slotRects[item.defaultSlot]);
             const slot = hasStoredSlot ? item.defaultSlot : 'bottomCenter';
             const freeMode = previewMode === 'free';
-            const rect = freeMode
-                ? {
-                    left: roomContract.furniture.previewCenter.x
-                        - roomContract.furniture.baseWidth / 2,
-                    top: roomContract.furniture.previewCenter.y
-                        - roomContract.furniture.baseWidth / 2,
-                    width: roomContract.furniture.baseWidth
-                }
-                : slotRects[slot];
+            const rect = freeMode ? { width: roomContract.furniture.baseWidth } : slotRects[slot];
             const baseWidth = rect.width * 100;
-            previewFurniture.className = freeMode
-                ? 'room-furniture free-preview-anchor'
-                : 'room-furniture slot-preview-anchor';
-            previewFurniture.style.left = percent(rect.left);
-            previewFurniture.style.top = percent(rect.top);
-            previewFurniture.style.width = percent(rect.width);
-            previewFurniture.style.transform = freeMode ? 'scale(' + normalized + ')' : 'none';
             scaleMetric.textContent = freeMode
                 ? 'FREE_V1 기준 가구 폭 ' + baseWidth.toFixed(0) + '% × ' + normalized.toFixed(2)
-                    + ' = ' + (baseWidth * normalized).toFixed(1) + '% · 중심 고정'
+                    + ' = ' + (baseWidth * normalized).toFixed(1) + '% · 중심 X '
+                    + draft.x.toFixed(3) + ' / Y ' + draft.y.toFixed(3)
                 : 'SLOT_V1 기준 가구 폭 ' + baseWidth + '% 고정 · 기본 크기는 새 FREE_V1에만 적용'
                     + (!hasStoredSlot ? ' · 미지정은 하단 중앙으로 미리보기' : '');
             roomSourceNote.textContent = freeMode
                 ? 'Room contract v' + roomContract.version + ': ' + baseWidth.toFixed(0)
-                    + '% 박스 · 중심 좌표 고정 transform scale · 내부 여백 '
-                    + roomContract.furniture.imagePaddingPx + 'px · 보라 테두리는 관리자 가이드'
+                    + '% 배치 영역 · 중심 좌표 고정 transform scale·rotate·flip · 내부 여백 '
+                    + roomContract.furniture.imagePaddingPx + 'px · 선택 가구만 윤곽 강조'
                 : 'Room contract v' + roomContract.version
-                    + ': defaultSlot의 정규화 좌표·폭 사용 · 보라 테두리는 관리자 가이드';
-            const dirty = Math.abs(normalized - Number(item.defaultScale)) > 0.0001;
+                    + ': defaultSlot의 정규화 좌표·폭 사용 · 선택 가구만 윤곽 강조';
+            positionControls.hidden = activePreviewTab !== 'free';
+            transformControls.hidden = activePreviewTab !== 'free';
+            sceneToolbar.hidden = activePreviewTab !== 'free';
+            positionX.value = draft.x.toFixed(5);
+            positionY.value = draft.y.toFixed(5);
+            positionStatus.textContent = draft.explicitPosition
+                ? '아이템별 기본 위치 · X ' + draft.x.toFixed(3) + ' / Y ' + draft.y.toFixed(3)
+                : '공통 기본 위치 사용 중 · X ' + draft.x.toFixed(3) + ' / Y ' + draft.y.toFixed(3);
+            const dirty = isRenderDefaultsDirty(item, draft);
             draftStatus.textContent = dirty ? '저장되지 않은 변경사항' : '저장됨';
             draftStatus.classList.toggle('dirty', dirty);
             scaleSave.disabled = busy || !dirty;
+            renderScene();
         }
 
-        async function saveDefaultScale() {
+        function isRenderDefaultsDirty(item, draft) {
+            const savedExplicit = Number.isFinite(nullableNumber(item.defaultPositionX))
+                && Number.isFinite(nullableNumber(item.defaultPositionY));
+            if (Math.abs(Number(draft.scale.toFixed(2)) - Number(item.defaultScale)) > 0.0001) {
+                return true;
+            }
+            if (draft.explicitPosition !== savedExplicit) return true;
+            if (!savedExplicit) return false;
+            return Math.abs(draft.x - Number(item.defaultPositionX)) > 0.000001
+                || Math.abs(draft.y - Number(item.defaultPositionY)) > 0.000001;
+        }
+
+        async function saveRenderDefaults() {
             const item = currentItem();
             if (!item || busy) return;
-            setBusy(true, '기본 크기 저장 중…');
+            const draft = currentDraft(item);
+            setBusy(true, '기본 크기·위치 저장 중…');
             try {
-                const updated = await putJson('/admin/items/' + item.id + '/default-scale', {
-                    defaultScale: Number(draftScale.toFixed(2))
+                const updated = await putJson('/admin/items/' + item.id + '/render-defaults', {
+                    defaultScale: Number(draft.scale.toFixed(2)),
+                    defaultPositionX: draft.explicitPosition ? Number(draft.x.toFixed(5)) : null,
+                    defaultPositionY: draft.explicitPosition ? Number(draft.y.toFixed(5)) : null
                 });
                 item.defaultScale = Number(updated.defaultScale);
-                draftScales.delete(item.id);
+                item.defaultPositionX = nullableNumber(updated.defaultPositionX);
+                item.defaultPositionY = nullableNumber(updated.defaultPositionY);
+                draftDefaults.delete(item.id);
+                const saved = currentDraft(item);
+                const placement = scenePlacements.find((entry) => entry.itemId === item.id);
+                if (placement) Object.assign(placement, saved);
                 renderCatalog();
                 if (selectedId === item.id) {
                     draftScale = item.defaultScale;
                     renderScale();
                 }
-                showOperationStatus('기본 크기 저장됨', 'ok');
+                showOperationStatus('기본 크기·위치 저장됨', 'ok');
             } catch (error) {
                 if (selectedId === item.id) renderScale();
                 showOperationStatus('저장 실패', 'err');
-                showError(item.name + ' 기본 크기 저장 실패: ' + error.message);
+                showError(item.name + ' 기본 크기·위치 저장 실패: ' + error.message);
             } finally {
                 if (selectedId !== item.id && currentItem()) {
-                    draftScale = draftScales.get(currentItem().id)
-                        ?? Number(currentItem().defaultScale);
+                    draftScale = currentDraft().scale;
                 }
                 setBusy(false);
             }
@@ -722,8 +1247,7 @@
                 showError(item.name + ' 슬롯 저장 실패: ' + error.message);
             } finally {
                 if (selectedId !== item.id && currentItem()) {
-                    draftScale = draftScales.get(currentItem().id)
-                        ?? Number(currentItem().defaultScale);
+                    draftScale = currentDraft().scale;
                 }
                 setBusy(false);
             }
@@ -752,21 +1276,41 @@
                 showError(item.name + ' 등급 저장 실패: ' + error.message);
             } finally {
                 if (selectedId !== item.id && currentItem()) {
-                    draftScale = draftScales.get(currentItem().id)
-                        ?? Number(currentItem().defaultScale);
+                    draftScale = currentDraft().scale;
                 }
                 setBusy(false);
             }
         }
 
         async function putJson(url, body) {
-            const response = await fetch(url, {
+            const response = await fetchWithSession(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
                 body: JSON.stringify(body)
             });
             if (!response.ok) throw new Error(await errorMessage(response));
             return response.json();
+        }
+
+        async function fetchWithSession(url, options) {
+            let response;
+            try {
+                response = await fetch(url, options);
+            } catch (error) {
+                if (error instanceof TypeError) throw new Error(RELOGIN_MESSAGE);
+                throw error;
+            }
+            let responsePath = '';
+            try {
+                responsePath = new URL(response.url, window.location.href).pathname;
+            } catch {
+                responsePath = '';
+            }
+            if (response.status === 401 || response.status === 403
+                || (response.redirected && responsePath === '/login')) {
+                throw new Error(RELOGIN_MESSAGE);
+            }
+            return response;
         }
 
         function setBusy(next, message = '') {
@@ -794,15 +1338,22 @@
         function setControlsDisabled(disabled) {
             scaleRange.disabled = disabled;
             scaleNumber.disabled = disabled;
+            positionX.disabled = disabled;
+            positionY.disabled = disabled;
+            positionReset.disabled = disabled;
+            [rotationNumber, rotateLeft, rotateRight, rotationReset, flipHorizontal]
+                .forEach((control) => { control.disabled = disabled; });
             selectedSlot.disabled = disabled;
             selectedRarity.disabled = disabled;
             document.getElementById('scale-minus').disabled = disabled;
             document.getElementById('scale-plus').disabled = disabled;
             document.getElementById('scale-reset').disabled = disabled;
+            updateSceneControls();
             if (disabled) scaleSave.disabled = true;
         }
 
         function setPreviewMode(mode) {
+            activePreviewTab = mode;
             if (mode !== 'single') previewMode = mode;
             const roomActive = mode !== 'single';
             roomPreview.hidden = !roomActive;
@@ -868,7 +1419,31 @@
         document.getElementById('scale-minus').addEventListener('click', () => setDraftScale(draftScale - 0.10));
         document.getElementById('scale-plus').addEventListener('click', () => setDraftScale(draftScale + 0.10));
         document.getElementById('scale-reset').addEventListener('click', () => setDraftScale(1.00));
-        scaleSave.addEventListener('click', saveDefaultScale);
+        positionX.addEventListener('change', () =>
+            setDraftPosition(Number(positionX.value), Number(positionY.value)));
+        positionY.addEventListener('change', () =>
+            setDraftPosition(Number(positionX.value), Number(positionY.value)));
+        positionReset.addEventListener('click', resetDraftPosition);
+        rotationNumber.addEventListener('change', () =>
+            setSelectedRotation(Number(rotationNumber.value)));
+        rotateLeft.addEventListener('click', () => {
+            const placement = currentScenePlacement();
+            if (placement) setSelectedRotation(placement.rotationDeg - 15);
+        });
+        rotateRight.addEventListener('click', () => {
+            const placement = currentScenePlacement();
+            if (placement) setSelectedRotation(placement.rotationDeg + 15);
+        });
+        rotationReset.addEventListener('click', () => setSelectedRotation(0));
+        flipHorizontal.addEventListener('click', toggleSelectedFlip);
+        sceneAdd.addEventListener('click', () => {
+            const item = currentItem();
+            if (item) addItemToScene(item);
+        });
+        sceneLoadTheme.addEventListener('click', loadSelectedThemeScene);
+        sceneRemove.addEventListener('click', removeSelectedFromScene);
+        sceneClear.addEventListener('click', clearScene);
+        scaleSave.addEventListener('click', saveRenderDefaults);
         selectedSlot.addEventListener('change', saveSlot);
         selectedRarity.addEventListener('change', saveRarity);
         [previewBackground, previewWallpaper, previewFloor, previewCharacter]

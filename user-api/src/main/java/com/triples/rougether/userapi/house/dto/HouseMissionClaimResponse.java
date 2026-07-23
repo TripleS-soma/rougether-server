@@ -7,9 +7,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record HouseMissionClaimResponse(
         @Schema(description = "미션 ID", example = "3")
         Long missionId,
-        @Schema(description = "상태 (claim 성공 시 COMPLETED)", example = "COMPLETED")
+        @Schema(description = "상태. WEEKLY 는 claim 성공 시 COMPLETED, DAILY 는 ACTIVE 유지(매일 반복)", example = "COMPLETED")
         HouseMissionStatus status,
-        @Schema(description = "이번에 지급된 집 성장 포인트", example = "100")
+        @Schema(description = "이번에 지급된 집 성장 포인트. WEEKLY 100, DAILY 20", example = "100")
         int grantedGrowthPoints,
         @Schema(description = "지급 후 집 성장 포인트", example = "300")
         int houseGrowthPoints,

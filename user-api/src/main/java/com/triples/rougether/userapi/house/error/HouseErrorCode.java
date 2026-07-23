@@ -20,6 +20,7 @@ public enum HouseErrorCode implements ErrorCode {
     HOUSE_MISSION_NOT_FOUND("HOUSE_MISSION_NOT_FOUND", "존재하지 않는 미션입니다.", 404),
     HOUSE_MISSION_TYPE_NOT_SUPPORTED("HOUSE_MISSION_TYPE_NOT_SUPPORTED", "아직 지원하지 않는 미션 유형입니다.", 400),
     HOUSE_MISSION_PERIOD_INVALID("HOUSE_MISSION_PERIOD_INVALID", "미션 종료 시각은 시작 시각보다 뒤여야 합니다.", 400),
+    HOUSE_MISSION_TARGET_INVALID("HOUSE_MISSION_TARGET_INVALID", "DAILY 미션의 목표는 1~100(%) 이어야 합니다.", 400),
     HOUSE_MISSION_NOT_ACTIVE("HOUSE_MISSION_NOT_ACTIVE", "진행 중인 미션이 아니거나 기여 가능 기간이 아닙니다.", 409),
     HOUSE_MISSION_ALREADY_CONTRIBUTED("HOUSE_MISSION_ALREADY_CONTRIBUTED", "오늘은 이미 기여했습니다.", 409),
     HOUSE_MISSION_NOT_ACHIEVED("HOUSE_MISSION_NOT_ACHIEVED", "아직 목표를 달성하지 못했습니다.", 409),
@@ -30,7 +31,7 @@ public enum HouseErrorCode implements ErrorCode {
     HOUSE_ALREADY_MEMBER("HOUSE_ALREADY_MEMBER", "이미 참여 중인 집입니다.", 409),
     HOUSE_CHEER_TYPE_INVALID("HOUSE_CHEER_TYPE_INVALID", "유효하지 않은 응원 타입입니다.", 400),
     HOUSE_CHEER_SELF("HOUSE_CHEER_SELF", "자기 자신에게는 응원을 보낼 수 없습니다.", 400),
-    HOUSE_CHEER_DUPLICATED("HOUSE_CHEER_DUPLICATED", "오늘은 이미 같은 응원을 보냈습니다.", 409);
+    HOUSE_CHEER_LIMIT_EXCEEDED("HOUSE_CHEER_LIMIT_EXCEEDED", "같은 응원은 하루 5회까지 보낼 수 있습니다.", 409);
 
     private final String code;
     private final String message;

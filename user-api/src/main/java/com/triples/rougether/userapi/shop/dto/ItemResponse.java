@@ -26,6 +26,12 @@ public record ItemResponse(
         String defaultSlot,
         @Schema(description = "새 자유배치의 초기 렌더링 배율 (0.50~2.00, 기존 배치 비소급)", example = "1.25")
         BigDecimal defaultScale,
+        @Schema(description = "새 FREE_V1 배치의 중심점 기준 기본 X 좌표 (0~1, null 이면 공통 기본값)",
+                example = "0.5", nullable = true)
+        BigDecimal defaultPositionX,
+        @Schema(description = "새 FREE_V1 배치의 중심점 기준 기본 Y 좌표 (0~1, null 이면 공통 기본값)",
+                example = "0.55", nullable = true)
+        BigDecimal defaultPositionY,
         @Schema(description = "카테고리 코드", example = "furniture")
         String categoryCode,
         @Schema(description = "구매 재화. 허용값: COIN(코인 — 루틴·투두 보상으로 획득, 뽑기에 사용), "
@@ -66,6 +72,8 @@ public record ItemResponse(
                 item.getCharacterSlotType(),
                 item.getDefaultSlot(),
                 item.getDefaultScale(),
+                item.getDefaultPositionX(),
+                item.getDefaultPositionY(),
                 item.getCategoryCode(),
                 item.getPurchaseCurrencyType() != null ? item.getPurchaseCurrencyType().name() : null,
                 item.getPriceAmount(),

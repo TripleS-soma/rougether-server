@@ -67,6 +67,8 @@ public class FirebaseFcmSender implements FcmSender {
                 continue;
             }
             MessagingErrorCode errorCode = response.getException().getMessagingErrorCode();
+            log.warn("FCM 개별 발송 실패 - errorCode={}, message={}", errorCode,
+                    response.getException().getMessage());
             if (errorCode == MessagingErrorCode.UNREGISTERED || errorCode == MessagingErrorCode.INVALID_ARGUMENT) {
                 invalidTokens.add(tokens.get(i));
             }

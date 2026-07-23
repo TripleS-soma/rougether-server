@@ -2,6 +2,7 @@ package com.triples.rougether.adminapi.itemslot.web;
 
 import com.triples.rougether.adminapi.itemslot.dto.ItemDefaultScaleUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemRarityUpdateRequest;
+import com.triples.rougether.adminapi.itemslot.dto.ItemRenderDefaultsUpdateRequest;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotListResponse;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotRow;
 import com.triples.rougether.adminapi.itemslot.dto.ItemSlotUpdateRequest;
@@ -10,6 +11,7 @@ import com.triples.rougether.adminapi.itemslot.dto.SlotAssignmentDto;
 import com.triples.rougether.adminapi.itemslot.dto.SlotImportResult;
 import com.triples.rougether.adminapi.itemslot.error.ItemDefaultScaleInvalidException;
 import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
+import com.triples.rougether.adminapi.itemslot.error.ItemRenderDefaultsInvalidException;
 import com.triples.rougether.adminapi.itemslot.service.ItemSlotService;
 import com.triples.rougether.common.error.ErrorResponse;
 import java.util.List;
@@ -57,6 +59,16 @@ public class ItemSlotController {
         return itemSlotService.updateDefaultScale(itemId, request.defaultScale());
     }
 
+    @PutMapping("/{itemId}/render-defaults")
+    public ItemSlotRow updateRenderDefaults(@PathVariable Long itemId,
+                                            @RequestBody ItemRenderDefaultsUpdateRequest request) {
+        return itemSlotService.updateRenderDefaults(
+                itemId,
+                request.defaultScale(),
+                request.defaultPositionX(),
+                request.defaultPositionY());
+    }
+
     @PutMapping("/{itemId}/rarity")
     public ItemSlotRow updateRarity(@PathVariable Long itemId,
                                     @RequestBody ItemRarityUpdateRequest request) {
@@ -72,6 +84,12 @@ public class ItemSlotController {
     public ResponseEntity<ErrorResponse> handleInvalidDefaultScale(ItemDefaultScaleInvalidException exception) {
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("ITEM_DEFAULT_SCALE_INVALID", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ItemRenderDefaultsInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRenderDefaults(ItemRenderDefaultsInvalidException exception) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("ITEM_RENDER_DEFAULTS_INVALID", exception.getMessage()));
     }
 
     @ExceptionHandler(ItemRarityInvalidException.class)
