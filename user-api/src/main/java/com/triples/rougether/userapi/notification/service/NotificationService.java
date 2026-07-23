@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.notification.service;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.message.NotificationContent;
@@ -24,6 +25,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final FcmPushExecutor fcmPushExecutor;
+    private final NotificationSettingService notificationSettingService;
     private final ApplicationEventPublisher eventPublisher;
 
     public void send(Long userId, NotificationContent content) {
@@ -36,7 +38,7 @@ public class NotificationService {
                 Notification.create(user, content.type(), content.title(), content.body(), refId));
 
         eventPublisher.publishEvent(new NotificationCreatedEvent(
-                notification.getId(), userId, content.title(), content.body()));
+                notification.getId(), userId, content.type(), content.title(), content.body()));
     }
 
     // 트랜잭션 커밋 이후에 알림 수신.
@@ -46,12 +48,17 @@ public class NotificationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void onNotificationCreated(NotificationCreatedEvent event) {
         try {
+            // 알림 내역(notification)은 이미 저장됐음 — 설정 off는 push만 막는다.
+            if (!notificationSettingService.isPushAllowed(event.userId(), event.type())) {
+                return;
+            }
             fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());
         } catch (Exception e) {
             log.warn("알림 push 제출 실패 - userId={}", event.userId(), e);
         }
     }
 
-    public record NotificationCreatedEvent(Long notificationId, Long userId, String title, String body) {
+    public record NotificationCreatedEvent(Long notificationId, Long userId, NotificationType type,
+                                           String title, String body) {
     }
 }
