@@ -144,7 +144,9 @@
             statusCell.appendChild(statusSelect);
 
             const dateCell = document.createElement('td');
-            dateCell.textContent = (item.createdAt ?? '').substring(0, 10);
+            dateCell.textContent = item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
+                : '-';
 
             tr.append(userCell, bodyCell, envCell, shotCell, statusCell, dateCell);
             return tr;

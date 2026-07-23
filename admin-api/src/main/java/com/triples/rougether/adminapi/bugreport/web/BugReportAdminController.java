@@ -30,21 +30,28 @@ public class BugReportAdminController {
 
     @GetMapping
     public Map<String, List<AdminBugReportResponse>> getReports(
-            @RequestParam(value = "status", required = false) BugReportStatus status) {
-        return Map.of("items", bugReportAdminService.getReports(status));
+            @RequestParam(value = "status", required = false) String status) {
+        // enum 바인딩 실패는 공통 에러 형식을 우회하므로 문자열로 받아 직접 파싱한다
+        BugReportStatus parsed = (status == null || status.isBlank()) ? null : parseStatus(status);
+        return Map.of("items", bugReportAdminService.getReports(parsed));
     }
 
     @PatchMapping("/{id}/status")
     public AdminBugReportResponse changeStatus(@PathVariable Long id,
                                                @RequestBody Map<String, String> request) {
-        BugReportStatus status;
-        try {
-            status = BugReportStatus.valueOf(request.getOrDefault("status", ""));
-        } catch (IllegalArgumentException e) {
-            throw new BugReportAdminException("BUG_REPORT_STATUS_INVALID",
-                    "허용되지 않은 상태입니다: " + request.get("status"), 400);
+        return bugReportAdminService.changeStatus(id, parseStatus(request.get("status")));
+    }
+
+    // {"status": null}·미지원 값 모두 400 - valueOf(null) 은 NPE 라 직접 방어한다
+    private static BugReportStatus parseStatus(String raw) {
+        if (raw == null) {
+            throw new BugReportAdminException("BUG_REPORT_STATUS_INVALID", "상태 값이 필요합니다.", 400);
         }
-        return bugReportAdminService.changeStatus(id, status);
+        try {
+            return BugReportStatus.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw new BugReportAdminException("BUG_REPORT_STATUS_INVALID", "허용되지 않은 상태입니다: " + raw, 400);
+        }
     }
 
     @ExceptionHandler(BugReportAdminException.class)

@@ -68,6 +68,17 @@ class BugReportAdminTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BUG_REPORT_STATUS_INVALID"));
 
+        mockMvc.perform(patch("/admin/bug-reports/{id}/status", report.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": null}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BUG_REPORT_STATUS_INVALID"));
+
+        // 잘못된 status 필터도 공통 에러 형식으로 400
+        mockMvc.perform(get("/admin/bug-reports").param("status", "NOPE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BUG_REPORT_STATUS_INVALID"));
+
         mockMvc.perform(patch("/admin/bug-reports/{id}/status", 999999)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\": \"RESOLVED\"}").with(csrf()))

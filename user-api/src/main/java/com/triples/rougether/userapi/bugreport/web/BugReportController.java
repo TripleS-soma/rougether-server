@@ -33,7 +33,7 @@ public class BugReportController {
 
     @Operation(summary = "버그 제보 제출",
             description = "앱에서 발견한 버그를 제보합니다. 스크린샷은 선택이며 최대 3장, png·jpeg·webp 형식, "
-                    + "각 10MB 이하만 허용됩니다(요청 전체는 서버 설정상 최대 12MB). 제출된 제보는 RECEIVED 상태로 시작하고, "
+                    + "각 10MB 이하만 허용됩니다. 제출된 제보는 RECEIVED 상태로 시작하고, "
                     + "처리 현황은 내 제보 목록(GET /api/v1/me/bug-reports)에서 확인할 수 있습니다.")
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping(value = "/bug-reports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
