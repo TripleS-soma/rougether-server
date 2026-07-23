@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,7 +17,10 @@ import com.triples.rougether.domain.house.entity.HouseMission;
 import com.triples.rougether.domain.house.entity.HouseMissionParticipant;
 import com.triples.rougether.domain.house.entity.HouseMissionStatus;
 import com.triples.rougether.domain.house.entity.HouseMissionType;
+import com.triples.rougether.domain.house.entity.HouseMissionDailyContribution;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionDailyContributionRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionDailyRewardRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
@@ -42,13 +46,17 @@ class HouseMissionServiceTest {
     @Mock private HouseMemberRepository houseMemberRepository;
     @Mock private HouseMissionRepository houseMissionRepository;
     @Mock private HouseMissionParticipantRepository participantRepository;
+    @Mock private HouseMissionDailyContributionRepository dailyContributionRepository;
+    @Mock private HouseMissionDailyRewardRepository dailyRewardRepository;
     @InjectMocks private HouseMissionService houseMissionService;
 
     // NOTE: helper 가 만든 mock 은 반드시 변수에 받은 뒤 바깥 stubbing 에 쓴다 (UnfinishedStubbing 방지).
     private House aliveHouse(Long houseId) {
         House house = mock(House.class);
-        when(house.isDeleted()).thenReturn(false);
-        when(houseRepository.findById(houseId)).thenReturn(Optional.of(house));
+        lenient().when(house.isDeleted()).thenReturn(false);
+        // claim 은 진입부터 락 조회(findWithLockById), 나머지 경로는 일반 조회(findById)를 쓴다 - 둘 다 stub.
+        lenient().when(houseRepository.findById(houseId)).thenReturn(Optional.of(house));
+        lenient().when(houseRepository.findWithLockById(houseId)).thenReturn(Optional.of(house));
         return house;
     }
 
@@ -146,6 +154,10 @@ class HouseMissionServiceTest {
         aliveHouse(1L);
         activeMember(1L, 7L, false, 10L);
         activeMission(3L, 1L, 2);
+        when(dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
+                eq(3L), eq(10L), any())).thenReturn(false);
+        when(dailyContributionRepository.saveAndFlush(any(HouseMissionDailyContribution.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(participantRepository.findByMissionIdAndMemberId(3L, 10L)).thenReturn(Optional.empty());
         when(participantRepository.save(any(HouseMissionParticipant.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -163,14 +175,14 @@ class HouseMissionServiceTest {
         aliveHouse(1L);
         activeMember(1L, 7L, false, 10L);
         activeMission(3L, 1L, 2);
-        HouseMissionParticipant participant = mock(HouseMissionParticipant.class);
-        when(participant.getUpdatedAt()).thenReturn(Instant.now());
-        when(participantRepository.findByMissionIdAndMemberId(3L, 10L)).thenReturn(Optional.of(participant));
+        // 하루 1회 판정은 일별 이력 기준 (#201) — 오늘 이력이 있으면 참여 row 조회 전에 거부된다.
+        when(dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
+                eq(3L), eq(10L), any())).thenReturn(true);
 
         assertThatThrownBy(() -> houseMissionService.contribute(7L, 1L, 3L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED));
-        verify(participant, never()).contribute(1);
+        verify(participantRepository, never()).findByMissionIdAndMemberId(any(), any());
     }
 
     @Test
@@ -178,8 +190,12 @@ class HouseMissionServiceTest {
         aliveHouse(1L);
         activeMember(1L, 7L, false, 10L);
         activeMission(3L, 1L, 5);
+        // 어제 이력만 있고 오늘 이력은 없는 상태 (#201 — 일별 이력 판정이라 날짜가 바뀌면 다시 기여 가능)
+        when(dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
+                eq(3L), eq(10L), any())).thenReturn(false);
+        when(dailyContributionRepository.saveAndFlush(any(HouseMissionDailyContribution.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         HouseMissionParticipant participant = mock(HouseMissionParticipant.class);
-        when(participant.getUpdatedAt()).thenReturn(Instant.now().minus(Duration.ofDays(1)));
         when(participant.getContributionValue()).thenReturn(2);
         when(participantRepository.findByMissionIdAndMemberId(3L, 10L)).thenReturn(Optional.of(participant));
         when(participantRepository.sumContributionByMissionId(3L)).thenReturn(2L);

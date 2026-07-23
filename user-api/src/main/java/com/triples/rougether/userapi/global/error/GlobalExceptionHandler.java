@@ -24,8 +24,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
+        // 메시지는 예외 인스턴스 기준 - 기본 생성자는 errorCode.message() 와 동일하고, 오버라이드 시 상황별 메시지가 내려간다.
         return ResponseEntity.status(errorCode.status())
-                .body(ErrorResponse.of(errorCode.code(), errorCode.message()));
+                .body(ErrorResponse.of(errorCode.code(), exception.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
