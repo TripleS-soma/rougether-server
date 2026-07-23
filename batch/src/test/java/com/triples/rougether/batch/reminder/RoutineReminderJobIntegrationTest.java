@@ -8,10 +8,13 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
 import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationSetting;
+import com.triples.rougether.domain.notification.entity.NotificationSettingType;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
+import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
@@ -96,12 +99,15 @@ class RoutineReminderJobIntegrationTest {
     @Autowired
     private UserDeviceTokenRepository userDeviceTokenRepository;
     @Autowired
+    private NotificationSettingRepository notificationSettingRepository;
+    @Autowired
     private TestFcmSender testFcmSender;
 
     @AfterEach
     void cleanUp() {
         // Step2 reader가 날짜 무관 전체 PENDING을 훑으므로 테스트 간 알림이 남으면 서로 간섭함
         notificationRepository.deleteAll();
+        notificationSettingRepository.deleteAll();
         routineLogRepository.deleteAll();
         userDeviceTokenRepository.deleteAll();
         routineRepository.deleteAll();
@@ -310,6 +316,78 @@ class RoutineReminderJobIntegrationTest {
         Optional<UserDeviceToken> remaining = userDeviceTokenRepository.findByToken("invalid-token");
         assertThat(remaining).isEmpty();
         assertThat(token.getId()).isNotNull();
+    }
+
+    @Test
+    void 리마인더_알림을_끈_사용자는_push를_보내지_않고_BLOCKED로_종결한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.REMINDER);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.BLOCKED);
+        assertThat(testFcmSender.calls).isEmpty();
+    }
+
+    @Test
+    void 마스터를_끈_사용자는_리마인더_그룹이_켜져있어도_차단한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.ALL);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.TODO_REMINDER, ReminderMessage.TODO_TITLE, ReminderMessage.todoBody("장보기"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.BLOCKED);
+        assertThat(testFcmSender.calls).isEmpty();
+    }
+
+    @Test
+    void 집_알림만_끈_사용자에게는_리마인더를_그대로_발송한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.HOUSE);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.SENT);
+        assertThat(testFcmSender.calls).hasSize(1);
+    }
+
+    @Test
+    void 한_chunk에_off_사용자가_섞여도_그_사용자만_차단한다() {
+        User blocked = userRepository.save(User.signUp());
+        User allowed = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(
+                UserDeviceToken.register(blocked, "token-blocked", DevicePlatform.ANDROID, Instant.now()));
+        userDeviceTokenRepository.save(
+                UserDeviceToken.register(allowed, "token-allowed", DevicePlatform.IOS, Instant.now()));
+        disableSetting(blocked, NotificationSettingType.REMINDER);
+        Notification blockedNotification = notificationRepository.save(Notification.create(blocked,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+        Notification allowedNotification = notificationRepository.save(Notification.create(allowed,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 2L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        assertThat(notificationRepository.findById(blockedNotification.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.BLOCKED);
+        assertThat(notificationRepository.findById(allowedNotification.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.SENT);
+        assertThat(testFcmSender.calls).containsExactly(List.of("token-allowed"));
+    }
+
+    private void disableSetting(User user, NotificationSettingType type) {
+        notificationSettingRepository.save(NotificationSetting.create(user, type, false));
     }
 
     private void runJob(LocalDate date, LocalTime time) throws Exception {
