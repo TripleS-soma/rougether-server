@@ -89,7 +89,8 @@ public class HouseMissionController {
     }
 
     @Operation(summary = "단체 미션 보상 받기",
-            description = "목표를 달성한 미션의 보상을 받습니다. 해당 집의 ACTIVE 구성원 누구나 실행할 수 있습니다. "
+            description = "목표를 달성한 미션의 보상을 받습니다. 해당 집의 ACTIVE 구성원 누구나, 미션 기간 내에만 실행할 수 있습니다 "
+                    + "(endsAt 이 지나면 유형 무관 보상 수령 불가). "
                     + "WEEKLY 미션은 미션당 최초 1회만 가능하고, 성공 시 COMPLETED 로 전환되며 집 성장 포인트가 +100 적립됩니다. "
                     + "DAILY 미션은 오늘(KST) 달성률이 targetValue% 이상일 때 하루 1회 가능하고, 집 성장 포인트가 +20 적립되며 "
                     + "COMPLETED 전환 없이 다음날 다시 도전할 수 있습니다. 그날 claim 하지 않으면 그날 보상은 소멸합니다 "

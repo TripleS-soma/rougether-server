@@ -233,7 +233,8 @@ public class HouseMissionService {
         if (mission.getStatus() == HouseMissionStatus.COMPLETED) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED);
         }
-        if (!mission.isActive()) {
+        // 만료 후 claim 불가(유예 없음, #205) - 기간이 끝나면 보상 기회도 끝난다. EXPIRED 전이 배치 전이라도 기간으로 거부.
+        if (!mission.isActive() || !mission.isWithinPeriod(Instant.now())) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE);
         }
         long currentValue = participantRepository.sumContributionByMissionId(missionId);
