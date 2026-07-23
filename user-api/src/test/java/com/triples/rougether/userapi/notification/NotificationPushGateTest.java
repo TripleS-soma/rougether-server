@@ -54,6 +54,11 @@ class NotificationPushGateTest {
                 "SELECT COUNT(*) FROM notification WHERE user_id = ?", Integer.class, userId);
     }
 
+    private String savedPushStatus() {
+        return jdbcTemplate.queryForObject(
+                "SELECT push_status FROM notification WHERE user_id = ?", String.class, userId);
+    }
+
     @Test
     void 설정이_없으면_push가_나간다() {
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
@@ -70,6 +75,7 @@ class NotificationPushGateTest {
 
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
+        assertThat(savedPushStatus()).isEqualTo("BLOCKED");
     }
 
     // 그룹은 켜둔 채 마스터만 끈 경우. REMINDER 타입은 send() 를 타지 않아(batch 경로) 여기서 쓰지 않음 —
@@ -82,6 +88,7 @@ class NotificationPushGateTest {
 
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
+        assertThat(savedPushStatus()).isEqualTo("BLOCKED");
     }
 
     @Test

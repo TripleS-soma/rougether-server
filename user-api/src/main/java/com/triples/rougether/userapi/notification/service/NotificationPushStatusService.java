@@ -22,4 +22,8 @@ public class NotificationPushStatusService {
     public void markFailed(Long notificationId) {
         notificationRepository.findById(notificationId).ifPresent(Notification::markPushFailed);
     }
+
+    public void markBlocked(Long notificationId) {
+        notificationRepository.findById(notificationId).ifPresent(Notification::markPushBlocked);
+    }
 }

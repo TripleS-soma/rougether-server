@@ -26,6 +26,7 @@ public class NotificationService {
     private final UserRepository userRepository;
     private final FcmPushExecutor fcmPushExecutor;
     private final NotificationSettingService notificationSettingService;
+    private final NotificationPushStatusService notificationPushStatusService;
     private final ApplicationEventPublisher eventPublisher;
 
     public void send(Long userId, NotificationContent content) {
@@ -50,6 +51,7 @@ public class NotificationService {
         try {
             // 알림 내역(notification)은 이미 저장됐음 — 설정 off는 push만 막는다.
             if (!notificationSettingService.isPushAllowed(event.userId(), event.type())) {
+                notificationPushStatusService.markBlocked(event.notificationId());
                 return;
             }
             fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());

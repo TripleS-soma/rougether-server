@@ -17,6 +17,7 @@ import com.triples.rougether.domain.notification.repository.NotificationReposito
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.message.NotificationContent;
 import com.triples.rougether.userapi.notification.service.NotificationService;
+import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
 import com.triples.rougether.userapi.notification.service.NotificationSettingService;
 import com.triples.rougether.userapi.notification.service.NotificationService.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class NotificationServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private FcmPushExecutor fcmPushExecutor;
     @Mock private NotificationSettingService notificationSettingService;
+    @Mock private NotificationPushStatusService notificationPushStatusService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @InjectMocks private NotificationService notificationService;
 
@@ -85,5 +87,16 @@ class NotificationServiceTest {
         assertThatCode(() -> notificationService.onNotificationCreated(
                 new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문")))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 설정이_off면_push_대신_BLOCKED로_종결한다() {
+        when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(false);
+
+        notificationService.onNotificationCreated(
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
+
+        verify(notificationPushStatusService).markBlocked(100L);
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
     }
 }
