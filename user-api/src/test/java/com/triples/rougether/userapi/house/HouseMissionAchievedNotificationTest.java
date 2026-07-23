@@ -53,8 +53,12 @@ class HouseMissionAchievedNotificationTest {
     void cleanUp() {
         // 테스트 트랜잭션이 없어 직접 정리함.
         if (houseId != null) {
-            jdbcTemplate.update("DELETE FROM house_mission_participants WHERE mission_id IN "
-                    + "(SELECT id FROM house_missions WHERE house_id = ?)", houseId);
+            // house_missions 를 참조하는 자식 테이블을 먼저 지워야 FK 위반이 안 남.
+            for (String childTable : new String[] {
+                    "house_mission_daily_contributions", "house_mission_daily_rewards", "house_mission_participants"}) {
+                jdbcTemplate.update("DELETE FROM " + childTable + " WHERE mission_id IN "
+                        + "(SELECT id FROM house_missions WHERE house_id = ?)", houseId);
+            }
             jdbcTemplate.update("DELETE FROM house_missions WHERE house_id = ?", houseId);
         }
         for (Long userId : new Long[] {ownerId, memberId}) {
