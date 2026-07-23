@@ -22,7 +22,7 @@ public record HouseMissionListResponse(List<MissionSummary> items) {
             int targetValue,
             @Schema(description = "현재 진행 수치. WEEKLY 는 구성원 기여 누적 합, DAILY 는 오늘(KST) 기여 멤버 비율 %(내림)", example = "12")
             long currentValue,
-            @Schema(description = "상태. ACTIVE(진행 중), COMPLETED(달성 — 보상 지급됨, WEEKLY 전용), EXPIRED(기간 만료). DAILY 는 COMPLETED 전환 없이 매일 반복", example = "ACTIVE")
+            @Schema(description = "상태. ACTIVE(진행 중), COMPLETED(달성 — 보상 지급됨, WEEKLY 전용), EXPIRED(기간 만료 — endsAt 경과 시 매시 배치로 전이). DAILY 는 COMPLETED 전환 없이 매일 반복", example = "ACTIVE")
             HouseMissionStatus status,
             @Schema(description = "시작 시각 (null 이면 즉시 시작)")
             Instant startsAt,

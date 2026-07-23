@@ -237,6 +237,7 @@ class HouseMissionServiceTest {
         HouseMission mission = mock(HouseMission.class);
         when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
         when(mission.isActive()).thenReturn(true);
+        when(mission.isWithinPeriod(any())).thenReturn(true);
         when(mission.getTargetValue()).thenReturn(2);
         when(houseMissionRepository.findWithLockByIdAndHouseId(3L, 1L)).thenReturn(Optional.of(mission));
         when(participantRepository.sumContributionByMissionId(3L)).thenReturn(2L);
@@ -263,6 +264,7 @@ class HouseMissionServiceTest {
         HouseMission mission = mock(HouseMission.class);
         when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
         when(mission.isActive()).thenReturn(true);
+        when(mission.isWithinPeriod(any())).thenReturn(true);
         when(mission.getTargetValue()).thenReturn(5);
         when(houseMissionRepository.findWithLockByIdAndHouseId(3L, 1L)).thenReturn(Optional.of(mission));
         when(participantRepository.sumContributionByMissionId(3L)).thenReturn(4L);

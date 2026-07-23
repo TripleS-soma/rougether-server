@@ -139,4 +139,54 @@ class HouseMissionFlowIntegrationTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
     }
+
+    @Test
+    void 기간이_지난_미션은_목표를_달성했어도_claim_할_수_없다() {
+        Fixture f = fixture();
+        Instant now = Instant.now();
+        // 기간 내 목표(2)를 달성해놓고 claim 하지 않은 채 기간이 끝난 상황 (#205 - 유예 없음)
+        HouseMissionResponse created = houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("만료 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 2,
+                        null, now.plus(Duration.ofDays(1))));
+        houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId());
+        houseMissionService.contribute(f.member().getId(), f.house().getId(), created.missionId());
+
+        entityManager.flush();
+        entityManager.clear();
+        jdbcTemplate.update("update house_missions set ends_at = ? where id = ?",
+                Timestamp.from(now.minus(Duration.ofDays(1))), created.missionId());
+
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
+        // 성장 포인트 미지급
+        assertThat(houseRepository.findById(f.house().getId()).orElseThrow().getGrowthPoints()).isZero();
+    }
+
+    @Test
+    void EXPIRED_전이된_미션은_기여와_claim_이_모두_거부된다() {
+        Fixture f = fixture();
+        HouseMissionResponse created = houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("만료 전이 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 2,
+                        null, Instant.now().plus(Duration.ofDays(1))));
+
+        // 만료 전이 배치가 EXPIRED 로 내린 상태 시뮬레이션
+        entityManager.flush();
+        entityManager.clear();
+        jdbcTemplate.update("update house_missions set status = 'EXPIRED' where id = ?", created.missionId());
+
+        assertThatThrownBy(() -> houseMissionService.contribute(f.owner().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), created.missionId()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
+
+        // 목록에는 EXPIRED 상태로 그대로 노출된다
+        assertThat(houseMissionService.getMissions(f.owner().getId(), f.house().getId()).items())
+                .anySatisfy(item -> {
+                    assertThat(item.missionId()).isEqualTo(created.missionId());
+                    assertThat(item.status()).isEqualTo(HouseMissionStatus.EXPIRED);
+                });
+    }
 }
