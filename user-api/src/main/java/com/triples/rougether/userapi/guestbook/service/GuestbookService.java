@@ -12,6 +12,7 @@ import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateRequest;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateResponse;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookListResponse;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookListResponse.GuestbookItem;
+import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -25,13 +26,16 @@ public class GuestbookService {
     private final RoomGuestbookRepository roomGuestbookRepository;
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
+    private final BannedWordChecker bannedWordChecker;
 
     public GuestbookService(RoomGuestbookRepository roomGuestbookRepository,
                             HouseRepository houseRepository,
-                            HouseMemberRepository houseMemberRepository) {
+                            HouseMemberRepository houseMemberRepository,
+                            BannedWordChecker bannedWordChecker) {
         this.roomGuestbookRepository = roomGuestbookRepository;
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
+        this.bannedWordChecker = bannedWordChecker;
     }
 
     // 방명록 목록 - 커서 기반 무한스크롤. size+1 로 조회해 hasNext 판정.
@@ -51,6 +55,10 @@ public class GuestbookService {
     // 방명록 작성 - 방 주인 본인도 자기 방에 쓸 수 있다.
     @Transactional
     public GuestbookCreateResponse write(Long userId, Long roomOwnerId, GuestbookCreateRequest request) {
+        // 금칙어 차단 (#209)
+        if (bannedWordChecker.containsBannedWord(request.content())) {
+            throw new BusinessException(HouseErrorCode.GUESTBOOK_CONTENT_BANNED);
+        }
         SameHouseContext context = requireSameHouseMembers(userId, roomOwnerId, request.houseId());
         RoomGuestbook guestbook = roomGuestbookRepository.save(RoomGuestbook.write(
                 context.roomOwner(), context.house(), context.author(), request.content()));

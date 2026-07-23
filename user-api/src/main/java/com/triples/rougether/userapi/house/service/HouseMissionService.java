@@ -22,6 +22,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
+import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -57,6 +58,7 @@ public class HouseMissionService {
     private final HouseMissionParticipantRepository participantRepository;
     private final HouseMissionDailyContributionRepository dailyContributionRepository;
     private final HouseMissionDailyRewardRepository dailyRewardRepository;
+    private final BannedWordChecker bannedWordChecker;
     private final NotificationService notificationService;
 
     public HouseMissionService(HouseRepository houseRepository,
@@ -65,6 +67,7 @@ public class HouseMissionService {
                                HouseMissionParticipantRepository participantRepository,
                                HouseMissionDailyContributionRepository dailyContributionRepository,
                                HouseMissionDailyRewardRepository dailyRewardRepository,
+                               BannedWordChecker bannedWordChecker,
                                NotificationService notificationService) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
@@ -72,6 +75,7 @@ public class HouseMissionService {
         this.participantRepository = participantRepository;
         this.dailyContributionRepository = dailyContributionRepository;
         this.dailyRewardRepository = dailyRewardRepository;
+        this.bannedWordChecker = bannedWordChecker;
         this.notificationService = notificationService;
     }
 
@@ -82,6 +86,9 @@ public class HouseMissionService {
         HouseMember me = requireActiveMember(userId, houseId);
         if (!me.isOwner()) {
             throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
+        }
+        if (bannedWordChecker.containsBannedWord(request.title())) {
+            throw new BusinessException(HouseErrorCode.HOUSE_MISSION_TITLE_BANNED);
         }
         if (request.missionType() == HouseMissionType.STREAK_DAYS) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_TYPE_NOT_SUPPORTED);

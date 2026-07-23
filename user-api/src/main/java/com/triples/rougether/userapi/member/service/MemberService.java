@@ -10,6 +10,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.io.IOException;
 import java.util.Set;
@@ -30,6 +31,7 @@ public class MemberService {
     private final UserRepository userRepository;
     private final OnboardingQueryService onboardingQueryService;
     private final AssetStorageService assetStorageService;
+    private final BannedWordChecker bannedWordChecker;
 
     @Transactional(readOnly = true)
     public MeResponse getMe(Long userId) {
@@ -38,6 +40,13 @@ public class MemberService {
 
     @Transactional
     public MeResponse updateMe(Long userId, MemberUpdateRequest request) {
+        // 금칙어 차단 (#209) - 정규화 포함 매칭, 걸린 단어는 노출하지 않음
+        if (bannedWordChecker.containsBannedWord(request.nickname())) {
+            throw new BusinessException(MemberErrorCode.MEMBER_NICKNAME_BANNED);
+        }
+        if (request.bio() != null && bannedWordChecker.containsBannedWord(request.bio())) {
+            throw new BusinessException(MemberErrorCode.MEMBER_BIO_BANNED);
+        }
         User user = findUser(userId);
         user.changeNickname(request.nickname().trim());
         if (request.bio() != null) {
