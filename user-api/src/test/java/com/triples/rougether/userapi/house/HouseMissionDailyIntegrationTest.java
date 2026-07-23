@@ -190,6 +190,30 @@ class HouseMissionDailyIntegrationTest {
     }
 
     @Test
+    void 기여_후_탈퇴한_멤버는_오늘_판정에서_제외된다() {
+        Fixture f = fixture();
+        Long missionId = createDaily(f, 100); // 멤버 2명 전원 기여해야 달성
+        houseMissionService.contribute(f.member().getId(), f.house().getId(), missionId);
+
+        // 기여한 멤버가 탈퇴 - 분모(활성 2->1)와 함께 분자에서도 빠져야 한다
+        houseMemberRepository.findByHouseIdAndUserId(f.house().getId(), f.member().getId())
+                .orElseThrow()
+                .leave();
+        f.house().decreaseMemberCount();
+        entityManager.flush();
+
+        HouseMissionResponse detail =
+                houseMissionService.getMission(f.owner().getId(), f.house().getId(), missionId);
+        // 탈퇴자 기여가 남으면 1/1=100% 로 왜곡 - 제외되어 0% 여야 한다
+        assertThat(detail.currentValue()).isZero();
+        assertThat(detail.achieved()).isFalse();
+
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), missionId))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED));
+    }
+
+    @Test
     void 목록과_상세는_DAILY_에만_todayClaimed_를_내려준다() {
         Fixture f = fixture();
         Long dailyId = createDaily(f, 50);

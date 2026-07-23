@@ -157,7 +157,7 @@ public class HouseMissionService {
                 .orElse(0);
         if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
             LocalDate today = LocalDate.now(KST);
-            long todayCount = dailyContributionRepository.countByMissionIdAndContributionDate(missionId, today);
+            long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(missionId, today);
             return HouseMissionResponse.of(mission,
                     ratePercent(todayCount, house.getCurrentMemberCount()),
                     myContribution,
@@ -199,7 +199,7 @@ public class HouseMissionService {
         }
 
         if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
-            long todayCount = dailyContributionRepository.countByMissionIdAndContributionDate(missionId, today);
+            long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(missionId, today);
             return new HouseMissionContributeResponse(
                     missionId, participant.getContributionValue(),
                     ratePercent(todayCount, house.getCurrentMemberCount()),
@@ -259,7 +259,7 @@ public class HouseMissionService {
         // 성장 포인트는 집 행 락으로 갱신 - 판정에 쓰는 멤버 수도 같은 잠금 상태의 값을 쓴다.
         House house = houseRepository.findWithLockById(houseId)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
-        long todayCount = dailyContributionRepository.countByMissionIdAndContributionDate(mission.getId(), today);
+        long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(mission.getId(), today);
         if (!isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue())) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED);
         }
@@ -315,7 +315,7 @@ public class HouseMissionService {
             return Map.of();
         }
         Map<Long, Long> counts = new HashMap<>();
-        for (Object[] row : dailyContributionRepository.countByMissionIdsAndDate(missionIds, today)) {
+        for (Object[] row : dailyContributionRepository.countActiveByMissionIdsAndDate(missionIds, today)) {
             counts.put((Long) row[0], (Long) row[1]);
         }
         return counts;
