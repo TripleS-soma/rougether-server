@@ -12,6 +12,7 @@ import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateRequest;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateResponse;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookListResponse;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookListResponse.GuestbookItem;
+import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -25,13 +26,16 @@ public class GuestbookService {
     private final RoomGuestbookRepository roomGuestbookRepository;
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
+    private final BannedWordChecker bannedWordChecker;
 
     public GuestbookService(RoomGuestbookRepository roomGuestbookRepository,
                             HouseRepository houseRepository,
-                            HouseMemberRepository houseMemberRepository) {
+                            HouseMemberRepository houseMemberRepository,
+                            BannedWordChecker bannedWordChecker) {
         this.roomGuestbookRepository = roomGuestbookRepository;
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
+        this.bannedWordChecker = bannedWordChecker;
     }
 
     // 방명록 목록 - 커서 기반 무한스크롤. size+1 로 조회해 hasNext 판정.
@@ -52,6 +56,10 @@ public class GuestbookService {
     @Transactional
     public GuestbookCreateResponse write(Long userId, Long roomOwnerId, GuestbookCreateRequest request) {
         SameHouseContext context = requireSameHouseMembers(userId, roomOwnerId, request.houseId());
+        // 금칙어 차단 (#209) - 인가 확인 후 콘텐츠 검증 (다른 적용 지점과 순서 통일)
+        if (bannedWordChecker.containsBannedWord(request.content())) {
+            throw new BusinessException(HouseErrorCode.GUESTBOOK_CONTENT_BANNED);
+        }
         RoomGuestbook guestbook = roomGuestbookRepository.save(RoomGuestbook.write(
                 context.roomOwner(), context.house(), context.author(), request.content()));
         return GuestbookCreateResponse.of(guestbook);

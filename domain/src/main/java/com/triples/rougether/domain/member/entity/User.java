@@ -28,6 +28,10 @@ public class User extends BaseEntity {
     @Column(name = "bio", length = 100)
     private String bio;
 
+    // S3 object key (profile/{uuid}.{ext}). null = 프론트가 기본 이미지 표시.
+    @Column(name = "profile_image_key", length = 255)
+    private String profileImageKey;
+
     @Column(name = "email", length = 255)
     private String email;
 
@@ -62,5 +66,13 @@ public class User extends BaseEntity {
 
     public void changeBio(String bio) {
         this.bio = bio;
+    }
+
+    public void changeProfileImage(String profileImageKey) {
+        this.profileImageKey = profileImageKey;
+    }
+
+    public void removeProfileImage() {
+        this.profileImageKey = null;
     }
 }

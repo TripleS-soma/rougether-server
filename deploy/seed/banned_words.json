@@ -1,0 +1,902 @@
+[
+  {
+    "word": "mc무현",
+    "category": "deceased"
+  },
+  {
+    "word": "고인드립",
+    "category": "deceased"
+  },
+  {
+    "word": "고인모독",
+    "category": "deceased"
+  },
+  {
+    "word": "노무노무",
+    "category": "deceased"
+  },
+  {
+    "word": "노알라",
+    "category": "deceased"
+  },
+  {
+    "word": "세월호충",
+    "category": "deceased"
+  },
+  {
+    "word": "시체팔이",
+    "category": "deceased"
+  },
+  {
+    "word": "운지버섯",
+    "category": "deceased"
+  },
+  {
+    "word": "운지하",
+    "category": "deceased"
+  },
+  {
+    "word": "운지했",
+    "category": "deceased"
+  },
+  {
+    "word": "응디시티",
+    "category": "deceased"
+  },
+  {
+    "word": "홍어택배",
+    "category": "deceased"
+  },
+  {
+    "word": "개독교",
+    "category": "hate"
+  },
+  {
+    "word": "개슬람",
+    "category": "hate"
+  },
+  {
+    "word": "개쌍도",
+    "category": "hate"
+  },
+  {
+    "word": "개저씨",
+    "category": "hate"
+  },
+  {
+    "word": "귀머거리",
+    "category": "hate"
+  },
+  {
+    "word": "급식충",
+    "category": "hate"
+  },
+  {
+    "word": "김치녀",
+    "category": "hate"
+  },
+  {
+    "word": "깜둥이",
+    "category": "hate"
+  },
+  {
+    "word": "껌둥이",
+    "category": "hate"
+  },
+  {
+    "word": "난민충",
+    "category": "hate"
+  },
+  {
+    "word": "니그로",
+    "category": "hate"
+  },
+  {
+    "word": "된장녀",
+    "category": "hate"
+  },
+  {
+    "word": "똥남아",
+    "category": "hate"
+  },
+  {
+    "word": "맘충년",
+    "category": "hate"
+  },
+  {
+    "word": "맘충들",
+    "category": "hate"
+  },
+  {
+    "word": "멍청도",
+    "category": "hate"
+  },
+  {
+    "word": "보슬아치",
+    "category": "hate"
+  },
+  {
+    "word": "상폐녀",
+    "category": "hate"
+  },
+  {
+    "word": "씹선비",
+    "category": "hate"
+  },
+  {
+    "word": "씹치녀",
+    "category": "hate"
+  },
+  {
+    "word": "연금충",
+    "category": "hate"
+  },
+  {
+    "word": "일베충",
+    "category": "hate"
+  },
+  {
+    "word": "자칭페미",
+    "category": "hate"
+  },
+  {
+    "word": "저능아",
+    "category": "hate"
+  },
+  {
+    "word": "전라디언",
+    "category": "hate"
+  },
+  {
+    "word": "절름발이",
+    "category": "hate"
+  },
+  {
+    "word": "정박아",
+    "category": "hate"
+  },
+  {
+    "word": "조센징",
+    "category": "hate"
+  },
+  {
+    "word": "짱꼴라",
+    "category": "hate"
+  },
+  {
+    "word": "쪽바리",
+    "category": "hate"
+  },
+  {
+    "word": "쪽발이",
+    "category": "hate"
+  },
+  {
+    "word": "코쟁이",
+    "category": "hate"
+  },
+  {
+    "word": "틀딱충",
+    "category": "hate"
+  },
+  {
+    "word": "페미나치",
+    "category": "hate"
+  },
+  {
+    "word": "페미충",
+    "category": "hate"
+  },
+  {
+    "word": "퐁퐁남",
+    "category": "hate"
+  },
+  {
+    "word": "퐁퐁녀",
+    "category": "hate"
+  },
+  {
+    "word": "한남충",
+    "category": "hate"
+  },
+  {
+    "word": "홍어족",
+    "category": "hate"
+  },
+  {
+    "word": "굥석열",
+    "category": "political"
+  },
+  {
+    "word": "닭그네",
+    "category": "political"
+  },
+  {
+    "word": "닭근혜",
+    "category": "political"
+  },
+  {
+    "word": "대깨문",
+    "category": "political"
+  },
+  {
+    "word": "문슬람",
+    "category": "political"
+  },
+  {
+    "word": "문재앙",
+    "category": "political"
+  },
+  {
+    "word": "문죄앙",
+    "category": "political"
+  },
+  {
+    "word": "문죄인",
+    "category": "political"
+  },
+  {
+    "word": "빨갱이",
+    "category": "political"
+  },
+  {
+    "word": "윤짜장",
+    "category": "political"
+  },
+  {
+    "word": "이죄명",
+    "category": "political"
+  },
+  {
+    "word": "좌좀비",
+    "category": "political"
+  },
+  {
+    "word": "쥐명박",
+    "category": "political"
+  },
+  {
+    "word": "쥐박이",
+    "category": "political"
+  },
+  {
+    "word": "찢재명",
+    "category": "political"
+  },
+  {
+    "word": "토착왜구",
+    "category": "political"
+  },
+  {
+    "word": "틀딱보수",
+    "category": "political"
+  },
+  {
+    "word": "10새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "18놈",
+    "category": "profanity"
+  },
+  {
+    "word": "18새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "asshole",
+    "category": "profanity"
+  },
+  {
+    "word": "bastard",
+    "category": "profanity"
+  },
+  {
+    "word": "bitch",
+    "category": "profanity"
+  },
+  {
+    "word": "fuck",
+    "category": "profanity"
+  },
+  {
+    "word": "fucker",
+    "category": "profanity"
+  },
+  {
+    "word": "fucking",
+    "category": "profanity"
+  },
+  {
+    "word": "fuckyou",
+    "category": "profanity"
+  },
+  {
+    "word": "jot같",
+    "category": "profanity"
+  },
+  {
+    "word": "mi쳤",
+    "category": "profanity"
+  },
+  {
+    "word": "motherfucker",
+    "category": "profanity"
+  },
+  {
+    "word": "qudtls",
+    "category": "profanity"
+  },
+  {
+    "word": "sibal",
+    "category": "profanity"
+  },
+  {
+    "word": "sipal",
+    "category": "profanity"
+  },
+  {
+    "word": "tlqkf",
+    "category": "profanity"
+  },
+  {
+    "word": "wlfkf",
+    "category": "profanity"
+  },
+  {
+    "word": "개돼지",
+    "category": "profanity"
+  },
+  {
+    "word": "개새기",
+    "category": "profanity"
+  },
+  {
+    "word": "개새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "개색기",
+    "category": "profanity"
+  },
+  {
+    "word": "개색끼",
+    "category": "profanity"
+  },
+  {
+    "word": "개세끼",
+    "category": "profanity"
+  },
+  {
+    "word": "개쓰래기",
+    "category": "profanity"
+  },
+  {
+    "word": "개쓰레기",
+    "category": "profanity"
+  },
+  {
+    "word": "개씨발",
+    "category": "profanity"
+  },
+  {
+    "word": "개자슥",
+    "category": "profanity"
+  },
+  {
+    "word": "개자식",
+    "category": "profanity"
+  },
+  {
+    "word": "걸레같은",
+    "category": "profanity"
+  },
+  {
+    "word": "골1빈",
+    "category": "profanity"
+  },
+  {
+    "word": "느검마",
+    "category": "profanity"
+  },
+  {
+    "word": "느그애미",
+    "category": "profanity"
+  },
+  {
+    "word": "느금마",
+    "category": "profanity"
+  },
+  {
+    "word": "니기미",
+    "category": "profanity"
+  },
+  {
+    "word": "니미럴",
+    "category": "profanity"
+  },
+  {
+    "word": "니애미",
+    "category": "profanity"
+  },
+  {
+    "word": "니애비",
+    "category": "profanity"
+  },
+  {
+    "word": "돌아이",
+    "category": "profanity"
+  },
+  {
+    "word": "뒈져라",
+    "category": "profanity"
+  },
+  {
+    "word": "뒈지고",
+    "category": "profanity"
+  },
+  {
+    "word": "뒤져라",
+    "category": "profanity"
+  },
+  {
+    "word": "뒤질래",
+    "category": "profanity"
+  },
+  {
+    "word": "디질래",
+    "category": "profanity"
+  },
+  {
+    "word": "또라이",
+    "category": "profanity"
+  },
+  {
+    "word": "또라인",
+    "category": "profanity"
+  },
+  {
+    "word": "머저리",
+    "category": "profanity"
+  },
+  {
+    "word": "미친것",
+    "category": "profanity"
+  },
+  {
+    "word": "미친년",
+    "category": "profanity"
+  },
+  {
+    "word": "미친놈",
+    "category": "profanity"
+  },
+  {
+    "word": "미친새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "미틴놈",
+    "category": "profanity"
+  },
+  {
+    "word": "벼엉신",
+    "category": "profanity"
+  },
+  {
+    "word": "병1신",
+    "category": "profanity"
+  },
+  {
+    "word": "병신같",
+    "category": "profanity"
+  },
+  {
+    "word": "병신들",
+    "category": "profanity"
+  },
+  {
+    "word": "병신새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "병신아",
+    "category": "profanity"
+  },
+  {
+    "word": "빡대가리",
+    "category": "profanity"
+  },
+  {
+    "word": "시1발",
+    "category": "profanity"
+  },
+  {
+    "word": "싸가지없",
+    "category": "profanity"
+  },
+  {
+    "word": "씨1발",
+    "category": "profanity"
+  },
+  {
+    "word": "씨1팔",
+    "category": "profanity"
+  },
+  {
+    "word": "씨바알",
+    "category": "profanity"
+  },
+  {
+    "word": "씨발것",
+    "category": "profanity"
+  },
+  {
+    "word": "씨발년",
+    "category": "profanity"
+  },
+  {
+    "word": "씨발놈",
+    "category": "profanity"
+  },
+  {
+    "word": "씨발새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "씨이발",
+    "category": "profanity"
+  },
+  {
+    "word": "씨팔놈",
+    "category": "profanity"
+  },
+  {
+    "word": "씹새기",
+    "category": "profanity"
+  },
+  {
+    "word": "씹새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "씹세끼",
+    "category": "profanity"
+  },
+  {
+    "word": "씹쌔끼",
+    "category": "profanity"
+  },
+  {
+    "word": "아가리",
+    "category": "profanity"
+  },
+  {
+    "word": "애미뒤진",
+    "category": "profanity"
+  },
+  {
+    "word": "애미없",
+    "category": "profanity"
+  },
+  {
+    "word": "애비없",
+    "category": "profanity"
+  },
+  {
+    "word": "염병떨",
+    "category": "profanity"
+  },
+  {
+    "word": "염병할",
+    "category": "profanity"
+  },
+  {
+    "word": "엿먹어",
+    "category": "profanity"
+  },
+  {
+    "word": "엿먹인",
+    "category": "profanity"
+  },
+  {
+    "word": "조온나",
+    "category": "profanity"
+  },
+  {
+    "word": "존나게",
+    "category": "profanity"
+  },
+  {
+    "word": "좆같네",
+    "category": "profanity"
+  },
+  {
+    "word": "좆같은",
+    "category": "profanity"
+  },
+  {
+    "word": "좆같이",
+    "category": "profanity"
+  },
+  {
+    "word": "좆까라",
+    "category": "profanity"
+  },
+  {
+    "word": "좆만아",
+    "category": "profanity"
+  },
+  {
+    "word": "좆만한",
+    "category": "profanity"
+  },
+  {
+    "word": "좆밥새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "주댕이",
+    "category": "profanity"
+  },
+  {
+    "word": "죽여버린다",
+    "category": "profanity"
+  },
+  {
+    "word": "지랄맞",
+    "category": "profanity"
+  },
+  {
+    "word": "지랄염병",
+    "category": "profanity"
+  },
+  {
+    "word": "지랄하네",
+    "category": "profanity"
+  },
+  {
+    "word": "호로새기",
+    "category": "profanity"
+  },
+  {
+    "word": "호로새끼",
+    "category": "profanity"
+  },
+  {
+    "word": "호로자식",
+    "category": "profanity"
+  },
+  {
+    "word": "후레자식",
+    "category": "profanity"
+  },
+  {
+    "word": "dildo",
+    "category": "sexual"
+  },
+  {
+    "word": "hentai",
+    "category": "sexual"
+  },
+  {
+    "word": "penis",
+    "category": "sexual"
+  },
+  {
+    "word": "phonesex",
+    "category": "sexual"
+  },
+  {
+    "word": "porn",
+    "category": "sexual"
+  },
+  {
+    "word": "porno",
+    "category": "sexual"
+  },
+  {
+    "word": "slut",
+    "category": "sexual"
+  },
+  {
+    "word": "가슴만져",
+    "category": "sexual"
+  },
+  {
+    "word": "가슴빨아",
+    "category": "sexual"
+  },
+  {
+    "word": "가슴주물럭",
+    "category": "sexual"
+  },
+  {
+    "word": "강간당",
+    "category": "sexual"
+  },
+  {
+    "word": "강간범",
+    "category": "sexual"
+  },
+  {
+    "word": "강간하",
+    "category": "sexual"
+  },
+  {
+    "word": "개걸레",
+    "category": "sexual"
+  },
+  {
+    "word": "개보지",
+    "category": "sexual"
+  },
+  {
+    "word": "개부랄",
+    "category": "sexual"
+  },
+  {
+    "word": "개불랄",
+    "category": "sexual"
+  },
+  {
+    "word": "걸레년",
+    "category": "sexual"
+  },
+  {
+    "word": "근친상간",
+    "category": "sexual"
+  },
+  {
+    "word": "딸딸이",
+    "category": "sexual"
+  },
+  {
+    "word": "떡치기",
+    "category": "sexual"
+  },
+  {
+    "word": "떡치자",
+    "category": "sexual"
+  },
+  {
+    "word": "떡친다",
+    "category": "sexual"
+  },
+  {
+    "word": "로리콘",
+    "category": "sexual"
+  },
+  {
+    "word": "몸캠피싱",
+    "category": "sexual"
+  },
+  {
+    "word": "바바리맨",
+    "category": "sexual"
+  },
+  {
+    "word": "변태새끼",
+    "category": "sexual"
+  },
+  {
+    "word": "보지빨",
+    "category": "sexual"
+  },
+  {
+    "word": "보지털",
+    "category": "sexual"
+  },
+  {
+    "word": "보짓물",
+    "category": "sexual"
+  },
+  {
+    "word": "빠구리",
+    "category": "sexual"
+  },
+  {
+    "word": "사까시",
+    "category": "sexual"
+  },
+  {
+    "word": "성노예",
+    "category": "sexual"
+  },
+  {
+    "word": "섹스하고",
+    "category": "sexual"
+  },
+  {
+    "word": "섹스하자",
+    "category": "sexual"
+  },
+  {
+    "word": "섹스해",
+    "category": "sexual"
+  },
+  {
+    "word": "쇼타콘",
+    "category": "sexual"
+  },
+  {
+    "word": "스와핑",
+    "category": "sexual"
+  },
+  {
+    "word": "씹구멍",
+    "category": "sexual"
+  },
+  {
+    "word": "씹보지",
+    "category": "sexual"
+  },
+  {
+    "word": "야동보",
+    "category": "sexual"
+  },
+  {
+    "word": "오나홀",
+    "category": "sexual"
+  },
+  {
+    "word": "오럴섹스",
+    "category": "sexual"
+  },
+  {
+    "word": "오르가즘",
+    "category": "sexual"
+  },
+  {
+    "word": "원조교제",
+    "category": "sexual"
+  },
+  {
+    "word": "자위하",
+    "category": "sexual"
+  },
+  {
+    "word": "자위행위",
+    "category": "sexual"
+  },
+  {
+    "word": "자지빨",
+    "category": "sexual"
+  },
+  {
+    "word": "자지털",
+    "category": "sexual"
+  },
+  {
+    "word": "젖가슴",
+    "category": "sexual"
+  },
+  {
+    "word": "젖꼭지",
+    "category": "sexual"
+  },
+  {
+    "word": "젖탱이",
+    "category": "sexual"
+  },
+  {
+    "word": "조건만남",
+    "category": "sexual"
+  },
+  {
+    "word": "펠라치오",
+    "category": "sexual"
+  },
+  {
+    "word": "포르노",
+    "category": "sexual"
+  },
+  {
+    "word": "항문성교",
+    "category": "sexual"
+  },
+  {
+    "word": "화냥년",
+    "category": "sexual"
+  }
+]

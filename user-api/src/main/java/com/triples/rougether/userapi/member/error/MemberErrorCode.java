@@ -9,7 +9,11 @@ public enum MemberErrorCode implements ErrorCode {
     PRIMARY_GOAL_NOT_IN_SELECTION("PRIMARY_GOAL_NOT_IN_SELECTION", "대표 목표는 선택한 목표에 포함되어야 합니다.", 400),
     CHARACTER_NOT_FOUND("CHARACTER_NOT_FOUND", "존재하지 않거나 비활성 캐릭터입니다.", 404),
     CHARACTER_NOT_OWNED("CHARACTER_NOT_OWNED", "보유하지 않은 캐릭터입니다.", 409),
-    USER_NOT_FOUND("USER_NOT_FOUND", "회원을 찾을 수 없습니다.", 404);
+    USER_NOT_FOUND("USER_NOT_FOUND", "회원을 찾을 수 없습니다.", 404),
+    MEMBER_PROFILE_IMAGE_INVALID(
+            "MEMBER_PROFILE_IMAGE_INVALID", "프로필 사진은 png·jpeg·webp 형식, 10MB 이하만 허용됩니다.", 400),
+    MEMBER_NICKNAME_BANNED("MEMBER_NICKNAME_BANNED", "닉네임에 사용할 수 없는 단어가 포함되어 있습니다.", 400),
+    MEMBER_BIO_BANNED("MEMBER_BIO_BANNED", "소개글에 사용할 수 없는 단어가 포함되어 있습니다.", 400);
 
     private final String code;
     private final String message;
