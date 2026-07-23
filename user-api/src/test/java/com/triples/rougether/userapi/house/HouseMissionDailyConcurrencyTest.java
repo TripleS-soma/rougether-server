@@ -41,14 +41,18 @@ class HouseMissionDailyConcurrencyTest {
     private Long ownerId;
     private Long memberId;
     private Long missionId;
+    private Long secondMissionId;
 
     @AfterEach
     void cleanup() {
-        if (missionId != null) {
-            jdbcTemplate.update("DELETE FROM house_mission_daily_rewards WHERE mission_id = ?", missionId);
-            jdbcTemplate.update("DELETE FROM house_mission_daily_contributions WHERE mission_id = ?", missionId);
-            jdbcTemplate.update("DELETE FROM house_mission_participants WHERE mission_id = ?", missionId);
-            jdbcTemplate.update("DELETE FROM house_missions WHERE id = ?", missionId);
+        for (Long id : new Long[]{missionId, secondMissionId}) {
+            if (id == null) {
+                continue;
+            }
+            jdbcTemplate.update("DELETE FROM house_mission_daily_rewards WHERE mission_id = ?", id);
+            jdbcTemplate.update("DELETE FROM house_mission_daily_contributions WHERE mission_id = ?", id);
+            jdbcTemplate.update("DELETE FROM house_mission_participants WHERE mission_id = ?", id);
+            jdbcTemplate.update("DELETE FROM house_missions WHERE id = ?", id);
         }
         if (houseId != null) {
             jdbcTemplate.update("DELETE FROM house_members WHERE house_id = ?", houseId);
@@ -155,5 +159,44 @@ class HouseMissionDailyConcurrencyTest {
         Integer growthPoints = jdbcTemplate.queryForObject(
                 "SELECT growth_points FROM house WHERE id = ?", Integer.class, houseId);
         assertThat(growthPoints).isEqualTo(20);
+    }
+
+    @Test
+    void 서로_다른_미션을_동시에_claim_해도_포인트가_누락되지_않는다() throws Exception {
+        setUpDailyMission(50);
+        secondMissionId = houseMissionService.create(ownerId, houseId,
+                new HouseMissionCreateRequest("경합 데일리 2", HouseMissionType.DAILY_MEMBER_RATE,
+                        50, null, null)).missionId();
+        houseMissionService.contribute(ownerId, houseId, missionId);       // 1/2 = 50% 달성
+        houseMissionService.contribute(ownerId, houseId, secondMissionId); // 1/2 = 50% 달성
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        AtomicInteger succeeded = new AtomicInteger();
+
+        for (Long target : new Long[]{missionId, secondMissionId}) {
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    houseMissionService.claim(ownerId, houseId, target);
+                    succeeded.incrementAndGet();
+                } catch (Exception ignored) {
+                    // 본검증은 아래 growth_points 로 수행
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        // 핵심 불변식: 서로 다른 미션의 +20 이 서로를 덮어쓰지 않는다 (claim 진입 시 house 락 선점).
+        // 일반 조회 후 재잠금 방식이면 낡은 관리 엔티티로 UPDATE 해 20 만 남는 lost update 가 재현된다.
+        assertThat(succeeded.get()).isEqualTo(2);
+        Integer growthPoints = jdbcTemplate.queryForObject(
+                "SELECT growth_points FROM house WHERE id = ?", Integer.class, houseId);
+        assertThat(growthPoints).isEqualTo(40);
     }
 }

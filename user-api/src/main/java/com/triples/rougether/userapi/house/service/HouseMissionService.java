@@ -216,14 +216,19 @@ public class HouseMissionService {
     // WEEKLY: 구성원 누구나 미션당 최초 1회. COMPLETED 전환 + 성장 포인트 +100 + reward_claimed 일괄(한 트랜잭션).
     // DAILY: 그날(KST) 달성 시 구성원 누구나 하루 1회. +20 지급, COMPLETED 전환 없이 매일 반복.
     //        하루 1회는 일별 보상 UNIQUE(mission, reward_date)가 DB 방어선. 자정이 지나면 그날 보상은 소멸(소급 없음).
+    // house 는 트랜잭션의 첫 접근부터 락 조회로 읽는다 - 일반 조회로 영속성 컨텍스트에 올라간 뒤
+    // 락을 다시 잡으면 낡은 관리 엔티티가 반환되어(자동 refresh 없음) 서로 다른 미션의 동시 claim 이
+    // 성장 포인트를 덮어쓸 수 있다(lost update). 락 순서는 house -> mission 으로 claim 경로에서 일관.
     @Transactional
     public HouseMissionClaimResponse claim(Long userId, Long houseId, Long missionId) {
-        requireHouse(houseId);
+        House house = houseRepository.findWithLockById(houseId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         HouseMember me = requireActiveMember(userId, houseId);
         HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
         if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
-            return claimDaily(houseId, me, mission);
+            return claimDaily(house, me, mission);
         }
         if (mission.getStatus() == HouseMissionStatus.COMPLETED) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED);
@@ -236,9 +241,6 @@ public class HouseMissionService {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED);
         }
         mission.complete();
-        // 성장 포인트는 집 행 락으로 갱신 - 다른 미션의 동시 claim 과 lost update 방지.
-        House house = houseRepository.findWithLockById(houseId)
-                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         house.addGrowthPoints(GROWTH_POINTS_PER_MISSION);
         participantRepository.findByMissionId(missionId)
                 .forEach(HouseMissionParticipant::markRewardClaimed);
@@ -247,7 +249,7 @@ public class HouseMissionService {
                 house.getGrowthPoints(), house.getLevel());
     }
 
-    private HouseMissionClaimResponse claimDaily(Long houseId, HouseMember me, HouseMission mission) {
+    private HouseMissionClaimResponse claimDaily(House house, HouseMember me, HouseMission mission) {
         Instant now = Instant.now();
         if (!mission.isActive() || !mission.isWithinPeriod(now)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE);
@@ -256,9 +258,7 @@ public class HouseMissionService {
         if (dailyRewardRepository.existsByMissionIdAndRewardDate(mission.getId(), today)) {
             throw dailyAlreadyClaimed();
         }
-        // 성장 포인트는 집 행 락으로 갱신 - 판정에 쓰는 멤버 수도 같은 잠금 상태의 값을 쓴다.
-        House house = houseRepository.findWithLockById(houseId)
-                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        // 판정에 쓰는 멤버 수도 claim() 진입 시 잠근 house 의 값을 쓴다.
         long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(mission.getId(), today);
         if (!isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue())) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED);

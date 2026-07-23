@@ -53,8 +53,10 @@ class HouseMissionServiceTest {
     // NOTE: helper 가 만든 mock 은 반드시 변수에 받은 뒤 바깥 stubbing 에 쓴다 (UnfinishedStubbing 방지).
     private House aliveHouse(Long houseId) {
         House house = mock(House.class);
-        when(house.isDeleted()).thenReturn(false);
-        when(houseRepository.findById(houseId)).thenReturn(Optional.of(house));
+        lenient().when(house.isDeleted()).thenReturn(false);
+        // claim 은 진입부터 락 조회(findWithLockById), 나머지 경로는 일반 조회(findById)를 쓴다 - 둘 다 stub.
+        lenient().when(houseRepository.findById(houseId)).thenReturn(Optional.of(house));
+        lenient().when(houseRepository.findWithLockById(houseId)).thenReturn(Optional.of(house));
         return house;
     }
 
