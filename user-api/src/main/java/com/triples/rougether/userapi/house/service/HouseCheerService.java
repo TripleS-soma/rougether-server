@@ -8,13 +8,14 @@ import com.triples.rougether.domain.house.entity.HouseMemberCheer;
 import com.triples.rougether.domain.house.repository.HouseMemberCheerRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import org.springframework.dao.DataIntegrityViolationException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,29 +25,17 @@ import org.springframework.transaction.annotation.Transactional;
 // AFTER_COMMIT 리스너 + 새 트랜잭션 방식은 커밋된 트랜잭션 참여(내역 유실)·커밋 예외 전파(요청 500)·
 // 이중 커넥션 점유·제출 거부 전파·비동기 내역 유실까지 실패 모드가 많아 채택하지 않는다(#174 리뷰 이력).
 @Service
+@RequiredArgsConstructor
 public class HouseCheerService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     // 도배 방지: 같은 대상에게 같은 타입은 하루(KST) 5회까지
     private static final int DAILY_LIMIT_PER_TYPE = 5;
-    private static final String NOTIFICATION_TITLE = "응원이 도착했어요";
-    // 온보딩 전(닉네임 null) 보낸이의 알림 표시명
-    private static final String FALLBACK_SENDER_NAME = "집 친구";
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final HouseMemberCheerRepository houseMemberCheerRepository;
     private final NotificationService notificationService;
-
-    public HouseCheerService(HouseRepository houseRepository,
-                             HouseMemberRepository houseMemberRepository,
-                             HouseMemberCheerRepository houseMemberCheerRepository,
-                             NotificationService notificationService) {
-        this.houseRepository = houseRepository;
-        this.houseMemberRepository = houseMemberRepository;
-        this.houseMemberCheerRepository = houseMemberCheerRepository;
-        this.notificationService = notificationService;
-    }
 
     @Transactional
     public HouseCheerResponse cheer(Long userId, Long houseId, Long membershipId, String typeCode) {
@@ -83,14 +72,9 @@ public class HouseCheerService {
             throw new BusinessException(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED);
         }
 
-        String senderName = requester.getUser().getNickname() != null
-                ? requester.getUser().getNickname()
-                : FALLBACK_SENDER_NAME;
         notificationService.send(
                 target.getUser().getId(),
-                NotificationType.FRIEND_CHEER,
-                NOTIFICATION_TITLE,
-                senderName + "님: " + type.message(),
+                NotificationMessages.friendCheer(requester.getUser().getNickname(), type.message()),
                 cheer.getId());
 
         return HouseCheerResponse.of(cheer, houseId, membershipId);

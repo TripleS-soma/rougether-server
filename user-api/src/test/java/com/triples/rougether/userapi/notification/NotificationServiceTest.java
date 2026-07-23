@@ -15,6 +15,7 @@ import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.notification.service.NotificationService.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ class NotificationServiceTest {
         when(savedNotification.getId()).thenReturn(100L);
         when(notificationRepository.save(any())).thenReturn(savedNotification);
 
-        notificationService.send(1L, NotificationType.HOUSE_KICK, "제목", "본문");
+        notificationService.send(1L, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
         ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(notificationCaptor.capture());
