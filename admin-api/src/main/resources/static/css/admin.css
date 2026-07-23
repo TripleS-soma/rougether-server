@@ -662,6 +662,8 @@ body {
 .room-furniture:focus-visible,
 .scene-toolbar button:focus-visible,
 .position-heading-row button:focus-visible,
+.transform-actions button:focus-visible,
+.rotation-number-wrap input:focus-visible,
 .scale-quick-actions button:focus-visible {
     outline: 3px solid var(--primary-soft);
     outline-offset: 2px;
@@ -844,18 +846,13 @@ body {
     border: 0;
     padding: 0;
     border-radius: 12px;
-    background: rgba(238, 242, 255, .2);
-    outline: 1.5px solid rgba(99, 102, 241, .44);
-    outline-offset: -2px;
+    background: transparent;
+    outline: 0;
     transform-origin: center center;
     pointer-events: auto;
 }
 .room-furniture--free { cursor: grab; touch-action: none; user-select: none; }
 .room-furniture--free.dragging { cursor: grabbing; }
-.room-furniture.selected {
-    outline: 2.5px solid rgba(79, 70, 229, .92);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, .14);
-}
 .room-furniture img {
     width: 100%;
     height: 100%;
@@ -865,7 +862,12 @@ body {
     display: block;
     pointer-events: none;
     user-select: none;
+    transition: filter .15s ease, transform .15s ease;
 }
+.room-furniture--free:hover img { filter: drop-shadow(0 2px 5px rgba(79, 70, 229, .24)); }
+.room-furniture.selected img { filter: drop-shadow(0 0 6px rgba(79, 70, 229, .58)); }
+.room-furniture.dragging img { filter: drop-shadow(0 4px 8px rgba(79, 70, 229, .45)); }
+.room-furniture.flipped img { transform: scaleX(-1); }
 .room-character {
     position: absolute;
     z-index: 4;
@@ -971,6 +973,67 @@ body {
 }
 .position-inputs input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .position-control-block > p { margin-top: 8px; color: var(--text-soft); font-size: 10px; }
+.transform-control-block { padding: 14px 16px; border-top: 1px solid var(--border); }
+.transform-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.transform-heading-row strong { display: block; font-size: 11.5px; }
+.transform-heading-row span { display: block; margin-top: 2px; color: var(--text-soft); font-size: 9.5px; }
+.transform-heading-row output {
+    flex: 0 0 auto;
+    color: var(--primary-strong);
+    font-size: 10px;
+    font-weight: 750;
+}
+.transform-actions {
+    display: grid;
+    grid-template-columns: .8fr 1.25fr .8fr 1fr 1fr;
+    align-items: end;
+    gap: 7px;
+    margin-top: 11px;
+}
+.transform-actions > button {
+    min-height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text-soft);
+    font: 650 10px/1 'Pretendard', sans-serif;
+    cursor: pointer;
+}
+.transform-actions > button:hover,
+.transform-actions > button.active { border-color: var(--primary); color: var(--primary); }
+.transform-actions > button.active { background: var(--primary-soft); }
+.transform-actions > button:disabled { opacity: .45; cursor: default; }
+.transform-actions > label { min-width: 0; }
+.transform-actions > label > span:first-child {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-soft);
+    font-size: 9px;
+    font-weight: 700;
+}
+.rotation-number-wrap {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+.rotation-number-wrap:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.rotation-number-wrap input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text);
+    font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-align: right;
+}
+.rotation-number-wrap > span { margin-left: 3px; color: var(--text-soft); font-size: 10px; }
+.transform-control-block > p { margin-top: 8px; color: var(--text-soft); font-size: 9.5px; line-height: 1.45; }
 .item-operations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--border); }
 .item-operations label > span { display: block; margin-bottom: 6px; color: var(--text-soft); font-size: 10.5px; font-weight: 700; }
 .item-operations .slot-select { width: 100%; min-width: 0; }
@@ -1036,4 +1099,6 @@ body {
     .furniture-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
     .scale-quick-actions { grid-template-columns: 1fr 1fr; }
     .scale-quick-actions button:last-child { grid-column: 1 / -1; }
+    .transform-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .transform-actions > label { grid-column: 1 / -1; }
 }

@@ -193,6 +193,35 @@
                         <p id="position-status">방 안의 가구를 끌거나 숫자로 위치를 조정하세요.</p>
                     </div>
 
+                    <div class="transform-control-block" id="transform-controls">
+                        <div class="transform-heading-row">
+                            <div>
+                                <strong>FREE 미리보기 방향</strong>
+                                <span>실제 방 배치의 회전·좌우 반전 확인</span>
+                            </div>
+                            <output id="transform-status" aria-live="polite">0° · 기본 방향</output>
+                        </div>
+                        <div class="transform-actions">
+                            <button type="button" id="rotate-left" aria-label="선택 가구 왼쪽으로 15도 회전">
+                                ↺ 15°
+                            </button>
+                            <label>
+                                <span>회전 각도</span>
+                                <span class="rotation-number-wrap">
+                                    <input type="number" id="rotation-number" min="-360" max="360" step="1"
+                                           inputmode="numeric" aria-label="선택 가구 회전 각도">
+                                    <span>°</span>
+                                </span>
+                            </label>
+                            <button type="button" id="rotate-right" aria-label="선택 가구 오른쪽으로 15도 회전">
+                                ↻ 15°
+                            </button>
+                            <button type="button" id="rotation-reset">0° 초기화</button>
+                            <button type="button" id="flip-horizontal" aria-pressed="false">좌우 반전</button>
+                        </div>
+                        <p>회전·반전은 현재 미리보기 배치에만 적용되며 기본 크기·위치 저장에는 포함되지 않습니다.</p>
+                    </div>
+
                     <div class="item-operations">
                         <label>
                             <span>기본 슬롯</span>
@@ -289,6 +318,13 @@
         const positionY = document.getElementById('position-y');
         const positionStatus = document.getElementById('position-status');
         const positionReset = document.getElementById('position-reset');
+        const transformControls = document.getElementById('transform-controls');
+        const transformStatus = document.getElementById('transform-status');
+        const rotationNumber = document.getElementById('rotation-number');
+        const rotateLeft = document.getElementById('rotate-left');
+        const rotateRight = document.getElementById('rotate-right');
+        const rotationReset = document.getElementById('rotation-reset');
+        const flipHorizontal = document.getElementById('flip-horizontal');
         const sceneToolbar = document.getElementById('scene-toolbar');
         const sceneCount = document.getElementById('scene-count');
         const sceneAdd = document.getElementById('scene-add');
@@ -528,6 +564,8 @@
                     x: position.x,
                     y: position.y,
                     explicitPosition: draft.explicitPosition,
+                    rotationDeg: 0,
+                    flipped: false,
                     z: nextSceneZ++
                 });
             }
@@ -590,6 +628,8 @@
                     x: position.x,
                     y: position.y,
                     explicitPosition: draft.explicitPosition,
+                    rotationDeg: 0,
+                    flipped: false,
                     z: nextSceneZ++
                 });
             });
@@ -619,8 +659,12 @@
             updateSceneControls();
         }
 
-        function clampPosition(x, y, scale) {
-            const half = roomContract.furniture.baseWidth * Number(scale) / 2;
+        function clampPosition(x, y, scale, rotationDeg = 0) {
+            const radians = clampRotation(rotationDeg) * Math.PI / 180;
+            const rotatedWidthRatio = Math.abs(Math.cos(radians)) + Math.abs(Math.sin(radians));
+            const half = Math.min(
+                0.5,
+                roomContract.furniture.baseWidth * Number(scale) * rotatedWidthRatio / 2);
             return {
                 x: Math.min(1 - half, Math.max(half, Number(x))),
                 y: Math.min(1 - half, Math.max(half, Number(y)))
@@ -651,17 +695,21 @@
         }
 
         function buildFreePreviewNode(item, placement) {
+            const renderPosition = clampPosition(
+                placement.x, placement.y, placement.scale, placement.rotationDeg);
             const node = document.createElement('button');
             node.type = 'button';
             node.className = 'room-furniture room-furniture--free'
                 + (item.id === selectedId ? ' selected' : '');
             node.dataset.itemId = item.id;
             node.setAttribute('aria-label', item.name + ' 위치 이동');
-            node.style.left = percent(placement.x);
-            node.style.top = percent(placement.y);
+            node.setAttribute('aria-pressed', String(item.id === selectedId));
+            node.style.left = percent(renderPosition.x);
+            node.style.top = percent(renderPosition.y);
             node.style.width = percent(roomContract.furniture.baseWidth);
             node.style.zIndex = String(placement.z + 2);
-            node.style.transform = 'translate(-50%, -50%) scale(' + placement.scale + ')';
+            node.style.transform = placementTransform(placement);
+            node.classList.toggle('flipped', placement.flipped);
             node.appendChild(furnitureImage(item));
             node.addEventListener('click', () => selectItem(item.id, true, false));
             node.addEventListener('pointerdown', (event) => beginFurnitureDrag(event, node, placement));
@@ -689,6 +737,34 @@
             return image;
         }
 
+        function placementTransform(placement) {
+            return 'translate(-50%, -50%) scale(' + placement.scale + ') rotate('
+                + clampRotation(placement.rotationDeg) + 'deg)';
+        }
+
+        function clampRotation(value) {
+            if (!Number.isFinite(Number(value))) return 0;
+            return Math.min(360, Math.max(-360, Math.round(Number(value))));
+        }
+
+        function currentScenePlacement() {
+            return scenePlacements.find((entry) => entry.itemId === selectedId) ?? null;
+        }
+
+        function setSelectedRotation(value) {
+            const placement = currentScenePlacement();
+            if (!placement || busy || activePreviewTab !== 'free') return;
+            placement.rotationDeg = clampRotation(value);
+            renderScene();
+        }
+
+        function toggleSelectedFlip() {
+            const placement = currentScenePlacement();
+            if (!placement || busy || activePreviewTab !== 'free') return;
+            placement.flipped = !placement.flipped;
+            renderScene();
+        }
+
         function beginFurnitureDrag(event, node, placement) {
             if (previewMode !== 'free' || busy || event.button !== 0) return;
             event.preventDefault();
@@ -703,7 +779,8 @@
                 const position = clampPosition(
                     (moveEvent.clientX - rect.left) / rect.width,
                     (moveEvent.clientY - rect.top) / rect.height,
-                    placement.scale);
+                    placement.scale,
+                    placement.rotationDeg);
                 placement.x = position.x;
                 placement.y = position.y;
                 placement.explicitPosition = true;
@@ -746,7 +823,8 @@
             const next = clampPosition(
                 placement.x + direction[0] * step,
                 placement.y + direction[1] * step,
-                placement.scale);
+                placement.scale,
+                placement.rotationDeg);
             placement.x = next.x;
             placement.y = next.y;
             placement.explicitPosition = true;
@@ -762,7 +840,23 @@
             sceneAdd.disabled = busy || !currentItem() || placed || activePreviewTab !== 'free';
             sceneRemove.disabled = busy || !placed || activePreviewTab !== 'free';
             sceneClear.disabled = busy || scenePlacements.length === 0 || activePreviewTab !== 'free';
+            updateTransformControls();
             updateThemeBatchAction();
+        }
+
+        function updateTransformControls() {
+            const placement = currentScenePlacement();
+            const enabled = Boolean(placement) && !busy && activePreviewTab === 'free';
+            const rotation = placement ? clampRotation(placement.rotationDeg) : 0;
+            const flipped = Boolean(placement?.flipped);
+            rotationNumber.value = String(rotation);
+            [rotationNumber, rotateLeft, rotateRight, rotationReset, flipHorizontal]
+                .forEach((control) => { control.disabled = !enabled; });
+            flipHorizontal.setAttribute('aria-pressed', String(flipped));
+            flipHorizontal.classList.toggle('active', flipped);
+            transformStatus.textContent = placement
+                ? rotation + '° · ' + (flipped ? '좌우 반전' : '기본 방향')
+                : '가구를 방에 배치하세요';
         }
 
         function visibleItems() {
@@ -1065,11 +1159,12 @@
                     + (!hasStoredSlot ? ' · 미지정은 하단 중앙으로 미리보기' : '');
             roomSourceNote.textContent = freeMode
                 ? 'Room contract v' + roomContract.version + ': ' + baseWidth.toFixed(0)
-                    + '% 박스 · 중심 좌표 고정 transform scale · 내부 여백 '
-                    + roomContract.furniture.imagePaddingPx + 'px · 보라 테두리는 관리자 가이드'
+                    + '% 배치 영역 · 중심 좌표 고정 transform scale·rotate·flip · 내부 여백 '
+                    + roomContract.furniture.imagePaddingPx + 'px · 선택 가구만 윤곽 강조'
                 : 'Room contract v' + roomContract.version
-                    + ': defaultSlot의 정규화 좌표·폭 사용 · 보라 테두리는 관리자 가이드';
+                    + ': defaultSlot의 정규화 좌표·폭 사용 · 선택 가구만 윤곽 강조';
             positionControls.hidden = activePreviewTab !== 'free';
+            transformControls.hidden = activePreviewTab !== 'free';
             sceneToolbar.hidden = activePreviewTab !== 'free';
             positionX.value = draft.x.toFixed(5);
             positionY.value = draft.y.toFixed(5);
@@ -1246,6 +1341,8 @@
             positionX.disabled = disabled;
             positionY.disabled = disabled;
             positionReset.disabled = disabled;
+            [rotationNumber, rotateLeft, rotateRight, rotationReset, flipHorizontal]
+                .forEach((control) => { control.disabled = disabled; });
             selectedSlot.disabled = disabled;
             selectedRarity.disabled = disabled;
             document.getElementById('scale-minus').disabled = disabled;
@@ -1327,6 +1424,18 @@
         positionY.addEventListener('change', () =>
             setDraftPosition(Number(positionX.value), Number(positionY.value)));
         positionReset.addEventListener('click', resetDraftPosition);
+        rotationNumber.addEventListener('change', () =>
+            setSelectedRotation(Number(rotationNumber.value)));
+        rotateLeft.addEventListener('click', () => {
+            const placement = currentScenePlacement();
+            if (placement) setSelectedRotation(placement.rotationDeg - 15);
+        });
+        rotateRight.addEventListener('click', () => {
+            const placement = currentScenePlacement();
+            if (placement) setSelectedRotation(placement.rotationDeg + 15);
+        });
+        rotationReset.addEventListener('click', () => setSelectedRotation(0));
+        flipHorizontal.addEventListener('click', toggleSelectedFlip);
         sceneAdd.addEventListener('click', () => {
             const item = currentItem();
             if (item) addItemToScene(item);
