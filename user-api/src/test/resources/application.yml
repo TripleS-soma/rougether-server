@@ -19,3 +19,9 @@ jwt:
 google:
   allowed-client-ids:
   certs-url: https://www.googleapis.com/oauth2/v3/certs
+
+# 통합테스트는 AssetStorageService를 mock 하므로 실제 S3 호출은 없음. 값은 S3Client 빈 생성용.
+asset:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2
