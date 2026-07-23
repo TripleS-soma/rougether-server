@@ -78,4 +78,8 @@ public class Notification extends BaseCreatedEntity {
     public void markPushFailed() {
         this.pushStatus = PushStatus.FAILED;
     }
+
+    public void markPushBlocked() {
+        this.pushStatus = PushStatus.BLOCKED;
+    }
 }
