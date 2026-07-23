@@ -3,9 +3,9 @@ package com.triples.rougether.userapi.notification.service;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.Notification;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,15 +26,17 @@ public class NotificationService {
     private final FcmPushExecutor fcmPushExecutor;
     private final ApplicationEventPublisher eventPublisher;
 
-    public void send(Long userId, NotificationType type, String title, String body) {
-        send(userId, type, title, body, null);
+    public void send(Long userId, NotificationContent content) {
+        send(userId, content, null);
     }
 
-    public void send(Long userId, NotificationType type, String title, String body, Long refId) {
+    public void send(Long userId, NotificationContent content, Long refId) {
         User user = userRepository.getReferenceById(userId);
-        Notification notification = notificationRepository.save(Notification.create(user, type, title, body, refId));
+        Notification notification = notificationRepository.save(
+                Notification.create(user, content.type(), content.title(), content.body(), refId));
 
-        eventPublisher.publishEvent(new NotificationCreatedEvent(notification.getId(), userId, title, body));
+        eventPublisher.publishEvent(new NotificationCreatedEvent(
+                notification.getId(), userId, content.title(), content.body()));
     }
 
     // 트랜잭션 커밋 이후에 알림 수신.
