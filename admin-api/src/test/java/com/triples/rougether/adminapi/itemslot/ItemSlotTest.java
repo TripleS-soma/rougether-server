@@ -780,6 +780,7 @@ class ItemSlotTest {
                 .andExpect(content().string(containsString("placementTransform")))
                 .andExpect(content().string(containsString("toggleSelectedFlip")))
                 .andExpect(content().string(containsString("rotatedWidthRatio")))
+                .andExpect(content().string(containsString("renderPosition")))
                 .andExpect(content().string(containsString("placement.rotationDeg")))
                 .andExpect(content().string(containsString("미리보기 배치에만 적용")))
                 .andExpect(content().string(containsString("모두 비우기")))

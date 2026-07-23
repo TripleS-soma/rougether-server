@@ -695,10 +695,8 @@
         }
 
         function buildFreePreviewNode(item, placement) {
-            const position = clampPosition(
+            const renderPosition = clampPosition(
                 placement.x, placement.y, placement.scale, placement.rotationDeg);
-            placement.x = position.x;
-            placement.y = position.y;
             const node = document.createElement('button');
             node.type = 'button';
             node.className = 'room-furniture room-furniture--free'
@@ -706,8 +704,8 @@
             node.dataset.itemId = item.id;
             node.setAttribute('aria-label', item.name + ' 위치 이동');
             node.setAttribute('aria-pressed', String(item.id === selectedId));
-            node.style.left = percent(placement.x);
-            node.style.top = percent(placement.y);
+            node.style.left = percent(renderPosition.x);
+            node.style.top = percent(renderPosition.y);
             node.style.width = percent(roomContract.furniture.baseWidth);
             node.style.zIndex = String(placement.z + 2);
             node.style.transform = placementTransform(placement);
@@ -757,10 +755,6 @@
             const placement = currentScenePlacement();
             if (!placement || busy || activePreviewTab !== 'free') return;
             placement.rotationDeg = clampRotation(value);
-            const position = clampPosition(
-                placement.x, placement.y, placement.scale, placement.rotationDeg);
-            placement.x = position.x;
-            placement.y = position.y;
             renderScene();
         }
 
