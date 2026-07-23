@@ -659,8 +659,12 @@
             updateSceneControls();
         }
 
-        function clampPosition(x, y, scale) {
-            const half = roomContract.furniture.baseWidth * Number(scale) / 2;
+        function clampPosition(x, y, scale, rotationDeg = 0) {
+            const radians = clampRotation(rotationDeg) * Math.PI / 180;
+            const rotatedWidthRatio = Math.abs(Math.cos(radians)) + Math.abs(Math.sin(radians));
+            const half = Math.min(
+                0.5,
+                roomContract.furniture.baseWidth * Number(scale) * rotatedWidthRatio / 2);
             return {
                 x: Math.min(1 - half, Math.max(half, Number(x))),
                 y: Math.min(1 - half, Math.max(half, Number(y)))
@@ -691,6 +695,10 @@
         }
 
         function buildFreePreviewNode(item, placement) {
+            const position = clampPosition(
+                placement.x, placement.y, placement.scale, placement.rotationDeg);
+            placement.x = position.x;
+            placement.y = position.y;
             const node = document.createElement('button');
             node.type = 'button';
             node.className = 'room-furniture room-furniture--free'
@@ -749,6 +757,10 @@
             const placement = currentScenePlacement();
             if (!placement || busy || activePreviewTab !== 'free') return;
             placement.rotationDeg = clampRotation(value);
+            const position = clampPosition(
+                placement.x, placement.y, placement.scale, placement.rotationDeg);
+            placement.x = position.x;
+            placement.y = position.y;
             renderScene();
         }
 
@@ -773,7 +785,8 @@
                 const position = clampPosition(
                     (moveEvent.clientX - rect.left) / rect.width,
                     (moveEvent.clientY - rect.top) / rect.height,
-                    placement.scale);
+                    placement.scale,
+                    placement.rotationDeg);
                 placement.x = position.x;
                 placement.y = position.y;
                 placement.explicitPosition = true;
@@ -816,7 +829,8 @@
             const next = clampPosition(
                 placement.x + direction[0] * step,
                 placement.y + direction[1] * step,
-                placement.scale);
+                placement.scale,
+                placement.rotationDeg);
             placement.x = next.x;
             placement.y = next.y;
             placement.explicitPosition = true;
