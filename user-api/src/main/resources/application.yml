@@ -19,7 +19,8 @@ spring:
   servlet:
     multipart:
       max-file-size: 12MB
-      max-request-size: 12MB
+      # 버그 제보 스크린샷 최대 3장 x 10MB 를 수용 (#213). 파일당 상한은 12MB 유지.
+      max-request-size: 34MB
 
 server:
   port: 8080

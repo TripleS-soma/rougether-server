@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 버그 제보</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}" class="active">버그 제보</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide">
+        <div class="upload-card">
+            <div class="upload-head">
+                <h2>버그 제보</h2>
+                <p>유저가 앱에서 제출한 버그 제보입니다. 상태를 변경하면 유저의 내 제보 목록에도 반영됩니다.</p>
+            </div>
+
+            <div class="slot-toolbar">
+                <select id="statusFilter" class="slot-select">
+                    <option value="">전체 상태</option>
+                    <option value="RECEIVED">접수</option>
+                    <option value="IN_PROGRESS">확인 중</option>
+                    <option value="RESOLVED">완료</option>
+                </select>
+                <span class="slot-count" id="count"></span>
+            </div>
+
+            <div class="alert alert-error" id="error" hidden></div>
+
+            <table class="slot-table">
+                <thead>
+                <tr>
+                    <th>제보자</th>
+                    <th>제목 / 내용</th>
+                    <th>환경</th>
+                    <th>스크린샷</th>
+                    <th>상태</th>
+                    <th>제출일</th>
+                </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
+        const STATUSES = [['RECEIVED', '접수'], ['IN_PROGRESS', '확인 중'], ['RESOLVED', '완료']];
+        const tbody = document.getElementById('rows');
+        const countEl = document.getElementById('count');
+        const errorBox = document.getElementById('error');
+        const statusFilter = document.getElementById('statusFilter');
+        statusFilter.addEventListener('change', load);
+
+        load();
+
+        async function load() {
+            hideError();
+            const query = statusFilter.value ? ('?status=' + statusFilter.value) : '';
+            try {
+                const res = await fetch('/admin/bug-reports' + query);
+                if (!res.ok) {
+                    showError('목록 조회 실패 (HTTP ' + res.status + ')');
+                    return;
+                }
+                render((await res.json()).items);
+            } catch (err) {
+                showError('목록 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function render(items) {
+            tbody.replaceChildren(...items.map(buildRow));
+            countEl.textContent = items.length + '건';
+        }
+
+        function buildRow(item) {
+            const tr = document.createElement('tr');
+
+            const userCell = document.createElement('td');
+            userCell.textContent = (item.nickname ?? '(닉네임 없음)') + ' #' + item.userId;
+
+            const bodyCell = document.createElement('td');
+            const titleEl = document.createElement('div');
+            titleEl.className = 'slot-name';
+            titleEl.textContent = item.title;
+            const contentEl = document.createElement('div');
+            contentEl.className = 'slot-key';
+            contentEl.textContent = item.content;
+            bodyCell.append(titleEl, contentEl);
+
+            const envCell = document.createElement('td');
+            envCell.textContent = [item.appVersion, item.deviceInfo].filter(Boolean).join(' / ') || '-';
+
+            const shotCell = document.createElement('td');
+            (item.screenshotKeys ?? []).forEach((key) => {
+                const link = document.createElement('a');
+                link.href = s3BaseUrl + '/' + key;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                const img = document.createElement('img');
+                img.className = 'slot-thumb';
+                img.loading = 'lazy';
+                img.alt = '스크린샷';
+                img.src = s3BaseUrl + '/' + key;
+                link.appendChild(img);
+                shotCell.appendChild(link);
+            });
+            if (!(item.screenshotKeys ?? []).length) shotCell.textContent = '-';
+
+            const statusCell = document.createElement('td');
+            const statusSelect = document.createElement('select');
+            statusSelect.className = 'slot-select';
+            STATUSES.forEach(([code, label]) => statusSelect.add(new Option(label, code)));
+            statusSelect.value = item.status;
+            statusSelect.addEventListener('change', () => changeStatus(item, statusSelect));
+            statusCell.appendChild(statusSelect);
+
+            const dateCell = document.createElement('td');
+            dateCell.textContent = item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
+                : '-';
+
+            tr.append(userCell, bodyCell, envCell, shotCell, statusCell, dateCell);
+            return tr;
+        }
+
+        async function changeStatus(item, statusSelect) {
+            const previous = item.status;
+            statusSelect.disabled = true;
+            hideError();
+            try {
+                const res = await fetch('/admin/bug-reports/' + item.bugReportId + '/status', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify({ status: statusSelect.value })
+                });
+                if (!res.ok) {
+                    throw new Error(await errorMessage(res));
+                }
+                item.status = (await res.json()).status;
+            } catch (err) {
+                statusSelect.value = previous;
+                showError('상태 변경 실패: ' + err.message);
+            } finally {
+                statusSelect.disabled = false;
+            }
+        }
+
+        async function errorMessage(response) {
+            try {
+                const body = await response.json();
+                return body.message || ('HTTP ' + response.status);
+            } catch {
+                return 'HTTP ' + response.status;
+            }
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.hidden = false;
+        }
+
+        function hideError() {
+            errorBox.hidden = true;
+        }
+    </script>
+</body>
+</html>
