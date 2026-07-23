@@ -51,8 +51,12 @@ class HouseMissionAchievedNotificationTest {
 
     @AfterEach
     void cleanUp() {
-        // 테스트 트랜잭션이 없어 직접 정리함.
+        // 테스트 트랜잭션이 없어 직접 정리함. 미션을 참조하는 일별 이력(#201)부터 지워야 FK 가 안 걸림.
         if (houseId != null) {
+            jdbcTemplate.update("DELETE FROM house_mission_daily_rewards WHERE mission_id IN "
+                    + "(SELECT id FROM house_missions WHERE house_id = ?)", houseId);
+            jdbcTemplate.update("DELETE FROM house_mission_daily_contributions WHERE mission_id IN "
+                    + "(SELECT id FROM house_missions WHERE house_id = ?)", houseId);
             jdbcTemplate.update("DELETE FROM house_mission_participants WHERE mission_id IN "
                     + "(SELECT id FROM house_missions WHERE house_id = ?)", houseId);
             jdbcTemplate.update("DELETE FROM house_missions WHERE house_id = ?", houseId);
