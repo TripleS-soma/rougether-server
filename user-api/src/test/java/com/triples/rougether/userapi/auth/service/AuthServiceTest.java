@@ -4,6 +4,7 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +15,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
@@ -22,6 +24,7 @@ import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,12 +80,15 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-raw");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
-        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함
-        ArgumentCaptor<UserWallet> walletCaptor = ArgumentCaptor.forClass(UserWallet.class);
-        verify(userWalletRepository, times(CurrencyType.values().length)).save(walletCaptor.capture());
-        assertThat(walletCaptor.getAllValues())
-                .extracting(UserWallet::getCurrencyType)
-                .containsExactlyInAnyOrder(CurrencyType.values());
+        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함. 초기 잔액은 SignupWalletPolicy(코인 750).
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UserWallet>> walletCaptor = ArgumentCaptor.forClass(List.class);
+        verify(userWalletRepository).saveAll(walletCaptor.capture());
+        assertThat(walletCaptor.getValue())
+                .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
+                .containsExactlyInAnyOrder(
+                        tuple(CurrencyType.COIN, SignupWalletPolicy.INITIAL_COIN_BALANCE),
+                        tuple(CurrencyType.DIAMOND, 0));
     }
 
     @Test

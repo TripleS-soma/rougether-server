@@ -5,11 +5,10 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
-import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.client.GoogleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
@@ -43,10 +42,8 @@ public class AuthService {
         boolean isNewUser;
         if (userId == null) {
             user = userRepository.save(User.signUp());
-            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매)
-            for (CurrencyType currencyType : CurrencyType.values()) {
-                userWalletRepository.save(UserWallet.create(user, currencyType));
-            }
+            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
+            userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
             isNewUser = true;
         } else {
             user = userRepository.findById(userId)

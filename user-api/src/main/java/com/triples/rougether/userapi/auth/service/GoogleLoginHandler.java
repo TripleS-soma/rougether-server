@@ -4,12 +4,11 @@ import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
-import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
@@ -54,10 +53,8 @@ public class GoogleLoginHandler {
 
     private User register(GoogleUser googleUser) {
         User user = userRepository.save(User.signUp(googleUser.email()));
-        // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매)
-        for (CurrencyType currencyType : CurrencyType.values()) {
-            userWalletRepository.save(UserWallet.create(user, currencyType));
-        }
+        // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
+        userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
         // IDENTITY 전략이라 즉시 INSERT됨 → 경쟁 패자는 여기서 unique 충돌이 발생함.
         oauthAccountRepository.save(OauthAccount.link(user, OauthProvider.GOOGLE, googleUser.id()));
         return user;
