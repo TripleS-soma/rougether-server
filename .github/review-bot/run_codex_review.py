@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from review_state import format_prompt_section, load_review_state
+
 
 SENSITIVE_ENV_PREFIXES = ("OPENAI_",)
 SENSITIVE_ENV_KEYS = {
@@ -72,6 +74,7 @@ def main() -> int:
     parser.add_argument("--pr-number", required=True)
     parser.add_argument("--schema", required=True)
     parser.add_argument("--prompt", required=True)
+    parser.add_argument("--review-state", default="")
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="gpt-5.6-sol")
     parser.add_argument(
@@ -95,7 +98,10 @@ def main() -> int:
         raise RuntimeError(f"spec directory not found: {spec_dir}")
 
     base_prompt = _read_text(prompt_path)
+    maintainer_decisions = format_prompt_section(load_review_state(args.review_state))
     prompt = f"""{base_prompt}
+
+{maintainer_decisions}
 
 ## Runtime Context
 
@@ -132,7 +138,7 @@ and targeted file reads to review only this PR's changes. Return only JSON match
 
     print("Running Codex review with saved Codex CLI auth", file=sys.stderr)
     try:
-        completed = _run(
+        _run(
             cmd,
             cwd=subject_dir,
             env=env,
