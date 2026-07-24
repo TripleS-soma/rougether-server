@@ -6,13 +6,19 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.PhotoVerificationRepository;
+import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.category.dto.CategoryCreateRequest;
+import com.triples.rougether.userapi.category.dto.CategoryDeleteMode;
 import com.triples.rougether.userapi.category.dto.CategoryListResponse;
 import com.triples.rougether.userapi.category.dto.CategoryResponse;
 import com.triples.rougether.userapi.category.dto.CategoryUpdateRequest;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,8 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CategoryService {
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private final CategoryRepository categoryRepository;
     private final RoutineRepository routineRepository;
+    private final TodoRepository todoRepository;
+    private final RoutineLogRepository routineLogRepository;
+    private final PhotoVerificationRepository photoVerificationRepository;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -56,13 +67,32 @@ public class CategoryService {
     }
 
     @Transactional
-    public void delete(Long userId, Long categoryId) {
+    public void delete(Long userId, Long categoryId, CategoryDeleteMode mode) {
         Category category = findOwned(userId, categoryId);
         // status 무관 살아있는 루틴만 삭제 차단함. 투두는 참조해도 삭제 허용
         if (routineRepository.existsByCategoryIdAndDeletedAtIsNull(categoryId)) {
             throw new BusinessException(CategoryErrorCode.CATEGORY_IN_USE);
         }
-        category.softDelete(Instant.now());
+        Instant now = Instant.now();
+        // 아래 bulk 쿼리가 영속성 컨텍스트를 비우므로(clearAutomatically) category가 detach되기 전에 먼저 변경함.
+        // 첫 bulk 쿼리의 flushAutomatically가 이 변경을 같은 트랜잭션에서 내보냄
+        category.softDelete(now);
+        switch (mode) {
+            case UNASSIGN -> {
+                routineRepository.clearCategoryByCategoryId(categoryId);
+                todoRepository.clearCategoryByCategoryId(categoryId);
+            }
+            // 사진 인증 → 로그 순서. routine_log_id가 non-null FK라 역순이면 제약에 걸림.
+            // 두 쿼리는 같은 today를 받아야 남기는 대상이 일치함.
+            // 계산 직후 자정을 넘겨도 오삭제가 없는 건 purge 대상이 "계보에 살아있는 버전이 없는 루틴"뿐이고
+            // log는 살아있는 루틴에만 생기기 때문임 — 계보 조건을 완화하면 이 보장도 같이 깨짐
+            case PURGE -> {
+                LocalDate today = LocalDate.now(KST);
+                photoVerificationRepository.deleteByCategoryId(categoryId, today);
+                routineLogRepository.deleteByCategoryId(categoryId, today);
+                todoRepository.softDeleteByCategoryId(categoryId, now);
+            }
+        }
     }
 
     private Category findOwned(Long userId, Long categoryId) {
