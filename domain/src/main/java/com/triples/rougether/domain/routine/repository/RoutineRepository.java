@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +30,10 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
     // 카테고리 삭제 차단 검사용: status 무관 살아있는 루틴 존재 여부
     boolean existsByCategoryIdAndDeletedAtIsNull(Long categoryId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Routine r set r.category = null where r.category.id = :categoryId")
+    int clearCategoryByCategoryId(@Param("categoryId") Long categoryId);
 
     // 리마인드 batch Step1 reader: 지정 분에 예약된 ACTIVE·살아있는 루틴 중 당일 미완료·미발송인 것만 커서 페이징 조회.
     // 반복규칙(요일 등) 판정은 RoutineRecurrence가 processor에서 함(여기서 걸러지지 않음).

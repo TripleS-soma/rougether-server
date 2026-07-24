@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +19,18 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     // 소유권 guard 단건: 타인 소유·미존재·삭제됨 모두 empty
     Optional<Todo> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
+
+    // 카테고리 삭제(UNASSIGN) 미분류 전환. 삭제된 투두는 과거 기록이라 그대로 둠
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Todo t set t.category = null where t.category.id = :categoryId and t.deletedAt is null")
+    int clearCategoryByCategoryId(@Param("categoryId") Long categoryId);
+
+    // 카테고리 삭제(PURGE) 일괄 soft delete. 이미 삭제된 투두는 deletedAt을 덮어쓰지 않음
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Todo t set t.deletedAt = :deletedAt "
+            + "where t.category.id = :categoryId and t.deletedAt is null")
+    int softDeleteByCategoryId(@Param("categoryId") Long categoryId,
+                               @Param("deletedAt") Instant deletedAt);
 
     // categoryId/status/dueDate는 null이면 해당 조건 무시(동적 필터). dueDate는 오늘 현황용으로도 재사용함
     @Query("""
