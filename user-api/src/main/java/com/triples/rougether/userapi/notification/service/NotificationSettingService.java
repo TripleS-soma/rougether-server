@@ -4,6 +4,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.NotificationSetting;
 import com.triples.rougether.domain.notification.entity.NotificationSettingType;
 import com.triples.rougether.domain.notification.entity.NotificationType;
+import com.triples.rougether.domain.notification.policy.NotificationPushPolicy;
 import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.userapi.notification.dto.NotificationSettingResponse;
 import com.triples.rougether.userapi.notification.dto.NotificationSettingUpdateRequest;
@@ -34,11 +35,10 @@ public class NotificationSettingService {
         return toResponse(enabledByType(userId));
     }
 
-    // push 발송 게이트. 마스터(ALL)가 off면 그룹 설정과 무관하게 차단됨.
+    // push 발송 게이트. 판정 규칙 정본은 NotificationPushPolicy - batch 리마인더 경로도 같은 걸 씀.
     public boolean isPushAllowed(Long userId, NotificationType notificationType) {
-        Map<NotificationSettingType, Boolean> enabled = enabledByType(userId);
-        return isEnabled(enabled, NotificationSettingType.ALL)
-                && isEnabled(enabled, notificationType.settingType());
+        return NotificationPushPolicy.of(notificationSettingRepository.findAllByUserId(userId))
+                .isPushAllowed(userId, notificationType);
     }
 
     private void apply(Long userId, NotificationSettingType type, Boolean value) {
