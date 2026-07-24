@@ -23,8 +23,8 @@ class SignupWalletPolicyTest {
     }
 
     @Test
-    void 초기_코인은_500_나머지_통화는_0이다() {
-        // 500 = 온보딩에서 가구 뽑기 단챠(250) 1회 체험 후 250이 남는 값.
+    void 초기_코인은_750_나머지_통화는_0이다() {
+        // 750 = 온보딩에서 가구 뽑기 단챠(250) 1회 체험 후 500(단챠 2회분)이 남는 값.
         List<UserWallet> wallets = SignupWalletPolicy.issueAll(User.signUp("a@b.com"));
 
         assertThat(wallets)
@@ -32,7 +32,7 @@ class SignupWalletPolicyTest {
                 .singleElement()
                 .extracting(UserWallet::getBalance)
                 .isEqualTo(SignupWalletPolicy.INITIAL_COIN_BALANCE)
-                .isEqualTo(500);
+                .isEqualTo(750);
 
         assertThat(wallets)
                 .filteredOn(wallet -> wallet.getCurrencyType() != CurrencyType.COIN)

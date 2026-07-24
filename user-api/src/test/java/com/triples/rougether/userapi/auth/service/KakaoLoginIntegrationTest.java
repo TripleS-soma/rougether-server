@@ -65,7 +65,7 @@ class KakaoLoginIntegrationTest {
         // 로그인 성공 시 마지막 접속 시각 기록(회귀 확인).
         assertThat(user.getLastAccessedAt()).isNotNull();
 
-        // 가입 시 지갑 발급 + 초기 잔액(코인 500=온보딩 뽑기 체험용, 다이아 0)
+        // 가입 시 지갑 발급 + 초기 잔액(코인 750=온보딩 뽑기 체험용, 다이아 0)
         assertThat(userWalletRepository.findByUserId(user.getId()))
                 .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
                 .containsExactlyInAnyOrder(

@@ -7,11 +7,11 @@ import java.util.Arrays;
 import java.util.List;
 
 // 가입 시 지갑 발급 정책. 통화별 지갑을 한 번에 발급하고 초기 잔액을 정한다.
-// 초기 코인 500 = 온보딩(튜토리얼)에서 가구 뽑기 단챠(250)를 1회 체험시키고 250을 남기는 값.
+// 초기 코인 750 = 온보딩(튜토리얼)에서 가구 뽑기 단챠(250)를 1회 체험시키고 500(단챠 2회분)을 남기는 값.
 // 지급 시점이 가입 트랜잭션(지갑 신규 발급)이라 (user_id, currency_type) UNIQUE 제약이 중복 지급을 막는다.
 public final class SignupWalletPolicy {
 
-    public static final int INITIAL_COIN_BALANCE = 500;
+    public static final int INITIAL_COIN_BALANCE = 750;
 
     private SignupWalletPolicy() {
     }
