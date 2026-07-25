@@ -11,6 +11,8 @@ public enum AuthErrorCode implements ErrorCode {
     OAUTH_KAKAO_UNAVAILABLE("AUTH_OAUTH_KAKAO_UNAVAILABLE", "카카오 인증 서버 응답에 실패했습니다.", 502),
     OAUTH_GOOGLE_TOKEN_INVALID("AUTH_OAUTH_GOOGLE_TOKEN_INVALID", "구글 토큰이 유효하지 않습니다.", 401),
     OAUTH_GOOGLE_UNAVAILABLE("AUTH_OAUTH_GOOGLE_UNAVAILABLE", "구글 인증 서버 응답에 실패했습니다.", 502),
+    OAUTH_APPLE_TOKEN_INVALID("AUTH_OAUTH_APPLE_TOKEN_INVALID", "애플 토큰이 유효하지 않습니다.", 401),
+    OAUTH_APPLE_UNAVAILABLE("AUTH_OAUTH_APPLE_UNAVAILABLE", "애플 인증 서버 응답에 실패했습니다.", 502),
     FORBIDDEN("AUTH_FORBIDDEN", "접근 권한이 없습니다.", 403);
 
     private final String code;

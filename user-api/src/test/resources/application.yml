@@ -20,6 +20,11 @@ google:
   allowed-client-ids:
   certs-url: https://www.googleapis.com/oauth2/v3/certs
 
+# 통합테스트는 AppleTokenVerifier를 mock 하므로 실제 JWK 조회는 없음. keys-url은 빈 생성용(지연 조회).
+apple:
+  allowed-client-ids:
+  keys-url: https://appleid.apple.com/auth/keys
+
 # 통합테스트는 AssetStorageService를 mock 하므로 실제 S3 호출은 없음. 값은 S3Client 빈 생성용.
 asset:
   s3:

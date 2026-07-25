@@ -144,6 +144,60 @@ class AuthControllerTest {
     }
 
     @Test
+    void apple_login_성공_응답_계약() throws Exception {
+        when(authService.appleLogin("apple-id")).thenReturn(new LoginResponse(7L, "acc", "ref", true));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"apple-id\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.accessToken").value("acc"))
+                .andExpect(jsonPath("$.refreshToken").value("ref"))
+                .andExpect(jsonPath("$.isNewUser").value(true));
+    }
+
+    @Test
+    void apple_login_은_idToken_이_없으면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void apple_login_은_idToken_이_공백이면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void apple_login_은_애플_토큰이_무효면_401_과_code_를_준다() throws Exception {
+        when(authService.appleLogin("bad"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"bad\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_APPLE_TOKEN_INVALID"));
+    }
+
+    @Test
+    void apple_login_은_애플_서버_오류면_502_와_code_를_준다() throws Exception {
+        when(authService.appleLogin("tok"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"tok\"}"))
+                .andExpect(status().is(502))
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_APPLE_UNAVAILABLE"));
+    }
+
+    @Test
     void refresh_성공_응답_계약() throws Exception {
         when(authService.refresh("rt")).thenReturn(new TokenResponse("new-acc", "new-ref"));
 
