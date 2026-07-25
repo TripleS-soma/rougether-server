@@ -7,7 +7,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, KakaoProperties.class, GoogleProperties.class})
+@EnableConfigurationProperties({
+        JwtProperties.class, KakaoProperties.class, GoogleProperties.class, AppleProperties.class})
 public class AuthConfig {
 
     // 구글 JWK로 RS256 서명·exp를 검증하는 디코더. JWK 조회는 최초 decode 시점에 지연 수행됨(빈 생성 시 네트워크 X).
@@ -15,5 +16,12 @@ public class AuthConfig {
     @Bean
     JwtDecoder googleJwtDecoder(GoogleProperties properties) {
         return NimbusJwtDecoder.withJwkSetUri(properties.certsUrl()).build();
+    }
+
+    // 애플 JWK로 RS256 서명·exp를 검증하는 디코더. 구조는 googleJwtDecoder와 동일하고 키 출처만 다름.
+    // iss/aud 비즈니스 규칙은 AppleTokenVerifier가 담당함.
+    @Bean
+    JwtDecoder appleJwtDecoder(AppleProperties properties) {
+        return NimbusJwtDecoder.withJwkSetUri(properties.keysUrl()).build();
     }
 }

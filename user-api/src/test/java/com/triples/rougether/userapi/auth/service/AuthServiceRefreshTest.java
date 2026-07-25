@@ -49,6 +49,10 @@ class AuthServiceRefreshTest {
     private com.triples.rougether.userapi.auth.client.GoogleTokenVerifier googleTokenVerifier;
     @Mock
     private GoogleLoginHandler googleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenVerifier appleTokenVerifier;
+    @Mock
+    private AppleLoginHandler appleLoginHandler;
 
     private AuthService authService;
 
@@ -57,7 +61,7 @@ class AuthServiceRefreshTest {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler);
+                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler);
     }
 
     private User userWithId(long id) {
