@@ -41,7 +41,7 @@ kakao:
   app-id: ${KAKAO_APP_ID:1501738}
 
 google:
-  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:499923665503-f2l1b05h9q48f4lda8reh65d9hdh1jfo.apps.googleusercontent.com,499923665503-b1brsuooa940tjrs8vapo4dl2m8mri19.apps.googleusercontent.com}
+  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:499923665503-f2l1b05h9q48f4lda8reh65d9hdh1jfo.apps.googleusercontent.com,499923665503-b1brsuooa940tjrs8vapo4dl2m8mri19.apps.googleusercontent.com,437063052004-99kq37m58jcj7nakm9uhottgskphob95.apps.googleusercontent.com}
   certs-url: ${GOOGLE_CERTS_URL:https://www.googleapis.com/oauth2/v3/certs}
 
 apple:
