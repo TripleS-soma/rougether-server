@@ -74,16 +74,15 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                       @Param("cursorId") Long cursorId,
                                       Pageable pageable);
 
-    // 일일 보상 상한: KST 날짜에 완료되고 지급된 투두 건수(reward_amount > 0).
-    // 삭제된 투두도 포함함 — 삭제는 코인을 회수하지 않으므로 집계에서 빼면 지급 슬롯이 부당 복구됨
+    // 일일 보상 상한: KST 날짜에 완료된 투두로 지급된 코인 합계.
+    // 삭제된 투두도 포함함 — 삭제는 코인을 회수하지 않으므로 집계에서 빼면 지급 한도가 부당 복구됨
     @Query("""
-            select count(t) from Todo t
+            select coalesce(sum(t.rewardAmount), 0) from Todo t
             where t.user.id = :userId
               and t.completedAt >= :kstDayStart and t.completedAt < :kstDayEnd
               and t.status = :status
-              and t.rewardAmount > 0
             """)
-    long countCompletedByUserIdAndCompletedAtInKstDayAndRewardAmountGreaterThan(
+    int sumRewardAmountByUserIdAndCompletedAtInKstDay(
             @Param("userId") Long userId,
             @Param("kstDayStart") Instant kstDayStart,
             @Param("kstDayEnd") Instant kstDayEnd,

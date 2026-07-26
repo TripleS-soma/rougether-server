@@ -19,7 +19,8 @@ public record RoutineLogResponse(
         Instant completedAt,
         @Schema(description = "보상 재화 종류. 허용값: COIN(루틴 실천 보상), DIAMOND(아이템 구매)", example = "COIN")
         CurrencyType rewardCurrencyType,
-        @Schema(description = "보상 금액. 오늘 완료는 코인 10이나, 일일 상한(4건) 도달 또는 과거 날짜 완료는 0 지급", example = "10")
+        @Schema(description = "실제 지급된 보상 금액. 오늘 완료는 코인 10이나, 루틴·투두 합산 일일 상한(50코인)의 남은 한도가 "
+                + "10보다 적으면 남은 만큼만 지급되고, 한도를 다 썼거나 과거 날짜 완료면 0 지급", example = "10")
         int rewardAmount,
         @Schema(description = "스트릭 요약. 오늘 첫 완료면 갱신된 값, 그 외(오늘 추가 완료·과거 날짜 완료)는 기존 값 그대로")
         StreakSummaryResponse streak
