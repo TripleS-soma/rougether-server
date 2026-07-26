@@ -128,13 +128,13 @@ class TodoControllerTest {
     void 완료는_201과_보상을_포함해_응답한다() throws Exception {
         when(todoService.complete(1L, 7L))
                 .thenReturn(new TodoCompleteResponse(7L, TodoStatus.COMPLETED,
-                        Instant.parse("2026-06-30T07:00:00Z"), CurrencyType.COIN, 5));
+                        Instant.parse("2026-06-30T07:00:00Z"), CurrencyType.COIN, 10));
 
         mockMvc.perform(post("/api/v1/todos/7/complete"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(7))
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.rewardAmount").value(5));
+                .andExpect(jsonPath("$.rewardAmount").value(10));
     }
 
     @Test
