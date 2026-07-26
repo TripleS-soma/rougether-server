@@ -2,12 +2,14 @@ package com.triples.rougether.userapi.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -61,9 +63,12 @@ class GoogleLoginIntegrationTest {
         // 닉네임은 가입 시 비우고 온보딩에서 채움.
         assertThat(user.getNickname()).isNull();
 
+        // 가입 시 지갑 발급 + 초기 잔액(코인 750=온보딩 뽑기 체험용, 다이아 0)
         assertThat(userWalletRepository.findByUserId(user.getId()))
-                .extracting(UserWallet::getCurrencyType)
-                .containsExactlyInAnyOrder(CurrencyType.values());
+                .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
+                .containsExactlyInAnyOrder(
+                        tuple(CurrencyType.COIN, SignupWalletPolicy.INITIAL_COIN_BALANCE),
+                        tuple(CurrencyType.DIAMOND, 0));
 
         assertThat(oauthAccountRepository.findByProviderAndProviderUserId(OauthProvider.GOOGLE, googleId))
                 .isPresent()

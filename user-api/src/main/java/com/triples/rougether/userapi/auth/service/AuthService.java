@@ -5,11 +5,12 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
-import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
+import com.triples.rougether.userapi.auth.client.AppleUser;
 import com.triples.rougether.userapi.auth.client.GoogleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
@@ -36,6 +37,8 @@ public class AuthService {
     private final KakaoLoginHandler kakaoLoginHandler;
     private final GoogleTokenVerifier googleTokenVerifier;
     private final GoogleLoginHandler googleLoginHandler;
+    private final AppleTokenVerifier appleTokenVerifier;
+    private final AppleLoginHandler appleLoginHandler;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -43,10 +46,8 @@ public class AuthService {
         boolean isNewUser;
         if (userId == null) {
             user = userRepository.save(User.signUp());
-            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매)
-            for (CurrencyType currencyType : CurrencyType.values()) {
-                userWalletRepository.save(UserWallet.create(user, currencyType));
-            }
+            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
+            userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
             isNewUser = true;
         } else {
             user = userRepository.findById(userId)
@@ -83,6 +84,18 @@ public class AuthService {
         } catch (DataIntegrityViolationException race) {
             // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
             return googleLoginHandler.login(googleUser);
+        }
+    }
+
+    // 애플 로그인 오케스트레이션. 트랜잭션은 AppleLoginHandler.login이 소유함(JWK 검증을 트랜잭션 밖에 둠).
+    public LoginResponse appleLogin(String idToken) {
+        // identityToken 서명·iss·aud·exp 검증 후 sub·email 추출. 실패는 AppleTokenVerifier가 401/502로 변환함.
+        AppleUser appleUser = appleTokenVerifier.verify(idToken);
+        try {
+            return appleLoginHandler.login(appleUser);
+        } catch (DataIntegrityViolationException race) {
+            // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
+            return appleLoginHandler.login(appleUser);
         }
     }
 

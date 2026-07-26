@@ -19,7 +19,8 @@ spring:
   servlet:
     multipart:
       max-file-size: 12MB
-      max-request-size: 12MB
+      # 버그 제보 스크린샷 최대 3장 x 10MB 를 수용 (#213). 파일당 상한은 12MB 유지.
+      max-request-size: 34MB
 
 server:
   port: 8080
@@ -40,14 +41,16 @@ kakao:
   app-id: ${KAKAO_APP_ID:1501738}
 
 google:
-  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:}
+  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:499923665503-f2l1b05h9q48f4lda8reh65d9hdh1jfo.apps.googleusercontent.com,499923665503-b1brsuooa940tjrs8vapo4dl2m8mri19.apps.googleusercontent.com}
   certs-url: ${GOOGLE_CERTS_URL:https://www.googleapis.com/oauth2/v3/certs}
 
-# 비어 있으면 FCM 발송 stub으로 동작
+apple:
+  allowed-client-ids: ${APPLE_ALLOWED_CLIENT_IDS:com.triples.rougether}
+  keys-url: ${APPLE_KEYS_URL:https://appleid.apple.com/auth/keys}
+
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
 
-# 에셋 S3 (자격증명은 env / IAM 으로 해결). bucket·region 은 admin-api 와 동일 버킷.
 asset:
   s3:
     bucket: rougether-assets

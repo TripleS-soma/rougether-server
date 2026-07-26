@@ -2,7 +2,9 @@ package com.triples.rougether.userapi.category.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.userapi.category.dto.CategoryCreateRequest;
+import com.triples.rougether.userapi.category.dto.CategoryDeleteMode;
 import com.triples.rougether.userapi.category.dto.CategoryListResponse;
 import com.triples.rougether.userapi.category.dto.CategoryResponse;
 import com.triples.rougether.userapi.category.dto.CategoryUpdateRequest;
@@ -137,10 +140,41 @@ class CategoryControllerTest {
     }
 
     @Test
-    void 삭제는_204이고_서비스를_호출한다() throws Exception {
-        mockMvc.perform(delete("/api/v1/categories/7"))
+    void 삭제는_204이고_mode를_그대로_서비스에_넘긴다() throws Exception {
+        mockMvc.perform(delete("/api/v1/categories/7").param("mode", "UNASSIGN"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/v1/categories/8").param("mode", "PURGE"))
                 .andExpect(status().isNoContent());
 
-        verify(categoryService).delete(1L, 7L);
+        verify(categoryService).delete(1L, 7L, CategoryDeleteMode.UNASSIGN);
+        verify(categoryService).delete(1L, 8L, CategoryDeleteMode.PURGE);
+    }
+
+    @Test
+    void mode_미지정이면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/categories/7"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(categoryService);
+    }
+
+    @Test
+    void 잘못된_mode면_400과_VALIDATION_FAILED를_응답한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/categories/7").param("mode", "DROP"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(categoryService);
+    }
+
+    @Test
+    void 삭제_차단은_409와_CATEGORY_IN_USE를_응답한다() throws Exception {
+        doThrow(new BusinessException(CategoryErrorCode.CATEGORY_IN_USE))
+                .when(categoryService).delete(1L, 7L, CategoryDeleteMode.PURGE);
+
+        mockMvc.perform(delete("/api/v1/categories/7").param("mode", "PURGE"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORY_IN_USE"));
     }
 }
