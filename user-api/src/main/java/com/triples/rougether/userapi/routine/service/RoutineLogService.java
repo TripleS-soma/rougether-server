@@ -87,8 +87,11 @@ public class RoutineLogService {
         boolean firstToday = isToday && routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
 
-        // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
-        int reward = isToday && dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+        // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
+        // 당일 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
+        int reward = isToday
+                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
+                : 0;
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
                 routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));

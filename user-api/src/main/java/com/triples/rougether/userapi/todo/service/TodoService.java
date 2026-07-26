@@ -32,9 +32,9 @@ public class TodoService {
 
     // KST 고정 — 완료 가능 여부(마감일) 판정 기준
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 투두 보상: 루틴(10)과 별도로 5코인 고정
+    // 투두 보상: 루틴과 같은 10코인 고정
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
-    private static final int REWARD_AMOUNT = 5;
+    private static final int REWARD_AMOUNT = 10;
 
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
@@ -97,9 +97,11 @@ public class TodoService {
         if (dueDate != null && dueDate.isAfter(today)) {
             throw new BusinessException(TodoErrorCode.TODO_FUTURE_NOT_COMPLETABLE);
         }
-        // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
-        int reward = today.equals(dueDate) && dailyRewardService.canReward(userId, today)
-                ? REWARD_AMOUNT : 0;
+        // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
+        // 당일 마감 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
+        int reward = today.equals(dueDate)
+                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
+                : 0;
 
         todo.complete(REWARD_CURRENCY, reward, Instant.now());
 

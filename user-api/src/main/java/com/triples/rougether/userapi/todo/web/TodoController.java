@@ -91,7 +91,8 @@ public class TodoController {
 
     @Operation(summary = "투두 완료 체크",
             description = "투두를 완료 처리합니다. 마감일(dueDate)이 오늘(KST 기준)이거나 이미 지났거나 없는 투두만 완료할 수 있습니다. "
-                    + "코인 5는 마감일이 오늘인 완료에만 지급하며(일일 상한 4건 적용), 마감일이 지났거나 없는 완료는 0코인입니다. "
+                    + "코인 10은 마감일이 오늘인 완료에만 지급하며(루틴·투두 합산 일일 상한 50코인 적용 — 남은 한도가 10보다 적으면 남은 만큼만 지급), "
+                    + "마감일이 지났거나 없는 완료는 0코인입니다. "
                     + "PENDING 상태의 투두만 완료할 수 있습니다. 루틴 완료와 달리 스트릭에는 반영되지 않습니다.")
     @PostMapping("/{id}/complete")
     @ResponseStatus(HttpStatus.CREATED)
