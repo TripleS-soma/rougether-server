@@ -633,11 +633,11 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.rarity").value("전설"))
                 .andExpect(jsonPath("$.rarityEditable").value(true));
 
-        // 스펙 기준 가구 뽑기 머신: 테마 코드 승계, COIN 250, 1회 뽑기, 즉시 활성
+        // 스펙 기준 가구 뽑기 머신: 테마 코드 승계, COIN 25, 1회 뽑기, 즉시 활성
         Integer gachaCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM gacha
                 WHERE theme_id = ? AND code = 'no_gacha_theme'
-                  AND cost_currency_type = 'COIN' AND cost_amount = 250
+                  AND cost_currency_type = 'COIN' AND cost_amount = 25
                   AND draw_count = 1 AND is_active = TRUE
                 """, Integer.class, newTheme.getId());
         assertThat(gachaCount).isEqualTo(1);

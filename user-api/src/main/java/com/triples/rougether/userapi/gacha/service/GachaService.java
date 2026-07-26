@@ -41,8 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GachaService {
 
-    private static final int ITEM_REFUND_DIA = 30;           // 아이템 중복 -> 다이아 전환 (프론트 DUPLICATE_DIA)
-    private static final int CHARACTER_REFUND_COIN = 200;    // 캐릭터 중복 -> 코인 환급 (spec)
+    // 환급값은 단가에 연동한다 — 단가만 낮추면 "뽑기 = 코인을 다이아로 바꾸는 환전기"가 된다.
+    private static final int ITEM_REFUND_DIA = 3;            // 아이템 중복 -> 다이아 전환 (단가 25 의 12%, 프론트 DUPLICATE_DIA)
+    private static final int CHARACTER_REFUND_COIN = 100;    // 캐릭터 중복 -> 코인 환급 (단가 500 의 20%, spec)
     private static final int TIER_NORMAL_MAX = 70;   // roll 0~69 -> 일반
     private static final int TIER_RARE_MAX = 95;     // 70~94 -> 희귀, 95~99 -> 전설
     private static final int MULTI_COUNT = 10;

@@ -84,7 +84,7 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-raw");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
-        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함. 초기 잔액은 SignupWalletPolicy(코인 750).
+        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함. 초기 잔액은 SignupWalletPolicy(코인 100).
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<UserWallet>> walletCaptor = ArgumentCaptor.forClass(List.class);
         verify(userWalletRepository).saveAll(walletCaptor.capture());

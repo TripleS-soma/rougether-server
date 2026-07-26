@@ -18,7 +18,7 @@ public record GachaResponse(
         @Schema(description = "뽑기 비용 재화. 허용값: COIN(코인 — 루틴 보상·뽑기), DIAMOND(다이아 — 상점 구매). "
                 + "표시용이며 실제 뽑기 차감은 항상 COIN", example = "COIN")
         CurrencyType costCurrencyType,
-        @Schema(description = "단챠 1회 비용 (count=10 요청 시 이 값의 5배 차감)", example = "250")
+        @Schema(description = "단챠 1회 비용 (count=10 요청 시 이 값의 5배 차감)", example = "25")
         int costAmount,
         @Schema(description = "1회 실행당 뽑는 개수", example = "1")
         int drawCount,
