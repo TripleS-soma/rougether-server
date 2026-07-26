@@ -36,7 +36,7 @@ public record GachaDrawResponse(
             @Schema(description = "전환된 재화 종류 (converted=true 일 때, 아이템은 DIAMOND·캐릭터는 COIN)",
                     example = "DIAMOND")
             CurrencyType refundCurrencyType,
-            @Schema(description = "전환 금액 (converted=true 일 때, 아이템 30·캐릭터 200)", example = "30")
+            @Schema(description = "전환 금액 (converted=true 일 때, 아이템 3·캐릭터 100)", example = "3")
             Integer refundAmount) {
     }
 

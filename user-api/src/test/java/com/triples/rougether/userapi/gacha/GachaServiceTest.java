@@ -137,7 +137,7 @@ class GachaServiceTest {
     }
 
     @Test
-    void 이미_소유한_아이템은_지급대신_다이아30으로_전환된다() {
+    void 이미_소유한_아이템은_지급대신_다이아3으로_전환된다() {
         Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
@@ -156,11 +156,11 @@ class GachaServiceTest {
 
         verify(wallet).spend(25);
         verify(wallet).add(0);
-        verify(diaWallet).add(30);
+        verify(diaWallet).add(3);
         verify(userItemRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.DIAMOND);
-        assertThat(res.results().get(0).refundAmount()).isEqualTo(30);
+        assertThat(res.results().get(0).refundAmount()).isEqualTo(3);
     }
 
     @Test
@@ -172,7 +172,7 @@ class GachaServiceTest {
         when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
         when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
         UserWallet createdDia = mock(UserWallet.class);
-        when(createdDia.getBalance()).thenReturn(30);
+        when(createdDia.getBalance()).thenReturn(3);
         when(walletRepository.save(any(UserWallet.class))).thenReturn(createdDia);
         Item item = singleItemPool(100L, 10L);
         UserItem owned = mock(UserItem.class);
@@ -184,8 +184,8 @@ class GachaServiceTest {
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
         verify(walletRepository).save(any(UserWallet.class));
-        verify(createdDia).add(30);
-        assertThat(res.wallets().get(1).balance()).isEqualTo(30);
+        verify(createdDia).add(3);
+        assertThat(res.wallets().get(1).balance()).isEqualTo(3);
     }
 
     // 캐릭터 pool 을 1개(rarity 미부여)로 만들어 추첨 결과를 결정적으로 고정.
@@ -224,7 +224,7 @@ class GachaServiceTest {
     }
 
     @Test
-    void 이미_소유한_캐릭터는_지급대신_코인200_환급된다() {
+    void 이미_소유한_캐릭터는_지급대신_코인100_환급된다() {
         Gacha g = activeGacha(500);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
@@ -241,10 +241,10 @@ class GachaServiceTest {
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
         verify(wallet).spend(500);
-        verify(wallet).add(200);
+        verify(wallet).add(100);
         verify(userCharacterRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.COIN);
-        assertThat(res.results().get(0).refundAmount()).isEqualTo(200);
+        assertThat(res.results().get(0).refundAmount()).isEqualTo(100);
     }
 }
