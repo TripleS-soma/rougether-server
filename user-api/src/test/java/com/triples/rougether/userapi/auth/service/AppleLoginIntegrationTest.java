@@ -69,7 +69,7 @@ class AppleLoginIntegrationTest {
         // 닉네임은 가입 시 비우고 온보딩에서 채움.
         assertThat(user.getNickname()).isNull();
 
-        // 가입 시 지갑 발급 + 초기 잔액(코인 750=온보딩 뽑기 체험용, 다이아 0)
+        // 가입 시 지갑 발급 + 초기 잔액(코인 100=온보딩 뽑기 체험용, 다이아 0)
         assertThat(userWalletRepository.findByUserId(user.getId()))
                 .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
                 .containsExactlyInAnyOrder(

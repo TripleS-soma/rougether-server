@@ -48,7 +48,7 @@ public class ItemSlotService {
     private static final String DEFAULT_POSITION_RANGE_MESSAGE =
             "기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다.";
     // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (10연 = x5 는 user-api GachaService 가 계산)
-    private static final int ITEM_GACHA_COST_COIN = 250;
+    private static final int ITEM_GACHA_COST_COIN = 25;
 
     private final ItemRepository itemRepository;
     private final ThemeRepository themeRepository;
@@ -162,7 +162,7 @@ public class ItemSlotService {
         return ItemSlotRow.of(item, activeItemEntries);
     }
 
-    // 미등록 아이템을 테마의 활성 머신 전부에 등록. 머신이 없으면 스펙 기본값(COIN 250, 1회)으로 새로 만듦.
+    // 미등록 아이템을 테마의 활성 머신 전부에 등록. 머신이 없으면 스펙 기본값(COIN 25, 1회)으로 새로 만듦.
     // 테마 행 락으로 동시 등록을 직렬화 — 같은 테마의 연속 클릭이 겹쳐도 머신/엔트리가 중복 생성되지 않는다.
     // 락 이후 재확인은 locking read 로만 한다 — REPEATABLE READ 에선 일반 조회가 락 이전 스냅샷을 읽어
     // 선행 커밋(머신/엔트리)을 못 보고 중복 생성할 수 있다.

@@ -45,13 +45,13 @@ class GachaControllerTest {
     @Test
     void 뽑기_머신_목록_응답_계약() throws Exception {
         when(gachaService.getGachaList()).thenReturn(new GachaListResponse(List.of(
-                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L, CurrencyType.COIN, 250, 1, true))));
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L, CurrencyType.COIN, 25, 1, true))));
 
         mockMvc.perform(get("/api/v1/gacha"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].gachaId").value(1))
                 .andExpect(jsonPath("$.items[0].code").value("calm_hanok"))
-                .andExpect(jsonPath("$.items[0].costAmount").value(250));
+                .andExpect(jsonPath("$.items[0].costAmount").value(25));
     }
 
     @Test

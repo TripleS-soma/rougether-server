@@ -98,10 +98,10 @@ class GachaServiceTest {
 
     @Test
     void 코인이_부족하면_거부하고_차감하지_않는다() {
-        Gacha g = activeGacha(250);
+        Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
-        when(wallet.getBalance()).thenReturn(100);
+        when(wallet.getBalance()).thenReturn(10);
         when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
@@ -111,7 +111,7 @@ class GachaServiceTest {
 
     @Test
     void 미소유_아이템은_지급되고_코인이_차감된다() {
-        Gacha g = activeGacha(250);
+        Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
@@ -124,7 +124,7 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).spend(250);
+        verify(wallet).spend(25);
         verify(userItemRepository).save(any(UserItem.class));
         verify(wallet).add(0);
         assertThat(res.results()).hasSize(1);
@@ -138,7 +138,7 @@ class GachaServiceTest {
 
     @Test
     void 이미_소유한_아이템은_지급대신_다이아30으로_전환된다() {
-        Gacha g = activeGacha(250);
+        Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
@@ -154,7 +154,7 @@ class GachaServiceTest {
 
         GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(1));
 
-        verify(wallet).spend(250);
+        verify(wallet).spend(25);
         verify(wallet).add(0);
         verify(diaWallet).add(30);
         verify(userItemRepository, never()).save(any());
@@ -165,7 +165,7 @@ class GachaServiceTest {
 
     @Test
     void 아이템_중복_전환시_다이아_지갑이_없으면_새로_발급한다() {
-        Gacha g = activeGacha(250);
+        Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
         when(wallet.getBalance()).thenReturn(1000);
