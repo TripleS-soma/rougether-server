@@ -127,6 +127,18 @@ class TodoServiceIntegrationTest {
     }
 
     @Test
+    void 수정에서_categoryId가_null이면_미분류로_해제된다() {
+        Long categoryId = persistCategory(userRepository.findById(userId).orElseThrow());
+        Long todoId = service.create(userId,
+                new TodoCreateRequest("장보기", null, categoryId, null, null)).id();
+
+        TodoResponse updated = service.update(userId, todoId,
+                new TodoUpdateRequest("청소하기", null, null, null, null));
+
+        assertThat(updated.categoryId()).isNull();
+    }
+
+    @Test
     void 수정에서_dueTime을_지정하면_초_나노가_정규화되어_바뀐다() {
         Long todoId = service.create(userId,
                 new TodoCreateRequest("장보기", null, null, null, LocalTime.of(9, 0))).id();

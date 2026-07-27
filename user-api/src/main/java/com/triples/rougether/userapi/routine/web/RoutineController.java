@@ -76,7 +76,8 @@ public class RoutineController {
 
     @Operation(summary = "루틴 수정",
             description = "소유한 루틴의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, title은 공백이면 기존 값을 유지합니다. "
-                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동합니다(null이면 기존 카테고리 유지). "
+                    + "단 categoryId·scheduledTime·endsOn은 null이면 해제합니다. "
+                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동하고, 지정하지 않으면 미분류가 됩니다. "
                     + "repeatType을 WEEKLY/BIWEEKLY로 변경할 때는 repeatDays를 함께 전달해야 요일 기준으로 반복되고, "
                     + "MONTHLY/YEARLY로 변경할 때는 각각 dayOfMonth 또는 month/day를 함께 전달해야 합니다.")
     @PutMapping("/{id}")

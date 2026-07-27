@@ -130,13 +130,13 @@ public class Routine extends BaseEntity {
     }
 
     // 버전 분기용 복제. 인자가 null이면 이 버전 값을 유지(update와 같은 병합 규칙),
-    // 단 scheduledTime·endsOn은 호출자가 확정한 유효값(해제 시 null 포함)을 그대로 씀.
+    // 단 category·scheduledTime·endsOn은 호출자가 확정한 유효값(해제 시 null 포함)을 그대로 씀.
     // status·origin은 이 버전에서 승계. created_at은 auditing이 now로 채움
     public Routine copyAsNewVersion(Category category, String title, AuthType authType,
                                     String repeatType, String repeatDays, LocalTime scheduledTime,
                                     LocalDate startsOn, LocalDate endsOn) {
         Routine copy = new Routine(this.user,
-                category != null ? category : this.category,
+                category,
                 title != null && !title.isBlank() ? title : this.title,
                 authType != null ? authType : this.authType,
                 repeatType != null ? repeatType : this.repeatType,
