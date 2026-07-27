@@ -109,10 +109,9 @@ public class RoutineService {
             return RoutineResponse.from(routineRepository.save(newVersion));
         }
 
-        // 제자리 수정(제목·카테고리·시각·인증 변경, 또는 오늘 생성분의 스케줄 변경) — 과거에도 반영됨
-        if (category != null) {
-            routine.changeCategory(category);
-        }
+        // 제자리 수정(제목·카테고리·시각·인증 변경, 또는 오늘 생성분의 스케줄 변경) — 과거에도 반영됨.
+        // categoryId null은 미분류로 해제함(scheduledTime·endsOn과 같은 규칙)
+        routine.changeCategory(category);
         routine.update(request.title(), request.authType(), request.repeatType(),
                 repeatDays, request.scheduledTime(), request.startsOn(),
                 request.endsOn());

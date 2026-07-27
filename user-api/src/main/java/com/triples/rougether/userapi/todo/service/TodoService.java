@@ -68,9 +68,8 @@ public class TodoService {
     @Transactional
     public TodoResponse update(Long userId, Long todoId, TodoUpdateRequest request) {
         Todo todo = findOwned(userId, todoId);
-        if (request.categoryId() != null) {
-            todo.changeCategory(findOwnedCategory(userId, request.categoryId()));
-        }
+        todo.changeCategory(request.categoryId() != null
+                ? findOwnedCategory(userId, request.categoryId()) : null);
         todo.update(request.title(), request.description(), request.dueDate(), request.dueTime());
         return TodoResponse.from(todo);
     }

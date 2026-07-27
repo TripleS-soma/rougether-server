@@ -157,6 +157,43 @@ class RoutineServiceIntegrationTest {
     }
 
     @Test
+    void 수정_시_categoryId를_null로_보내면_미분류로_해제된다() {
+        Long categoryId = persistCategory(userId, "운동");
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("원래", categoryId, AuthType.CHECK,
+                        "DAILY", null, null, null, null));
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest("변경됨", null, null, null, null, null, null, null));
+        em.flush();
+        em.clear();
+
+        assertThat(updated.categoryId()).isNull();
+        assertThat(routineRepository.findById(created.id()).orElseThrow().getCategory()).isNull();
+    }
+
+    @Test
+    void 버전_분기_수정에서도_categoryId를_null로_보내면_미분류로_해제된다() {
+        Long categoryId = persistCategory(userId, "운동");
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("운동", categoryId, AuthType.CHECK, "WEEKLY",
+                        new RepeatDays(List.of("MON")), null, null, null));
+        backdateCreatedAt(created.id(), 3);
+
+        RoutineResponse updated = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("TUE")),
+                        null, null, null));
+        em.flush();
+        em.clear();
+
+        // 새 버전은 미분류. 닫힌 옛 버전은 그 시점 분류(운동)를 그대로 남김
+        assertThat(updated.id()).isNotEqualTo(created.id());
+        assertThat(updated.categoryId()).isNull();
+        assertThat(routineRepository.findById(created.id()).orElseThrow()
+                .getCategory().getId()).isEqualTo(categoryId);
+    }
+
+    @Test
     void scheduledTime과_endsOn에_null을_보내면_해제된다() {
         LocalDate today = LocalDate.now(KST);
         RoutineResponse created = routineService.create(userId,

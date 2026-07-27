@@ -11,7 +11,7 @@ import java.time.LocalTime;
 public record RoutineUpdateRequest(
         @Schema(description = "루틴 제목(최대 160자). 미지정(null)이거나 공백이면 기존 값 유지", example = "아침 운동")
         @Size(max = 160) String title,
-        @Schema(description = "소속 카테고리 ID(지정하면 해당 카테고리로 변경, null이면 기존 카테고리 유지). 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값", example = "3")
+        @Schema(description = "소속 카테고리 ID(지정하면 해당 카테고리로 변경). null이면 미분류로 해제합니다. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값", example = "3")
         Long categoryId,
         @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형). 미지정(null)이면 기존 값 유지", example = "CHECK")
         AuthType authType,

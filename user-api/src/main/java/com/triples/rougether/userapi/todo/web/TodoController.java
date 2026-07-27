@@ -72,7 +72,8 @@ public class TodoController {
 
     @Operation(summary = "투두 수정",
             description = "소유한 투두의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, title은 공백이면 기존 값을 유지합니다. "
-                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동합니다(null이면 기존 카테고리 유지).")
+                    + "단 categoryId·dueTime은 null이면 해제합니다. "
+                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동하고, 지정하지 않으면 미분류가 됩니다.")
     @PutMapping("/{id}")
     public TodoResponse update(@CurrentUser AuthUser authUser,
                                @Parameter(description = "투두 ID. 내 투두 목록 조회(GET /api/v1/todos) 응답의 id 값") @PathVariable Long id,
