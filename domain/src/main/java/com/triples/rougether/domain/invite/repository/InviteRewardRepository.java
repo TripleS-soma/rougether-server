@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.invite.repository;
 
 import com.triples.rougether.domain.invite.entity.InviteReward;
+import com.triples.rougether.domain.member.entity.OauthProvider;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,6 +22,15 @@ public interface InviteRewardRepository extends JpaRepository<InviteReward, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from InviteReward r where r.inviter.id = :inviterUserId and r.inviterRewardAmount > 0")
     List<InviteReward> findRewardedForUpdateByInviterId(@Param("inviterUserId") Long inviterUserId);
+
+    // 탈퇴 후 재가입 재수령 차단. 탈퇴가 oauth_accounts 행을 지우므로 재가입하면 user_id 가 새로 발급되고
+    // findForUpdateByInviteeId 로는 못 막는다. 수령 시점에 복사해 둔 provider 식별자로 판정한다.
+    // 위와 같은 이유로 locking read 를 쓴다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from InviteReward r "
+            + "where r.inviteeProvider = :provider and r.inviteeProviderUserId = :providerUserId")
+    List<InviteReward> findForUpdateByInviteeOauth(@Param("provider") OauthProvider provider,
+                                                   @Param("providerUserId") String providerUserId);
 
     // 조회 전용(내 초대코드 화면) — 판정에 쓰지 않으므로 잠금 없이 센다.
     long countByInviterIdAndInviterRewardAmountGreaterThan(Long inviterUserId, int amount);

@@ -75,4 +75,11 @@ public class User extends BaseEntity {
     public void removeProfileImage() {
         this.profileImageKey = null;
     }
+
+    // 탈퇴 여부. soft delete 로 행이 남으므로(방명록·응원 이력의 FK) 표시 분기와 로그인 차단이 이 값을 본다.
+    // 실제 탈퇴 쓰기는 UserRepository.withdrawIfActive 의 조건부 UPDATE 로 한다 — 엔티티 dirty checking 으로
+    // 하면 트랜잭션 앞단에서 행 락을 잡게 되어, 집 소유권 양도가 잡는 users shared lock 과 엇물린다.
+    public boolean isWithdrawn() {
+        return deletedAt != null;
+    }
 }

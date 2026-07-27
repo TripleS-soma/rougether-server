@@ -12,8 +12,27 @@
   },
   "surfaces": {
     "background": { "top": 0, "left": 0, "width": 1, "height": 1, "contentFit": "cover" },
-    "wallpaper": { "top": 0, "left": 0, "width": 1, "height": 0.5, "contentFit": "cover" },
-    "floor": { "top": 0.5, "left": 0, "width": 1, "height": 0.5, "contentFit": "cover" }
+    "wallpaper": {
+      "top": 0,
+      "left": 0,
+      "width": 1,
+      "height": 0.6667,
+      "contentFit": "cover",
+      "contentPosition": "bottom"
+    },
+    "floor": {
+      "top": 0.6667,
+      "left": 0,
+      "width": 1,
+      "height": 0.3333,
+      "contentFit": "cover",
+      "contentPosition": "top"
+    }
+  },
+  "art": {
+    "wallpaper": { "width": 1205, "height": 964 },
+    "floor": { "width": 1205, "height": 482 },
+    "heroHeightRatio": 1.2
   },
   "furniture": {
     "baseWidth": 0.28,

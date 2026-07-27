@@ -16,6 +16,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     // 재사용 감지 시 해당 user의 살아있는 refresh 일괄 폐기용.
     List<RefreshToken> findAllByUserIdAndRevokedAtIsNull(Long userId);
 
+    // 탈퇴 시 세션 정리. 폐기(revokedAt) 대신 삭제한다 — 계정 자체가 사라지므로 이력을 남길 이유가 없다.
+    void deleteByUserId(Long userId);
+
     // 회전 시 원자적 1회성 폐기. 동시 요청이 같은 토큰을 회전하면 한쪽만 영향행 1, 진 쪽은 0 → 재사용으로 처리함.
     @Modifying
     @Query("update RefreshToken r set r.revokedAt = :now where r.id = :id and r.revokedAt is null")

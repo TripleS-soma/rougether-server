@@ -27,6 +27,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
+    // 회원 탈퇴 - soft delete 와 개인정보 비움을 원자적 1회성 UPDATE 로 한다.
+    // 탈퇴 앞단에서 users 행 락을 잡으면, 집 소유권 양도(house.owner_user_id UPDATE)가 fk_house_owner 로
+    // 양도 대상의 users 행에 shared lock 을 잡기 때문에 서로의 집에 함께 속한 두 사람의 동시 탈퇴가
+    // 데드락에 빠진다. users 쓰기를 마지막 한 번으로 미루고, 중복 탈퇴는 영향행 0으로 판별한다
+    // (동시 요청이 들어오면 한쪽만 1, 진 쪽은 0 → 이미 탈퇴로 처리).
+    // flushAutomatically 가 없으면 앞선 집 정리(house_members 상태 전환)가 flush 되기 전에
+    // clear 로 detach 되어 통째로 유실된다.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update User u set u.deletedAt = :now, u.updatedAt = :now, u.nickname = null, u.email = null, "
+            + "u.profileImageKey = null, u.bio = null where u.id = :id and u.deletedAt is null")
+    int withdrawIfActive(@Param("id") Long id, @Param("now") Instant now);
+
     // 어드민 유저 검색(읽기 전용) - email/nickname 부분 일치(대소문자 무시), 검색어 없으면 전체.
     @Query("select u from User u where :query is null "
             + "or lower(u.email) like lower(concat('%', :query, '%')) "

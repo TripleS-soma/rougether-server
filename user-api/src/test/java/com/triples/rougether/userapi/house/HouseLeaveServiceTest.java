@@ -47,7 +47,7 @@ class HouseLeaveServiceTest {
         House house = aliveHouse();
         HouseMember me = activeMember(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(me));
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(me));
         when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
 
         houseMemberCommandService.leave(7L, 1L);
@@ -62,7 +62,7 @@ class HouseLeaveServiceTest {
         House house = aliveHouse();
         HouseMember owner = activeMember(true);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
         when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
 
         assertThatThrownBy(() -> houseMemberCommandService.leave(7L, 1L))
@@ -77,7 +77,7 @@ class HouseLeaveServiceTest {
         House house = aliveHouse();
         HouseMember lastOwner = activeMember(true);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastOwner));
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastOwner));
         when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L);
 
         houseMemberCommandService.leave(7L, 1L);
@@ -93,7 +93,7 @@ class HouseLeaveServiceTest {
         House house = aliveHouse();
         HouseMember lastMember = activeMember(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastMember));
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastMember));
         when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L);
 
         houseMemberCommandService.leave(7L, 1L);
@@ -106,7 +106,7 @@ class HouseLeaveServiceTest {
     void 비구성원의_탈퇴는_403() {
         House house = aliveHouse();
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseMemberCommandService.leave(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
@@ -118,7 +118,7 @@ class HouseLeaveServiceTest {
         HouseMember left = mock(HouseMember.class);
         when(left.isActive()).thenReturn(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
+        when(houseMemberRepository.findForUpdateByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
 
         assertThatThrownBy(() -> houseMemberCommandService.leave(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));

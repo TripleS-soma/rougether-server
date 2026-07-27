@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.guestbook.dto;
 
+import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.room.entity.RoomGuestbook;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -13,12 +14,16 @@ public record GuestbookListResponse(
         @Schema(description = "다음 페이지 존재 여부", example = "true")
         boolean hasNext) {
 
+    // 탈퇴자가 남긴 글은 지우지 않고 작성자 표시만 가린다 - 남은 사람의 방 이력에 구멍을 내지 않기 위함.
+    // 탈퇴 시 nickname 이 null 로 비워지므로 "온보딩 전(null)"과 구분하려면 deletedAt 을 봐야 한다.
+    private static final String WITHDRAWN_AUTHOR_NICKNAME = "탈퇴한 사용자";
+
     public record GuestbookItem(
             @Schema(description = "방명록 ID", example = "12")
             Long guestbookId,
             @Schema(description = "작성자 회원 ID", example = "7")
             Long authorId,
-            @Schema(description = "작성자 닉네임 (온보딩 전이면 null)", example = "진형")
+            @Schema(description = "작성자 닉네임 (온보딩 전이면 null, 탈퇴한 회원이면 \"탈퇴한 사용자\")", example = "진형")
             String authorNickname,
             @Schema(description = "방명록 내용", example = "오늘도 루틴 완료! 방 예쁘다 ㅎㅎ")
             String content,
@@ -26,10 +31,11 @@ public record GuestbookListResponse(
             Instant createdAt) {
 
         public static GuestbookItem of(RoomGuestbook guestbook) {
+            User author = guestbook.getAuthor();
             return new GuestbookItem(
                     guestbook.getId(),
-                    guestbook.getAuthor().getId(),
-                    guestbook.getAuthor().getNickname(),
+                    author.getId(),
+                    author.isWithdrawn() ? WITHDRAWN_AUTHOR_NICKNAME : author.getNickname(),
                     guestbook.getContent(),
                     guestbook.getCreatedAt());
         }
