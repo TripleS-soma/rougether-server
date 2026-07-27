@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +20,7 @@ import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.member.service.MemberService;
+import com.triples.rougether.userapi.member.service.MemberWithdrawService;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingSummary;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +42,8 @@ class MemberControllerTest {
 
     @MockitoBean
     private MemberService memberService;
+    @MockitoBean
+    private MemberWithdrawService memberWithdrawService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     @MockitoBean
@@ -107,5 +111,15 @@ class MemberControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(memberService).deleteProfileImage(1L);
+    }
+
+    @Test
+    void 회원_탈퇴는_인증_사용자_본인_기준으로_204를_반환한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        // path 로 대상을 받지 않는다 - 남의 계정을 지울 경로 자체를 열지 않기 위함.
+        verify(memberWithdrawService).withdraw(1L);
     }
 }

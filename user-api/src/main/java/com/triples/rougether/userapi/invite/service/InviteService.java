@@ -6,8 +6,10 @@ import com.triples.rougether.domain.invite.entity.UserInviteCode;
 import com.triples.rougether.domain.invite.policy.InviteRewardPolicy;
 import com.triples.rougether.domain.invite.repository.InviteRewardRepository;
 import com.triples.rougether.domain.invite.repository.UserInviteCodeRepository;
+import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
@@ -37,6 +39,7 @@ public class InviteService {
     private final InviteRewardRepository inviteRewardRepository;
     private final UserRepository userRepository;
     private final UserWalletRepository walletRepository;
+    private final OauthAccountRepository oauthAccountRepository;
     private final UserInviteCodeGenerator codeGenerator;
 
     @Transactional
@@ -72,6 +75,16 @@ public class InviteService {
             throw new BusinessException(InviteErrorCode.INVITE_ALREADY_REDEEMED);
         }
 
+        // 탈퇴 후 재가입 재수령 차단. 탈퇴가 oauth_accounts 행을 지워 user_id 기준 판정을 통과해 버리므로,
+        // 수령 시점의 provider 식별자를 복사해 두고 그 값으로도 막는다(uq_invite_rewards_invitee_oauth).
+        // dev-login 계정은 oauth 행이 없어 null 이며, 그 경우 위 user_id 판정이 그대로 방어선이 된다.
+        OauthAccount inviteeOauth = oauthAccountRepository.findByUserId(inviteeUserId).orElse(null);
+        if (inviteeOauth != null && !inviteRewardRepository
+                .findForUpdateByInviteeOauth(inviteeOauth.getProvider(), inviteeOauth.getProviderUserId())
+                .isEmpty()) {
+            throw new BusinessException(InviteErrorCode.INVITE_ALREADY_REDEEMED);
+        }
+
         int inviterReward = InviteRewardPolicy.inviterRewardOf(
                 inviteRewardRepository.findRewardedForUpdateByInviterId(inviterUserId).size());
         int inviteeReward = InviteRewardPolicy.INVITEE_REWARD_COIN;
@@ -82,7 +95,9 @@ public class InviteService {
                 userRepository.getReferenceById(inviterUserId),
                 userRepository.getReferenceById(inviteeUserId),
                 inviterReward,
-                inviteeReward));
+                inviteeReward,
+                inviteeOauth != null ? inviteeOauth.getProvider() : null,
+                inviteeOauth != null ? inviteeOauth.getProviderUserId() : null));
 
         return new InviteRedeemResponse(inviteeReward, inviteeWallet.getBalance(), inviterReward > 0);
     }

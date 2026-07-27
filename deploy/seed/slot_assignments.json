@@ -18,7 +18,7 @@
     "reason": "방 중앙은 캐릭터 자리 - 러그가 깔린 하단 중앙에 식탁 배치"
   },
   {
-    "assetKey": "items/bakery-morning/furniture/bakery-morning-mini-oven.png",
+    "assetKey": "items/bakery-morning/furniture/bakery-morning-mini-oven-animated-v1.webp",
     "name": "Bakery Morning Set - Mini Oven",
     "slot": "midLeft",
     "reason": "부피 있는 대형 조리 가전 - 중단 좌측 주요 가구 자리"
@@ -66,7 +66,7 @@
     "reason": "벽에 붙는 전통 창호(창문)이므로 상단 벽 슬롯이 적합"
   },
   {
-    "assetKey": "items/calm-hanok/furniture/calm-hanok-tea-set.png",
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-tea-set-animated-v1.webp",
     "name": "Calm Hanok Set - Tea Set",
     "slot": "topRight",
     "reason": "작은 다기 쟁반 소품이라 상단 선반/벽 슬롯에 진열용으로 배치"
@@ -78,8 +78,8 @@
     "reason": "이불을 얹은 낮은 침상으로 대형 주요 가구라 중단 큰 자리에 배치"
   },
   {
-    "assetKey": "items/calm-hanok/furniture/calm-hanok-folding-screen.png",
-    "name": "Calm Hanok Set - Folding Screen",
+    "assetKey": "items/calm-hanok/furniture/calm-hanok-folding-screen-animated-v3.webp",
+    "name": "Calm Hanok Set - Moonlight Landscape Folding Screen",
     "slot": "topCenter",
     "reason": "벽면에 세우는 병풍 - 상단 중앙 벽 슬롯"
   },
@@ -168,7 +168,7 @@
     "reason": "바닥에 쌓는 쿠션 더미라 하단 우측 소품 자리에 배치"
   },
   {
-    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-bedside-lamp.png",
+    "assetKey": "items/cloud-nap-room-imagegen-v2/furniture/cloud-nap-room-imagegen-v2-bedside-lamp-animated-v1.webp",
     "name": "Cloud Nap Room Set - Bedside Lamp",
     "slot": "bottomLeft",
     "reason": "작은 탁상 조명 소품이라 하단 좌측 바닥 조명 자리에 배치"
@@ -180,7 +180,7 @@
     "reason": "담요를 담은 바닥 수납 바구니 소품이라 하단 우측에 배치"
   },
   {
-    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-morning-code-window.png",
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-morning-code-window-animated-v1.webp",
     "name": "Cozy Developer Room Set - Morning Code Window",
     "slot": "topLeft",
     "reason": "커튼 달린 창문은 벽에 붙는 대표 오브젝트라 상단 벽 자리인 topLeft가 적합"
@@ -192,7 +192,7 @@
     "reason": "벽걸이 메모보드는 상단 벽에 걸리는 소품이라 topRight에 배치"
   },
   {
-    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-server-router-shelf.png",
+    "assetKey": "items/cozy-developer-room/furniture/cozy-developer-room-server-router-shelf-animated-v1.webp",
     "name": "Cozy Developer Room Set - Server Router Shelf",
     "slot": "topLeft",
     "reason": "라우터가 올라간 벽 선반은 상단 벽걸이 성격이라 창문 옆 topLeft 영역이 어울림"
@@ -252,7 +252,7 @@
     "reason": "케이블·멀티탭이 담긴 바구니는 바닥에 놓는 소품이라 하단 bottomLeft에 배치"
   },
   {
-    "assetKey": "items/cozy-space/furniture/cozy-space-space-window.png",
+    "assetKey": "items/cozy-space/furniture/cozy-space-space-window-animated-v1.webp",
     "name": "Cozy Space Set - Space Window",
     "slot": "topLeft",
     "reason": "별밤 하늘이 보이는 창문+커튼은 벽에 붙는 요소라 상단 벽 자리에 배치."
@@ -294,7 +294,7 @@
     "reason": "오벌형 러그는 바닥 중앙에 까는 소품이라 하단 중앙에 배치."
   },
   {
-    "assetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table.png",
+    "assetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table-animated-v1.webp",
     "name": "Cozy Space Set - Planet Mobile Table",
     "slot": "bottomRight",
     "reason": "모빌이 달린 낮은 원형 테이블이라 바닥 소품 자리인 하단에 배치."
@@ -354,7 +354,7 @@
     "reason": "바닥에 까는 타원형 러그라 중앙 바닥 자리가 정석이다"
   },
   {
-    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-hand-sprout-plant.png",
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-hand-sprout-plant-animated-v1.webp",
     "name": "Cozy Zombie Hideout Set - Hand Sprout Plant",
     "slot": "bottomRight",
     "reason": "화분 소품이라 바닥에 놓는 하단 우측 자리에 배치한다"
@@ -414,7 +414,7 @@
     "reason": "찻주전자가 놓인 낮은 좌식 테이블이라 바닥 소품 하단에 배치"
   },
   {
-    "assetKey": "items/forest-sage/furniture/forest-sage-table-lamp.png",
+    "assetKey": "items/forest-sage/furniture/forest-sage-table-lamp-animated-v1.webp",
     "name": "Forest Sage Set - Table Lamp",
     "slot": "bottomRight",
     "reason": "작은 스탠드 조명 소품이라 하단 바닥 자리에 배치(테이블과 공유)"
@@ -432,7 +432,7 @@
     "reason": "수건이 걸린 나무 선반 — 벽에 붙는 선반형 수납이라 상단 벽면에 배치"
   },
   {
-    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bathtub.png",
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bathtub-animated-v3.webp",
     "name": "Onsen Bath Routine Set - Wooden Bathtub",
     "slot": "midLeft",
     "reason": "테마의 핵심 대형 가구인 원형 나무 욕조 — 중단 주요 자리에 배치"
@@ -462,7 +462,7 @@
     "reason": "낮은 나무 목욕 의자 — 바닥에 놓는 소형 스툴이라 하단 자리"
   },
   {
-    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bucket.png",
+    "assetKey": "items/onsen-bath-routine-imagegen-v2/furniture/onsen-bath-routine-imagegen-v2-wooden-bucket-animated-v1.webp",
     "name": "Onsen Bath Routine Set - Wooden Bucket",
     "slot": "bottomRight",
     "reason": "국자 딸린 작은 나무 바가지 — 바닥 소품이라 목욕 의자 옆 하단에 배치"
@@ -487,18 +487,18 @@
   },
   {
     "name": "Pastel Cyberpunk Room Set - Round Neon City Window",
-    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-round-neon-city-window.png",
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-round-neon-city-window-animated-v2.webp",
     "slot": "topRight",
     "reason": "원형 네온 창문은 벽에 붙는 창이므로 상단 벽면에 배치"
   },
   {
-    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-mini-server-router-shelf.png",
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-mini-server-router-shelf-animated-v1.webp",
     "name": "Pastel Cyberpunk Room Set - Mini Server Router Shelf",
     "slot": "topRight",
     "reason": "라우터를 올린 낮은 선반형 유닛이라 상단 벽 선반 자리에 어울린다"
   },
   {
-    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-neon-coding-desk.png",
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-neon-coding-desk-animated-v1.webp",
     "name": "Pastel Cyberpunk Room Set - Neon Coding Desk",
     "slot": "midLeft",
     "reason": "벽에 붙는 네온 책상 - 책장 곁 중단 좌측"
@@ -528,7 +528,7 @@
     "reason": "바닥에 까는 러그라 하단 중앙이 정석 위치"
   },
   {
-    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-coffee-glow-plant-set.png",
+    "assetKey": "items/pastel-cyberpunk-room/furniture/pastel-cyberpunk-room-coffee-glow-plant-set-animated-v1.webp",
     "name": "Pastel Cyberpunk Room Set - Coffee Glow Plant Set",
     "slot": "bottomLeft",
     "reason": "화분과 머그컵 바닥 소품이라 하단 코너에 두기 좋다"
@@ -540,7 +540,7 @@
     "reason": "작은 곰인형 소품이라 바닥 하단 코너에 배치"
   },
   {
-    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-rainy-window.png",
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-rainy-window-animated-v1.webp",
     "name": "Rainy Afternoon Study Set - Rainy Window",
     "slot": "topLeft",
     "reason": "커튼 달린 벽걸이 창문이라 벽에 붙는 상단 슬롯이 정석"
@@ -582,7 +582,7 @@
     "reason": "독서 의자 - 램프 곁 중단 우측"
   },
   {
-    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-tea-table-cup.png",
+    "assetKey": "items/rainy-afternoon-study-imagegen-v2/furniture/rainy-afternoon-study-imagegen-v2-tea-table-cup-animated-v1.webp",
     "name": "Rainy Afternoon Study Set - Tea Table Cup",
     "slot": "bottomRight",
     "reason": "찻잔 올린 낮은 원형 테이블, 바닥 소품이라 하단 코너에 배치"
@@ -660,7 +660,7 @@
     "reason": "작은 노트 더미 소품이라 하단 우측 바닥 소품 자리에 함께 배치"
   },
   {
-    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-emergency-lantern-table.png",
+    "assetKey": "items/cozy-zombie-hideout/furniture/cozy-zombie-hideout-emergency-lantern-table-animated-v1.webp",
     "name": "Emergency Lantern Table",
     "slot": "bottomLeft",
     "reason": "낮은 랜턴 테이블 소품 - 하단 배치 (수동 보정)"
@@ -678,7 +678,7 @@
     "reason": "벽걸이 서핑보드 선반 - 상단 좌측 벽면 슬롯이 적합"
   },
   {
-    "assetKey": "items/summer-beach-room-v2/furniture/summer-beach-room-v2-arched-palm-ocean-window.png",
+    "assetKey": "items/summer-beach-room-v2/furniture/summer-beach-room-v2-arched-palm-ocean-window-animated-v1.webp",
     "name": "야자수 바다 창문",
     "slot": "topRight",
     "reason": "아치형 창문 - 상단 우측 벽면 슬롯에 배치"

@@ -2,9 +2,11 @@ package com.triples.rougether.domain.house.repository;
 
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +33,24 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
     List<HouseMember> findByUserIdAndStatus(Long userId, String status);
 
     Optional<HouseMember> findByHouseIdAndUserId(Long houseId, Long userId);
+
+    // house 행 락을 잡은 뒤 내 멤버십을 다시 읽을 때 쓴다. 일반 조회면 REPEATABLE READ 스냅샷을 봐서
+    // "락 대기 중에 다른 트랜잭션이 나를 소유자로 승격시킨 것"을 놓친다(동시 탈퇴 시 소유자 없는 집이 생김).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select hm from HouseMember hm where hm.house.id = :houseId and hm.user.id = :userId")
+    Optional<HouseMember> findForUpdateByHouseIdAndUserId(@Param("houseId") Long houseId,
+                                                          @Param("userId") Long userId);
+
+    // 회원 탈퇴 시 자동 양도 대상 선정 — 탈퇴자를 뺀 ACTIVE 구성원 중 가장 먼저 가입한 사람.
+    // 탈퇴한 회원은 leave 로 status 가 LEFT 가 되므로 ACTIVE 필터만으로 후보에서 빠진다.
+    // users 를 조인해 deleted_at 을 함께 보면 FOR UPDATE 가 상대방 user 행까지 잠가,
+    // 서로의 집에 함께 속한 두 사람이 동시에 탈퇴할 때 데드락이 난다(실제로 재현됨).
+    // joined_at 동률이면 id 오름차순으로 결정적으로 뽑는다(다른 목록 조회와 같은 정렬 규칙).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select hm from HouseMember hm "
+            + "where hm.house.id = :houseId and hm.status = :status and hm.user.id <> :excludeUserId "
+            + "order by hm.joinedAt asc, hm.id asc")
+    List<HouseMember> findTransferCandidates(@Param("houseId") Long houseId,
+                                             @Param("status") HouseMemberStatus status,
+                                             @Param("excludeUserId") Long excludeUserId);
 }

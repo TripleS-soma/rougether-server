@@ -113,8 +113,8 @@
                         <div id="preview-furniture-layer" class="room-furniture-layer"
                              aria-label="미리보기 가구 배치 영역"></div>
                         <img id="room-character" class="room-character" alt="">
-                        <span class="room-band-label wall-label">벽 50%</span>
-                        <span class="room-band-label floor-label">바닥 50%</span>
+                        <span id="room-wall-label" class="room-band-label wall-label">벽</span>
+                        <span id="room-floor-label" class="room-band-label floor-label">바닥</span>
                     </div>
                     <div class="scene-toolbar" id="scene-toolbar">
                         <span id="scene-count">0개 배치</span>
@@ -298,6 +298,8 @@
         const roomWallpaper = document.getElementById('room-wallpaper');
         const roomFloor = document.getElementById('room-floor');
         const roomCharacter = document.getElementById('room-character');
+        const roomWallLabel = document.getElementById('room-wall-label');
+        const roomFloorLabel = document.getElementById('room-floor-label');
         const previewBackground = document.getElementById('preview-background');
         const previewWallpaper = document.getElementById('preview-wallpaper');
         const previewFloor = document.getElementById('preview-floor');
@@ -422,6 +424,8 @@
             roomStage.style.aspectRatio = roomContract.room.aspectRatio;
             roomStage.style.borderRadius = roomContract.room.borderRadiusPx + 'px';
             roomStage.style.setProperty('--wall-height', percent(wall.height));
+            roomWallLabel.textContent = '벽 ' + Math.round(wall.height * 100) + '%';
+            roomFloorLabel.textContent = '바닥 ' + Math.round(floor.height * 100) + '%';
             roomStage.style.setProperty(
                 '--furniture-padding', roomContract.furniture.imagePaddingPx + 'px');
             roomStage.style.setProperty(
@@ -512,6 +516,7 @@
             element.style.left = percent(rect.left);
             element.style.width = percent(rect.width);
             element.style.height = percent(rect.height);
+            element.style.objectPosition = rect.contentPosition ?? 'center';
         }
 
         function percent(value) {

@@ -129,7 +129,10 @@
             img.className = 'asset-thumb';
             img.loading = 'lazy';
             img.alt = asset.key;
-            img.src = s3BaseUrl + '/' + asset.key;
+            // 같은 key를 덮어써도 이전 이미지가 브라우저 캐시에 남지 않도록
+            // S3 목록의 수정 시각을 URL 버전으로 사용한다.
+            const assetVersion = encodeURIComponent(asset.lastModified);
+            img.src = s3BaseUrl + '/' + asset.key + '?v=' + assetVersion;
             thumbWrap.appendChild(img);
             if (asset.animated) {
                 const badge = document.createElement('span');

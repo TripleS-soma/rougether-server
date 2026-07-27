@@ -11,6 +11,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.member.service.MemberWithdrawService;
 import com.triples.rougether.domain.room.repository.RoomGuestbookRepository;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateRequest;
 import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateResponse;
@@ -34,6 +35,8 @@ class GuestbookFlowIntegrationTest {
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private RoomGuestbookRepository roomGuestbookRepository;
+    @Autowired private MemberWithdrawService memberWithdrawService;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     private record Fixture(User owner, User visitor, House house) {
     }
@@ -150,5 +153,36 @@ class GuestbookFlowIntegrationTest {
         GuestbookListResponse response = guestbookService.getGuestbooks(
                 f.visitor().getId(), f.owner().getId(), f.house().getId(), null, 20);
         assertThat(response.items()).extracting("content").containsExactly("남는 글");
+    }
+
+    @Test
+    void 탈퇴한_회원의_글은_남고_작성자만_탈퇴한_사용자로_표시된다() {
+        Fixture f = fixture();
+        f.visitor().changeNickname("떠난사람");
+        write(f, f.visitor(), "탈퇴 전에 남긴 글");
+
+        memberWithdrawService.withdraw(f.visitor().getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        GuestbookListResponse response = guestbookService.getGuestbooks(
+                f.owner().getId(), f.owner().getId(), f.house().getId(), null, 20);
+
+        // 글 자체는 지우지 않는다 - 남은 사람의 방 이력에 구멍을 내지 않기 위함.
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).content()).isEqualTo("탈퇴 전에 남긴 글");
+        assertThat(response.items().get(0).authorNickname()).isEqualTo("탈퇴한 사용자");
+    }
+
+    @Test
+    void 온보딩_전_닉네임없는_작성자는_탈퇴한_사용자로_표시되지_않는다() {
+        Fixture f = fixture();
+        // 가입 직후엔 nickname 이 null 이다 - 탈퇴자와 구분되어야 한다(판정 기준은 deletedAt).
+        write(f, f.visitor(), "닉네임 정하기 전 글");
+
+        GuestbookListResponse response = guestbookService.getGuestbooks(
+                f.owner().getId(), f.owner().getId(), f.house().getId(), null, 20);
+
+        assertThat(response.items().get(0).authorNickname()).isNull();
     }
 }
