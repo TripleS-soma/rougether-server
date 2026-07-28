@@ -15,8 +15,8 @@ jobs:
     steps:
       - name: Webex 알림 전송
         run: |
-          payload=$(jq -n --arg roomId "$WEBEX_ROOM_ID" \
-            --arg md "📢 **API 변경 PR 머지됨** — [#${PR_NUMBER} ${PR_TITLE}](${PR_URL}) · 본문의 **🔔 API 변경** 섹션을 확인해 주세요." \
+          md=$'📢 **API 변경 PR 머지됨** — [#'"${PR_NUMBER} ${PR_TITLE}](${PR_URL})"$'\n\n본문의 **🔔 API 변경** 섹션을 확인해 주세요.'
+          payload=$(jq -n --arg roomId "$WEBEX_ROOM_ID" --arg md "$md" \
             '{roomId: $roomId, markdown: $md}')
           status=$(curl -s -o response.json -w '%{http_code}' \
             -X POST "https://webexapis.com/v1/messages" \
