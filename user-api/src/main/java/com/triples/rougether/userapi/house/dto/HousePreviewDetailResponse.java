@@ -4,6 +4,7 @@ import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
+import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
@@ -34,6 +35,8 @@ public record HousePreviewDetailResponse(
         boolean isFull,
         @Schema(description = "내 최근 입주 신청 상태. 신청 이력이 없거나 이미 구성원이면 null", example = "PENDING")
         HouseJoinRequestStatus myJoinRequestStatus,
+        @Schema(description = "단체미션 요약 (최신 생성순). 비구성원도 읽기 전용으로 조회 가능")
+        List<MissionSummary> missions,
         @Schema(description = "구성원별 방 렌더 데이터 (가입순, ACTIVE 구성원만). 미리보기 화면의 구성원 타일 렌더용")
         List<MemberRoomSummary> memberRooms) {
 
@@ -42,11 +45,12 @@ public record HousePreviewDetailResponse(
             Integer maxMembers, int currentMemberCount, int level, List<GoalSummary> goals,
             boolean isMember, boolean isFull, List<MemberRoomSummary> memberRooms) {
         this(houseId, name, description, coverImageKey, maxMembers, currentMemberCount, level,
-                goals, isMember, isFull, null, memberRooms);
+                goals, isMember, isFull, null, List.of(), memberRooms);
     }
 
     public static HousePreviewDetailResponse of(House house, List<GoalSummary> goals, boolean isMember,
                                                 HouseJoinRequestStatus myJoinRequestStatus,
+                                                List<MissionSummary> missions,
                                                 List<MemberRoomSummary> memberRooms) {
         return new HousePreviewDetailResponse(
                 house.getId(),
@@ -60,6 +64,7 @@ public record HousePreviewDetailResponse(
                 isMember,
                 house.isFull(),
                 myJoinRequestStatus,
+                missions,
                 memberRooms);
     }
 

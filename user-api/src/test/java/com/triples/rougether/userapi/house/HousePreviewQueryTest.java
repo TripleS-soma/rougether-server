@@ -10,6 +10,7 @@ import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMissionType;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
@@ -30,8 +31,10 @@ import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse.MemberRoomSummary;
+import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
+import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.PlacementItem;
@@ -55,6 +58,7 @@ class HousePreviewQueryTest {
 
     @Autowired private HouseQueryService houseQueryService;
     @Autowired private HouseMemberCommandService houseMemberCommandService;
+    @Autowired private HouseMissionService houseMissionService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseGoalRepository houseGoalRepository;
@@ -106,6 +110,26 @@ class HousePreviewQueryTest {
         assertThat(response.goals().get(0).code()).isEqualTo("preview_goal");
         assertThat(response.isMember()).isFalse();
         assertThat(response.isFull()).isFalse();
+    }
+
+    @Test
+    void 비구성원도_단체미션_요약과_진행도를_조회한다() {
+        houseMissionService.create(owner.getId(), house.getId(), new HouseMissionCreateRequest(
+                "이번 주 다같이 루틴 지키기",
+                HouseMissionType.WEEKLY_MEMBER_COUNT,
+                20,
+                null,
+                null));
+
+        HousePreviewDetailResponse response = houseQueryService.getPreview(stranger.getId(), house.getId());
+
+        assertThat(response.missions()).singleElement()
+                .satisfies(mission -> {
+                    assertThat(mission.title()).isEqualTo("이번 주 다같이 루틴 지키기");
+                    assertThat(mission.missionType()).isEqualTo(HouseMissionType.WEEKLY_MEMBER_COUNT);
+                    assertThat(mission.targetValue()).isEqualTo(20);
+                    assertThat(mission.currentValue()).isZero();
+                });
     }
 
     @Test

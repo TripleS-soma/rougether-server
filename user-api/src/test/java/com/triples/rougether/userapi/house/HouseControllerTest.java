@@ -18,6 +18,8 @@ import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
+import com.triples.rougether.domain.house.entity.HouseMissionStatus;
+import com.triples.rougether.domain.house.entity.HouseMissionType;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
@@ -28,6 +30,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinRequestListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
@@ -577,7 +580,11 @@ class HouseControllerTest {
                 1L, "아침 루틴 하우스", "같이 아침 루틴 지켜요", "house/cover.png",
                 4, 3, 2,
                 List.of(new HouseListResponse.GoalSummary(5L, "morning_routine", "아침 루틴")),
-                false, false,
+                false, false, null,
+                List.of(new MissionSummary(
+                        31L, "오늘 다같이 루틴 지키기", HouseMissionType.DAILY_MEMBER_RATE,
+                        70, 66, HouseMissionStatus.ACTIVE,
+                        null, null, false, Instant.parse("2026-07-28T01:00:00Z"))),
                 List.of(
                         new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
                                 new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1, null,
@@ -599,6 +606,12 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.goals[0].code").value("morning_routine"))
                 .andExpect(jsonPath("$.isMember").value(false))
                 .andExpect(jsonPath("$.isFull").value(false))
+                .andExpect(jsonPath("$.missions[0].missionId").value(31))
+                .andExpect(jsonPath("$.missions[0].title").value("오늘 다같이 루틴 지키기"))
+                .andExpect(jsonPath("$.missions[0].missionType").value("DAILY_MEMBER_RATE"))
+                .andExpect(jsonPath("$.missions[0].targetValue").value(70))
+                .andExpect(jsonPath("$.missions[0].currentValue").value(66))
+                .andExpect(jsonPath("$.missions[0].todayClaimed").value(false))
                 // 구성원 타일 렌더용 memberRooms(#177) - 방 미생성 구성원은 room null
                 .andExpect(jsonPath("$.memberRooms[0].membershipId").value(12))
                 .andExpect(jsonPath("$.memberRooms[0].nickname").value("진형"))

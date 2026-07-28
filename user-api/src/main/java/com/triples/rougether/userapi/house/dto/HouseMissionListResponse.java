@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 
-// GET /api/v1/houses/{houseId}/missions 응답. 구성원 전용, 최신 생성순.
+// GET /api/v1/houses/{houseId}/missions 응답. 엔드포인트는 구성원 전용, MissionSummary 는 공개 미리보기에도 재사용.
 public record HouseMissionListResponse(List<MissionSummary> items) {
 
     public record MissionSummary(
