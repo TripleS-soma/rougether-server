@@ -32,6 +32,8 @@ public enum HouseErrorCode implements ErrorCode {
     INVITE_CODE_EXPIRED("INVITE_CODE_EXPIRED", "만료된 초대코드입니다.", 409),
     HOUSE_FULL("HOUSE_FULL", "집 정원이 가득 찼습니다.", 409),
     HOUSE_ALREADY_MEMBER("HOUSE_ALREADY_MEMBER", "이미 참여 중인 집입니다.", 409),
+    HOUSE_JOIN_REQUEST_ALREADY_PENDING("HOUSE_JOIN_REQUEST_ALREADY_PENDING", "이미 입주 신청 중인 집입니다.", 409),
+    HOUSE_JOIN_REQUEST_NOT_PENDING("HOUSE_JOIN_REQUEST_NOT_PENDING", "대기 중인 입주 신청이 아닙니다.", 409),
     HOUSE_CHEER_TYPE_INVALID("HOUSE_CHEER_TYPE_INVALID", "유효하지 않은 응원 타입입니다.", 400),
     HOUSE_CHEER_SELF("HOUSE_CHEER_SELF", "자기 자신에게는 응원을 보낼 수 없습니다.", 400),
     HOUSE_CHEER_LIMIT_EXCEEDED("HOUSE_CHEER_LIMIT_EXCEEDED", "같은 응원은 하루 5회까지 보낼 수 있습니다.", 409);

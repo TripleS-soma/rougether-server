@@ -38,10 +38,11 @@ class HouseExploreQueryTest {
     private House middle;
     private House newest;
     private Goal morningGoal;
+    private User owner;
 
     @BeforeEach
     void setUp() {
-        User owner = userRepository.save(User.signUp("house-explore-test@rougether.dev"));
+        owner = userRepository.save(User.signUp("house-explore-test@rougether.dev"));
 
         // goals 는 마스터 테이블(엔티티에 생성자 없음) - 테스트 픽스처는 SQL 로 적재.
         jdbcTemplate.update(
@@ -58,7 +59,7 @@ class HouseExploreQueryTest {
 
     @Test
     void 최신_생성순으로_페이지네이션해_내려준다() {
-        HouseListResponse first = houseQueryService.explore(0, 2, null);
+        HouseListResponse first = houseQueryService.explore(owner.getId(), 0, 2, null);
 
         assertThat(first.totalElements()).isGreaterThanOrEqualTo(3);
         assertThat(first.items()).hasSize(2);
@@ -73,7 +74,7 @@ class HouseExploreQueryTest {
     void 삭제된_집은_목록에서_제외한다() {
         jdbcTemplate.update("UPDATE house SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", middle.getId());
 
-        HouseListResponse response = houseQueryService.explore(0, 20, null);
+        HouseListResponse response = houseQueryService.explore(owner.getId(), 0, 20, null);
 
         assertThat(response.items()).extracting(HouseListResponse.HouseSummary::houseId)
                 .contains(oldest.getId(), newest.getId())
@@ -82,7 +83,8 @@ class HouseExploreQueryTest {
 
     @Test
     void goalCode로_필터링한다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, "morning_routine");
+        HouseListResponse response = houseQueryService.explore(
+                owner.getId(), 0, 20, "morning_routine");
 
         assertThat(response.items()).extracting(HouseListResponse.HouseSummary::houseId)
                 .containsExactly(oldest.getId());
@@ -91,7 +93,7 @@ class HouseExploreQueryTest {
 
     @Test
     void 목록_항목에_goals가_매핑된다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, null);
+        HouseListResponse response = houseQueryService.explore(owner.getId(), 0, 20, null);
 
         HouseListResponse.HouseSummary withGoal = response.items().stream()
                 .filter(item -> item.houseId().equals(oldest.getId())).findFirst().orElseThrow();
@@ -107,7 +109,8 @@ class HouseExploreQueryTest {
 
     @Test
     void 없는_goalCode면_빈_목록이다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, "no_such_goal");
+        HouseListResponse response = houseQueryService.explore(
+                owner.getId(), 0, 20, "no_such_goal");
 
         assertThat(response.items()).isEmpty();
         assertThat(response.totalElements()).isZero();

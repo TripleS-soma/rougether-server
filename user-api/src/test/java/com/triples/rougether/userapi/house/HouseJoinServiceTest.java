@@ -5,19 +5,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseJoinRequest;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseJoinRequestRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -36,15 +41,16 @@ class HouseJoinServiceTest {
 
     @Mock private HouseRepository houseRepository;
     @Mock private HouseMemberRepository houseMemberRepository;
+    @Mock private HouseJoinRequestRepository houseJoinRequestRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private HouseJoinService houseJoinService;
 
     private House joinableHouse(Long id) {
         House house = mock(House.class);
-        when(house.getId()).thenReturn(id);
+        lenient().when(house.getId()).thenReturn(id);
         when(house.isDeleted()).thenReturn(false);
-        when(house.isInviteExpired()).thenReturn(false);
-        when(house.isFull()).thenReturn(false);
+        lenient().when(house.isInviteExpired()).thenReturn(false);
+        lenient().when(house.isFull()).thenReturn(false);
         return house;
     }
 
@@ -236,6 +242,104 @@ class HouseJoinServiceTest {
         assertThatThrownBy(() -> houseJoinService.join(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_ALREADY_MEMBER));
         verify(houseMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void 탐색_입주_신청은_PENDING만_만들고_구성원_수는_늘리지_않는다() {
+        House house = joinableHouse(1L);
+        User applicant = mock(User.class);
+        when(applicant.getId()).thenReturn(7L);
+        when(applicant.getNickname()).thenReturn("루티니");
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(userRepository.getReferenceById(7L)).thenReturn(applicant);
+        when(houseJoinRequestRepository.save(any(HouseJoinRequest.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        HouseJoinRequestResponse response = houseJoinService.requestJoin(7L, 1L);
+
+        assertThat(response.status()).isEqualTo(HouseJoinRequestStatus.PENDING);
+        assertThat(response.nickname()).isEqualTo("루티니");
+        verify(houseJoinRequestRepository).save(any(HouseJoinRequest.class));
+        verify(house, never()).increaseMemberCount();
+        verify(houseMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void 이미_PENDING이면_그사이_정원이_차도_중복_신청_오류를_우선한다() {
+        House house = House.create(
+                mock(User.class), "가득 찬 집", null, null, 1, CODE, null);
+        User applicant = mock(User.class);
+        HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L))
+                .thenReturn(Optional.of(request));
+
+        assertThat(house.isFull()).isTrue();
+        assertThatThrownBy(() -> houseJoinService.requestJoin(7L, 1L))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_JOIN_REQUEST_ALREADY_PENDING));
+    }
+
+    @Test
+    void 방장이_입주_신청을_수락하면_구성원_ACTIVE와_인원_증가를_함께_처리한다() {
+        House house = joinableHouse(1L);
+        User owner = mock(User.class);
+        User applicant = mock(User.class);
+        when(owner.getId()).thenReturn(3L);
+        when(applicant.getId()).thenReturn(7L);
+        when(house.getOwner()).thenReturn(owner);
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
+        when(houseJoinRequestRepository.findWithLockByIdAndHouseId(21L, 1L))
+                .thenReturn(Optional.of(request));
+        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(userRepository.getReferenceById(7L)).thenReturn(applicant);
+        when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        HouseJoinDetailResponse response = houseJoinService.acceptRequest(3L, 1L, 21L);
+
+        assertThat(response.status()).isEqualTo(HouseMemberStatus.ACTIVE);
+        assertThat(request.getStatus()).isEqualTo(HouseJoinRequestStatus.ACCEPTED);
+        verify(house).increaseMemberCount();
+    }
+
+    @Test
+    void 방장이_입주_신청을_거절하면_구성원_수는_바뀌지_않는다() {
+        House house = joinableHouse(1L);
+        User owner = mock(User.class);
+        User applicant = mock(User.class);
+        when(owner.getId()).thenReturn(3L);
+        when(house.getOwner()).thenReturn(owner);
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
+        when(houseJoinRequestRepository.findWithLockByIdAndHouseId(21L, 1L))
+                .thenReturn(Optional.of(request));
+
+        houseJoinService.rejectRequest(3L, 1L, 21L);
+
+        assertThat(request.getStatus()).isEqualTo(HouseJoinRequestStatus.REJECTED);
+        verify(house, never()).increaseMemberCount();
+        verify(houseMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void 초대코드로_즉시가입하면_대기_신청도_ACCEPTED로_종결한다() {
+        House house = joinableHouse(1L);
+        User applicant = mock(User.class);
+        when(houseRepository.findWithLockByInviteCode(CODE)).thenReturn(Optional.of(house));
+        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(userRepository.getReferenceById(7L)).thenReturn(applicant);
+        when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
+        HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
+        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L))
+                .thenReturn(Optional.of(request));
+
+        houseJoinService.joinByCode(7L, CODE);
+
+        assertThat(request.getStatus()).isEqualTo(HouseJoinRequestStatus.ACCEPTED);
     }
 
     @Test
