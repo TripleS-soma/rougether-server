@@ -47,7 +47,7 @@ public class ItemSlotService {
             "기본 위치 X와 Y는 둘 다 입력하거나 둘 다 비워야 합니다.";
     private static final String DEFAULT_POSITION_RANGE_MESSAGE =
             "기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다.";
-    // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (10연 = x5 는 user-api GachaService 가 계산)
+    // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (5+1회 = x5 는 user-api GachaService 가 계산)
     private static final int ITEM_GACHA_COST_COIN = 25;
 
     private final ItemRepository itemRepository;

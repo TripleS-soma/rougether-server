@@ -46,8 +46,10 @@ public class GachaService {
     private static final int CHARACTER_REFUND_COIN = 100;    // 캐릭터 중복 -> 코인 환급 (단가 500 의 20%, spec)
     private static final int TIER_NORMAL_MAX = 70;   // roll 0~69 -> 일반
     private static final int TIER_RARE_MAX = 95;     // 70~94 -> 희귀, 95~99 -> 전설
-    private static final int MULTI_COUNT = 10;
-    private static final int MULTI_MULTIPLIER = 5;   // 10연 = 단챠 비용 x5
+    private static final int SINGLE_DRAW_COUNT = 1;
+    private static final int BONUS_DRAW_COUNT = 6;
+    private static final int LEGACY_MULTI_DRAW_COUNT = 10;
+    private static final int BONUS_DRAW_COST_MULTIPLIER = 5;   // 5+1회 = 단챠 비용 x5
 
     private final GachaRepository gachaRepository;
     private final GachaPoolEntryRepository poolRepository;
@@ -90,7 +92,8 @@ public class GachaService {
     @Transactional
     public GachaDrawResponse draw(Long userId, Long gachaId, GachaDrawRequest request) {
         int count = request.count() == null ? 0 : request.count();
-        if (count != 1 && count != MULTI_COUNT) {
+        boolean bonusDraw = count == BONUS_DRAW_COUNT || count == LEGACY_MULTI_DRAW_COUNT;
+        if (count != SINGLE_DRAW_COUNT && !bonusDraw) {
             throw new BusinessException(GachaErrorCode.INVALID_DRAW_COUNT);
         }
 
@@ -100,7 +103,10 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 
-        int cost = count == 1 ? gacha.getCostAmount() : gacha.getCostAmount() * MULTI_MULTIPLIER;
+        int resultCount = bonusDraw ? BONUS_DRAW_COUNT : SINGLE_DRAW_COUNT;
+        int cost = bonusDraw
+                ? gacha.getCostAmount() * BONUS_DRAW_COST_MULTIPLIER
+                : gacha.getCostAmount();
         // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
         // 전부 같은 user 행 락을 잡으므로 동시 지급이 같은 캐릭터를 2행 만들 수 없다. 락 순서: user → wallet.
         userRepository.findByIdForUpdate(userId)
@@ -135,7 +141,7 @@ public class GachaService {
         List<DrawResult> results = new ArrayList<>();
         int coinRefund = 0;
         int diaRefund = 0;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < resultCount; i++) {
             GachaPoolEntry picked = pickEntry(pool, byRarity);
             if (picked.getRewardType() == RewardType.CHARACTER) {
                 coinRefund += drawCharacter(user, picked, ownedCharacterIds, results);
