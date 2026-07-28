@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
@@ -31,10 +32,21 @@ public record HousePreviewDetailResponse(
         boolean isMember,
         @Schema(description = "정원 초과 여부. true 면 참여(POST /api/v1/houses/{houseId}/join) 불가 - 가입 버튼 비활성", example = "false")
         boolean isFull,
+        @Schema(description = "내 최근 입주 신청 상태. 신청 이력이 없거나 이미 구성원이면 null", example = "PENDING")
+        HouseJoinRequestStatus myJoinRequestStatus,
         @Schema(description = "구성원별 방 렌더 데이터 (가입순, ACTIVE 구성원만). 미리보기 화면의 구성원 타일 렌더용")
         List<MemberRoomSummary> memberRooms) {
 
+    public HousePreviewDetailResponse(
+            Long houseId, String name, String description, String coverImageKey,
+            Integer maxMembers, int currentMemberCount, int level, List<GoalSummary> goals,
+            boolean isMember, boolean isFull, List<MemberRoomSummary> memberRooms) {
+        this(houseId, name, description, coverImageKey, maxMembers, currentMemberCount, level,
+                goals, isMember, isFull, null, memberRooms);
+    }
+
     public static HousePreviewDetailResponse of(House house, List<GoalSummary> goals, boolean isMember,
+                                                HouseJoinRequestStatus myJoinRequestStatus,
                                                 List<MemberRoomSummary> memberRooms) {
         return new HousePreviewDetailResponse(
                 house.getId(),
@@ -47,6 +59,7 @@ public record HousePreviewDetailResponse(
                 goals,
                 isMember,
                 house.isFull(),
+                myJoinRequestStatus,
                 memberRooms);
     }
 

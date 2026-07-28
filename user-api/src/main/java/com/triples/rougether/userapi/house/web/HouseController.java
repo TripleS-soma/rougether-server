@@ -9,6 +9,8 @@ import com.triples.rougether.userapi.house.dto.HouseJoinByCodeRequest;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestListResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
@@ -65,10 +67,11 @@ public class HouseController {
                     + "미지정 시 page=0, size=20 으로 조회합니다. goalCode 는 GET /api/v1/goals 응답의 code 값을 사용합니다.")
     @GetMapping
     public HouseListResponse explore(
+            @CurrentUser AuthUser user,
             @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") @Min(1) int size,
             @Parameter(description = "목표 코드 필터 (선택). GET /api/v1/goals 응답의 code 값") @RequestParam(required = false) String goalCode) {
-        return houseQueryService.explore(page, size, goalCode);
+        return houseQueryService.explore(user.id(), page, size, goalCode);
     }
 
     @Operation(summary = "공동집 생성",
@@ -128,14 +131,51 @@ public class HouseController {
         return houseQueryService.getMembers(user.id(), houseId);
     }
 
-    @Operation(summary = "집 참여",
-            description = "탐색한 집에 houseId 로 즉시 가입합니다. 초대코드 참여와 동일한 정책으로, 승인 절차 없이 MEMBER 역할·ACTIVE 상태로 바로 등록되며 참여가 확정되면 집의 현재 구성원 수가 1 증가합니다. "
-                    + "정원에 여유가 있는 집에, 아직 이 집의 활성 구성원이 아니고 강퇴 이력이 없는 회원만 참여할 수 있습니다. "
-                    + "탈퇴(LEFT) 이력이 있으면 기존 구성원 정보를 재활성화합니다(membershipId 유지, 가입 시각 갱신).")
+    @Operation(summary = "입주 신청 (구버전 호환 경로)",
+            description = "탐색한 집에 입주를 신청합니다. 신청만으로 구성원이 되거나 현재 구성원 수가 증가하지 않으며, 방장이 수락해야 입주가 확정됩니다. "
+                    + "신규 앱은 POST /api/v1/houses/{houseId}/join-requests 를 사용합니다.")
     @PostMapping("/{houseId}/join")
-    public HouseJoinDetailResponse join(@CurrentUser AuthUser user,
-                                        @Parameter(description = "참여할 집 ID. GET /api/v1/houses (탐색 목록) 응답의 houseId 값") @PathVariable Long houseId) {
-        return houseJoinService.join(user.id(), houseId);
+    @ResponseStatus(HttpStatus.CREATED)
+    public HouseJoinRequestResponse joinLegacy(@CurrentUser AuthUser user,
+                                               @Parameter(description = "신청할 집 ID") @PathVariable Long houseId) {
+        return houseJoinService.requestJoin(user.id(), houseId);
+    }
+
+    @Operation(summary = "입주 신청",
+            description = "탐색한 집에 입주를 신청합니다. 신청은 PENDING 상태로 생성되며 방장이 수락하기 전에는 구성원으로 등록되지 않습니다. "
+                    + "거절된 신청은 다시 신청할 수 있고, 이미 신청 중이면 409를 반환합니다.")
+    @PostMapping("/{houseId}/join-requests")
+    @ResponseStatus(HttpStatus.CREATED)
+    public HouseJoinRequestResponse requestJoin(@CurrentUser AuthUser user,
+                                                @Parameter(description = "신청할 집 ID") @PathVariable Long houseId) {
+        return houseJoinService.requestJoin(user.id(), houseId);
+    }
+
+    @Operation(summary = "대기 중인 입주 신청 목록",
+            description = "집 소유자만 대기 중인 입주 신청을 신청 시각 순으로 조회합니다.")
+    @GetMapping("/{houseId}/join-requests")
+    public HouseJoinRequestListResponse joinRequests(@CurrentUser AuthUser user,
+                                                     @PathVariable Long houseId) {
+        return houseJoinService.getPendingRequests(user.id(), houseId);
+    }
+
+    @Operation(summary = "입주 신청 수락",
+            description = "집 소유자만 입주 신청을 수락할 수 있습니다. 수락 시점에 정원을 다시 확인하고 구성원 등록과 구성원 수 증가를 처리합니다.")
+    @PostMapping("/{houseId}/join-requests/{requestId}/accept")
+    public HouseJoinDetailResponse acceptJoinRequest(@CurrentUser AuthUser user,
+                                                     @PathVariable Long houseId,
+                                                     @PathVariable Long requestId) {
+        return houseJoinService.acceptRequest(user.id(), houseId, requestId);
+    }
+
+    @Operation(summary = "입주 신청 거절",
+            description = "집 소유자만 대기 중인 입주 신청을 거절할 수 있습니다. 구성원 수는 바뀌지 않습니다.")
+    @PostMapping("/{houseId}/join-requests/{requestId}/reject")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void rejectJoinRequest(@CurrentUser AuthUser user,
+                                  @PathVariable Long houseId,
+                                  @PathVariable Long requestId) {
+        houseJoinService.rejectRequest(user.id(), houseId, requestId);
     }
 
     @Operation(summary = "집 설정 수정",

@@ -17,12 +17,15 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
@@ -235,23 +238,74 @@ class HouseControllerTest {
     @Test
     void 탐색_집_참여_응답_계약() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 1L)).thenReturn(new HouseJoinDetailResponse(
-                12L, 1L, 7L, HouseMemberRole.MEMBER, HouseMemberStatus.ACTIVE,
+        when(houseJoinService.requestJoin(7L, 1L)).thenReturn(new HouseJoinRequestResponse(
+                21L, 1L, 7L, "루티니", HouseJoinRequestStatus.PENDING,
                 Instant.parse("2026-07-03T00:00:00Z")));
 
         mockMvc.perform(post("/api/v1/houses/1/join"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.membershipId").value(12))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requestId").value(21))
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.userId").value(7))
-                .andExpect(jsonPath("$.role").value("MEMBER"))
+                .andExpect(jsonPath("$.nickname").value("루티니"))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void 신규_입주_신청_경로는_201과_PENDING을_내려준다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.requestJoin(7L, 1L)).thenReturn(new HouseJoinRequestResponse(
+                21L, 1L, 7L, "루티니", HouseJoinRequestStatus.PENDING,
+                Instant.parse("2026-07-03T00:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requestId").value(21))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void 방장은_대기_중인_입주_신청을_조회한다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.getPendingRequests(7L, 1L)).thenReturn(
+                new HouseJoinRequestListResponse(List.of(new HouseJoinRequestResponse(
+                        21L, 1L, 8L, "신청자", HouseJoinRequestStatus.PENDING,
+                        Instant.parse("2026-07-03T00:00:00Z")))));
+
+        mockMvc.perform(get("/api/v1/houses/1/join-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].requestId").value(21))
+                .andExpect(jsonPath("$.items[0].nickname").value("신청자"))
+                .andExpect(jsonPath("$.items[0].status").value("PENDING"));
+    }
+
+    @Test
+    void 방장은_입주_신청을_수락한다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.acceptRequest(7L, 1L, 21L)).thenReturn(
+                new HouseJoinDetailResponse(12L, 1L, 8L, HouseMemberRole.MEMBER,
+                        HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T01:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests/21/accept"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipId").value(12))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void 방장은_입주_신청을_거절한다() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests/21/reject"))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(houseJoinService).rejectRequest(7L, 1L, 21L);
     }
 
     @Test
     void 없는_집_참여는_404와_에러코드를_내려준다() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 99L))
+        when(houseJoinService.requestJoin(7L, 99L))
                 .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/houses/99/join"))
@@ -262,7 +316,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_기본_경로_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(0, 20, null)).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, null)).thenReturn(new HouseListResponse(
                 java.util.List.of(), 0, 20, 0L));
 
         mockMvc.perform(get("/api/v1/houses"))
@@ -292,7 +346,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(0, 20, "morning_routine")).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, "morning_routine")).thenReturn(new HouseListResponse(
                 java.util.List.of(new HouseListResponse.HouseSummary(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, 0,
                         java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")))),
                 0, 20, 1L));
@@ -456,7 +510,7 @@ class HouseControllerTest {
     @Test
     void 강퇴자의_재참여는_409와_에러코드를_내려준다() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 1L))
+        when(houseJoinService.requestJoin(7L, 1L))
                 .thenThrow(new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER));
 
         mockMvc.perform(post("/api/v1/houses/1/join"))
