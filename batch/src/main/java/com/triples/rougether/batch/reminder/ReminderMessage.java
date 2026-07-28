@@ -13,6 +13,6 @@ final class ReminderMessage {
     }
 
     static String todoBody(String todoTitle) {
-        return "『" + todoTitle + "』 마감 시간이에요!";
+        return "『" + todoTitle + "』 할 시간이에요!";
     }
 }
