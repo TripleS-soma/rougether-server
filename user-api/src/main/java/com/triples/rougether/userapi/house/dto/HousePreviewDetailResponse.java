@@ -40,14 +40,6 @@ public record HousePreviewDetailResponse(
         @Schema(description = "구성원별 방 렌더 데이터 (가입순, ACTIVE 구성원만). 미리보기 화면의 구성원 타일 렌더용")
         List<MemberRoomSummary> memberRooms) {
 
-    public HousePreviewDetailResponse(
-            Long houseId, String name, String description, String coverImageKey,
-            Integer maxMembers, int currentMemberCount, int level, List<GoalSummary> goals,
-            boolean isMember, boolean isFull, List<MemberRoomSummary> memberRooms) {
-        this(houseId, name, description, coverImageKey, maxMembers, currentMemberCount, level,
-                goals, isMember, isFull, null, List.of(), memberRooms);
-    }
-
     public static HousePreviewDetailResponse of(House house, List<GoalSummary> goals, boolean isMember,
                                                 HouseJoinRequestStatus myJoinRequestStatus,
                                                 List<MissionSummary> missions,
