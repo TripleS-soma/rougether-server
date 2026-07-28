@@ -37,7 +37,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 단체 미션 - 생성(소유자)/목록·상세(구성원)/기여(수행 체크, 하루 1회)/보상(claim).
+// 단체 미션 - 생성(소유자)/목록·상세(구성원)/미리보기 요약(로그인 회원)/기여(수행 체크, 하루 1회)/보상(claim).
 // WEEKLY: 기여 누적 합 >= target, 1회 claim(+100) 후 COMPLETED. (모델 확정 2026-07-05)
 // DAILY: 오늘(KST) 기여 멤버 비율 >= target%, 매일 claim(+20) 반복, COMPLETED 전환 없음. (#201, 확정 2026-07-23)
 @Service
@@ -132,6 +132,18 @@ public class HouseMissionService {
     public HouseMissionListResponse getMissions(Long userId, Long houseId) {
         House house = requireHouse(houseId);
         requireActiveMember(userId, houseId);
+        return new HouseMissionListResponse(summarizeMissions(house));
+    }
+
+    // 집 미리보기용 요약 - 로그인·집 존재·삭제 여부 검증을 마친 house 를 preview API 경계에서 받는다.
+    // 기여·보상 수령 가능 여부나 개인 기여값은 노출하지 않고 목록과 동일한 읽기 모델만 재사용한다.
+    @Transactional(readOnly = true)
+    public List<MissionSummary> getPreviewMissions(House house) {
+        return summarizeMissions(house);
+    }
+
+    private List<MissionSummary> summarizeMissions(House house) {
+        Long houseId = house.getId();
         List<HouseMission> missions = houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(houseId);
         Map<Long, Long> sums = sumByMissionIds(missions);
 
@@ -145,7 +157,7 @@ public class HouseMissionService {
                 ? Set.of()
                 : Set.copyOf(dailyRewardRepository.findClaimedMissionIds(dailyIds, today));
 
-        List<MissionSummary> items = missions.stream()
+        return missions.stream()
                 .map(mission -> {
                     if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
                         long todayCount = todayCounts.getOrDefault(mission.getId(), 0L);
@@ -156,7 +168,6 @@ public class HouseMissionService {
                     return MissionSummary.of(mission, sums.getOrDefault(mission.getId(), 0L));
                 })
                 .toList();
-        return new HouseMissionListResponse(items);
     }
 
     // 미션 상세 - 구성원 전용. 내 기여(myContribution)는 두 유형 모두 누적 체크 횟수.

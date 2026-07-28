@@ -56,6 +56,7 @@ class HouseMissionServiceTest {
     private House aliveHouse(Long houseId) {
         House house = mock(House.class);
         lenient().when(house.isDeleted()).thenReturn(false);
+        lenient().when(house.getId()).thenReturn(houseId);
         // claim 은 진입부터 락 조회(findWithLockById), 나머지 경로는 일반 조회(findById)를 쓴다 - 둘 다 stub.
         lenient().when(houseRepository.findById(houseId)).thenReturn(Optional.of(house));
         lenient().when(houseRepository.findWithLockById(houseId)).thenReturn(Optional.of(house));
@@ -124,6 +125,31 @@ class HouseMissionServiceTest {
         assertThatThrownBy(() -> houseMissionService.getMissions(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
+    }
+
+    @Test
+    void 미리보기_미션_요약은_구성원_검사_없이_진행도를_반환한다() {
+        House house = aliveHouse(1L);
+        HouseMission mission = mock(HouseMission.class);
+        when(mission.getId()).thenReturn(3L);
+        when(mission.getTitle()).thenReturn("공개 미리보기 미션");
+        when(mission.getMissionType()).thenReturn(HouseMissionType.WEEKLY_MEMBER_COUNT);
+        when(mission.getTargetValue()).thenReturn(10);
+        when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
+        when(houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(1L))
+                .thenReturn(List.of(mission));
+        when(participantRepository.sumContributionByMissionIds(List.of(3L)))
+                .thenReturn(List.<Object[]>of(new Object[]{3L, 4L}));
+
+        var missions = houseMissionService.getPreviewMissions(house);
+
+        assertThat(missions).singleElement()
+                .satisfies(summary -> {
+                    assertThat(summary.title()).isEqualTo("공개 미리보기 미션");
+                    assertThat(summary.currentValue()).isEqualTo(4);
+                    assertThat(summary.targetValue()).isEqualTo(10);
+                });
+        verify(houseMemberRepository, never()).findByHouseIdAndUserId(any(), any());
     }
 
     @Test

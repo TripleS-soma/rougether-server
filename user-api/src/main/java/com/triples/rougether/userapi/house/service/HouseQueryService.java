@@ -42,16 +42,19 @@ public class HouseQueryService {
     private final HouseMemberRepository houseMemberRepository;
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final RoomQueryService roomQueryService;
+    private final HouseMissionService houseMissionService;
 
     public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository,
                              HouseMemberRepository houseMemberRepository,
                              HouseJoinRequestRepository houseJoinRequestRepository,
-                             RoomQueryService roomQueryService) {
+                             RoomQueryService roomQueryService,
+                             HouseMissionService houseMissionService) {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseJoinRequestRepository = houseJoinRequestRepository;
         this.roomQueryService = roomQueryService;
+        this.houseMissionService = houseMissionService;
     }
 
     // 집 상세 - ACTIVE 구성원만 조회 가능. 초대코드는 소유자에게만 내려간다.
@@ -99,7 +102,9 @@ public class HouseQueryService {
                         .map(HouseJoinRequest::getStatus)
                         .filter(HouseQueryService::isVisibleJoinRequestStatus)
                         .orElse(null);
-        return HousePreviewDetailResponse.of(house, goals, isMember, requestStatus, memberRooms);
+        return HousePreviewDetailResponse.of(
+                house, goals, isMember, requestStatus,
+                houseMissionService.getPreviewMissions(house), memberRooms);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
