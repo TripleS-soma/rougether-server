@@ -2,6 +2,7 @@ name: API 변경 머지 알림
 
 # PR 본문에 "🔔 API 변경" 섹션이 있는 PR이 머지되면 Webex 스페이스로 알림을 보낸다.
 # 본문 섹션은 정본(멘션 없음), 알림은 머지 시점 이 메시지 한 번만 — 규칙 정본은 CONTRIBUTING.md §4 "API 변경 섹션".
+# 섹션의 변경 표를 불릿으로, "프론트 반영 포인트" 줄을 본문으로 옮겨 담는다. 파싱 실패 시 링크만 보낸다.
 # WEBEX_BOT_TOKEN은 repo secret. 봇(Rougether Git Bot)이 대상 스페이스 멤버여야 전송된다.
 
 on:
@@ -15,7 +16,26 @@ jobs:
     steps:
       - name: Webex 알림 전송
         run: |
-          md=$'📢 **API 변경 PR 머지됨** — [#'"${PR_NUMBER} ${PR_TITLE}](${PR_URL})"$'\n\n본문의 **🔔 API 변경** 섹션을 확인해 주세요.'
+          # 🔔 섹션만 잘라낸 뒤 표 행 → 불릿, "프론트 반영 포인트" 줄 → 강조 문단으로 변환
+          section=$(printf '%s' "$PR_BODY" | tr -d '\r' | awk '/^## 🔔 API 변경/{f=1; next} /^## /{f=0} f')
+          bullets=$(printf '%s\n' "$section" | awk -F'|' '
+            /^\|/ {
+              gsub(/^[ \t]+|[ \t]+$/, "", $2); gsub(/^[ \t]+|[ \t]+$/, "", $3)
+              if ($2 == "구분" || $2 ~ /^-+$/ || $2 ~ /^:?-+:?$/) next
+              print "- " $2 ": " $3
+            }')
+          point=$(printf '%s\n' "$section" | sed -n 's/^프론트 반영 포인트[ ]*:[ ]*//p' | head -1)
+
+          md=$'📢 **API 변경 PR 머지됨** — [#'"${PR_NUMBER} ${PR_TITLE}](${PR_URL})"
+          if [ -n "$bullets" ]; then
+            md="$md"$'\n\n'"$bullets"
+          else
+            md="$md"$'\n\n본문의 **🔔 API 변경** 섹션을 확인해 주세요.'
+          fi
+          if [ -n "$point" ]; then
+            md="$md"$'\n\n**프론트 반영 포인트:** '"$point"
+          fi
+
           payload=$(jq -n --arg roomId "$WEBEX_ROOM_ID" --arg md "$md" \
             '{roomId: $roomId, markdown: $md}')
           status=$(curl -s -o response.json -w '%{http_code}' \
@@ -34,3 +54,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_BODY: ${{ github.event.pull_request.body }}
