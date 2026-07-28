@@ -30,7 +30,7 @@ jobs:
           fi
         env:
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
-          WEBEX_ROOM_ID: Y2lzY29zcGFyazovL3VzL1JPT00vNzQ0MmE3MjAtM2JlOS0xMWYxLTk1YzEtMjNhNmNjZTI4Yjcx
+          WEBEX_ROOM_ID: Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNzQ0MmE3MjAtM2JlOS0xMWYxLTk1YzEtMjNhNmNjZTI4Yjcx
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
