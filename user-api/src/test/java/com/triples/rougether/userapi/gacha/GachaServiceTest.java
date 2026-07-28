@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +36,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -80,10 +83,37 @@ class GachaServiceTest {
     }
 
     @Test
-    void 뽑기횟수가_1이나_10이_아니면_거부한다() {
+    void 뽑기횟수가_1이나_6이_아니면_거부한다() {
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(2)))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.INVALID_DRAW_COUNT));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {6, 10})
+    void 신규_6과_구버전_10요청은_다섯회_비용으로_여섯개를_뽑는다(int requestCount) {
+        Gacha g = activeGacha(25);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(1000);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN))
+                .thenReturn(Optional.of(wallet));
+        UserWallet diaWallet = mock(UserWallet.class);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND))
+                .thenReturn(Optional.of(diaWallet));
+        singleItemPool(100L, 10L);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
+        when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
+
+        GachaDrawResponse res = gachaService.draw(1L, 10L, new GachaDrawRequest(requestCount));
+
+        verify(wallet).spend(125);
+        verify(userItemRepository, times(1)).save(any(UserItem.class));
+        verify(diaWallet).add(15);
+        assertThat(res.results()).hasSize(6);
+        assertThat(res.results()).extracting(result -> result.rewardType())
+                .containsExactly("ITEM", "CURRENCY", "CURRENCY", "CURRENCY", "CURRENCY", "CURRENCY");
     }
 
     @Test
