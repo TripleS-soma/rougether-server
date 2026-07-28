@@ -129,7 +129,7 @@ class HouseMissionServiceTest {
 
     @Test
     void 미리보기_미션_요약은_구성원_검사_없이_진행도를_반환한다() {
-        aliveHouse(1L);
+        House house = aliveHouse(1L);
         HouseMission mission = mock(HouseMission.class);
         when(mission.getId()).thenReturn(3L);
         when(mission.getTitle()).thenReturn("공개 미리보기 미션");
@@ -141,7 +141,7 @@ class HouseMissionServiceTest {
         when(participantRepository.sumContributionByMissionIds(List.of(3L)))
                 .thenReturn(List.<Object[]>of(new Object[]{3L, 4L}));
 
-        var missions = houseMissionService.getPreviewMissions(1L);
+        var missions = houseMissionService.getPreviewMissions(house);
 
         assertThat(missions).singleElement()
                 .satisfies(summary -> {

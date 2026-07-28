@@ -104,7 +104,7 @@ public class HouseQueryService {
                         .orElse(null);
         return HousePreviewDetailResponse.of(
                 house, goals, isMember, requestStatus,
-                houseMissionService.getPreviewMissions(houseId), memberRooms);
+                houseMissionService.getPreviewMissions(house), memberRooms);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
