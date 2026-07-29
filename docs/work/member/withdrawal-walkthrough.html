@@ -101,7 +101,7 @@
   </div>
   <div class="layer-box l-db">
     <div class="h">DB migration</div>
-    <div class="m"><code>V35__add_oauth_apple_refresh_token.sql</code> — <code>oauth_accounts</code>에 애플 refresh token 저장 컬럼 추가. 기존 migration은 건드리지 않음</div>
+    <div class="m"><code>V36__add_oauth_apple_refresh_token.sql</code> — <code>oauth_accounts</code>에 애플 refresh token 저장 컬럼 추가. 기존 migration은 건드리지 않음</div>
   </div>
 
   <h2>3. 요청 하나가 흐르는 경로</h2>
@@ -172,7 +172,7 @@
     <b>access token 30분 한계.</b> 이미 발급된 access token은 탈퇴 후에도 만료 전까지 유효합니다(stateless JWT의 알려진 한계, logout도 동일). 이 창에서의 중복 탈퇴 요청은 404로 안전하게 거부됩니다. 즉시 무효화가 필요해지면 블랙리스트 도입을 별도 논의합니다.
   </div>
   <div class="note">
-    <b>migration V35.</b> 신규 파일만 추가했고 기존 V1~V34는 수정하지 않았습니다(checksum 안전). 컬럼 정의가 엔티티와 일치해 <code>ddl-auto: validate</code>를 통과합니다.
+    <b>migration V36.</b> 신규 파일만 추가했고 기존 V1~V35는 수정하지 않았습니다(checksum 안전). 컬럼 정의가 엔티티와 일치해 <code>ddl-auto: validate</code>를 통과합니다.
   </div>
 
   <h2>7. 파일별 역할</h2>
@@ -187,7 +187,7 @@
     <tr><td><code>AppleRefreshTokenCipher</code></td><td><span class="tag userapi">user-api</span></td><td>refresh token AES-256-GCM 암복호화 (fail-closed)</td></tr>
     <tr><td><code>AppleLoginHandler</code> · <code>AuthService</code> · <code>AuthController</code></td><td><span class="tag userapi">user-api</span></td><td>애플 로그인에 교환·암호화 저장 연결, refresh/dev-login 탈퇴 차단</td></tr>
     <tr><td><code>User</code> · <code>OauthAccount</code> · 리포지토리 3종</td><td><span class="tag domain">domain</span></td><td><code>softDelete</code>, 애플 토큰 컬럼, 탈퇴용 파생 쿼리(FCM 토큰 bulk delete 포함)</td></tr>
-    <tr><td><code>V35__add_oauth_apple_refresh_token.sql</code></td><td><span class="tag domain">domain</span></td><td><code>oauth_accounts.apple_refresh_token_encrypted</code> 추가</td></tr>
+    <tr><td><code>V36__add_oauth_apple_refresh_token.sql</code></td><td><span class="tag domain">domain</span></td><td><code>oauth_accounts.apple_refresh_token_encrypted</code> 추가</td></tr>
   </table>
 
   <h2>8. 테스트 구성</h2>
@@ -208,7 +208,7 @@
   deleted_at TIMESTAMP NULL          -- 탈퇴 시각(soft delete). null = 활성 회원
 
 oauth_accounts                       -- 탈퇴 시 row 삭제 → 재가입 허용의 핵심
-  apple_refresh_token_encrypted      -- V35 신규. 애플 revoke용(AES-256-GCM 암호문)
+  apple_refresh_token_encrypted      -- V36 신규. 애플 revoke용(AES-256-GCM 암호문)
   VARCHAR(1000) NULL                 -- provider=APPLE일 때만 채워짐
 
 refresh_tokens
