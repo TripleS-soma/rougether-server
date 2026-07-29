@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.category.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -29,6 +30,7 @@ import com.triples.rougether.userapi.global.security.MemberRole;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -112,6 +114,24 @@ class CategoryControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("name"));
+    }
+
+    @Test
+    void 등록_요청의_houseId가_서비스까지_전달되고_응답에_내려간다() throws Exception {
+        when(categoryService.create(eq(1L), any(CategoryCreateRequest.class)))
+                .thenReturn(new CategoryResponse(5L, "우리집 미션", null, null, 0,
+                        PrivacyScope.HOUSE, false, 3L));
+
+        mockMvc.perform(post("/api/v1/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"우리집 미션\",\"visibility\":\"HOUSE\",\"houseId\":3}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.houseId").value(3));
+
+        // 보조 생성자가 추가된 record 의 JSON 역직렬화가 canonical 생성자(houseId 포함)로 가는지 확인
+        ArgumentCaptor<CategoryCreateRequest> captor = ArgumentCaptor.forClass(CategoryCreateRequest.class);
+        verify(categoryService).create(eq(1L), captor.capture());
+        assertThat(captor.getValue().houseId()).isEqualTo(3L);
     }
 
     @Test

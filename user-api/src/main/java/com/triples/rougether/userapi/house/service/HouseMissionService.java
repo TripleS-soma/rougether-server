@@ -217,16 +217,17 @@ public class HouseMissionService {
     // 루틴 완료 자동 기여 - 연동 루틴(routines.house_mission_id) 완료 시 완료 트랜잭션 안에서 호출된다.
     // 기여 불가 사유(미션 없음·삭제·비활성·기간 밖, 집 삭제, 비구성원, 오늘 이미 기여)는 예외 대신
     // null 반환으로 조용히 건너뛴다 — 루틴 완료 자체를 실패시키면 안 되고, 같은 트랜잭션에서
-    // 예외를 던지면 완료 기록까지 롤백되기 때문. 기여 판정·기록은 contribute 와 같은 미션 행 락 아래서 한다.
+    // 예외를 던지면 완료 기록(코인·스트릭 포함)까지 롤백되기 때문.
     @Transactional(propagation = Propagation.MANDATORY)
     public HouseMissionContributeResponse autoContribute(Long userId, Long missionId) {
-        HouseMission found = houseMissionRepository.findById(missionId)
-                .filter(mission -> mission.getDeletedAt() == null)
-                .orElse(null);
-        if (found == null) {
+        // 미션 첫 접근부터 락 조회 - claim() 과 같은 이유. 비잠금 조회 후 재잠금은 낡은 관리 엔티티를
+        // 반환해 동시 claim 의 COMPLETED 전환을 ACTIVE 로 잘못 판정한다(완료된 미션에 기여가 남음).
+        HouseMission mission = houseMissionRepository.findWithLockById(missionId).orElse(null);
+        Instant now = Instant.now();
+        if (mission == null || !mission.isActive() || !mission.isWithinPeriod(now)) {
             return null;
         }
-        Long houseId = found.getHouse().getId();
+        Long houseId = mission.getHouse().getId();
         House house = houseRepository.findById(houseId)
                 .filter(h -> !h.isDeleted())
                 .orElse(null);
@@ -239,16 +240,12 @@ public class HouseMissionService {
         if (me == null) {
             return null;
         }
-        HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
-                .orElse(null);
-        Instant now = Instant.now();
-        if (mission == null || !mission.isActive() || !mission.isWithinPeriod(now)) {
-            return null;
-        }
         LocalDate today = now.atZone(KST).toLocalDate();
-        // 같은 미션에 연동된 다른 루틴을 이미 완료했거나 직접 기여한 날은 건너뛴다(하루 1회).
-        if (dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
-                missionId, me.getId(), today)) {
+        // 하루 1회 판정은 락 조회(current read) - 완료 트랜잭션 스냅샷 밖에서 커밋된 직접 기여도 봐야
+        // recordContribution 의 UNIQUE 충돌 예외(→완료까지 롤백)가 구조적으로 닫힌다.
+        // 기여 insert 는 전부 미션 행 락 아래라, 락을 쥔 지금 안 보이면 이 트랜잭션 중 새로 생기지도 않는다.
+        if (dailyContributionRepository.findWithLockByMissionIdAndMemberIdAndContributionDate(
+                missionId, me.getId(), today).isPresent()) {
             return null;
         }
         return recordContribution(house, me, mission, today);

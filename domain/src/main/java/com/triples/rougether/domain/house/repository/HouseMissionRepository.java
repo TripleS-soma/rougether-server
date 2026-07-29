@@ -23,4 +23,11 @@ public interface HouseMissionRepository extends JpaRepository<HouseMission, Long
     @Query("select m from HouseMission m where m.id = :missionId and m.house.id = :houseId and m.deletedAt is null")
     Optional<HouseMission> findWithLockByIdAndHouseId(@Param("missionId") Long missionId,
                                                       @Param("houseId") Long houseId);
+
+    // 자동 기여 경로 전용 - houseId 를 모르는 상태에서 미션 첫 접근부터 락 조회로 강제한다.
+    // 비잠금 조회 후 재잠금은 낡은 관리 엔티티를 반환해(자동 refresh 없음) 동시 claim 의
+    // COMPLETED 전환을 놓친다. 삭제 필터는 쿼리 술어로 DB 단에서 건다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from HouseMission m where m.id = :missionId and m.deletedAt is null")
+    Optional<HouseMission> findWithLockById(@Param("missionId") Long missionId);
 }

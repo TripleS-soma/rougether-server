@@ -192,6 +192,22 @@ class RoutineMissionAutoContributeIntegrationTest {
     }
 
     @Test
+    void 완료_취소_후_재완료해도_기여는_한_번만_남는다() {
+        Long routineId = persistLinkedRoutine(missionId);
+        service.complete(userId, routineId, new RoutineLogCreateRequest(null));
+        // 기여 미회수 정책 - 취소해도 오늘 기여는 남고, 재완료는 하루 1회 규칙으로 건너뛴다.
+        service.cancel(userId, routineId, TODAY);
+
+        RoutineLogResponse recompleted = service.complete(userId, routineId, new RoutineLogCreateRequest(null));
+
+        assertThat(recompleted.status()).isEqualTo(RoutineLogStatus.COMPLETED);
+        assertThat(recompleted.houseMissionContribution()).isNull();
+        assertThat(participantRepository.sumContributionByMissionId(missionId)).isEqualTo(1);
+        assertThat(dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
+                missionId, membership.getId(), TODAY)).isTrue();
+    }
+
+    @Test
     void 자동_기여로_목표에_도달하면_achieved가_true다() {
         Long routineId = persistLinkedRoutine(targetOneMissionId());
 

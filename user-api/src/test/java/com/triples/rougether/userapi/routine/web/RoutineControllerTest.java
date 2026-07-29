@@ -104,6 +104,25 @@ class RoutineControllerTest {
     }
 
     @Test
+    void 등록_요청의_houseMissionId가_서비스까지_전달되고_응답에_내려간다() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(new RoutineResponse(5L, "공원 산책", null, AuthType.CHECK,
+                        RoutineStatus.ACTIVE, "DAILY", null, null, null, null, 5L, 12L));
+
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"공원 산책\",\"authType\":\"CHECK\",\"repeatType\":\"DAILY\","
+                                + "\"houseMissionId\":12}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.houseMissionId").value(12));
+
+        // 보조 생성자가 추가된 record 의 JSON 역직렬화가 canonical 생성자(houseMissionId 포함)로 가는지 확인
+        ArgumentCaptor<RoutineCreateRequest> captor = ArgumentCaptor.forClass(RoutineCreateRequest.class);
+        verify(routineService).create(eq(1L), captor.capture());
+        assertThat(captor.getValue().houseMissionId()).isEqualTo(12L);
+    }
+
+    @Test
     void repeatDays를_객체로_보내면_201로_등록된다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "아침 운동", null, AuthType.CHECK,
