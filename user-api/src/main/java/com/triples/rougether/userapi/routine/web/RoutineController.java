@@ -103,7 +103,11 @@ public class RoutineController {
                     + "같은 루틴은 같은 날짜에 한 번만 완료할 수 있습니다. "
                     + "스트릭은 오늘의 첫 완료(루틴 종류 무관)에만 갱신됩니다 — 어제가 성공일이면 currentCount가 1 증가하고, 아니면 1부터 다시 시작합니다. "
                     + "과거 날짜 완료는 스트릭에 반영하지 않고 기존 스트릭 요약을 그대로 반환합니다. "
-                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 스트릭 요약이 포함됩니다.")
+                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 스트릭 요약이 포함됩니다. "
+                    + "집 단체미션에 연동된 루틴(houseMissionId 보유)을 오늘 날짜로 완료하면 해당 미션에 수행 체크(하루 1회)가 자동 반영되고 "
+                    + "결과가 응답의 houseMissionContribution 으로 내려갑니다. 이미 기여한 날이거나 미션이 비활성·기간 밖·삭제됐거나 "
+                    + "그 집의 구성원이 아니면 기여만 조용히 건너뛰고(houseMissionContribution=null) 완료는 정상 처리됩니다. "
+                    + "완료를 취소해도 미션 기여는 회수되지 않습니다.")
     @PostMapping("/{id}/logs")
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineLogResponse complete(

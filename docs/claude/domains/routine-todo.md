@@ -20,4 +20,5 @@
 - 연동 지정은 해당 집의 ACTIVE 구성원만 가능하다(`HouseLinkValidator`, 집 도메인 소유 컴포넌트). 위반 시 `HOUSE_MISSION_NOT_FOUND`/`HOUSE_NOT_FOUND`/`HOUSE_NOT_MEMBER`.
 - 수정 요청에서 이 필드는 null=기존 연동 유지다. `categoryId`(null=해제)와 규칙이 다른 이유: 연동 필드를 모르는 구버전 클라이언트의 수정 요청이 연동을 지우면 안 되기 때문. 연동 해제 API는 미지원(미결정 — 필요해지면 별도 논의).
 - FK 없이 식별자만 보관한다. 미션·집이 soft delete 되거나 집에서 탈퇴해도 값은 남으며, 클라이언트는 보유한 미션·집 목록에 없는 id를 연동 해제로 취급한다. 루틴 버전 분기(`copyAsNewVersion`) 시 연동은 새 버전으로 승계된다.
+- 연동 루틴을 오늘(KST) 날짜로 완료하면 해당 미션에 수행 체크가 자동 반영된다(`RoutineLogService` → `HouseMissionService.autoContribute`, 완료와 한 트랜잭션). 기여 불가 사유(오늘 이미 기여·미션 삭제/비활성/기간 밖·집 비구성원·과거 날짜 완료)는 예외 대신 null 로 건너뛰어 완료 자체는 항상 성공하며, 반영 결과는 완료 응답의 `houseMissionContribution`(수행 체크 API 응답과 동일 형태)으로 내려간다. 완료 취소는 기여를 회수하지 않는다(프론트 정책과 동일).
 - 루틴·투두·카테고리 도메인 계약은 임채영 담당 — 이 연동 필드 추가는 프론트 요청 기반 확장이므로 계약 확정 전 담당자 확인이 필요하다(open question).

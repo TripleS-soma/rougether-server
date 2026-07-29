@@ -15,6 +15,7 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
@@ -64,7 +65,8 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 todoRepository);
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, dailyRewardService,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                org.mockito.Mockito.mock(HouseMissionService.class));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);

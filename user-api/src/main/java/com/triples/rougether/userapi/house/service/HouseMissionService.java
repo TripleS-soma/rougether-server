@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 단체 미션 - 생성(소유자)/목록·상세(구성원)/미리보기 요약(로그인 회원)/기여(수행 체크, 하루 1회)/보상(claim).
@@ -210,6 +211,53 @@ public class HouseMissionService {
                 missionId, me.getId(), today)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED);
         }
+        return recordContribution(house, me, mission, today);
+    }
+
+    // 루틴 완료 자동 기여 - 연동 루틴(routines.house_mission_id) 완료 시 완료 트랜잭션 안에서 호출된다.
+    // 기여 불가 사유(미션 없음·삭제·비활성·기간 밖, 집 삭제, 비구성원, 오늘 이미 기여)는 예외 대신
+    // null 반환으로 조용히 건너뛴다 — 루틴 완료 자체를 실패시키면 안 되고, 같은 트랜잭션에서
+    // 예외를 던지면 완료 기록까지 롤백되기 때문. 기여 판정·기록은 contribute 와 같은 미션 행 락 아래서 한다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HouseMissionContributeResponse autoContribute(Long userId, Long missionId) {
+        HouseMission found = houseMissionRepository.findById(missionId)
+                .filter(mission -> mission.getDeletedAt() == null)
+                .orElse(null);
+        if (found == null) {
+            return null;
+        }
+        Long houseId = found.getHouse().getId();
+        House house = houseRepository.findById(houseId)
+                .filter(h -> !h.isDeleted())
+                .orElse(null);
+        if (house == null) {
+            return null;
+        }
+        HouseMember me = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .orElse(null);
+        if (me == null) {
+            return null;
+        }
+        HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
+                .orElse(null);
+        Instant now = Instant.now();
+        if (mission == null || !mission.isActive() || !mission.isWithinPeriod(now)) {
+            return null;
+        }
+        LocalDate today = now.atZone(KST).toLocalDate();
+        // 같은 미션에 연동된 다른 루틴을 이미 완료했거나 직접 기여한 날은 건너뛴다(하루 1회).
+        if (dailyContributionRepository.existsByMissionIdAndMemberIdAndContributionDate(
+                missionId, me.getId(), today)) {
+            return null;
+        }
+        return recordContribution(house, me, mission, today);
+    }
+
+    // 기여 기록 공통부 - 호출자가 미션 행 락 + 오늘 미기여 확인을 마친 상태여야 한다.
+    private HouseMissionContributeResponse recordContribution(House house, HouseMember me,
+                                                              HouseMission mission, LocalDate today) {
+        Long missionId = mission.getId();
         HouseMissionParticipant participant = participantRepository
                 .findByMissionIdAndMemberId(missionId, me.getId())
                 .orElseGet(() -> participantRepository.save(HouseMissionParticipant.create(mission, me)));
@@ -234,7 +282,7 @@ public class HouseMissionService {
         boolean achieved = currentValue >= mission.getTargetValue();
         // 이번 +1 로 처음 도달한 순간에만 1회 발송. 미션 행 락 하 판정이라 별도 dedupe 쿼리가 필요없음
         if (achieved && currentValue - 1 < mission.getTargetValue()) {
-            notifyAchieved(houseId, mission);
+            notifyAchieved(house.getId(), mission);
         }
         return new HouseMissionContributeResponse(
                 missionId, participant.getContributionValue(), currentValue, achieved);

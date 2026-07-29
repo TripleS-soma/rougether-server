@@ -252,7 +252,8 @@ class RoutineControllerTest {
         when(routineLogService.complete(eq(1L), eq(7L), any(RoutineLogCreateRequest.class)))
                 .thenReturn(new RoutineLogResponse(100L, LocalDate.of(2026, 6, 29),
                         RoutineLogStatus.COMPLETED, Instant.parse("2026-06-29T07:00:00Z"),
-                        CurrencyType.COIN, 10, new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29))));
+                        CurrencyType.COIN, 10, new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29)),
+                        null));
 
         mockMvc.perform(post("/api/v1/routines/7/logs")
                         .contentType(MediaType.APPLICATION_JSON)

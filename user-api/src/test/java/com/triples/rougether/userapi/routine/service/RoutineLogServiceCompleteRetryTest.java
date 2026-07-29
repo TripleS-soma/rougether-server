@@ -16,6 +16,7 @@ import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
@@ -45,7 +46,7 @@ class RoutineLogServiceCompleteRetryTest {
 
     private final RoutineLogService service = new RoutineLogService(routineRepository,
             routineLogRepository, userWalletRepository, streakRepository, dailyRewardService,
-            new TransactionTemplate(transactionManager));
+            new TransactionTemplate(transactionManager), mock(HouseMissionService.class));
 
     @Test
     void 배치가_먼저_FAILED를_커밋해_unique_충돌이_나면_재시도에서_전이로_흡수한다() {
