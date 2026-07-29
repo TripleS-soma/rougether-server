@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 // 이미지를 S3 에 올리고 object key 를 발급한다. key 규칙: {kind}/{uuid}.{ext}
@@ -41,5 +42,18 @@ public class S3AssetStorageService implements AssetStorageService {
                         .build(),
                 RequestBody.fromBytes(content));
         return key;
+    }
+
+    @Override
+    public void delete(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        // S3 DeleteObject 는 미존재 key 도 성공 응답이라 멱등함.
+        s3Client.deleteObject(
+                DeleteObjectRequest.builder()
+                        .bucket(properties.s3().bucket())
+                        .key(key)
+                        .build());
     }
 }

@@ -83,7 +83,7 @@
 
   <h2>1. 한 줄 요약</h2>
   <div class="card">
-    로그인한 회원이 <code>DELETE /api/v1/me</code>를 호출하면 계정을 soft delete 하고, 모든 refresh token을 폐기하고, 소셜 연동(<code>oauth_accounts</code>)과 FCM 토큰을 지웁니다. DB 커밋이 끝난 뒤에는 카카오 unlink·애플 revoke를 best-effort로 호출해 provider 쪽 연동까지 해제합니다(앱스토어 심사 가이드라인 5.1.1(v) 요구사항). 같은 소셜 계정으로 다시 로그인하면 <b>새 계정으로 즉시 재가입</b>되며 기존 데이터는 복원되지 않습니다. 이를 위해 애플 로그인 계약도 바뀌어, 로그인 시 <code>authorizationCode</code>를 함께 받아 revoke용 refresh token을 미리 확보·암호화 저장해 둡니다.
+    로그인한 회원이 <code>DELETE /api/v1/me</code>를 호출하면 계정을 soft delete 하고, 모든 refresh token을 폐기하고, 소셜 연동(<code>oauth_accounts</code>)과 FCM 토큰을 지웁니다. DB 커밋이 끝난 뒤에는 카카오 unlink·애플 revoke를 best-effort로 호출해 provider 쪽 연동까지 해제합니다(앱스토어 심사 가이드라인 5.1.1(v) 요구사항). 개인정보(이메일·닉네임·소개글·프로필 사진)는 즉시 파기(익명화)하고 루틴·할 일·카테고리도 함께 삭제합니다(#236). 같은 소셜 계정으로 다시 로그인하면 <b>새 계정으로 즉시 재가입</b>되며 기존 데이터는 복원되지 않습니다. 이를 위해 애플 로그인 계약도 바뀌어, 로그인 시 <code>authorizationCode</code>를 함께 받아 revoke용 refresh token을 미리 확보·암호화 저장해 둡니다.
   </div>
 
   <h2>2. 어디에 무엇을 뒀나 (모듈 구조)</h2>
@@ -158,6 +158,9 @@
   <h3>탈퇴 계정 잔여 토큰 차단</h3>
   <p>탈퇴 트랜잭션과 <b>동시에</b> refresh 회전이 일어나면 전량 폐기 스냅샷을 빠져나간 토큰이 생길 수 있습니다. 그래서 <code>refresh</code> 회전과 <code>dev-login</code>에서 <code>user.deletedAt</code>을 한 번 더 확인해 거부합니다. 신규 에러코드 없이 기존 <code>REFRESH_TOKEN_INVALID</code>/<code>USER_NOT_FOUND</code>를 재사용합니다.</p>
 
+  <h3>개인정보 즉시 파기 + 루틴/투두 연쇄 삭제 (#236 확장)</h3>
+  <p>업계 관행(개인 전용 데이터는 삭제, 공유 데이터는 익명화 보존)에 맞춰, 탈퇴 트랜잭션에서 <code>email</code>·<code>nickname</code>·<code>bio</code>·<code>profile_image_key</code>를 즉시 비우고 프로필 이미지 S3 원본은 커밋 후 best-effort로 삭제합니다. 루틴·할 일·카테고리도 bulk soft delete 하며, 완료 이력·스트릭은 집 통계 의존 가능성 때문에 보존합니다. 탈퇴 후 잔여 access token(최대 30분)으로 개인정보를 재기입해 익명화를 되돌리는 구멍은 <code>MemberService</code> 조회를 미탈퇴 조건으로 바꿔 차단했습니다(그 외 쓰기 API의 30분 창은 수용한 한계).</p>
+
   <h3>FCM 토큰 삭제 (리뷰 반영)</h3>
   <p>루틴을 연쇄 soft delete 하지 않기로 했기 때문에, 탈퇴자의 ACTIVE 루틴이 리마인더 배치 후보에 그대로 남습니다. 리뷰에서 "탈퇴한 사용자 단말에 다음날에도 push가 간다"는 문제가 발견되어, 탈퇴 트랜잭션에서 <code>user_device_token</code>을 전량 삭제해 발송 자체를 차단했습니다. 같은 취지로 revoke 실패 로그에서 소셜 식별자(<code>providerUserId</code>)도 제거했습니다.</p>
 
@@ -221,12 +224,12 @@ user_device_token                    -- 탈퇴 시 row 삭제(리마인더 push 
     <b>사람 결정 대기</b>
     <ul style="margin:6px 0 0; padding-left:20px">
       <li>애플 로그인 fail-open 여부 — 교환 실패 시 refresh token 없이 로그인을 성공시킬지(현재는 fail-closed로 로그인 실패)</li>
-      <li>탈퇴 후 개인정보(email·nickname·bio·프로필 key) 파기 정책 — 현재 무기한 보존. 익명화 또는 보관기간 결정 필요</li>
+      <li>타 회원 알림 내역(notifications.body)에 남는 탈퇴자 닉네임 사본 처리</li>
     </ul>
   </div>
   <ul>
     <li>house/room/캐릭터/아이템/재화(장진형 도메인)의 탈퇴 회원 처리 — 소유 house 처리, 길드북 닉네임 노출, 잔여 재화 데이터. dependency로만 남김</li>
-    <li>리마인더 배치가 탈퇴자 루틴을 계속 후보로 잡아 매일 FAILED 알림 행이 쌓임(push는 안 감) — 후보 쿼리에 <code>user.deletedAt is null</code> 필터 추가로 해결 가능</li>
+    <li>완료 이력(routine_logs)·인증 사진의 완전 파기 여부 — 집 통계 의존을 장진형과 확인 후 별도 결정. 카테고리 연쇄 삭제로 집 완료 내역 조회에서 탈퇴자 이력이 빈 결과가 되는 것의 수용 여부도 동일</li>
     <li>교환·revoke용 client_id를 <code>apple.allowed-client-ids</code> 첫 항목으로 유추 — 목록에 Service ID를 추가하게 되면 별도 프로퍼티 분리 필요</li>
     <li>revoke 실패 운영 모니터링·알림, 외부 호출 타임아웃 설정</li>
   </ul>

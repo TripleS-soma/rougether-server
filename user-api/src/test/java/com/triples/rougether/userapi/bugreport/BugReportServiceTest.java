@@ -37,8 +37,17 @@ class BugReportServiceTest {
         @Bean
         @Primary
         AssetStorageService stubAssetStorageService() {
-            return (content, contentType, kind) ->
-                    kind + "/stub-" + UPLOAD_COUNT.incrementAndGet() + ".png";
+            // delete 추가로 함수형 인터페이스가 아니게 됨 — 익명 클래스로 스텁(delete는 no-op).
+            return new AssetStorageService() {
+                @Override
+                public String upload(byte[] content, String contentType, String kind) {
+                    return kind + "/stub-" + UPLOAD_COUNT.incrementAndGet() + ".png";
+                }
+
+                @Override
+                public void delete(String key) {
+                }
+            };
         }
     }
 

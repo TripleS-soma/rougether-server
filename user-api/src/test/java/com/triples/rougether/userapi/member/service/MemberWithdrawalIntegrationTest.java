@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,8 +15,24 @@ import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
+import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.domain.routine.entity.Category;
+import com.triples.rougether.domain.routine.entity.PrivacyScope;
+import com.triples.rougether.domain.routine.entity.Routine;
+import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
+import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.routine.entity.Streak;
+import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.StreakRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.client.AppleRevokeClient;
 import com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient;
 import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
@@ -28,7 +45,12 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.auth.service.AuthService;
 import com.triples.rougether.userapi.auth.service.GeneratedRefreshToken;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.global.storage.AssetStorageService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +72,8 @@ class MemberWithdrawalIntegrationTest {
     private KakaoUnlinkClient kakaoUnlinkClient;
     @MockitoBean
     private AppleRevokeClient appleRevokeClient;
+    @MockitoBean
+    private AssetStorageService assetStorageService;
 
     @Autowired
     private MemberWithdrawalService memberWithdrawalService;
@@ -65,6 +89,18 @@ class MemberWithdrawalIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private UserDeviceTokenRepository userDeviceTokenRepository;
+    @Autowired
+    private RoutineRepository routineRepository;
+    @Autowired
+    private TodoRepository todoRepository;
+    @Autowired
+    private CategoryRepository categoryRepository;
+    @Autowired
+    private RoutineLogRepository routineLogRepository;
+    @Autowired
+    private StreakRepository streakRepository;
+    @Autowired
+    private MemberService memberService;
 
     private String kakaoLoginAs(String kakaoId) {
         String token = "tok-" + kakaoId;
@@ -122,6 +158,134 @@ class MemberWithdrawalIntegrationTest {
 
         // 암호화 저장된 토큰이 원문으로 복호화되어 revoke에 사용됨(암복호화 왕복 검증 포함).
         verify(appleRevokeClient).revoke("apple-rt-original");
+    }
+
+    @Test
+    void 탈퇴하면_개인정보가_즉시_익명화되고_프로필_원본은_커밋_후_삭제된다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        user.changeNickname("루티니");
+        user.changeBio("소개글");
+        user.changeProfileImage("profile/withdraw-test.png");
+        userRepository.save(user);
+
+        memberWithdrawalService.withdraw(login.userId());
+
+        User withdrawn = userRepository.findById(login.userId()).orElseThrow();
+        assertThat(withdrawn.getEmail()).isNull();
+        assertThat(withdrawn.getNickname()).isNull();
+        assertThat(withdrawn.getBio()).isNull();
+        assertThat(withdrawn.getProfileImageKey()).isNull();
+        // 접속기록·탈퇴시각은 보존됨.
+        assertThat(withdrawn.getLastAccessedAt()).isNotNull();
+        assertThat(withdrawn.getDeletedAt()).isNotNull();
+        // 익명화 전에 스냅샷한 key로 S3 원본이 커밋 후 삭제됨.
+        verify(assetStorageService).delete("profile/withdraw-test.png");
+    }
+
+    @Test
+    void 프로필_이미지가_없으면_S3_삭제를_호출하지_않는다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+
+        memberWithdrawalService.withdraw(login.userId());
+
+        verify(assetStorageService, never()).delete(anyString());
+    }
+
+    @Test
+    void S3_원본_삭제가_실패해도_탈퇴와_익명화는_유지된다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        user.changeProfileImage("profile/fail-test.png");
+        userRepository.save(user);
+        doThrow(new RuntimeException("s3 down")).when(assetStorageService).delete(anyString());
+
+        memberWithdrawalService.withdraw(login.userId());
+
+        User withdrawn = userRepository.findById(login.userId()).orElseThrow();
+        assertThat(withdrawn.getDeletedAt()).isNotNull();
+        assertThat(withdrawn.getProfileImageKey()).isNull();
+    }
+
+    @Test
+    void 탈퇴하면_루틴_투두_카테고리가_연쇄_soft_delete_되고_리마인더_후보에서_빠진다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        Category category = categoryRepository.save(
+                Category.create(user, "운동", "#FFFFFF", null, 1, PrivacyScope.PRIVATE));
+        LocalTime nineAm = LocalTime.of(9, 0);
+        Routine routine = routineRepository.save(Routine.create(
+                user, category, "아침 스트레칭", AuthType.CHECK, "DAILY", null,
+                nineAm, LocalDate.now(), null));
+        Todo todo = todoRepository.save(Todo.create(user, category, "청소", null, LocalDate.now(), null));
+        // 탈퇴 전에 이미 삭제된 루틴의 원래 삭제 시각은 보존돼야 함. DB TIMESTAMP가 초 단위라 절삭해 비교함.
+        Instant earlierDeletedAt = Instant.now().minusSeconds(3600)
+                .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Routine alreadyDeleted = Routine.create(
+                user, category, "옛 루틴", AuthType.CHECK, "DAILY", null, null, LocalDate.now(), null);
+        alreadyDeleted.softDelete(earlierDeletedAt);
+        alreadyDeleted = routineRepository.save(alreadyDeleted);
+        // 완료 이력·스트릭은 보존 대상(집 통계 의존 가능성).
+        // 이력 날짜는 어제로 둠 — 오늘 COMPLETED면 리마인더 후보 조건(당일 미완료)에서 미리 빠져버림.
+        RoutineLog log = routineLogRepository.save(RoutineLog.complete(
+                routine, LocalDate.now().minusDays(1), Instant.now(), CurrencyType.COIN, 10));
+        Streak streak = streakRepository.save(Streak.start(user, LocalDate.now()));
+        // 다른 회원의 개인 데이터는 영향받지 않아야 함(스코프 검증).
+        LoginResponse otherLogin = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User other = userRepository.findById(otherLogin.userId()).orElseThrow();
+        Routine otherRoutine = routineRepository.save(Routine.create(
+                other, null, "남의 루틴", AuthType.CHECK, "DAILY", null, nineAm, LocalDate.now(), null));
+
+        // 탈퇴 전에는 리마인더 후보에 잡힘.
+        assertThat(reminderCandidateIds(nineAm)).contains(routine.getId());
+
+        memberWithdrawalService.withdraw(login.userId());
+
+        Routine deletedRoutine = routineRepository.findById(routine.getId()).orElseThrow();
+        assertThat(deletedRoutine.getDeletedAt()).isNotNull();
+        // bulk UPDATE 는 auditing 을 우회하므로 updated_at 을 직접 세팅함 — deletedAt과 같은 시각.
+        assertThat(deletedRoutine.getUpdatedAt()).isEqualTo(deletedRoutine.getDeletedAt());
+        assertThat(todoRepository.findById(todo.getId()).orElseThrow().getDeletedAt()).isNotNull();
+        assertThat(categoryRepository.findById(category.getId()).orElseThrow().getDeletedAt()).isNotNull();
+        assertThat(routineRepository.findById(alreadyDeleted.getId()).orElseThrow().getDeletedAt())
+                .isEqualTo(earlierDeletedAt);
+        // 완료 이력·스트릭은 그대로 남음.
+        assertThat(routineLogRepository.findById(log.getId())).isPresent();
+        assertThat(streakRepository.findById(streak.getId())).isPresent();
+        // 다른 회원의 루틴은 건드리지 않음.
+        assertThat(routineRepository.findById(otherRoutine.getId()).orElseThrow().getDeletedAt()).isNull();
+        // 루틴 soft delete로 리마인더 후보에서 자연 제외됨.
+        assertThat(reminderCandidateIds(nineAm)).doesNotContain(routine.getId());
+    }
+
+    @Test
+    void 탈퇴_후_잔여_access_token_으로는_개인정보를_재기입할_수_없다() {
+        // 탈퇴 후 access token 만료 전(최대 30분) 재기입으로 익명화가 되돌려지지 않아야 함.
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        memberWithdrawalService.withdraw(login.userId());
+
+        assertThatThrownBy(() -> memberService.getMe(login.userId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.INVALID_TOKEN);
+        // 재기입 경로(닉네임·소개글 수정)도 같은 조회를 타고 401로 막힘.
+        assertThatThrownBy(() -> memberService.updateMe(login.userId(),
+                new com.triples.rougether.userapi.member.dto.MemberUpdateRequest("부활닉", null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.INVALID_TOKEN);
+
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        assertThat(user.getNickname()).isNull();
+    }
+
+    private List<Long> reminderCandidateIds(LocalTime scheduledTime) {
+        Instant now = Instant.now();
+        return routineRepository.findReminderCandidates(
+                        RoutineStatus.ACTIVE, scheduledTime, LocalDate.now(), RoutineLogStatus.COMPLETED,
+                        NotificationType.ROUTINE_REMINDER, now.minusSeconds(3600), now.plusSeconds(3600),
+                        0L, org.springframework.data.domain.Pageable.unpaged())
+                .stream().map(Routine::getId).toList();
     }
 
     @Test

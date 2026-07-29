@@ -91,7 +91,9 @@ public class MemberService {
     }
 
     private User findUser(Long userId) {
-        return userRepository.findById(userId)
+        // 탈퇴 회원 제외 필수 — 탈퇴 후 access token 만료 전(최대 30분) 재기입으로
+        // 익명화(즉시 파기)가 되돌려지는 것을 차단함(#236).
+        return userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
     }
 

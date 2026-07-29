@@ -48,6 +48,14 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "and r.houseMissionId in (select m.id from HouseMission m where m.house.id = :houseId)")
     int clearHouseMissionLinksOfMember(@Param("userId") Long userId, @Param("houseId") Long houseId);
 
+    // 회원탈퇴 시 개인 전용 데이터 일괄 soft delete. 이미 삭제된 루틴의 원래 시각은 보존함.
+    // bulk UPDATE 는 auditing 을 우회하므로 updated_at 을 직접 갱신함. clearAutomatically 는 쓰지 않는다
+    // - 호출자(탈퇴 트랜잭션) 영속성 컨텍스트를 불필요하게 비우지 않기 위함. 이후 루틴을 다시 읽지 않는 위치에서 호출.
+    @Modifying(flushAutomatically = true)
+    @Query("update Routine r set r.deletedAt = :now, r.updatedAt = :now "
+            + "where r.user.id = :userId and r.deletedAt is null")
+    int softDeleteAllByUserId(@Param("userId") Long userId, @Param("now") Instant now);
+
     // 리마인드 batch Step1 reader: 지정 분에 예약된 ACTIVE·살아있는 루틴 중 당일 미완료·미발송인 것만 커서 페이징 조회.
     // 반복규칙(요일 등) 판정은 RoutineRecurrence가 processor에서 함(여기서 걸러지지 않음).
     // cursorId 커서(id > cursorId)로 페이징함 - 처리된 루틴이 NOT EXISTS 조건에서 즉시 빠지는 쿼리라

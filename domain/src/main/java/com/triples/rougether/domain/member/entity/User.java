@@ -71,6 +71,15 @@ public class User extends BaseEntity {
         return deletedAt != null;
     }
 
+    // 회원탈퇴 시 개인정보 즉시 파기(익명화). 접속기록(lastAccessedAt)·탈퇴시각은 보존함.
+    // 프로필 이미지 S3 원본 삭제는 호출측이 key를 스냅샷해 커밋 후 처리함.
+    public void anonymize() {
+        this.email = null;
+        this.nickname = null;
+        this.bio = null;
+        this.profileImageKey = null;
+    }
+
     public void changeNickname(String nickname) {
         this.nickname = nickname;
     }
