@@ -30,6 +30,16 @@ public record RoutineCreateRequest(
         @Schema(description = "시작일(YYYY-MM-DD). 미지정이면 생성일(오늘)로 지정됨. 오늘 이전 과거일은 불가. 오늘 현황은 시작일~종료일 범위의 루틴만 대상으로 봄", example = "2026-07-01")
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD). 미지정이면 제한 없음. 시작일보다 앞설 수 없음", example = "2026-12-31")
-        LocalDate endsOn
+        LocalDate endsOn,
+        @Schema(description = "연동할 집 단체미션 ID(선택, 미지정이면 미연동). 집 미션 목록(GET /api/v1/houses/{houseId}/missions) 응답의 id 값. "
+                + "해당 미션이 있는 집의 활성 구성원만 지정할 수 있으며, 지정하면 응답의 houseMissionId 로 연동 여부를 표시함", example = "12")
+        Long houseMissionId
 ) {
+
+    // 기존 클라이언트/테스트 호환용 (houseMissionId 미지정 = 미연동)
+    public RoutineCreateRequest(String title, Long categoryId, AuthType authType, String repeatType,
+                                RepeatDays repeatDays, LocalTime scheduledTime,
+                                LocalDate startsOn, LocalDate endsOn) {
+        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, null);
+    }
 }

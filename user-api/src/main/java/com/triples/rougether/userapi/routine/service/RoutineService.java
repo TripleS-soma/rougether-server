@@ -9,6 +9,7 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
@@ -36,6 +37,7 @@ public class RoutineService {
     private final RoutineRepository routineRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final HouseLinkValidator houseLinkValidator;
 
     @Transactional(readOnly = true)
     public RoutineListResponse list(Long userId, Long categoryId, RoutineStatus status) {
@@ -76,6 +78,10 @@ public class RoutineService {
         Routine routine = Routine.create(user, category, request.title(), request.authType(),
                 request.repeatType(), repeatDays, request.scheduledTime(),
                 startsOn, request.endsOn());
+        if (request.houseMissionId() != null) {
+            houseLinkValidator.validateMissionLink(userId, request.houseMissionId());
+            routine.linkHouseMission(request.houseMissionId());
+        }
         Routine saved = routineRepository.save(routine);
         // 계보 루트를 자기 id로 지정(dirty → 트랜잭션 커밋 시 반영)
         saved.assignOriginToSelf();
@@ -98,6 +104,11 @@ public class RoutineService {
                 ? request.repeatDays() : RepeatDays.fromJson(routine.getRepeatDays());
         validateRepeatSchedule(effectiveRepeatType, effectiveStartsOn, effectiveRepeatDays);
         validateDateRange(effectiveStartsOn, request.endsOn());
+        // 단체미션 연동은 null=기존 유지 — 연동 사실을 모르는 구버전 클라이언트의 수정 요청이
+        // 연동을 지우지 않도록 categoryId(null=해제)와 다른 규칙. 해제는 전용 API(unlinkHouseMission)
+        if (request.houseMissionId() != null) {
+            houseLinkValidator.validateMissionLink(userId, request.houseMissionId());
+        }
 
         // 반복 스케줄이 실제로 바뀌고, 경과한 날이 있는(created_at<오늘) 버전이면 새 버전으로 분기.
         // 옛 버전은 그대로 닫아(deleted_at) 과거 유효기간엔 남기고, 응답은 새 버전(새 id)
@@ -105,6 +116,9 @@ public class RoutineService {
             Routine newVersion = routine.copyAsNewVersion(category, request.title(),
                     request.authType(), request.repeatType(), repeatDays,
                     request.scheduledTime(), request.startsOn(), request.endsOn());
+            if (request.houseMissionId() != null) {
+                newVersion.linkHouseMission(request.houseMissionId());
+            }
             routine.softDelete(Instant.now());
             return RoutineResponse.from(routineRepository.save(newVersion));
         }
@@ -115,6 +129,9 @@ public class RoutineService {
         routine.update(request.title(), request.authType(), request.repeatType(),
                 repeatDays, request.scheduledTime(), request.startsOn(),
                 request.endsOn());
+        if (request.houseMissionId() != null) {
+            routine.linkHouseMission(request.houseMissionId());
+        }
         return RoutineResponse.from(routine);
     }
 
@@ -211,6 +228,13 @@ public class RoutineService {
     private boolean hasElapsedDay(Routine routine) {
         LocalDate createdDate = LocalDate.ofInstant(routine.getCreatedAt(), KST);
         return createdDate.isBefore(LocalDate.now(KST));
+    }
+
+    // 단체미션 연동 해제 - 수정 API 는 null=기존 유지 규칙이라 해제 수단을 별도 API 로 둔다.
+    // 이미 미연동이어도 성공(멱등). 과거 자동 기여된 이력은 회수하지 않는다.
+    @Transactional
+    public void unlinkHouseMission(Long userId, Long routineId) {
+        findOwned(userId, routineId).unlinkHouseMission();
     }
 
     @Transactional

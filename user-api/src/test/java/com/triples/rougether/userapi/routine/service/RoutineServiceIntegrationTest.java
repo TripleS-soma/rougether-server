@@ -4,8 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMission;
+import com.triples.rougether.domain.house.entity.HouseMissionType;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.support.HouseLinkValidator;
+import java.time.Duration;
+import java.time.Instant;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
@@ -44,6 +56,12 @@ class RoutineServiceIntegrationTest {
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private HouseRepository houseRepository;
+    @Autowired
+    private HouseMissionRepository houseMissionRepository;
+    @Autowired
+    private HouseMemberRepository houseMemberRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -55,7 +73,8 @@ class RoutineServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        routineService = new RoutineService(routineRepository, categoryRepository, userRepository);
+        routineService = new RoutineService(routineRepository, categoryRepository, userRepository,
+                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -638,6 +657,136 @@ class RoutineServiceIntegrationTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(RoutineErrorCode.ROUTINE_STARTS_ON_AFTER_ENDS_ON);
+    }
+
+    // --- 집 단체미션 연동(houseMissionId) ---
+
+    @Test
+    void 등록_때_연동한_단체미션_id가_저장되고_응답에_내려간다() {
+        Long missionId = persistMissionOfMyHouse();
+
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+
+        assertThat(created.houseMissionId()).isEqualTo(missionId);
+        assertThat(routineRepository.findById(created.id()).orElseThrow().getHouseMissionId())
+                .isEqualTo(missionId);
+        // 연동 없이 등록하면 null
+        RoutineResponse plain = routineService.create(userId,
+                new RoutineCreateRequest("물 마시기", null, AuthType.CHECK, null, null, null, null, null));
+        assertThat(plain.houseMissionId()).isNull();
+    }
+
+    @Test
+    void 내가_속하지_않은_집의_미션으로는_연동할_수_없다() {
+        Long othersMission = persistMission(userRepository.save(User.signUp()), null);
+
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, othersMission)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER);
+    }
+
+    @Test
+    void 삭제된_미션으로는_연동할_수_없다() {
+        Long missionId = persistMissionOfMyHouse();
+        HouseMission mission = houseMissionRepository.findById(missionId).orElseThrow();
+        mission.softDelete(Instant.now());
+        em.flush();
+
+        assertThatThrownBy(() -> routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_FOUND);
+    }
+
+    @Test
+    void 수정_때_미지정이면_기존_연동을_유지하고_지정하면_연동을_설정한다() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+
+        // 제목만 바꾸는 수정(구버전 클라이언트 시나리오) — 연동 유지
+        RoutineResponse renamed = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest("바뀐 제목", null, null, null, null, null, null, null));
+        assertThat(renamed.houseMissionId()).isEqualTo(missionId);
+
+        // 미연동 루틴에 수정으로 연동 지정
+        RoutineResponse plain = routineService.create(userId,
+                new RoutineCreateRequest("물 마시기", null, AuthType.CHECK, null, null, null, null, null));
+        RoutineResponse linked = routineService.update(userId, plain.id(),
+                new RoutineUpdateRequest(null, null, null, null, null, null, null, null, missionId));
+        assertThat(linked.houseMissionId()).isEqualTo(missionId);
+    }
+
+    @Test
+    void 스케줄_수정으로_버전이_분기돼도_연동이_승계된다() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "WEEKLY",
+                        new RepeatDays(List.of("MON")), null, null, null, missionId));
+        backdateCreatedAt(created.id(), 3);
+
+        RoutineResponse branched = routineService.update(userId, created.id(),
+                new RoutineUpdateRequest(null, null, null, "WEEKLY", new RepeatDays(List.of("TUE")),
+                        null, null, null));
+
+        assertThat(branched.id()).isNotEqualTo(created.id());
+        assertThat(branched.houseMissionId()).isEqualTo(missionId);
+    }
+
+    @Test
+    void 연동_해제는_루틴을_남기고_연동만_지우며_멱등이다() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+
+        routineService.unlinkHouseMission(userId, created.id());
+
+        Routine unlinked = routineRepository.findById(created.id()).orElseThrow();
+        assertThat(unlinked.getHouseMissionId()).isNull();
+        assertThat(unlinked.getDeletedAt()).isNull();
+        // 이미 미연동이어도 성공(멱등)
+        routineService.unlinkHouseMission(userId, created.id());
+    }
+
+    @Test
+    void 타인_루틴의_연동_해제는_ROUTINE_NOT_FOUND() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+        Long other = userRepository.save(User.signUp()).getId();
+
+        assertThatThrownBy(() -> routineService.unlinkHouseMission(other, created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_NOT_FOUND);
+    }
+
+    // 내가 ACTIVE 구성원인 집의 미션 생성
+    private Long persistMissionOfMyHouse() {
+        return persistMission(userRepository.findById(userId).orElseThrow(),
+                userRepository.findById(userId).orElseThrow());
+    }
+
+    // owner 의 집에 미션을 만들고, member(null 가능)를 ACTIVE 구성원으로 추가
+    private Long persistMission(User owner, User member) {
+        House house = houseRepository.save(House.create(owner, "미션 연동 집", null, null, 4,
+                "LNK" + owner.getId() + (member == null ? "X" : "M"),
+                Instant.now().plus(Duration.ofDays(7))));
+        if (member != null) {
+            houseMemberRepository.save(HouseMember.create(house, member, HouseMemberRole.MEMBER));
+        }
+        return houseMissionRepository.save(HouseMission.create(
+                house, "다같이 산책", HouseMissionType.WEEKLY_MEMBER_COUNT, 10, null, null)).getId();
     }
 
     private Long persistCategory(Long ownerId, String name) {

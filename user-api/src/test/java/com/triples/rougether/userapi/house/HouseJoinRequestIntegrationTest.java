@@ -60,7 +60,7 @@ class HouseJoinRequestIntegrationTest {
                 .isEmpty();
         assertThat(houseQueryService.getPreview(applicant.getId(), house.getId()).myJoinRequestStatus())
                 .isEqualTo(HouseJoinRequestStatus.PENDING);
-        assertThat(houseQueryService.explore(applicant.getId(), 0, 100, null).items().stream()
+        assertThat(houseQueryService.explore(applicant.getId(), 0, 100, null, false).items().stream()
                 .filter(item -> item.houseId().equals(house.getId()))
                 .findFirst().orElseThrow().myJoinRequestStatus())
                 .isEqualTo(HouseJoinRequestStatus.PENDING);
@@ -73,7 +73,7 @@ class HouseJoinRequestIntegrationTest {
                 .isEqualTo(HouseJoinRequestStatus.ACCEPTED);
         assertThat(houseQueryService.getPreview(applicant.getId(), house.getId()).myJoinRequestStatus())
                 .isNull();
-        assertThat(houseQueryService.explore(applicant.getId(), 0, 100, null).items().stream()
+        assertThat(houseQueryService.explore(applicant.getId(), 0, 100, null, false).items().stream()
                 .filter(item -> item.houseId().equals(house.getId()))
                 .findFirst().orElseThrow().myJoinRequestStatus())
                 .isNull();

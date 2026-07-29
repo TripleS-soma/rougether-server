@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.category.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -29,6 +30,7 @@ import com.triples.rougether.userapi.global.security.MemberRole;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -62,7 +64,7 @@ class CategoryControllerTest {
     void 목록은_items_배열로_감싸_응답하고_기본은_삭제분을_제외한다() throws Exception {
         when(categoryService.list(1L, false)).thenReturn(new CategoryListResponse(List.of(
                 new CategoryResponse(10L, "운동", "#FFAA00", "icon/run", 0,
-                        PrivacyScope.PRIVATE, false))));
+                        PrivacyScope.PRIVATE, false, null))));
 
         mockMvc.perform(get("/api/v1/categories"))
                 .andExpect(status().isOk())
@@ -81,7 +83,7 @@ class CategoryControllerTest {
     void includeDeleted_true면_삭제분_포함해서_조회한다() throws Exception {
         when(categoryService.list(1L, true)).thenReturn(new CategoryListResponse(List.of(
                 new CategoryResponse(10L, "삭제됨", null, null, 0,
-                        PrivacyScope.PRIVATE, true))));
+                        PrivacyScope.PRIVATE, true, null))));
 
         mockMvc.perform(get("/api/v1/categories").param("includeDeleted", "true"))
                 .andExpect(status().isOk())
@@ -93,7 +95,7 @@ class CategoryControllerTest {
     @Test
     void 등록은_201과_생성된_카테고리를_응답한다() throws Exception {
         when(categoryService.create(eq(1L), any(CategoryCreateRequest.class)))
-                .thenReturn(new CategoryResponse(5L, "공부", null, null, 2, PrivacyScope.HOUSE, false));
+                .thenReturn(new CategoryResponse(5L, "공부", null, null, 2, PrivacyScope.HOUSE, false, null));
 
         mockMvc.perform(post("/api/v1/categories")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,9 +117,27 @@ class CategoryControllerTest {
     }
 
     @Test
+    void 등록_요청의_houseId가_서비스까지_전달되고_응답에_내려간다() throws Exception {
+        when(categoryService.create(eq(1L), any(CategoryCreateRequest.class)))
+                .thenReturn(new CategoryResponse(5L, "우리집 미션", null, null, 0,
+                        PrivacyScope.HOUSE, false, 3L));
+
+        mockMvc.perform(post("/api/v1/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"우리집 미션\",\"visibility\":\"HOUSE\",\"houseId\":3}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.houseId").value(3));
+
+        // 보조 생성자가 추가된 record 의 JSON 역직렬화가 canonical 생성자(houseId 포함)로 가는지 확인
+        ArgumentCaptor<CategoryCreateRequest> captor = ArgumentCaptor.forClass(CategoryCreateRequest.class);
+        verify(categoryService).create(eq(1L), captor.capture());
+        assertThat(captor.getValue().houseId()).isEqualTo(3L);
+    }
+
+    @Test
     void 수정은_200과_수정된_카테고리를_응답한다() throws Exception {
         when(categoryService.update(eq(1L), eq(7L), any(CategoryUpdateRequest.class)))
-                .thenReturn(new CategoryResponse(7L, "변경됨", null, null, 0, PrivacyScope.PRIVATE, false));
+                .thenReturn(new CategoryResponse(7L, "변경됨", null, null, 0, PrivacyScope.PRIVATE, false, null));
 
         mockMvc.perform(put("/api/v1/categories/7")
                         .contentType(MediaType.APPLICATION_JSON)

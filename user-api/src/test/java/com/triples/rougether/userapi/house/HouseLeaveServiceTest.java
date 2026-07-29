@@ -13,6 +13,8 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import java.util.Optional;
@@ -27,6 +29,8 @@ class HouseLeaveServiceTest {
 
     @Mock private HouseRepository houseRepository;
     @Mock private HouseMemberRepository houseMemberRepository;
+    @Mock private RoutineRepository routineRepository;
+    @Mock private CategoryRepository categoryRepository;
     @InjectMocks private HouseMemberCommandService houseMemberCommandService;
 
     private House aliveHouse() {

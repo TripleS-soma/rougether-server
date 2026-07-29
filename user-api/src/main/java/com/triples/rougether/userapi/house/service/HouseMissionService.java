@@ -16,6 +16,7 @@ import com.triples.rougether.domain.house.repository.HouseMissionDailyRewardRepo
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 단체 미션 - 생성(소유자)/목록·상세(구성원)/미리보기 요약(로그인 회원)/기여(수행 체크, 하루 1회)/보상(claim).
@@ -60,6 +62,7 @@ public class HouseMissionService {
     private final HouseMissionDailyRewardRepository dailyRewardRepository;
     private final BannedWordChecker bannedWordChecker;
     private final NotificationService notificationService;
+    private final RoutineRepository routineRepository;
 
     public HouseMissionService(HouseRepository houseRepository,
                                HouseMemberRepository houseMemberRepository,
@@ -68,7 +71,8 @@ public class HouseMissionService {
                                HouseMissionDailyContributionRepository dailyContributionRepository,
                                HouseMissionDailyRewardRepository dailyRewardRepository,
                                BannedWordChecker bannedWordChecker,
-                               NotificationService notificationService) {
+                               NotificationService notificationService,
+                               RoutineRepository routineRepository) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseMissionRepository = houseMissionRepository;
@@ -77,6 +81,7 @@ public class HouseMissionService {
         this.dailyRewardRepository = dailyRewardRepository;
         this.bannedWordChecker = bannedWordChecker;
         this.notificationService = notificationService;
+        this.routineRepository = routineRepository;
     }
 
     // 미션 등록 - 소유자 전용. MVP 는 DAILY_MEMBER_RATE/WEEKLY_MEMBER_COUNT 2종만 허용.
@@ -125,6 +130,9 @@ public class HouseMissionService {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED);
         }
         mission.softDelete(Instant.now());
+        // 사라진 미션의 연동 루틴을 전 구성원에서 해제 - 이름/ID 잔존으로 클라이언트가 고아 연동을
+        // 정리할 필요가 없게 서버가 원천에서 끊는다. bulk 는 PC 를 우회하므로 트랜잭션 끝에서 호출(위 softDelete 는 flush 됨).
+        routineRepository.clearHouseMissionLink(missionId);
     }
 
     // 미션 목록 - 구성원 전용, 최신 생성순. currentValue 는 기여 합산(WEEKLY)·오늘 달성률 %(DAILY)를 일괄 조회(N+1 회피).
@@ -210,6 +218,54 @@ public class HouseMissionService {
                 missionId, me.getId(), today)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED);
         }
+        return recordContribution(house, me, mission, missionId, today);
+    }
+
+    // 루틴 완료 자동 기여 - 연동 루틴(routines.house_mission_id) 완료 시 완료 트랜잭션 안에서 호출된다.
+    // 기여 불가 사유(미션 없음·삭제·비활성·기간 밖, 집 삭제, 비구성원, 오늘 이미 기여)는 예외 대신
+    // null 반환으로 조용히 건너뛴다 — 루틴 완료 자체를 실패시키면 안 되고, 같은 트랜잭션에서
+    // 예외를 던지면 완료 기록(코인·스트릭 포함)까지 롤백되기 때문.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HouseMissionContributeResponse autoContribute(Long userId, Long missionId) {
+        // 미션 첫 접근부터 락 조회 - claim() 과 같은 이유. 비잠금 조회 후 재잠금은 낡은 관리 엔티티를
+        // 반환해 동시 claim 의 COMPLETED 전환을 ACTIVE 로 잘못 판정한다(완료된 미션에 기여가 남음).
+        HouseMission mission = houseMissionRepository.findWithLockById(missionId).orElse(null);
+        Instant now = Instant.now();
+        if (mission == null || !mission.isActive() || !mission.isWithinPeriod(now)) {
+            return null;
+        }
+        Long houseId = mission.getHouse().getId();
+        House house = houseRepository.findById(houseId)
+                .filter(h -> !h.isDeleted())
+                .orElse(null);
+        if (house == null) {
+            return null;
+        }
+        // membership 도 락 조회(current read) - 완료 트랜잭션 스냅샷 뒤에 커밋된 탈퇴/강퇴를 봐야
+        // 강퇴 직후 그 집 미션에 기여가 한 번 더 남는 경합 창이 닫힌다. 락 순서는 미션 → 멤버로,
+        // 멤버 락을 쥔 트랜잭션(leave/kick)은 미션 락을 요구하지 않아 순환이 없다.
+        HouseMember me = houseMemberRepository.findWithLockByHouseIdAndUserId(houseId, userId)
+                .filter(HouseMember::isActive)
+                .orElse(null);
+        if (me == null) {
+            return null;
+        }
+        LocalDate today = now.atZone(KST).toLocalDate();
+        // 하루 1회 판정은 락 조회(current read) - 완료 트랜잭션 스냅샷 밖에서 커밋된 직접 기여도 봐야
+        // recordContribution 의 UNIQUE 충돌 예외(→완료까지 롤백)가 구조적으로 닫힌다.
+        // 기여 insert 는 전부 미션 행 락 아래라, 락을 쥔 지금 안 보이면 이 트랜잭션 중 새로 생기지도 않는다.
+        if (dailyContributionRepository.findWithLockByMissionIdAndMemberIdAndContributionDate(
+                missionId, me.getId(), today).isPresent()) {
+            return null;
+        }
+        return recordContribution(house, me, mission, missionId, today);
+    }
+
+    // 기여 기록 공통부 - 호출자가 미션 행 락 + 오늘 미기여 확인을 마친 상태여야 한다.
+    // missionId 는 mission.getId() 와 같은 값이지만 파라미터로 받는다 - 단위 테스트가 미저장 미션으로 검증함.
+    private HouseMissionContributeResponse recordContribution(House house, HouseMember me,
+                                                              HouseMission mission, Long missionId,
+                                                              LocalDate today) {
         HouseMissionParticipant participant = participantRepository
                 .findByMissionIdAndMemberId(missionId, me.getId())
                 .orElseGet(() -> participantRepository.save(HouseMissionParticipant.create(mission, me)));
@@ -234,7 +290,7 @@ public class HouseMissionService {
         boolean achieved = currentValue >= mission.getTargetValue();
         // 이번 +1 로 처음 도달한 순간에만 1회 발송. 미션 행 락 하 판정이라 별도 dedupe 쿼리가 필요없음
         if (achieved && currentValue - 1 < mission.getTargetValue()) {
-            notifyAchieved(houseId, mission);
+            notifyAchieved(house.getId(), mission);
         }
         return new HouseMissionContributeResponse(
                 missionId, participant.getContributionValue(), currentValue, achieved);

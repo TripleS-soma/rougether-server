@@ -63,6 +63,7 @@ public class HouseController {
     @Operation(summary = "집 탐색 목록 조회",
             description = "참여할 수 있는 집 목록을 최신 생성순으로 반환합니다. 로그인한 회원 누구나 호출할 수 있습니다. "
                     + "삭제되지 않은 모든 집이 대상이며, 본인이 이미 가입한 집과 정원이 가득 찬 집도 목록에 포함됩니다. "
+                    + "excludeJoined=true 를 주면 본인이 지금 가입(ACTIVE)해 있는 집을 제외합니다(탈퇴·강퇴한 집은 계속 포함). "
                     + "goalCode 를 주면 해당 목표가 연결된 집만 반환하고, 미지정 또는 빈 값이면 전체를 반환합니다. "
                     + "미지정 시 page=0, size=20 으로 조회합니다. goalCode 는 GET /api/v1/goals 응답의 code 값을 사용합니다.")
     @GetMapping
@@ -70,8 +71,10 @@ public class HouseController {
             @CurrentUser AuthUser user,
             @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") @Min(1) int size,
-            @Parameter(description = "목표 코드 필터 (선택). GET /api/v1/goals 응답의 code 값") @RequestParam(required = false) String goalCode) {
-        return houseQueryService.explore(user.id(), page, size, goalCode);
+            @Parameter(description = "목표 코드 필터 (선택). GET /api/v1/goals 응답의 code 값") @RequestParam(required = false) String goalCode,
+            @Parameter(description = "가입된 집 제외 필터 (선택). true 면 본인이 가입(ACTIVE)해 있는 집을 목록에서 제외. 기본값 false")
+            @RequestParam(defaultValue = "false") boolean excludeJoined) {
+        return houseQueryService.explore(user.id(), page, size, goalCode, excludeJoined);
     }
 
     @Operation(summary = "공동집 생성",

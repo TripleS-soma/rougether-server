@@ -64,6 +64,17 @@ public class CategoryController {
         return categoryService.update(authUser.id(), id, request);
     }
 
+    @Operation(summary = "카테고리 집 연동 해제",
+            description = "소유한 카테고리의 집 연동(houseId)을 해제합니다. 카테고리와 소속 루틴·투두는 그대로 남습니다. "
+                    + "이미 연동이 없는 카테고리에 호출해도 성공(멱등)합니다. "
+                    + "카테고리 수정(PUT)의 houseId 는 null=기존 유지 규칙이라 해제는 이 API 로만 할 수 있습니다.")
+    @DeleteMapping("/{id}/house-link")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlinkHouse(@CurrentUser AuthUser authUser,
+                            @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id) {
+        categoryService.unlinkHouse(authUser.id(), id);
+    }
+
     @Operation(summary = "카테고리 삭제",
             description = "소유한 카테고리를 mode에 따라 삭제합니다. 두 모드 모두 이 카테고리를 사용하는 살아있는 루틴이 없을 때만 삭제할 수 있고, "
                     + "카테고리 자체는 soft delete되어 이름은 내 카테고리 목록 조회(GET /api/v1/categories?includeDeleted=true)로 계속 조회됩니다. "

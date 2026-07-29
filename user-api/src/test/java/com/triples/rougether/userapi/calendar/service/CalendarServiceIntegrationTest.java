@@ -3,6 +3,9 @@ package com.triples.rougether.userapi.calendar.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
@@ -21,6 +24,7 @@ import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
@@ -63,6 +67,12 @@ class CalendarServiceIntegrationTest {
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private HouseRepository houseRepository;
+    @Autowired
+    private HouseMissionRepository houseMissionRepository;
+    @Autowired
+    private HouseMemberRepository houseMemberRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -70,6 +80,11 @@ class CalendarServiceIntegrationTest {
     private CalendarService service;
     private User user;
     private Long userId;
+
+    // 버전 분기 시나리오에서 RoutineService 를 직접 조립할 때 쓰는 링크 검증기
+    private HouseLinkValidator linkValidator() {
+        return new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository);
+    }
 
     @BeforeEach
     void setUp() {
@@ -289,7 +304,7 @@ class CalendarServiceIntegrationTest {
 
         // 제목·스케줄을 함께 변경 → 새 버전으로 분기(옛 제목은 닫힌 옛 버전 row에 남음)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository);
+                userRepository, linkValidator());
         routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
                 "WEEKLY", new RepeatDays(List.of("TUE")), null, null, null));
         em.flush();
@@ -310,7 +325,7 @@ class CalendarServiceIntegrationTest {
 
         // 스케줄을 DAILY로 변경 → 분기(옛 WEEKLY 버전 닫힘, 새 DAILY 버전 생성)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository);
+                userRepository, linkValidator());
         RoutineResponse neo = routineService.update(userId, routineId,
                 new RoutineUpdateRequest(null, null, null, "DAILY", null, null, null, null));
         em.flush();
@@ -486,7 +501,7 @@ class CalendarServiceIntegrationTest {
         // 완료 log 는 옛 버전을, findEffectiveOnDay 는 새 버전을 가리키게 만듦.
         // 계보로 dedup 하지 않으면 완료본·재계산본이 각각 잡혀 2건이 되고 summary 도 틀어짐
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository);
+                userRepository, linkValidator());
         routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
                 "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY))), null, null, null));
         em.flush();
@@ -513,7 +528,7 @@ class CalendarServiceIntegrationTest {
 
         // 자정이 지난 뒤(=오늘) 제목·스케줄 변경 → 새 버전으로 분기, 옛 버전은 오늘 닫힘
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository);
+                userRepository, linkValidator());
         routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
                 "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY.plusDays(3)))),
                 null, null, null));

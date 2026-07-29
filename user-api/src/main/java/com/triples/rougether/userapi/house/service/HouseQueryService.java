@@ -138,12 +138,24 @@ public class HouseQueryService {
         return new MyHouseListResponse(items);
     }
 
+    // excludeJoined=true 면 내가 가입(ACTIVE)해 있는 집을 제외한다(가입된 집 필터, 프론트 요청).
     @Transactional(readOnly = true)
-    public HouseListResponse explore(Long userId, int page, int size, String goalCode) {
+    public HouseListResponse explore(Long userId, int page, int size, String goalCode,
+                                     boolean excludeJoined) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<House> houses = (goalCode == null || goalCode.isBlank())
-                ? houseRepository.findExplorePage(pageable)
-                : houseRepository.findExplorePageByGoalCode(goalCode, pageable);
+        boolean noGoalFilter = goalCode == null || goalCode.isBlank();
+        Page<House> houses;
+        if (noGoalFilter) {
+            houses = excludeJoined
+                    ? houseRepository.findExplorePageExcludingMemberStatus(
+                            userId, HouseMemberStatus.ACTIVE, pageable)
+                    : houseRepository.findExplorePage(pageable);
+        } else {
+            houses = excludeJoined
+                    ? houseRepository.findExplorePageByGoalCodeExcludingMemberStatus(
+                            goalCode, userId, HouseMemberStatus.ACTIVE, pageable)
+                    : houseRepository.findExplorePageByGoalCode(goalCode, pageable);
+        }
 
         Map<Long, List<GoalSummary>> goalsByHouseId = loadGoals(houses.getContent());
         Map<Long, HouseJoinRequestStatus> requestStatusByHouseId = loadJoinRequestStatuses(

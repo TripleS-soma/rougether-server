@@ -4,6 +4,7 @@ import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,10 +24,20 @@ public record RoutineLogResponse(
                 + "10보다 적으면 남은 만큼만 지급되고, 한도를 다 썼거나 과거 날짜 완료면 0 지급", example = "10")
         int rewardAmount,
         @Schema(description = "스트릭 요약. 오늘 첫 완료면 갱신된 값, 그 외(오늘 추가 완료·과거 날짜 완료)는 기존 값 그대로")
-        StreakSummaryResponse streak
+        StreakSummaryResponse streak,
+        @Schema(description = "연동 단체미션 자동 기여 결과(수행 체크 API 응답과 동일 형태). "
+                + "이번 완료로 기여가 반영된 경우에만 값이 있고, 미연동 루틴이거나 기여가 건너뛰어진 경우"
+                + "(오늘 이미 기여함·미션 비활성/기간 밖/삭제·집 비구성원·과거 날짜 완료)는 null. "
+                + "완료 취소를 해도 이 기여는 회수되지 않음")
+        HouseMissionContributeResponse houseMissionContribution
 ) {
 
     public static RoutineLogResponse from(RoutineLog log, Streak streak) {
+        return from(log, streak, null);
+    }
+
+    public static RoutineLogResponse from(RoutineLog log, Streak streak,
+                                          HouseMissionContributeResponse houseMissionContribution) {
         return new RoutineLogResponse(
                 log.getId(),
                 log.getRoutineDate(),
@@ -35,7 +46,8 @@ public record RoutineLogResponse(
                 log.getRewardCurrencyType(),
                 log.getRewardAmount(),
                 // 과거 완료는 스트릭을 건드리지 않으므로 스트릭이 아직 없을 수 있음
-                streak != null ? StreakSummaryResponse.from(streak) : new StreakSummaryResponse(0, 0, null)
+                streak != null ? StreakSummaryResponse.from(streak) : new StreakSummaryResponse(0, 0, null),
+                houseMissionContribution
         );
     }
 }

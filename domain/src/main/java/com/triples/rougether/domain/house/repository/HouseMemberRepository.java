@@ -2,9 +2,11 @@ package com.triples.rougether.domain.house.repository;
 
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +33,11 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
     List<HouseMember> findByUserIdAndStatus(Long userId, String status);
 
     Optional<HouseMember> findByHouseIdAndUserId(Long houseId, Long userId);
+
+    // 자동 기여 경로 전용 - 락 조회(current read). 완료 트랜잭션의 REPEATABLE READ 스냅샷이 잡힌 뒤
+    // 커밋된 탈퇴·강퇴를 일반 조회는 못 보므로, 강퇴 직후에도 기여가 기록되는 경합 창을 닫는다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select hm from HouseMember hm where hm.house.id = :houseId and hm.user.id = :userId")
+    Optional<HouseMember> findWithLockByHouseIdAndUserId(@Param("houseId") Long houseId,
+                                                         @Param("userId") Long userId);
 }

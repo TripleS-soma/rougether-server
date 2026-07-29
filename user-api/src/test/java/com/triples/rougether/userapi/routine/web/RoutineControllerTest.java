@@ -75,7 +75,7 @@ class RoutineControllerTest {
         when(routineService.list(1L, null, null)).thenReturn(new RoutineListResponse(List.of(
                 new RoutineResponse(10L, "아침 운동", 3L,
                         AuthType.PHOTO, RoutineStatus.ACTIVE,
-                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L))));
+                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L, null))));
 
         mockMvc.perform(get("/api/v1/routines"))
                 .andExpect(status().isOk())
@@ -92,7 +92,7 @@ class RoutineControllerTest {
     void 등록은_201과_생성된_루틴을_응답한다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "물 마시기", null, AuthType.CHECK,
-                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L));
+                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -104,11 +104,30 @@ class RoutineControllerTest {
     }
 
     @Test
+    void 등록_요청의_houseMissionId가_서비스까지_전달되고_응답에_내려간다() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(new RoutineResponse(5L, "공원 산책", null, AuthType.CHECK,
+                        RoutineStatus.ACTIVE, "DAILY", null, null, null, null, 5L, 12L));
+
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"공원 산책\",\"authType\":\"CHECK\",\"repeatType\":\"DAILY\","
+                                + "\"houseMissionId\":12}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.houseMissionId").value(12));
+
+        // 보조 생성자가 추가된 record 의 JSON 역직렬화가 canonical 생성자(houseMissionId 포함)로 가는지 확인
+        ArgumentCaptor<RoutineCreateRequest> captor = ArgumentCaptor.forClass(RoutineCreateRequest.class);
+        verify(routineService).create(eq(1L), captor.capture());
+        assertThat(captor.getValue().houseMissionId()).isEqualTo(12L);
+    }
+
+    @Test
     void repeatDays를_객체로_보내면_201로_등록된다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "아침 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "WEEKLY", new RepeatDays(List.of("MON", "WED")),
-                        null, null, null, 5L));
+                        null, null, null, 5L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -184,7 +203,7 @@ class RoutineControllerTest {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(6L, "격주 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "BIWEEKLY", new RepeatDays(List.of("MON")),
-                        null, LocalDate.of(2026, 7, 13), null, 6L));
+                        null, LocalDate.of(2026, 7, 13), null, 6L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -252,7 +271,8 @@ class RoutineControllerTest {
         when(routineLogService.complete(eq(1L), eq(7L), any(RoutineLogCreateRequest.class)))
                 .thenReturn(new RoutineLogResponse(100L, LocalDate.of(2026, 6, 29),
                         RoutineLogStatus.COMPLETED, Instant.parse("2026-06-29T07:00:00Z"),
-                        CurrencyType.COIN, 10, new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29))));
+                        CurrencyType.COIN, 10, new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29)),
+                        null));
 
         mockMvc.perform(post("/api/v1/routines/7/logs")
                         .contentType(MediaType.APPLICATION_JSON)

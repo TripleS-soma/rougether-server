@@ -24,6 +24,7 @@ import com.triples.rougether.domain.house.repository.HouseMissionDailyRewardRepo
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
@@ -50,6 +51,7 @@ class HouseMissionServiceTest {
     @Mock private HouseMissionDailyContributionRepository dailyContributionRepository;
     @Mock private HouseMissionDailyRewardRepository dailyRewardRepository;
     @Mock private BannedWordChecker bannedWordChecker;
+    @Mock private RoutineRepository routineRepository;
     @InjectMocks private HouseMissionService houseMissionService;
 
     // NOTE: helper 가 만든 mock 은 반드시 변수에 받은 뒤 바깥 stubbing 에 쓴다 (UnfinishedStubbing 방지).
