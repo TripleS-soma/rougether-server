@@ -101,6 +101,8 @@ class MemberWithdrawalIntegrationTest {
     private StreakRepository streakRepository;
     @Autowired
     private MemberService memberService;
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private String kakaoLoginAs(String kakaoId) {
         String token = "tok-" + kakaoId;
@@ -286,6 +288,29 @@ class MemberWithdrawalIntegrationTest {
                         NotificationType.ROUTINE_REMINDER, now.minusSeconds(3600), now.plusSeconds(3600),
                         0L, org.springframework.data.domain.Pageable.unpaged())
                 .stream().map(Routine::getId).toList();
+    }
+
+    @Test
+    void 탈퇴와_동시에_진행되던_로그인_flush_가_soft_delete_를_되돌리지_않는다() {
+        // 로그인 트랜잭션(T2)이 탈퇴 커밋 전 스냅샷의 user(deletedAt=null)를 들고 있다가
+        // 탈퇴(T1) 커밋 후 recordAccess()로 flush해도, @DynamicUpdate 덕에 deleted_at을 되쓰지 않아야 함.
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        Long userId = login.userId();
+
+        transactionTemplate.executeWithoutResult(status -> {
+            User stale = userRepository.findById(userId).orElseThrow();
+            Thread withdrawThread = new Thread(() -> memberWithdrawalService.withdraw(userId));
+            withdrawThread.start();
+            try {
+                withdrawThread.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            stale.recordAccess(Instant.now());
+        });
+
+        assertThat(userRepository.findById(userId).orElseThrow().getDeletedAt()).isNotNull();
     }
 
     @Test

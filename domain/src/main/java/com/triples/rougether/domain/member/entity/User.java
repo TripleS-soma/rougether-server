@@ -11,7 +11,11 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
+// @DynamicUpdate 필수 — 전체 컬럼 UPDATE면 탈퇴와 거의 동시에 진행되던 로그인 트랜잭션의
+// recordAccess() flush가 stale deleted_at=null 을 되써서 soft delete 를 되돌릴 수 있음(dirty 필드만 갱신해 차단).
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
