@@ -265,6 +265,35 @@ class RoutineMissionAutoContributeIntegrationTest {
         assertThat(categoryRepository.findById(category.getId()).orElseThrow().getDeletedAt()).isNull();
     }
 
+    @Test
+    void 강퇴된_회원의_연동만_해제되고_남은_구성원_연동은_유지된다() {
+        Long ownerRoutineId = persistLinkedRoutine(missionId);
+        User target = userRepository.save(User.signUp());
+        HouseMember targetMembership = houseMemberRepository.save(
+                HouseMember.create(house, target, HouseMemberRole.MEMBER));
+        Routine targetRoutine = Routine.create(target, null, "강퇴자 루틴", AuthType.CHECK,
+                null, null, null, null, null);
+        targetRoutine.linkHouseMission(missionId);
+        Long targetRoutineId = routineRepository.save(targetRoutine).getId();
+        Category targetCategory = categoryRepository.save(
+                Category.create(target, "강퇴자 카테고리", null, null, 0, PrivacyScope.HOUSE));
+        targetCategory.linkHouse(house.getId());
+        HouseMemberCommandService memberCommand = new HouseMemberCommandService(
+                houseRepository, houseMemberRepository, mock(NotificationService.class),
+                routineRepository, categoryRepository);
+
+        memberCommand.kick(userId, house.getId(), targetMembership.getId());
+
+        // bulk update 는 PC 를 우회하므로 비우고 다시 읽어야 해제가 보인다
+        em.flush();
+        em.clear();
+        assertThat(routineRepository.findById(targetRoutineId).orElseThrow().getHouseMissionId()).isNull();
+        assertThat(categoryRepository.findById(targetCategory.getId()).orElseThrow().getHouseId()).isNull();
+        // 강퇴되지 않은 구성원(소유자)의 연동은 유지
+        assertThat(routineRepository.findById(ownerRoutineId).orElseThrow().getHouseMissionId())
+                .isEqualTo(missionId);
+    }
+
     private Long targetOneMissionId() {
         return houseMissionRepository.save(HouseMission.create(
                 house, "한 번이면 달성", HouseMissionType.WEEKLY_MEMBER_COUNT, 1, null, null)).getId();

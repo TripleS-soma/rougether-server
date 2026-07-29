@@ -241,7 +241,10 @@ public class HouseMissionService {
         if (house == null) {
             return null;
         }
-        HouseMember me = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+        // membership 도 락 조회(current read) - 완료 트랜잭션 스냅샷 뒤에 커밋된 탈퇴/강퇴를 봐야
+        // 강퇴 직후 그 집 미션에 기여가 한 번 더 남는 경합 창이 닫힌다. 락 순서는 미션 → 멤버로,
+        // 멤버 락을 쥔 트랜잭션(leave/kick)은 미션 락을 요구하지 않아 순환이 없다.
+        HouseMember me = houseMemberRepository.findWithLockByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
                 .orElse(null);
         if (me == null) {
