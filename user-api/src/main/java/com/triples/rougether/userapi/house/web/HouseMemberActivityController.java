@@ -64,6 +64,8 @@ public class HouseMemberActivityController {
                     + "루틴은 수행 예정 시각 오름차순, 투두는 id 오름차순으로 정렬됩니다. "
                     + "카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 루틴·투두만 내려가고, "
                     + "PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음)는 제외됩니다. "
+                    + "루틴·투두가 참조하는 카테고리 정보(id·이름·색상·아이콘)는 categories 로 함께 내려갑니다 — "
+                    + "타인의 카테고리는 내 카테고리 목록 조회(GET /api/v1/categories)로 resolve 할 수 없기 때문입니다. "
                     + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 화면에는 GET /api/v1/today 를 사용하세요.")
     @GetMapping("/day")
     public HouseMemberDayResponse getMemberDay(

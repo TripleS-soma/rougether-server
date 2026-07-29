@@ -200,6 +200,32 @@ class HouseMemberActivityIntegrationTest {
     }
 
     @Test
+    void 그날_현황에는_보이는_루틴_투두가_참조하는_카테고리_정보가_함께_내려간다() {
+        Fixture f = fixture();
+        Category open = categoryRepository.save(Category.create(
+                f.target(), "공개 카테고리", "#FF8800", "icon_health", 1, PrivacyScope.HOUSE));
+        Category first = categoryRepository.save(Category.create(
+                f.target(), "앞 카테고리", "#00FF00", null, 0, PrivacyScope.PUBLIC));
+        saveRoutine(f.target(), open, "집 공개 루틴");
+        todoRepository.save(Todo.create(
+                f.target(), first, "공개 투두", null, LocalDate.now(KST), null));
+        routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴"); // 카테고리도 내려가면 안 됨
+
+        HouseMemberDayResponse response = activityService.getMemberDay(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);
+
+        // 보이는 항목이 참조한 카테고리만, sortOrder 오름차순으로
+        assertThat(response.categories()).extracting("id", "name", "colorHex", "iconKey")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                first.getId(), "앞 카테고리", "#00FF00", null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                open.getId(), "공개 카테고리", "#FF8800", "icon_health"));
+        assertThat(response.routines()).extracting("categoryId").containsExactly(open.getId());
+        assertThat(response.todos()).extracting("categoryId").containsExactly(first.getId());
+    }
+
+    @Test
     void 루틴은_그날_반복_대상만_완료_여부와_함께_보인다() {
         Fixture f = fixture();
         // 지난주 월요일 (오늘 기준 7~13일 전) — 고정 날짜를 쓰면 시간이 지나

@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
@@ -17,7 +18,10 @@ public record HouseMemberDayResponse(
         @Schema(description = "그날 반복 대상 루틴 목록. 수행 예정 시각 오름차순")
         List<MemberRoutineItem> routines,
         @Schema(description = "그날 마감(dueDate=date) 투두 목록. id 오름차순")
-        List<MemberTodoItem> todos) {
+        List<MemberTodoItem> todos,
+        @Schema(description = "루틴·투두가 참조하는 카테고리 목록(조회 대상 회원 소유). "
+                + "타인의 카테고리는 내 카테고리 목록 조회로 resolve 할 수 없으므로 함께 내려간다. sortOrder 오름차순")
+        List<MemberCategoryItem> categories) {
 
     public record MemberRoutineItem(
             @Schema(description = "루틴 ID (버전 id — 스케줄 수정 시 바뀔 수 있음)", example = "12")
@@ -44,6 +48,25 @@ public record HouseMemberDayResponse(
                     routine.getAuthType(),
                     routine.getCategory() != null ? routine.getCategory().getId() : null,
                     completed);
+        }
+    }
+
+    public record MemberCategoryItem(
+            @Schema(description = "카테고리 ID. 루틴·투두의 categoryId 에 대응", example = "3")
+            Long id,
+            @Schema(description = "카테고리 이름", example = "운동")
+            String name,
+            @Schema(description = "표시 색상 hex", example = "#FF8800")
+            String colorHex,
+            @Schema(description = "아이콘 asset key. CDN base URL과 조합해 이미지 URL로 사용", example = "icon_health")
+            String iconKey) {
+
+        public static MemberCategoryItem of(Category category) {
+            return new MemberCategoryItem(
+                    category.getId(),
+                    category.getName(),
+                    category.getColorHex(),
+                    category.getIconKey());
         }
     }
 

@@ -230,7 +230,7 @@ class RoutineReminderJobIntegrationTest {
                 .filter(n -> n.getType() == NotificationType.TODO_REMINDER).findFirst().orElseThrow();
         assertThat(todoNotification.getRefId()).isEqualTo(todo.getId());
         assertThat(todoNotification.getTitle()).isEqualTo(ReminderMessage.TODO_TITLE);
-        assertThat(todoNotification.getBody()).isEqualTo("『장보기』 마감 시간이에요!");
+        assertThat(todoNotification.getBody()).isEqualTo("『장보기』 할 시간이에요!");
     }
 
     @Test
