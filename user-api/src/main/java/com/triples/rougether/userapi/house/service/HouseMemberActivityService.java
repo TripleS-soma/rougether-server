@@ -10,11 +10,13 @@ import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
 import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
+import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse.MemberCategoryItem;
 import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse.MemberRoutineItem;
 import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse.MemberTodoItem;
 import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListResponse;
@@ -30,6 +32,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,29 +80,53 @@ public class HouseMemberActivityService {
         return roomQueryService.getRoomOf(memberUserId);
     }
 
+    // 그날 대상 루틴 목록과 그중 완료된 루틴 id — item 변환 전에 카테고리 수집에도 쓰기 위한 중간 형태
+    private record DayRoutines(List<Routine> routines, Set<Long> completedRoutineIds) {
+    }
+
     // 멤버 그날 현황 - 그날(기본 오늘 KST) 반복 대상 루틴(완료 여부 포함) + 그날 마감 투두.
     // 공개 범위를 통과한 것만. 대상·완료 판정과 과거 날짜의 버전 재구성은 오늘 현황·캘린더와 동일 규칙.
+    // 타인의 카테고리는 별도 조회 API 가 없으므로 참조된 카테고리 정보(categories)를 응답에 함께 담는다.
     @Transactional(readOnly = true)
     public HouseMemberDayResponse getMemberDay(Long userId, Long houseId,
                                                Long membershipId, LocalDate date) {
         Long memberUserId = requireSameHouseMember(userId, houseId, membershipId);
         LocalDate targetDate = date != null ? date : LocalDate.now(KST);
 
-        List<MemberRoutineItem> routines = targetDate.isBefore(LocalDate.now(KST))
+        DayRoutines dayRoutines = targetDate.isBefore(LocalDate.now(KST))
                 ? pastDayRoutines(memberUserId, targetDate)
                 : liveDayRoutines(memberUserId, targetDate);
+        List<Todo> dueTodos = todoRepository
+                .findVisibleDueOn(memberUserId, targetDate, HOUSE_VISIBLE_SCOPES);
 
-        List<MemberTodoItem> todos = todoRepository
-                .findVisibleDueOn(memberUserId, targetDate, HOUSE_VISIBLE_SCOPES)
-                .stream()
+        List<MemberRoutineItem> routines = dayRoutines.routines().stream()
+                .map(routine -> MemberRoutineItem.of(
+                        routine, dayRoutines.completedRoutineIds().contains(routine.getId())))
+                .toList();
+        List<MemberTodoItem> todos = dueTodos.stream()
                 .map(MemberTodoItem::of)
                 .toList();
 
-        return new HouseMemberDayResponse(targetDate, routines, todos);
+        return new HouseMemberDayResponse(targetDate, routines, todos,
+                referencedCategories(dayRoutines.routines(), dueTodos));
+    }
+
+    // 응답에 담긴 루틴·투두가 참조하는 카테고리를 중복 없이 sortOrder(같으면 id) 오름차순으로 수집
+    private List<MemberCategoryItem> referencedCategories(List<Routine> routines, List<Todo> todos) {
+        return Stream.concat(
+                        routines.stream().map(Routine::getCategory),
+                        todos.stream().map(Todo::getCategory))
+                .filter(category -> category != null)
+                .collect(Collectors.toMap(Category::getId, category -> category, (a, b) -> a))
+                .values().stream()
+                .sorted(Comparator.comparingInt(Category::getSortOrder)
+                        .thenComparing(Category::getId))
+                .map(MemberCategoryItem::of)
+                .toList();
     }
 
     // 오늘·미래: 현재 ACTIVE 버전 기준 live 재계산 (CalendarService.liveDay 와 동일 원칙)
-    private List<MemberRoutineItem> liveDayRoutines(Long memberUserId, LocalDate targetDate) {
+    private DayRoutines liveDayRoutines(Long memberUserId, LocalDate targetDate) {
         Set<Long> completedRoutineIds = routineLogRepository
                 .findByRoutine_UserIdAndRoutineDateAndStatus(
                         memberUserId, targetDate, RoutineLogStatus.COMPLETED)
@@ -107,17 +134,17 @@ public class HouseMemberActivityService {
                 .map(log -> log.getRoutine().getId())
                 .collect(Collectors.toSet());
 
-        return routineRepository
+        List<Routine> routines = routineRepository
                 .findVisibleByUserIdAndStatus(memberUserId, RoutineStatus.ACTIVE, HOUSE_VISIBLE_SCOPES)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
-                .map(routine -> MemberRoutineItem.of(routine, completedRoutineIds.contains(routine.getId())))
                 .toList();
+        return new DayRoutines(routines, completedRoutineIds);
     }
 
     // 과거: 그날 유효했던 버전(닫힌·삭제 버전 포함) ∪ 그날 완료 log 의 루틴으로 재구성
     // (CalendarService.pastDay 와 동일 원칙). 완료 log 가 옛 버전 id 를 가리켜도 completed 가 정확하다.
-    private List<MemberRoutineItem> pastDayRoutines(Long memberUserId, LocalDate targetDate) {
+    private DayRoutines pastDayRoutines(Long memberUserId, LocalDate targetDate) {
         List<Routine> completedRoutines = routineLogRepository
                 .findVisibleCompletedInPeriod(memberUserId, RoutineLogStatus.COMPLETED,
                         targetDate, targetDate, HOUSE_VISIBLE_SCOPES)
@@ -144,9 +171,7 @@ public class HouseMemberActivityService {
                 .comparing(Routine::getScheduledTime, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Routine::getId));
 
-        return routines.stream()
-                .map(routine -> MemberRoutineItem.of(routine, completedRoutineIds.contains(routine.getId())))
-                .toList();
+        return new DayRoutines(routines, completedRoutineIds);
     }
 
     // findEffectiveOnDay 는 공개 범위를 거르지 않으므로 서비스에서 동일 기준으로 필터
