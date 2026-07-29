@@ -319,7 +319,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_기본_경로_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(7L, 0, 20, null)).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, null, false)).thenReturn(new HouseListResponse(
                 java.util.List.of(), 0, 20, 0L));
 
         mockMvc.perform(get("/api/v1/houses"))
@@ -349,7 +349,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(7L, 0, 20, "morning_routine")).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, "morning_routine", false)).thenReturn(new HouseListResponse(
                 java.util.List.of(new HouseListResponse.HouseSummary(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, 0,
                         java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")))),
                 0, 20, 1L));

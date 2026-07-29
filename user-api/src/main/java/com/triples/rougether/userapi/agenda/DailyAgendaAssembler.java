@@ -38,7 +38,8 @@ public class DailyAgendaAssembler {
             groups.computeIfAbsent(key, Accumulator::new)
                     .routines.add(new TodayRoutineItem(routine.getId(), routine.getTitle(),
                             routine.getScheduledTime(), routine.getAuthType(),
-                            completedRoutineIds.contains(routine.getId())));
+                            completedRoutineIds.contains(routine.getId()),
+                            routine.getHouseMissionId()));
         }
         for (Todo todo : todos) {
             Long key = categoryIdOf(todo.getCategory());

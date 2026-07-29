@@ -75,7 +75,7 @@ class RoutineControllerTest {
         when(routineService.list(1L, null, null)).thenReturn(new RoutineListResponse(List.of(
                 new RoutineResponse(10L, "아침 운동", 3L,
                         AuthType.PHOTO, RoutineStatus.ACTIVE,
-                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L))));
+                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L, null))));
 
         mockMvc.perform(get("/api/v1/routines"))
                 .andExpect(status().isOk())
@@ -92,7 +92,7 @@ class RoutineControllerTest {
     void 등록은_201과_생성된_루틴을_응답한다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "물 마시기", null, AuthType.CHECK,
-                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L));
+                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +108,7 @@ class RoutineControllerTest {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "아침 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "WEEKLY", new RepeatDays(List.of("MON", "WED")),
-                        null, null, null, 5L));
+                        null, null, null, 5L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -184,7 +184,7 @@ class RoutineControllerTest {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(6L, "격주 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "BIWEEKLY", new RepeatDays(List.of("MON")),
-                        null, LocalDate.of(2026, 7, 13), null, 6L));
+                        null, LocalDate.of(2026, 7, 13), null, 6L, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -5,6 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseMissionRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.routine.entity.AiReviewStatus;
@@ -31,7 +37,10 @@ import com.triples.rougether.userapi.category.dto.CategoryResponse;
 import com.triples.rougether.userapi.category.dto.CategoryUpdateRequest;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import jakarta.persistence.EntityManager;
+import java.time.Duration;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -68,6 +77,12 @@ class CategoryServiceIntegrationTest {
     private StreakRepository streakRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private HouseRepository houseRepository;
+    @Autowired
+    private HouseMissionRepository houseMissionRepository;
+    @Autowired
+    private HouseMemberRepository houseMemberRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -78,7 +93,8 @@ class CategoryServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         categoryService = new CategoryService(categoryRepository, routineRepository, todoRepository,
-                routineLogRepository, photoVerificationRepository, userRepository);
+                routineLogRepository, photoVerificationRepository, userRepository,
+                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -481,5 +497,64 @@ class CategoryServiceIntegrationTest {
         ReflectionTestUtils.setField(todo, "title", "장보기");
         ReflectionTestUtils.setField(todo, "status", TodoStatus.PENDING);
         return todoRepository.save(todo).getId();
+    }
+
+    // --- 집 연동(houseId) ---
+
+    @Test
+    void 생성_때_연동한_집_id가_저장되고_응답에_내려간다() {
+        Long houseId = persistHouseWithMe();
+
+        CategoryResponse created = categoryService.create(userId,
+                new CategoryCreateRequest("우리집 미션", null, null, null, null, houseId));
+
+        assertThat(created.houseId()).isEqualTo(houseId);
+        assertThat(categoryRepository.findById(created.id()).orElseThrow().getHouseId())
+                .isEqualTo(houseId);
+        // 연동 없이 생성하면 null
+        CategoryResponse plain = categoryService.create(userId,
+                new CategoryCreateRequest("운동", null, null, null, null));
+        assertThat(plain.houseId()).isNull();
+    }
+
+    @Test
+    void 내가_속하지_않은_집으로는_연동할_수_없다() {
+        User other = userRepository.save(User.signUp());
+        Long othersHouse = houseRepository.save(House.create(other, "남의 집", null, null, 4,
+                "CATLNKX1", Instant.now().plus(Duration.ofDays(7)))).getId();
+
+        assertThatThrownBy(() -> categoryService.create(userId,
+                new CategoryCreateRequest("우리집 미션", null, null, null, null, othersHouse)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER);
+    }
+
+    @Test
+    void 수정_때_미지정이면_기존_연동을_유지하고_지정하면_연동을_설정한다() {
+        Long houseId = persistHouseWithMe();
+        CategoryResponse created = categoryService.create(userId,
+                new CategoryCreateRequest("우리집 미션", null, null, null, null, houseId));
+
+        // 이름만 바꾸는 수정(구버전 클라이언트 시나리오) — 연동 유지
+        CategoryResponse renamed = categoryService.update(userId, created.id(),
+                new CategoryUpdateRequest("바뀐 이름", null, null, null, null));
+        assertThat(renamed.houseId()).isEqualTo(houseId);
+
+        // 미연동 카테고리에 수정으로 연동 지정
+        CategoryResponse plain = categoryService.create(userId,
+                new CategoryCreateRequest("운동", null, null, null, null));
+        CategoryResponse linked = categoryService.update(userId, plain.id(),
+                new CategoryUpdateRequest(null, null, null, null, null, houseId));
+        assertThat(linked.houseId()).isEqualTo(houseId);
+    }
+
+    // 내가 ACTIVE 구성원인 집 생성
+    private Long persistHouseWithMe() {
+        User me = userRepository.findById(userId).orElseThrow();
+        House house = houseRepository.save(House.create(me, "연동 집", null, null, 4,
+                "CATLNKM1", Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(house, me, HouseMemberRole.OWNER));
+        return house.getId();
     }
 }

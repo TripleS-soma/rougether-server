@@ -16,6 +16,7 @@ import com.triples.rougether.userapi.category.dto.CategoryListResponse;
 import com.triples.rougether.userapi.category.dto.CategoryResponse;
 import com.triples.rougether.userapi.category.dto.CategoryUpdateRequest;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -36,6 +37,7 @@ public class CategoryService {
     private final RoutineLogRepository routineLogRepository;
     private final PhotoVerificationRepository photoVerificationRepository;
     private final UserRepository userRepository;
+    private final HouseLinkValidator houseLinkValidator;
 
     @Transactional(readOnly = true)
     public CategoryListResponse list(Long userId, boolean includeDeleted) {
@@ -55,6 +57,10 @@ public class CategoryService {
         PrivacyScope visibility = request.visibility() != null ? request.visibility() : PrivacyScope.PRIVATE;
         Category category = Category.create(
                 user, request.name(), request.colorHex(), request.iconKey(), sortOrder, visibility);
+        if (request.houseId() != null) {
+            houseLinkValidator.validateHouseLink(userId, request.houseId());
+            category.linkHouse(request.houseId());
+        }
         return CategoryResponse.from(categoryRepository.save(category));
     }
 
@@ -63,6 +69,12 @@ public class CategoryService {
         Category category = findOwned(userId, categoryId);
         category.update(request.name(), request.colorHex(), request.iconKey(),
                 request.sortOrder(), request.visibility());
+        // 집 연동은 null=기존 유지(해제 미지원) — 연동 사실을 모르는 구버전 클라이언트의
+        // 수정 요청이 연동을 지우지 않도록 함
+        if (request.houseId() != null) {
+            houseLinkValidator.validateHouseLink(userId, request.houseId());
+            category.linkHouse(request.houseId());
+        }
         return CategoryResponse.from(category);
     }
 

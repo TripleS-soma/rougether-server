@@ -14,6 +14,14 @@ public record TodayRoutineItem(
         @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형)", example = "CHECK")
         AuthType authType,
         @Schema(description = "기준일 완료 여부. false면 완료 체크(POST /api/v1/routines/{id}/logs), true면 완료 취소(DELETE /api/v1/routines/{id}/logs)로 전환")
-        boolean completed
+        boolean completed,
+        @Schema(description = "연동된 집 단체미션 ID(미연동이면 null). 이름 매칭 대신 이 값으로 연동 루틴을 판별", example = "12")
+        Long houseMissionId
 ) {
+
+    // 기존 테스트/호출부 호환용 (houseMissionId 미지정 = 미연동)
+    public TodayRoutineItem(Long id, String title, LocalTime scheduledTime,
+                            AuthType authType, boolean completed) {
+        this(id, title, scheduledTime, authType, completed, null);
+    }
 }

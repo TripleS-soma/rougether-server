@@ -12,3 +12,12 @@
 
 - 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).
+
+### 집 단체미션 연동 표시 (V35)
+
+- 클라이언트가 단체미션↔루틴 연동을 이름 매칭으로 추적하던 것을 서버 저장 식별자로 대체한다(이름이 바뀌면 연동이 끊기는 문제, 프론트 요청 2026-07-29).
+- 루틴은 `routines.house_mission_id`(nullable)에 연동된 단체미션 id, 카테고리는 `categories.house_id`(nullable)에 연동된 집 id를 보관하고 등록·수정 요청(`houseMissionId`/`houseId`)으로 받는다. 단건·목록·오늘 현황·캘린더 응답(`RoutineResponse`/`TodayRoutineItem`/`CategoryResponse`)에 노출한다.
+- 연동 지정은 해당 집의 ACTIVE 구성원만 가능하다(`HouseLinkValidator`, 집 도메인 소유 컴포넌트). 위반 시 `HOUSE_MISSION_NOT_FOUND`/`HOUSE_NOT_FOUND`/`HOUSE_NOT_MEMBER`.
+- 수정 요청에서 이 필드는 null=기존 연동 유지다. `categoryId`(null=해제)와 규칙이 다른 이유: 연동 필드를 모르는 구버전 클라이언트의 수정 요청이 연동을 지우면 안 되기 때문. 연동 해제 API는 미지원(미결정 — 필요해지면 별도 논의).
+- FK 없이 식별자만 보관한다. 미션·집이 soft delete 되거나 집에서 탈퇴해도 값은 남으며, 클라이언트는 보유한 미션·집 목록에 없는 id를 연동 해제로 취급한다. 루틴 버전 분기(`copyAsNewVersion`) 시 연동은 새 버전으로 승계된다.
+- 루틴·투두·카테고리 도메인 계약은 임채영 담당 — 이 연동 필드 추가는 프론트 요청 기반 확장이므로 계약 확정 전 담당자 확인이 필요하다(open question).

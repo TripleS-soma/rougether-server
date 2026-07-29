@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.house.repository;
 
 import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -32,6 +33,25 @@ public interface HouseRepository extends JpaRepository<House, Long> {
             + "and h.id in (select hg.house.id from HouseGoal hg where hg.goal.code = :goalCode) "
             + "order by h.createdAt desc, h.id desc")
     Page<House> findExplorePageByGoalCode(@Param("goalCode") String goalCode, Pageable pageable);
+
+    // excludeJoined 필터 - 내가 지금 가입해 있는(ACTIVE) 집만 제외한다. LEFT/KICKED 이력 집은 목록에 남는다.
+    @Query("select h from House h where h.deletedAt is null "
+            + "and h.id not in (select hm.house.id from HouseMember hm "
+            + "where hm.user.id = :userId and hm.status = :status) "
+            + "order by h.createdAt desc, h.id desc")
+    Page<House> findExplorePageExcludingMemberStatus(@Param("userId") Long userId,
+                                                     @Param("status") HouseMemberStatus status,
+                                                     Pageable pageable);
+
+    @Query("select h from House h where h.deletedAt is null "
+            + "and h.id in (select hg.house.id from HouseGoal hg where hg.goal.code = :goalCode) "
+            + "and h.id not in (select hm.house.id from HouseMember hm "
+            + "where hm.user.id = :userId and hm.status = :status) "
+            + "order by h.createdAt desc, h.id desc")
+    Page<House> findExplorePageByGoalCodeExcludingMemberStatus(@Param("goalCode") String goalCode,
+                                                               @Param("userId") Long userId,
+                                                               @Param("status") HouseMemberStatus status,
+                                                               Pageable pageable);
 
     boolean existsByInviteCode(String inviteCode);
 }

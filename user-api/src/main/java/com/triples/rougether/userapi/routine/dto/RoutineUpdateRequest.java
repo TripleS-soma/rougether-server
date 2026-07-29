@@ -28,6 +28,16 @@ public record RoutineUpdateRequest(
         @Schema(description = "시작일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지. 지정 시 오늘 이전 과거일은 불가", example = "2026-07-01")
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다. 지정 시 시작일보다 앞설 수 없음", example = "2026-12-31")
-        LocalDate endsOn
+        LocalDate endsOn,
+        @Schema(description = "연동할 집 단체미션 ID. 지정하면 해당 미션으로 연동을 설정/변경하고, 미지정(null)이면 기존 연동을 유지합니다"
+                + "(연동 해제는 미지원). 해당 미션이 있는 집의 활성 구성원만 지정할 수 있습니다", example = "12")
+        Long houseMissionId
 ) {
+
+    // 기존 클라이언트/테스트 호환용 (houseMissionId 미지정 = 기존 연동 유지)
+    public RoutineUpdateRequest(String title, Long categoryId, AuthType authType, String repeatType,
+                                RepeatDays repeatDays, LocalTime scheduledTime,
+                                LocalDate startsOn, LocalDate endsOn) {
+        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, null);
+    }
 }

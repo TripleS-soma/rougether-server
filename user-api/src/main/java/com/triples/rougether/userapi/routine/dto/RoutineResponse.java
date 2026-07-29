@@ -31,7 +31,10 @@ public record RoutineResponse(
         @Schema(description = "종료일(YYYY-MM-DD)", example = "2026-12-31")
         LocalDate endsOn,
         @Schema(description = "버전 계보 루트 ID. 스케줄 수정으로 새 버전(id 변경)이 생겨도 계보 내 값은 불변 — 프론트 목록 key로 사용", example = "1")
-        Long originRoutineId
+        Long originRoutineId,
+        @Schema(description = "연동된 집 단체미션 ID(미연동이면 null). 루틴·미션 제목이 바뀌어도 이 값은 유지되므로 이름 매칭 대신 연동 판별에 사용. "
+                + "미션이 삭제된 뒤에도 값은 남으므로 보유한 미션 목록에 없는 id 는 연동 해제로 취급", example = "12")
+        Long houseMissionId
 ) {
 
     public static RoutineResponse from(Routine routine) {
@@ -46,7 +49,8 @@ public record RoutineResponse(
                 routine.getScheduledTime(),
                 routine.getStartsOn(),
                 routine.getEndsOn(),
-                routine.getOriginRoutineId()
+                routine.getOriginRoutineId(),
+                routine.getHouseMissionId()
         );
     }
 }

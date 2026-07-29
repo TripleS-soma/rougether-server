@@ -62,7 +62,7 @@ class CategoryControllerTest {
     void 목록은_items_배열로_감싸_응답하고_기본은_삭제분을_제외한다() throws Exception {
         when(categoryService.list(1L, false)).thenReturn(new CategoryListResponse(List.of(
                 new CategoryResponse(10L, "운동", "#FFAA00", "icon/run", 0,
-                        PrivacyScope.PRIVATE, false))));
+                        PrivacyScope.PRIVATE, false, null))));
 
         mockMvc.perform(get("/api/v1/categories"))
                 .andExpect(status().isOk())
@@ -81,7 +81,7 @@ class CategoryControllerTest {
     void includeDeleted_true면_삭제분_포함해서_조회한다() throws Exception {
         when(categoryService.list(1L, true)).thenReturn(new CategoryListResponse(List.of(
                 new CategoryResponse(10L, "삭제됨", null, null, 0,
-                        PrivacyScope.PRIVATE, true))));
+                        PrivacyScope.PRIVATE, true, null))));
 
         mockMvc.perform(get("/api/v1/categories").param("includeDeleted", "true"))
                 .andExpect(status().isOk())
@@ -93,7 +93,7 @@ class CategoryControllerTest {
     @Test
     void 등록은_201과_생성된_카테고리를_응답한다() throws Exception {
         when(categoryService.create(eq(1L), any(CategoryCreateRequest.class)))
-                .thenReturn(new CategoryResponse(5L, "공부", null, null, 2, PrivacyScope.HOUSE, false));
+                .thenReturn(new CategoryResponse(5L, "공부", null, null, 2, PrivacyScope.HOUSE, false, null));
 
         mockMvc.perform(post("/api/v1/categories")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -117,7 +117,7 @@ class CategoryControllerTest {
     @Test
     void 수정은_200과_수정된_카테고리를_응답한다() throws Exception {
         when(categoryService.update(eq(1L), eq(7L), any(CategoryUpdateRequest.class)))
-                .thenReturn(new CategoryResponse(7L, "변경됨", null, null, 0, PrivacyScope.PRIVATE, false));
+                .thenReturn(new CategoryResponse(7L, "변경됨", null, null, 0, PrivacyScope.PRIVATE, false, null));
 
         mockMvc.perform(put("/api/v1/categories/7")
                         .contentType(MediaType.APPLICATION_JSON)
