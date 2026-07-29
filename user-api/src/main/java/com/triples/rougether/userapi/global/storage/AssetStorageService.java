@@ -4,4 +4,7 @@ package com.triples.rougether.userapi.global.storage;
 public interface AssetStorageService {
 
     String upload(byte[] content, String contentType, String kind);
+
+    // 회원탈퇴 등 원본 파기용 삭제. null/blank key 는 no-op.
+    void delete(String key);
 }

@@ -32,6 +32,14 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     int softDeleteByCategoryId(@Param("categoryId") Long categoryId,
                                @Param("deletedAt") Instant deletedAt);
 
+    // 회원탈퇴 시 개인 전용 데이터 일괄 soft delete. 이미 삭제된 투두의 원래 시각은 보존함.
+    // bulk UPDATE 는 auditing 을 우회하므로 updated_at 을 직접 갱신함. clearAutomatically 는 쓰지 않는다
+    // - 호출자(탈퇴 트랜잭션) 영속성 컨텍스트를 불필요하게 비우지 않기 위함. 이후 투두를 다시 읽지 않는 위치에서 호출.
+    @Modifying(flushAutomatically = true)
+    @Query("update Todo t set t.deletedAt = :now, t.updatedAt = :now "
+            + "where t.user.id = :userId and t.deletedAt is null")
+    int softDeleteAllByUserId(@Param("userId") Long userId, @Param("now") Instant now);
+
     // categoryId/status/dueDate는 null이면 해당 조건 무시(동적 필터). dueDate는 오늘 현황용으로도 재사용함
     @Query("""
             select t from Todo t

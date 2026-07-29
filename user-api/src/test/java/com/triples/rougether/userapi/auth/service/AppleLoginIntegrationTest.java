@@ -15,6 +15,7 @@ import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient;
 import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.AppleUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
@@ -25,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +39,9 @@ class AppleLoginIntegrationTest {
 
     @MockitoBean
     private AppleTokenVerifier appleTokenVerifier;
+    // 실제 애플 토큰 엔드포인트 호출을 막음. 교환 결과는 고정 refresh token으로 stub.
+    @MockitoBean
+    private AppleTokenExchangeClient appleTokenExchangeClient;
 
     @Autowired
     private AuthService authService;
@@ -53,12 +58,17 @@ class AppleLoginIntegrationTest {
         return "apple-" + UUID.randomUUID();
     }
 
+    @BeforeEach
+    void stubTokenExchange() {
+        when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
+    }
+
     @Test
     void 최초_로그인이면_회원_지갑_연동_이메일을_생성한다() {
         String appleId = uniqueAppleId();
         when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, "a@b.com"));
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         assertThat(response.isNewUser()).isTrue();
         assertThat(response.accessToken()).isNotBlank();
@@ -76,11 +86,11 @@ class AppleLoginIntegrationTest {
                         tuple(CurrencyType.COIN, SignupWalletPolicy.INITIAL_COIN_BALANCE),
                         tuple(CurrencyType.DIAMOND, 0));
 
-        assertThat(oauthAccountRepository.findByProviderAndProviderUserId(OauthProvider.APPLE, appleId))
-                .isPresent()
-                .get()
-                .extracting(a -> a.getUser().getId())
-                .isEqualTo(user.getId());
+        OauthAccount account = oauthAccountRepository
+                .findByProviderAndProviderUserId(OauthProvider.APPLE, appleId).orElseThrow();
+        assertThat(account.getUser().getId()).isEqualTo(user.getId());
+        // 탈퇴 revoke용 refresh token이 원문 그대로가 아니라 암호화되어 저장됨.
+        assertThat(account.getAppleRefreshTokenEncrypted()).isNotBlank().isNotEqualTo("apple-rt");
 
         assertThat(refreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(user.getId())).isNotEmpty();
     }
@@ -90,8 +100,8 @@ class AppleLoginIntegrationTest {
         String appleId = uniqueAppleId();
         when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, "a@b.com"));
 
-        LoginResponse first = authService.appleLogin("idtok");
-        LoginResponse second = authService.appleLogin("idtok");
+        LoginResponse first = authService.appleLogin("idtok", "authcode");
+        LoginResponse second = authService.appleLogin("idtok", "authcode");
 
         assertThat(second.isNewUser()).isFalse();
         assertThat(second.userId()).isEqualTo(first.userId());
@@ -105,7 +115,7 @@ class AppleLoginIntegrationTest {
         String appleId = uniqueAppleId();
         when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, null));
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         User user = userRepository.findById(response.userId()).orElseThrow();
         assertThat(user.getEmail()).isNull();
@@ -117,7 +127,7 @@ class AppleLoginIntegrationTest {
         String relay = UUID.randomUUID() + "@privaterelay.appleid.com";
         when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, relay));
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         User user = userRepository.findById(response.userId()).orElseThrow();
         assertThat(user.getEmail()).isEqualTo(relay);
@@ -130,8 +140,8 @@ class AppleLoginIntegrationTest {
                 .thenReturn(new AppleUser(appleId, "first@b.com"))
                 .thenReturn(new AppleUser(appleId, "changed@b.com"));
 
-        LoginResponse first = authService.appleLogin("idtok");
-        authService.appleLogin("idtok");
+        LoginResponse first = authService.appleLogin("idtok", "authcode");
+        authService.appleLogin("idtok", "authcode");
 
         User user = userRepository.findById(first.userId()).orElseThrow();
         assertThat(user.getEmail()).isEqualTo("first@b.com");
@@ -149,11 +159,11 @@ class AppleLoginIntegrationTest {
             List<Future<LoginResponse>> futures = List.of(
                     pool.submit(() -> {
                         start.await();
-                        return authService.appleLogin("idtok");
+                        return authService.appleLogin("idtok", "authcode");
                     }),
                     pool.submit(() -> {
                         start.await();
-                        return authService.appleLogin("idtok");
+                        return authService.appleLogin("idtok", "authcode");
                     }));
             start.countDown();
 

@@ -39,6 +39,8 @@ jwt:
 kakao:
   api-base-url: ${KAKAO_API_BASE_URL:https://kapi.kakao.com}
   app-id: ${KAKAO_APP_ID:1501738}
+  # 회원탈퇴 시 서버-투-서버 unlink용 Admin key. 미설정이면 unlink 호출이 502로 실패함(fail-closed).
+  admin-key: ${KAKAO_ADMIN_KEY:}
 
 google:
   allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:499923665503-f2l1b05h9q48f4lda8reh65d9hdh1jfo.apps.googleusercontent.com,499923665503-b1brsuooa940tjrs8vapo4dl2m8mri19.apps.googleusercontent.com,437063052004-99kq37m58jcj7nakm9uhottgskphob95.apps.googleusercontent.com}
@@ -47,6 +49,12 @@ google:
 apple:
   allowed-client-ids: ${APPLE_ALLOWED_CLIENT_IDS:com.triples.rougether}
   keys-url: ${APPLE_KEYS_URL:https://appleid.apple.com/auth/keys}
+  # 토큰 교환·revoke의 client_secret(ES256 JWT) 서명용 시크릿. 미설정이면 애플 로그인·revoke가 502로 실패함(fail-closed).
+  team-id: ${APPLE_TEAM_ID:}
+  key-id: ${APPLE_KEY_ID:}
+  private-key: ${APPLE_PRIVATE_KEY:}
+  # apple refresh token 저장 암호화 키. 커밋된 기본 키로 조용히 암호화하지 않도록 기본값을 두지 않음.
+  refresh-token-enc-key: ${APPLE_REFRESH_TOKEN_ENC_KEY:}
 
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}

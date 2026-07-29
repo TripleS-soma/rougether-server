@@ -28,6 +28,13 @@ public interface UserDeviceTokenRepository extends JpaRepository<UserDeviceToken
     @Query("DELETE FROM UserDeviceToken dt WHERE dt.token = :token AND dt.user.id = :userId")
     int deleteByTokenAndUserId(@Param("token") String token, @Param("userId") Long userId);
 
+    // 회원탈퇴 시 잔여 FCM 토큰 전량 삭제 — 탈퇴자 루틴이 리마인더 후보에 남아도 push가 가지 않도록 함.
+    // flushAutomatically 필수: 탈퇴 트랜잭션의 선행 dirty 변경(softDelete·revoke)이 flush 전에
+    // clear로 유실되지 않도록 bulk delete 직전에 flush함.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM UserDeviceToken dt WHERE dt.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
+
     @Modifying(clearAutomatically = true)
     @Query(value = "INSERT INTO user_device_token (user_id, token, platform, created_at, updated_at) "
             + "VALUES (:userId, :token, :platform, :now, :now) "

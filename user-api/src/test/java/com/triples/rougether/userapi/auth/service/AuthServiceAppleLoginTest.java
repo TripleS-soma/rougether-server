@@ -45,6 +45,10 @@ class AuthServiceAppleLoginTest {
     private AppleTokenVerifier appleTokenVerifier;
     @Mock
     private AppleLoginHandler appleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
+    @Mock
+    private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
     private AuthService authService;
 
@@ -53,7 +57,8 @@ class AuthServiceAppleLoginTest {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler);
+                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                appleTokenExchangeClient, appleRefreshTokenCipher);
     }
 
     @Test
@@ -61,12 +66,14 @@ class AuthServiceAppleLoginTest {
         AppleUser appleUser = new AppleUser("apple-1", "a@b.com");
         LoginResponse expected = new LoginResponse(10L, "acc", "ref", true);
         when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
-        when(appleLoginHandler.login(appleUser)).thenReturn(expected);
+        when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
+        when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
+        when(appleLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         assertThat(response).isEqualTo(expected);
-        verify(appleLoginHandler, times(1)).login(appleUser);
+        verify(appleLoginHandler, times(1)).login(appleUser, "enc-rt");
     }
 
     @Test
@@ -74,9 +81,11 @@ class AuthServiceAppleLoginTest {
         AppleUser appleUser = new AppleUser("apple-2", null);
         LoginResponse expected = new LoginResponse(11L, "acc", "ref", false);
         when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
-        when(appleLoginHandler.login(appleUser)).thenReturn(expected);
+        when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
+        when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
+        when(appleLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(11L);
@@ -87,15 +96,17 @@ class AuthServiceAppleLoginTest {
         AppleUser appleUser = new AppleUser("apple-3", "a@b.com");
         LoginResponse afterRetry = new LoginResponse(9L, "acc", "ref", false);
         when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
+        when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
+        when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
         // 첫 시도는 경쟁 충돌로 롤백, 재시도는 승자 연동으로 로그인 성공.
-        when(appleLoginHandler.login(appleUser))
+        when(appleLoginHandler.login(appleUser, "enc-rt"))
                 .thenThrow(new DataIntegrityViolationException("uq_oauth_provider_user"))
                 .thenReturn(afterRetry);
 
-        LoginResponse response = authService.appleLogin("idtok");
+        LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
-        verify(appleLoginHandler, times(2)).login(appleUser);
+        verify(appleLoginHandler, times(2)).login(appleUser, "enc-rt");
     }
 }

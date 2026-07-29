@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.member.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -19,6 +20,7 @@ import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.member.service.MemberService;
+import com.triples.rougether.userapi.member.service.MemberWithdrawalService;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingSummary;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +42,8 @@ class MemberControllerTest {
 
     @MockitoBean
     private MemberService memberService;
+    @MockitoBean
+    private MemberWithdrawalService memberWithdrawalService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     @MockitoBean
@@ -107,5 +111,23 @@ class MemberControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(memberService).deleteProfileImage(1L);
+    }
+
+    @Test
+    void 회원탈퇴는_인증_사용자_본인_기준으로_204를_반환한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me"))
+                .andExpect(status().isNoContent());
+
+        verify(memberWithdrawalService).withdraw(1L);
+    }
+
+    @Test
+    void 이미_탈퇴한_회원의_탈퇴_요청은_404와_에러코드로_응답한다() throws Exception {
+        doThrow(new BusinessException(MemberErrorCode.USER_NOT_FOUND))
+                .when(memberWithdrawalService).withdraw(1L);
+
+        mockMvc.perform(delete("/api/v1/me"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
     }
 }
