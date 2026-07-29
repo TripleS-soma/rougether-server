@@ -29,8 +29,9 @@ public record RoutineUpdateRequest(
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다. 지정 시 시작일보다 앞설 수 없음", example = "2026-12-31")
         LocalDate endsOn,
-        @Schema(description = "연동할 집 단체미션 ID. 지정하면 해당 미션으로 연동을 설정/변경하고, 미지정(null)이면 기존 연동을 유지합니다"
-                + "(연동 해제는 미지원). 해당 미션이 있는 집의 활성 구성원만 지정할 수 있습니다", example = "12")
+        @Schema(description = "연동할 집 단체미션 ID. 지정하면 해당 미션으로 연동을 설정/변경하고, 미지정(null)이면 기존 연동을 유지합니다. "
+                + "연동 해제는 DELETE /api/v1/routines/{id}/house-mission-link 를 사용합니다. "
+                + "해당 미션이 있는 집의 활성 구성원만 지정할 수 있습니다", example = "12")
         Long houseMissionId
 ) {
 

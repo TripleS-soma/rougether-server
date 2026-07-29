@@ -87,6 +87,17 @@ public class RoutineController {
         return routineService.update(authUser.id(), id, request);
     }
 
+    @Operation(summary = "루틴 단체미션 연동 해제",
+            description = "소유한 루틴의 집 단체미션 연동(houseMissionId)을 해제합니다. 루틴 자체는 그대로 남습니다. "
+                    + "이미 연동이 없는 루틴에 호출해도 성공(멱등)하며, 과거에 자동 반영된 미션 기여는 회수되지 않습니다. "
+                    + "루틴 수정(PUT)의 houseMissionId 는 null=기존 유지 규칙이라 해제는 이 API 로만 할 수 있습니다.")
+    @DeleteMapping("/{id}/house-mission-link")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlinkHouseMission(@CurrentUser AuthUser authUser,
+                                   @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id) {
+        routineService.unlinkHouseMission(authUser.id(), id);
+    }
+
     @Operation(summary = "루틴 삭제",
             description = "소유한 루틴을 삭제합니다. 삭제한 루틴은 루틴 목록·단건 조회·오늘 현황에서 더 이상 조회되지 않습니다.")
     @DeleteMapping("/{id}")

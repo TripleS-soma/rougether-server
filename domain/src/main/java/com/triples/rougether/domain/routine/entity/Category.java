@@ -96,6 +96,10 @@ public class Category extends BaseEntity {
         this.houseId = houseId;
     }
 
+    public void unlinkHouse() {
+        this.houseId = null;
+    }
+
     public void softDelete(Instant deletedAt) {
         this.deletedAt = deletedAt;
     }

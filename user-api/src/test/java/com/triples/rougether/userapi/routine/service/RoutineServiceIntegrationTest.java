@@ -741,6 +741,36 @@ class RoutineServiceIntegrationTest {
         assertThat(branched.houseMissionId()).isEqualTo(missionId);
     }
 
+    @Test
+    void 연동_해제는_루틴을_남기고_연동만_지우며_멱등이다() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+
+        routineService.unlinkHouseMission(userId, created.id());
+
+        Routine unlinked = routineRepository.findById(created.id()).orElseThrow();
+        assertThat(unlinked.getHouseMissionId()).isNull();
+        assertThat(unlinked.getDeletedAt()).isNull();
+        // 이미 미연동이어도 성공(멱등)
+        routineService.unlinkHouseMission(userId, created.id());
+    }
+
+    @Test
+    void 타인_루틴의_연동_해제는_ROUTINE_NOT_FOUND() {
+        Long missionId = persistMissionOfMyHouse();
+        RoutineResponse created = routineService.create(userId,
+                new RoutineCreateRequest("공원 산책", null, AuthType.CHECK, "DAILY", null,
+                        null, null, null, missionId));
+        Long other = userRepository.save(User.signUp()).getId();
+
+        assertThatThrownBy(() -> routineService.unlinkHouseMission(other, created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(RoutineErrorCode.ROUTINE_NOT_FOUND);
+    }
+
     // 내가 ACTIVE 구성원인 집의 미션 생성
     private Long persistMissionOfMyHouse() {
         return persistMission(userRepository.findById(userId).orElseThrow(),

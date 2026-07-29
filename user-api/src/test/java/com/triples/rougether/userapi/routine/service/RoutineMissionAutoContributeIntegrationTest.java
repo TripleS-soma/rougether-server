@@ -19,8 +19,11 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
+import com.triples.rougether.domain.routine.entity.Category;
+import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -28,6 +31,7 @@ import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
+import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
@@ -58,6 +62,7 @@ class RoutineMissionAutoContributeIntegrationTest {
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
     @Autowired private RoutineRepository routineRepository;
+    @Autowired private CategoryRepository categoryRepository;
     @Autowired private RoutineLogRepository routineLogRepository;
     @Autowired private UserWalletRepository userWalletRepository;
     @Autowired private StreakRepository streakRepository;
@@ -72,6 +77,7 @@ class RoutineMissionAutoContributeIntegrationTest {
     @Autowired private PlatformTransactionManager transactionManager;
 
     private RoutineLogService service;
+    private HouseMissionService houseMissionService;
     private User user;
     private Long userId;
     private House house;
@@ -80,10 +86,10 @@ class RoutineMissionAutoContributeIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        HouseMissionService houseMissionService = new HouseMissionService(
+        houseMissionService = new HouseMissionService(
                 houseRepository, houseMemberRepository, houseMissionRepository,
                 participantRepository, dailyContributionRepository, dailyRewardRepository,
-                mock(BannedWordChecker.class), mock(NotificationService.class));
+                mock(BannedWordChecker.class), mock(NotificationService.class), routineRepository);
         service = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository,
                 new DailyRewardService(routineLogRepository, todoRepository),
@@ -181,7 +187,7 @@ class RoutineMissionAutoContributeIntegrationTest {
         HouseMissionService direct = new HouseMissionService(
                 houseRepository, houseMemberRepository, houseMissionRepository,
                 participantRepository, dailyContributionRepository, dailyRewardRepository,
-                mock(BannedWordChecker.class), mock(NotificationService.class));
+                mock(BannedWordChecker.class), mock(NotificationService.class), routineRepository);
         direct.contribute(userId, house.getId(), missionId);
 
         RoutineLogResponse response = service.complete(userId, routineId, new RoutineLogCreateRequest(null));
@@ -215,6 +221,37 @@ class RoutineMissionAutoContributeIntegrationTest {
 
         assertThat(response.houseMissionContribution()).isNotNull();
         assertThat(response.houseMissionContribution().achieved()).isTrue();
+    }
+
+    @Test
+    void 미션을_삭제하면_전_구성원의_연동_루틴이_해제된다() {
+        Long routineId = persistLinkedRoutine(missionId);
+
+        houseMissionService.delete(userId, house.getId(), missionId);
+
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        assertThat(routine.getHouseMissionId()).isNull();
+        assertThat(routine.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void 집을_떠나면_그_집과의_루틴_카테고리_연동이_해제된다() {
+        Long routineId = persistLinkedRoutine(missionId);
+        Category category = categoryRepository.save(
+                Category.create(user, "우리집 미션", null, null, 0, PrivacyScope.HOUSE));
+        category.linkHouse(house.getId());
+        HouseMemberCommandService memberCommand = new HouseMemberCommandService(
+                houseRepository, houseMemberRepository, mock(NotificationService.class),
+                routineRepository, categoryRepository);
+
+        // 소유자 단독 구성원 - 탈퇴와 함께 집이 정리(soft delete)되는 경우까지 커버
+        memberCommand.leave(userId, house.getId());
+
+        assertThat(routineRepository.findById(routineId).orElseThrow().getHouseMissionId()).isNull();
+        assertThat(categoryRepository.findById(category.getId()).orElseThrow().getHouseId()).isNull();
+        // 루틴·카테고리 자체는 남는다(연동만 해제)
+        assertThat(routineRepository.findById(routineId).orElseThrow().getDeletedAt()).isNull();
+        assertThat(categoryRepository.findById(category.getId()).orElseThrow().getDeletedAt()).isNull();
     }
 
     private Long targetOneMissionId() {

@@ -69,13 +69,19 @@ public class CategoryService {
         Category category = findOwned(userId, categoryId);
         category.update(request.name(), request.colorHex(), request.iconKey(),
                 request.sortOrder(), request.visibility());
-        // 집 연동은 null=기존 유지(해제 미지원) — 연동 사실을 모르는 구버전 클라이언트의
-        // 수정 요청이 연동을 지우지 않도록 함
+        // 집 연동은 null=기존 유지 — 연동 사실을 모르는 구버전 클라이언트의 수정 요청이
+        // 연동을 지우지 않도록 함. 해제는 전용 API(unlinkHouse)
         if (request.houseId() != null) {
             houseLinkValidator.validateHouseLink(userId, request.houseId());
             category.linkHouse(request.houseId());
         }
         return CategoryResponse.from(category);
+    }
+
+    // 집 연동 해제 - 수정 API 는 null=기존 유지 규칙이라 해제 수단을 별도 API 로 둔다. 이미 미연동이어도 성공(멱등).
+    @Transactional
+    public void unlinkHouse(Long userId, Long categoryId) {
+        findOwned(userId, categoryId).unlinkHouse();
     }
 
     @Transactional

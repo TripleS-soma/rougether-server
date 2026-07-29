@@ -549,6 +549,34 @@ class CategoryServiceIntegrationTest {
         assertThat(linked.houseId()).isEqualTo(houseId);
     }
 
+    @Test
+    void 연동_해제는_카테고리를_남기고_연동만_지우며_멱등이다() {
+        Long houseId = persistHouseWithMe();
+        CategoryResponse created = categoryService.create(userId,
+                new CategoryCreateRequest("우리집 미션", null, null, null, null, houseId));
+
+        categoryService.unlinkHouse(userId, created.id());
+
+        Category unlinked = categoryRepository.findById(created.id()).orElseThrow();
+        assertThat(unlinked.getHouseId()).isNull();
+        assertThat(unlinked.getDeletedAt()).isNull();
+        // 이미 미연동이어도 성공(멱등)
+        categoryService.unlinkHouse(userId, created.id());
+    }
+
+    @Test
+    void 타인_카테고리의_연동_해제는_CATEGORY_NOT_FOUND() {
+        Long houseId = persistHouseWithMe();
+        CategoryResponse created = categoryService.create(userId,
+                new CategoryCreateRequest("우리집 미션", null, null, null, null, houseId));
+        Long other = userRepository.save(User.signUp()).getId();
+
+        assertThatThrownBy(() -> categoryService.unlinkHouse(other, created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
+    }
+
     // 내가 ACTIVE 구성원인 집 생성
     private Long persistHouseWithMe() {
         User me = userRepository.findById(userId).orElseThrow();

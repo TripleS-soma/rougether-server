@@ -16,6 +16,7 @@ import com.triples.rougether.domain.house.repository.HouseMissionDailyRewardRepo
 import com.triples.rougether.domain.house.repository.HouseMissionParticipantRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
@@ -61,6 +62,7 @@ public class HouseMissionService {
     private final HouseMissionDailyRewardRepository dailyRewardRepository;
     private final BannedWordChecker bannedWordChecker;
     private final NotificationService notificationService;
+    private final RoutineRepository routineRepository;
 
     public HouseMissionService(HouseRepository houseRepository,
                                HouseMemberRepository houseMemberRepository,
@@ -69,7 +71,8 @@ public class HouseMissionService {
                                HouseMissionDailyContributionRepository dailyContributionRepository,
                                HouseMissionDailyRewardRepository dailyRewardRepository,
                                BannedWordChecker bannedWordChecker,
-                               NotificationService notificationService) {
+                               NotificationService notificationService,
+                               RoutineRepository routineRepository) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseMissionRepository = houseMissionRepository;
@@ -78,6 +81,7 @@ public class HouseMissionService {
         this.dailyRewardRepository = dailyRewardRepository;
         this.bannedWordChecker = bannedWordChecker;
         this.notificationService = notificationService;
+        this.routineRepository = routineRepository;
     }
 
     // 미션 등록 - 소유자 전용. MVP 는 DAILY_MEMBER_RATE/WEEKLY_MEMBER_COUNT 2종만 허용.
@@ -126,6 +130,9 @@ public class HouseMissionService {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED);
         }
         mission.softDelete(Instant.now());
+        // 사라진 미션의 연동 루틴을 전 구성원에서 해제 - 이름/ID 잔존으로 클라이언트가 고아 연동을
+        // 정리할 필요가 없게 서버가 원천에서 끊는다. bulk 가 PC 를 비우므로 마지막에 호출(위 softDelete 는 flush 됨).
+        routineRepository.clearHouseMissionLink(missionId);
     }
 
     // 미션 목록 - 구성원 전용, 최신 생성순. currentValue 는 기여 합산(WEEKLY)·오늘 달성률 %(DAILY)를 일괄 조회(N+1 회피).
@@ -211,7 +218,7 @@ public class HouseMissionService {
                 missionId, me.getId(), today)) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED);
         }
-        return recordContribution(house, me, mission, today);
+        return recordContribution(house, me, mission, missionId, today);
     }
 
     // 루틴 완료 자동 기여 - 연동 루틴(routines.house_mission_id) 완료 시 완료 트랜잭션 안에서 호출된다.
@@ -248,13 +255,14 @@ public class HouseMissionService {
                 missionId, me.getId(), today).isPresent()) {
             return null;
         }
-        return recordContribution(house, me, mission, today);
+        return recordContribution(house, me, mission, missionId, today);
     }
 
     // 기여 기록 공통부 - 호출자가 미션 행 락 + 오늘 미기여 확인을 마친 상태여야 한다.
+    // missionId 는 mission.getId() 와 같은 값이지만 파라미터로 받는다 - 단위 테스트가 미저장 미션으로 검증함.
     private HouseMissionContributeResponse recordContribution(House house, HouseMember me,
-                                                              HouseMission mission, LocalDate today) {
-        Long missionId = mission.getId();
+                                                              HouseMission mission, Long missionId,
+                                                              LocalDate today) {
         HouseMissionParticipant participant = participantRepository
                 .findByMissionIdAndMemberId(missionId, me.getId())
                 .orElseGet(() -> participantRepository.save(HouseMissionParticipant.create(mission, me)));

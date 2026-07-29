@@ -13,6 +13,9 @@ import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import java.util.Optional;
@@ -27,6 +30,8 @@ class HouseKickServiceTest {
 
     @Mock private HouseRepository houseRepository;
     @Mock private HouseMemberRepository houseMemberRepository;
+    @Mock private RoutineRepository routineRepository;
+    @Mock private CategoryRepository categoryRepository;
     @InjectMocks private HouseMemberCommandService houseMemberCommandService;
 
     private House aliveHouse() {
@@ -50,6 +55,10 @@ class HouseKickServiceTest {
         when(target.isActive()).thenReturn(true);
         when(target.getHouse()).thenReturn(targetHouse);
         lenient().when(target.getId()).thenReturn(membershipId);
+        // 강퇴 시 연동 해제 대상(user id) 조회용
+        User targetUser = mock(User.class);
+        lenient().when(targetUser.getId()).thenReturn(membershipId + 100);
+        lenient().when(target.getUser()).thenReturn(targetUser);
         return target;
     }
 

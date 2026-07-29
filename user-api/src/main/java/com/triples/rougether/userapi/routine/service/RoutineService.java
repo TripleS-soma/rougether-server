@@ -104,8 +104,8 @@ public class RoutineService {
                 ? request.repeatDays() : RepeatDays.fromJson(routine.getRepeatDays());
         validateRepeatSchedule(effectiveRepeatType, effectiveStartsOn, effectiveRepeatDays);
         validateDateRange(effectiveStartsOn, request.endsOn());
-        // 단체미션 연동은 null=기존 유지(해제 미지원) — 연동 사실을 모르는 구버전 클라이언트의
-        // 수정 요청이 연동을 지우지 않도록 categoryId(null=해제)와 다른 규칙을 쓴다
+        // 단체미션 연동은 null=기존 유지 — 연동 사실을 모르는 구버전 클라이언트의 수정 요청이
+        // 연동을 지우지 않도록 categoryId(null=해제)와 다른 규칙. 해제는 전용 API(unlinkHouseMission)
         if (request.houseMissionId() != null) {
             houseLinkValidator.validateMissionLink(userId, request.houseMissionId());
         }
@@ -228,6 +228,13 @@ public class RoutineService {
     private boolean hasElapsedDay(Routine routine) {
         LocalDate createdDate = LocalDate.ofInstant(routine.getCreatedAt(), KST);
         return createdDate.isBefore(LocalDate.now(KST));
+    }
+
+    // 단체미션 연동 해제 - 수정 API 는 null=기존 유지 규칙이라 해제 수단을 별도 API 로 둔다.
+    // 이미 미연동이어도 성공(멱등). 과거 자동 기여된 이력은 회수하지 않는다.
+    @Transactional
+    public void unlinkHouseMission(Long userId, Long routineId) {
+        findOwned(userId, routineId).unlinkHouseMission();
     }
 
     @Transactional

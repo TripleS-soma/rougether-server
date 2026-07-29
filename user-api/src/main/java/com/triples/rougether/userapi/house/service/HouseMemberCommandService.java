@@ -6,6 +6,8 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
@@ -23,6 +25,8 @@ public class HouseMemberCommandService {
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
     private final NotificationService notificationService;
+    private final RoutineRepository routineRepository;
+    private final CategoryRepository categoryRepository;
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
@@ -78,6 +82,15 @@ public class HouseMemberCommandService {
             house.softDelete();
         }
         notifyMemberLeft(recipients, me);
+        clearMemberLinks(userId, houseId);
+    }
+
+    // 떠난 집과의 루틴·카테고리 연동 해제 - 연동 표시는 구성원에게만 의미가 있으므로 서버가 원천에서 끊는다.
+    // 루틴·카테고리 자체는 개인 데이터라 삭제하지 않는다(삭제 여부는 클라이언트 UX 결정).
+    // bulk 가 PC 를 비우므로(clearAutomatically) 반드시 엔티티 변경·알림 뒤, 트랜잭션 끝에서 호출한다.
+    private void clearMemberLinks(Long userId, Long houseId) {
+        routineRepository.clearHouseMissionLinksOfMember(userId, houseId);
+        categoryRepository.clearHouseLinkOfMember(userId, houseId);
     }
 
     // 퇴거 알림 - 탈퇴와 같은 트랜잭션에서 동기 저장(응원 #174 패턴). 강퇴(kick)는 범위 밖이라 붙이지 않음.
@@ -112,5 +125,6 @@ public class HouseMemberCommandService {
 
         target.kick();
         house.decreaseMemberCount();
+        clearMemberLinks(target.getUser().getId(), houseId);
     }
 }

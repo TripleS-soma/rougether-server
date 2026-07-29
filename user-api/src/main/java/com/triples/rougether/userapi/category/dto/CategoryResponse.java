@@ -20,7 +20,7 @@ public record CategoryResponse(
         @Schema(description = "삭제 여부. includeDeleted=true로 조회할 때만 true가 섞여 반환됩니다", example = "false")
         boolean deleted,
         @Schema(description = "연동된 집 ID(미연동이면 null). 집 단체미션용 카테고리 판별에 사용. 카테고리·집 이름이 바뀌어도 이 값은 유지됨. "
-                + "집에서 탈퇴했거나 집이 삭제된 뒤에도 값은 남으므로 내 집 목록에 없는 id 는 연동 해제로 취급", example = "5")
+                + "집 탈퇴/강퇴 시 서버가 자동으로 해제(null)하며, DELETE /api/v1/categories/{id}/house-link 로 직접 해제할 수도 있음", example = "5")
         Long houseId
 ) {
 
