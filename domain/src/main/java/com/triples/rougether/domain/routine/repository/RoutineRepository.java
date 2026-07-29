@@ -35,13 +35,15 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     @Query("update Routine r set r.category = null where r.category.id = :categoryId")
     int clearCategoryByCategoryId(@Param("categoryId") Long categoryId);
 
-    // 미션 삭제 시 전 구성원의 연동 일괄 해제. PC 를 비우므로(clearAutomatically) 트랜잭션 끝에서 호출한다.
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    // 미션 삭제 시 전 구성원의 연동 일괄 해제. clearAutomatically 는 쓰지 않는다 - 호출 트랜잭션이
+    // 잠근 house/mission 관리 엔티티가 detach 되면 이후·미flush 변경이 유실된다. 대신 이 쿼리 뒤
+    // 같은 트랜잭션에서 루틴을 다시 읽지 않는 위치(트랜잭션 끝)에서 호출한다(PC 의 루틴은 stale).
+    @Modifying(flushAutomatically = true)
     @Query("update Routine r set r.houseMissionId = null where r.houseMissionId = :missionId")
     int clearHouseMissionLink(@Param("missionId") Long missionId);
 
-    // 탈퇴·강퇴 시 그 집 미션들과의 연동 해제(해당 회원 것만). PC 를 비우므로 트랜잭션 끝에서 호출한다.
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    // 탈퇴·강퇴 시 그 집 미션들과의 연동 해제(해당 회원 것만). clearAutomatically 미사용 사유는 위와 동일.
+    @Modifying(flushAutomatically = true)
     @Query("update Routine r set r.houseMissionId = null where r.user.id = :userId "
             + "and r.houseMissionId in (select m.id from HouseMission m where m.house.id = :houseId)")
     int clearHouseMissionLinksOfMember(@Param("userId") Long userId, @Param("houseId") Long houseId);

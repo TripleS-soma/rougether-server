@@ -37,6 +37,8 @@ import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -75,6 +77,9 @@ class RoutineMissionAutoContributeIntegrationTest {
     @Autowired private HouseMissionDailyContributionRepository dailyContributionRepository;
     @Autowired private HouseMissionDailyRewardRepository dailyRewardRepository;
     @Autowired private PlatformTransactionManager transactionManager;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private RoutineLogService service;
     private HouseMissionService houseMissionService;
@@ -229,6 +234,9 @@ class RoutineMissionAutoContributeIntegrationTest {
 
         houseMissionService.delete(userId, house.getId(), missionId);
 
+        // bulk update 는 PC 를 우회하므로 비우고 다시 읽어야 해제가 보인다
+        em.flush();
+        em.clear();
         Routine routine = routineRepository.findById(routineId).orElseThrow();
         assertThat(routine.getHouseMissionId()).isNull();
         assertThat(routine.getDeletedAt()).isNull();
@@ -247,6 +255,9 @@ class RoutineMissionAutoContributeIntegrationTest {
         // 소유자 단독 구성원 - 탈퇴와 함께 집이 정리(soft delete)되는 경우까지 커버
         memberCommand.leave(userId, house.getId());
 
+        // bulk update 는 PC 를 우회하므로 비우고 다시 읽어야 해제가 보인다
+        em.flush();
+        em.clear();
         assertThat(routineRepository.findById(routineId).orElseThrow().getHouseMissionId()).isNull();
         assertThat(categoryRepository.findById(category.getId()).orElseThrow().getHouseId()).isNull();
         // 루틴·카테고리 자체는 남는다(연동만 해제)

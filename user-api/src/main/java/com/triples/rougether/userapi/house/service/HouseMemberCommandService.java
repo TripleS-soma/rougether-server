@@ -87,7 +87,7 @@ public class HouseMemberCommandService {
 
     // 떠난 집과의 루틴·카테고리 연동 해제 - 연동 표시는 구성원에게만 의미가 있으므로 서버가 원천에서 끊는다.
     // 루틴·카테고리 자체는 개인 데이터라 삭제하지 않는다(삭제 여부는 클라이언트 UX 결정).
-    // bulk 가 PC 를 비우므로(clearAutomatically) 반드시 엔티티 변경·알림 뒤, 트랜잭션 끝에서 호출한다.
+    // bulk 는 PC 를 우회하므로 이 뒤에서 같은 트랜잭션의 루틴·카테고리 조회 금지 - 트랜잭션 끝에서 호출한다.
     private void clearMemberLinks(Long userId, Long houseId) {
         routineRepository.clearHouseMissionLinksOfMember(userId, houseId);
         categoryRepository.clearHouseLinkOfMember(userId, houseId);

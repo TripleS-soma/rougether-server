@@ -131,7 +131,7 @@ public class HouseMissionService {
         }
         mission.softDelete(Instant.now());
         // 사라진 미션의 연동 루틴을 전 구성원에서 해제 - 이름/ID 잔존으로 클라이언트가 고아 연동을
-        // 정리할 필요가 없게 서버가 원천에서 끊는다. bulk 가 PC 를 비우므로 마지막에 호출(위 softDelete 는 flush 됨).
+        // 정리할 필요가 없게 서버가 원천에서 끊는다. bulk 는 PC 를 우회하므로 트랜잭션 끝에서 호출(위 softDelete 는 flush 됨).
         routineRepository.clearHouseMissionLink(missionId);
     }
 
