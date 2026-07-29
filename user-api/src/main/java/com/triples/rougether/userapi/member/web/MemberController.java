@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.member.web;
 
 import com.triples.rougether.userapi.member.service.MemberService;
+import com.triples.rougether.userapi.member.service.MemberWithdrawalService;
 import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.dto.MemberUpdateRequest;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
@@ -30,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class MemberController {
 
     private final MemberService memberService;
+    private final MemberWithdrawalService memberWithdrawalService;
 
     @Operation(summary = "내 정보 조회", description = "로그인한 회원의 기본 정보와 온보딩 진행 요약을 반환합니다. onboarding.completed로 온보딩 화면 진입 여부를 판단할 수 있습니다. lastAccessedAt은 UTC(Z) 기준이며 로그인 또는 refresh 재발급 성공 시 갱신됩니다.")
     @GetMapping
@@ -57,5 +59,12 @@ public class MemberController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteProfileImage(@CurrentUser AuthUser authUser) {
         memberService.deleteProfileImage(authUser.id());
+    }
+
+    @Operation(summary = "회원탈퇴", description = "로그인한 회원을 탈퇴 처리합니다. 계정이 삭제되고 refresh token이 모두 폐기되며 소셜 로그인 연동이 해제됩니다. 같은 소셜 계정으로 다시 로그인하면 새 계정으로 가입되며 기존 데이터는 복원되지 않습니다. 이미 발급된 access token은 만료 시각까지 유효하므로 클라이언트에 저장한 토큰을 함께 삭제합니다.")
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void withdraw(@CurrentUser AuthUser authUser) {
+        memberWithdrawalService.withdraw(authUser.id());
     }
 }

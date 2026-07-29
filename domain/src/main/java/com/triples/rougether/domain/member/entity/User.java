@@ -60,6 +60,17 @@ public class User extends BaseEntity {
         this.lastAccessedAt = now;
     }
 
+    // 회원탈퇴(soft delete). 이미 탈퇴한 경우 최초 탈퇴 시각을 보존함(멱등).
+    public void softDelete(Instant now) {
+        if (deletedAt == null) {
+            this.deletedAt = now;
+        }
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
     public void changeNickname(String nickname) {
         this.nickname = nickname;
     }

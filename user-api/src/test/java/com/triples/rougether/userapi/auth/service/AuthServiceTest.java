@@ -57,6 +57,10 @@ class AuthServiceTest {
     private com.triples.rougether.userapi.auth.client.AppleTokenVerifier appleTokenVerifier;
     @Mock
     private AppleLoginHandler appleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
+    @Mock
+    private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
     private AuthService authService;
 
@@ -65,7 +69,8 @@ class AuthServiceTest {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler);
+                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                appleTokenExchangeClient, appleRefreshTokenCipher);
     }
 
     @Test
@@ -99,7 +104,7 @@ class AuthServiceTest {
     void 기존_userId_는_새로_만들지_않고_last_accessed_갱신_후_토큰을_발급한다() {
         User existing = User.signUp();
         ReflectionTestUtils.setField(existing, "id", 7L);
-        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(existing));
         stubTokenIssue();
 
         LoginResponse response = authService.devLogin(7L);
@@ -114,7 +119,7 @@ class AuthServiceTest {
 
     @Test
     void 존재하지_않는_userId_는_USER_NOT_FOUND_로_거부한다() {
-        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.devLogin(99L))
                 .isInstanceOf(BusinessException.class)

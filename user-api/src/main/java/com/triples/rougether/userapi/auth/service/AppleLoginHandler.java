@@ -31,17 +31,20 @@ public class AppleLoginHandler {
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
 
+    // encryptedRefreshToken: 탈퇴 시 revoke 호출용으로 저장함. 재로그인 시마다 최신 값으로 갱신됨.
     @Transactional
-    public LoginResponse login(AppleUser appleUser) {
+    public LoginResponse login(AppleUser appleUser, String encryptedRefreshToken) {
         User user;
         boolean isNewUser;
         var existing = oauthAccountRepository
                 .findByProviderAndProviderUserId(OauthProvider.APPLE, appleUser.id());
         if (existing.isPresent()) {
-            user = existing.get().getUser();
+            OauthAccount account = existing.get();
+            account.updateAppleRefreshToken(encryptedRefreshToken);
+            user = account.getUser();
             isNewUser = false;
         } else {
-            user = register(appleUser);
+            user = register(appleUser, encryptedRefreshToken);
             isNewUser = true;
         }
 
@@ -51,13 +54,15 @@ public class AppleLoginHandler {
         return new LoginResponse(user.getId(), accessToken, refreshToken, isNewUser);
     }
 
-    private User register(AppleUser appleUser) {
+    private User register(AppleUser appleUser, String encryptedRefreshToken) {
         // 애플은 최초 로그인에만 email을 주므로 가입 시점 값만 저장하고 재로그인으로 갱신하지 않음.
         User user = userRepository.save(User.signUp(appleUser.email()));
         // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
         userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
+        OauthAccount account = OauthAccount.link(user, OauthProvider.APPLE, appleUser.id());
+        account.updateAppleRefreshToken(encryptedRefreshToken);
         // IDENTITY 전략이라 즉시 INSERT됨 → 경쟁 패자는 여기서 unique 충돌이 발생함.
-        oauthAccountRepository.save(OauthAccount.link(user, OauthProvider.APPLE, appleUser.id()));
+        oauthAccountRepository.save(account);
         return user;
     }
 

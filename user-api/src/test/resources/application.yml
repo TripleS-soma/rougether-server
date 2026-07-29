@@ -24,6 +24,9 @@ google:
 apple:
   allowed-client-ids:
   keys-url: https://appleid.apple.com/auth/keys
+  # 통합테스트는 AppleTokenExchangeClient를 mock 하므로 시크릿(team-id 등)은 불필요.
+  # 암호화 저장(AppleRefreshTokenCipher)은 실제로 동작해야 해서 테스트 키만 둠.
+  refresh-token-enc-key: test-only-apple-refresh-token-enc-key
 
 # 통합테스트는 AssetStorageService를 mock 하므로 실제 S3 호출은 없음. 값은 S3Client 빈 생성용.
 asset:

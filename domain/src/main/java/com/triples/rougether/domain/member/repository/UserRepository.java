@@ -23,6 +23,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "where u.id = :id and (u.lastAccessedAt is null or u.lastAccessedAt < :now)")
     int updateLastAccessedAt(@Param("id") Long id, @Param("now") Instant now);
 
+    Optional<User> findByIdAndDeletedAtIsNull(Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);

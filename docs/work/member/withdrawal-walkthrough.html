@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원탈퇴(계정 삭제) — 구현 walkthrough</title>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f7f8fa; --panel2: #eef1f5; --line: #e1e5eb;
+    --text: #1c2129; --muted: #5e6b7e; --accent: #2563eb; --green: #0f9d6b;
+    --amber: #b7791f; --red: #d63d4a; --purple: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.7; font-size: 15px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 21px; margin: 48px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 28px 0 8px; color: var(--accent); }
+  p { color: var(--text); }
+  .sub { color: var(--muted); margin-top: 0; }
+  code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; font-size: 13px;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace; color: #1d4ed8; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 9px; border-radius: 999px; font-weight: 600; }
+  .tag.domain { background: rgba(37,99,235,.12); color: var(--accent); }
+  .tag.userapi { background: rgba(15,157,107,.12); color: var(--green); }
+  .tag.test { background: rgba(124,58,237,.12); color: var(--purple); }
+  .tag.risk { background: rgba(214,61,74,.12); color: var(--red); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin: 14px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td code { white-space: nowrap; }
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 16px 0; }
+  .step { display: flex; align-items: stretch; gap: 14px; }
+  .step .rail { display: flex; flex-direction: column; align-items: center; }
+  .step .dot { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); margin-top: 18px; flex: none; }
+  .step .bar { width: 2px; flex: 1; background: var(--line); }
+  .step:last-child .bar { display: none; }
+  .step .body { padding: 12px 0 20px; }
+  .step .body .t { font-weight: 600; }
+  .step .body .d { color: var(--muted); font-size: 13.5px; }
+  .layer-box { border-radius: 10px; padding: 12px 16px; margin: 8px 0; border: 1px solid var(--line); }
+  .layer-box.l-userapi { border-left: 4px solid var(--green); }
+  .layer-box.l-domain { border-left: 4px solid var(--accent); }
+  .layer-box.l-common { border-left: 4px solid var(--muted); }
+  .layer-box.l-db { border-left: 4px solid var(--amber); }
+  .layer-box .h { font-weight: 700; }
+  .layer-box .m { color: var(--muted); font-size: 13px; }
+  .pill { font-size: 12px; color: var(--muted); }
+  .note { border-left: 3px solid var(--amber); background: rgba(183,121,31,.07);
+    padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+  .danger { border-left: 3px solid var(--red); background: rgba(214,61,74,.06);
+    padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+  .ok { color: var(--green); } .bad { color: var(--red); }
+  pre { background: #f4f6f9; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+    color: #1c2129;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+  .muted { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px){ .grid2 { grid-template-columns: 1fr; } }
+  .kpi { font-size: 13px; }
+  .kpi b { color: var(--green); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>회원탈퇴(계정 삭제) — 구현 walkthrough</h1>
+  <p class="sub"><code>DELETE /api/v1/me</code> — soft delete + 소셜 연동 해제(revoke) + 즉시 재가입 허용 · 이슈 #225</p>
+  <div class="legend">
+    <span><span class="tag domain">domain</span> 엔티티·리포지토리·스키마</span>
+    <span><span class="tag userapi">user-api</span> 컨트롤러·서비스·DTO</span>
+    <span><span class="tag test">test</span> 검증</span>
+    <span><span class="tag risk">위험영역</span> 정합성 주의</span>
+  </div>
+
+  <h2>1. 한 줄 요약</h2>
+  <div class="card">
+    로그인한 회원이 <code>DELETE /api/v1/me</code>를 호출하면 계정을 soft delete 하고, 모든 refresh token을 폐기하고, 소셜 연동(<code>oauth_accounts</code>)과 FCM 토큰을 지웁니다. DB 커밋이 끝난 뒤에는 카카오 unlink·애플 revoke를 best-effort로 호출해 provider 쪽 연동까지 해제합니다(앱스토어 심사 가이드라인 5.1.1(v) 요구사항). 같은 소셜 계정으로 다시 로그인하면 <b>새 계정으로 즉시 재가입</b>되며 기존 데이터는 복원되지 않습니다. 이를 위해 애플 로그인 계약도 바뀌어, 로그인 시 <code>authorizationCode</code>를 함께 받아 revoke용 refresh token을 미리 확보·암호화 저장해 둡니다.
+  </div>
+
+  <h2>2. 어디에 무엇을 뒀나 (모듈 구조)</h2>
+  <div class="layer-box l-userapi">
+    <div class="h"><span class="tag userapi">user-api</span> member 패키지</div>
+    <div class="m"><code>MemberWithdrawalService</code>(탈퇴 트랜잭션 + 커밋 후 revoke 오케스트레이션), <code>MemberController</code>의 <code>DELETE /api/v1/me</code></div>
+  </div>
+  <div class="layer-box l-userapi">
+    <div class="h"><span class="tag userapi">user-api</span> auth 패키지</div>
+    <div class="m">외부 호출 클라이언트 3종(<code>AppleTokenExchangeClient</code>·<code>AppleRevokeClient</code>·<code>KakaoUnlinkClient</code>), 애플 client_secret 서명기(<code>AppleClientSecretFactory</code>, ES256 JWT), refresh token 암호화기(<code>AppleRefreshTokenCipher</code>, AES-256-GCM). <code>AuthService</code>의 refresh·dev-login에 탈퇴 계정 차단 추가</div>
+  </div>
+  <div class="layer-box l-domain">
+    <div class="h"><span class="tag domain">domain</span> member·notification</div>
+    <div class="m"><code>User.softDelete</code>(멱등), <code>OauthAccount.appleRefreshTokenEncrypted</code> 컬럼, 리포지토리 파생 메서드(탈퇴 조회·연동 스냅샷/삭제·FCM 토큰 일괄 삭제)</div>
+  </div>
+  <div class="layer-box l-db">
+    <div class="h">DB migration</div>
+    <div class="m"><code>V35__add_oauth_apple_refresh_token.sql</code> — <code>oauth_accounts</code>에 애플 refresh token 저장 컬럼 추가. 기존 migration은 건드리지 않음</div>
+  </div>
+
+  <h2>3. 요청 하나가 흐르는 경로</h2>
+  <div class="flow">
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">JWT 인증 → <code>MemberController</code></div>
+      <div class="d">경로·바디에 userId가 없고 <code>@CurrentUser</code>만 사용 — 본인 외에는 탈퇴시킬 방법이 없습니다. 미인증은 401.</div></div></div>
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">탈퇴 트랜잭션 시작 (<code>MemberWithdrawalService.withdraw</code>)</div>
+      <div class="d">아직 탈퇴하지 않은 회원만 조회(<code>findByIdAndDeletedAtIsNull</code>) — 이미 탈퇴했으면 404 <code>USER_NOT_FOUND</code>.</div></div></div>
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">revoke 재료 스냅샷</div>
+      <div class="d">연동 row를 곧 지우므로, 지우기 전에 provider 종류·카카오 회원번호·애플 암호화 refresh token을 원시값 record로 떠 둡니다.</div></div></div>
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">한 트랜잭션으로 4가지 정리</div>
+      <div class="d"><code>users.deleted_at</code> 세팅 + active refresh token 전량 <code>revoked_at</code> 세팅 + <code>oauth_accounts</code> 삭제 + <code>user_device_token</code> 삭제. 하나라도 실패하면 전부 롤백됩니다.</div></div></div>
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">커밋 후 provider 연동 해제 (best-effort)</div>
+      <div class="d"><code>AFTER_COMMIT</code> 리스너가 카카오 unlink(Admin key)·애플 revoke(저장해 둔 refresh token 복호화)를 호출합니다. 구글은 서버가 보유한 토큰이 없어 row 삭제로 충분. 실패해도 탈퇴는 이미 확정 — 로그만 남깁니다.</div></div></div>
+    <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div>
+      <div class="body"><div class="t">204 No Content</div>
+      <div class="d">응답 본문 없음. 클라이언트는 저장한 토큰을 지우고 로그인 화면으로 이동합니다.</div></div></div>
+  </div>
+
+  <h2>4. 만든 엔드포인트</h2>
+  <table>
+    <tr><th>메서드·경로</th><th>하는 일</th><th>상태코드</th></tr>
+    <tr><td><code>DELETE /api/v1/me</code></td>
+      <td>회원탈퇴. soft delete + 토큰 전량 폐기 + 연동·FCM 토큰 삭제 + provider revoke</td>
+      <td>204 · 401(미인증) · 404(이미 탈퇴)</td></tr>
+    <tr><td><code>POST /api/v1/auth/apple</code> <span class="pill">(계약 변경)</span></td>
+      <td>기존 애플 로그인에 <code>authorizationCode</code> 필수 필드 추가. 서버가 refresh token으로 교환·암호화 저장해 탈퇴 revoke에 대비</td>
+      <td>200 · 400(코드 누락) · 401(토큰/코드 무효) · 502(애플 장애·시크릿 미설정)</td></tr>
+  </table>
+  <div class="note"><b>프론트 동시 배포 필요</b> — <code>authorizationCode</code>가 필수라, 이 서버가 배포되면 코드를 안 보내는 구버전 앱의 애플 로그인은 400이 됩니다. native Sign in with Apple이 identityToken과 함께 이미 반환하는 값이라 프론트 추가 UX는 없습니다(배포 순서만 조율).</div>
+
+  <h2>5. 핵심 설계 결정</h2>
+
+  <h3>soft delete — 기존 컬럼 재사용</h3>
+  <p><code>users.deleted_at</code>에 시각만 세팅하고 row는 남깁니다(hard delete 아님). 신규 migration 없이 기존 스키마를 그대로 쓰고, <code>softDelete</code>는 멱등이라 중복 호출돼도 최초 탈퇴 시각이 보존됩니다.</p>
+
+  <h3>재가입 허용 = 연동 row 삭제</h3>
+  <p>탈퇴 시 <code>oauth_accounts</code>를 지우면 <code>(provider, provider_user_id)</code> unique 제약이 풀려서, 재로그인이 <b>기존 신규 가입 플로우 그대로</b> 새 계정을 만듭니다. 재로그인 차단 로직도, 전용 에러코드도, 유예기간 판정도 필요 없습니다 — 삭제 하나로 정책이 구현되는 가장 단순한 형태입니다. 옛 계정의 루틴·재화·캐릭터는 soft delete된 옛 user에 남고 새 계정에는 노출되지 않습니다.</p>
+
+  <h3>provider revoke는 커밋 이후 best-effort</h3>
+  <p>외부 API(카카오·애플) 호출을 트랜잭션 밖(<code>AFTER_COMMIT</code>)에 두어, 애플 서버가 죽어 있어도 <b>탈퇴 자체는 성공</b>합니다. 반대로 revoke가 먼저였다면 외부 장애가 탈퇴를 막았을 것입니다. 기존 FCM push의 best-effort 컨벤션(<code>NotificationService</code>)과 동일한 패턴을 재사용했습니다. 실패는 로그만 남기고 재시도 없음(MVP).</p>
+
+  <h3>애플 revoke 재료는 로그인 때 미리 확보</h3>
+  <p>애플 revoke API는 access/refresh token을 요구하는데 서버는 identityToken만 받고 있었습니다. 그래서 로그인 계약에 <code>authorizationCode</code>를 추가해, 로그인 성공 시 애플 토큰 엔드포인트에서 refresh token으로 교환한 뒤 <b>AES-256-GCM으로 암호화해</b> <code>oauth_accounts</code>에 저장합니다(애플 공식 권장 방식). 교환·revoke 호출의 <code>client_secret</code>은 팀 키(.p8)로 서명한 ES256 JWT를 요청 직전에 생성합니다(TTL 300초).</p>
+
+  <h3>시크릿 fail-closed</h3>
+  <p>신규 시크릿 5종(<code>APPLE_TEAM_ID</code>·<code>APPLE_KEY_ID</code>·<code>APPLE_PRIVATE_KEY</code>·<code>APPLE_REFRESH_TOKEN_ENC_KEY</code>·<code>KAKAO_ADMIN_KEY</code>)은 전부 기본값이 공란이며, 미설정 환경에서는 커밋된 기본 키로 조용히 동작하는 대신 502로 실패합니다. 방어가 소리 없이 꺼지는 것을 막는 기존 컨벤션(카카오 app_id, 애플 aud 검증)과 같은 방향입니다.</p>
+
+  <h3>탈퇴 계정 잔여 토큰 차단</h3>
+  <p>탈퇴 트랜잭션과 <b>동시에</b> refresh 회전이 일어나면 전량 폐기 스냅샷을 빠져나간 토큰이 생길 수 있습니다. 그래서 <code>refresh</code> 회전과 <code>dev-login</code>에서 <code>user.deletedAt</code>을 한 번 더 확인해 거부합니다. 신규 에러코드 없이 기존 <code>REFRESH_TOKEN_INVALID</code>/<code>USER_NOT_FOUND</code>를 재사용합니다.</p>
+
+  <h3>FCM 토큰 삭제 (리뷰 반영)</h3>
+  <p>루틴을 연쇄 soft delete 하지 않기로 했기 때문에, 탈퇴자의 ACTIVE 루틴이 리마인더 배치 후보에 그대로 남습니다. 리뷰에서 "탈퇴한 사용자 단말에 다음날에도 push가 간다"는 문제가 발견되어, 탈퇴 트랜잭션에서 <code>user_device_token</code>을 전량 삭제해 발송 자체를 차단했습니다. 같은 취지로 revoke 실패 로그에서 소셜 식별자(<code>providerUserId</code>)도 제거했습니다.</p>
+
+  <h2>6. 위험영역 <span class="tag risk">인증·개인정보·migration</span></h2>
+  <div class="danger">
+    <b>bulk delete의 flush 함정.</b> FCM 토큰 삭제는 JPQL bulk delete인데, <code>clearAutomatically</code>만 켜면 아직 flush되지 않은 선행 dirty 변경(<code>softDelete</code>·토큰 revoke)이 <b>영속성 컨텍스트와 함께 버려집니다</b>. 실제로 이 상태에서 통합테스트 5개가 깨졌고, <code>flushAutomatically = true</code>를 함께 켜 "bulk delete 직전에 선행 변경을 DB로 내보낸 뒤 clear" 순서로 고쳤습니다. 같은 이유로 <code>withdraw</code>는 컨텍스트를 clear하므로 외부 트랜잭션에 참여시켜 호출하면 안 됩니다(코드 주석으로 명시).
+  </div>
+  <div class="danger">
+    <b>애플 로그인이 시크릿·외부 API에 의존하게 됐습니다.</b> 토큰 교환이 로그인 성공 경로의 필수 단계라, 애플 시크릿 미주입이나 애플 토큰 엔드포인트 장애 시 애플 로그인 전체가 502로 실패합니다(fail-closed 결정의 트레이드오프). 배포 전 환경변수 주입이 필수이며, 교환 실패 시 로그인은 성공시키는 완화(fail-open)는 정책 변경이라 미결로 남겼습니다.
+  </div>
+  <div class="note">
+    <b>access token 30분 한계.</b> 이미 발급된 access token은 탈퇴 후에도 만료 전까지 유효합니다(stateless JWT의 알려진 한계, logout도 동일). 이 창에서의 중복 탈퇴 요청은 404로 안전하게 거부됩니다. 즉시 무효화가 필요해지면 블랙리스트 도입을 별도 논의합니다.
+  </div>
+  <div class="note">
+    <b>migration V35.</b> 신규 파일만 추가했고 기존 V1~V34는 수정하지 않았습니다(checksum 안전). 컬럼 정의가 엔티티와 일치해 <code>ddl-auto: validate</code>를 통과합니다.
+  </div>
+
+  <h2>7. 파일별 역할</h2>
+  <table>
+    <tr><th>파일</th><th>모듈</th><th>역할</th></tr>
+    <tr><td><code>MemberWithdrawalService</code></td><td><span class="tag userapi">user-api</span></td><td>탈퇴 트랜잭션(4가지 정리 + 스냅샷) + <code>AFTER_COMMIT</code> best-effort revoke</td></tr>
+    <tr><td><code>MemberController</code></td><td><span class="tag userapi">user-api</span></td><td><code>DELETE /api/v1/me</code> 추가 (<code>@CurrentUser</code>, 204)</td></tr>
+    <tr><td><code>AppleTokenExchangeClient</code></td><td><span class="tag userapi">user-api</span></td><td>authorizationCode → refresh token 교환 (<code>/auth/token</code>)</td></tr>
+    <tr><td><code>AppleRevokeClient</code></td><td><span class="tag userapi">user-api</span></td><td>저장된 refresh token으로 연동 해제 (<code>/auth/revoke</code>)</td></tr>
+    <tr><td><code>KakaoUnlinkClient</code></td><td><span class="tag userapi">user-api</span></td><td>Admin key 서버-투-서버 unlink</td></tr>
+    <tr><td><code>AppleClientSecretFactory</code></td><td><span class="tag userapi">user-api</span></td><td>ES256 client_secret JWT 서명 (팀 키 .p8, fail-closed)</td></tr>
+    <tr><td><code>AppleRefreshTokenCipher</code></td><td><span class="tag userapi">user-api</span></td><td>refresh token AES-256-GCM 암복호화 (fail-closed)</td></tr>
+    <tr><td><code>AppleLoginHandler</code> · <code>AuthService</code> · <code>AuthController</code></td><td><span class="tag userapi">user-api</span></td><td>애플 로그인에 교환·암호화 저장 연결, refresh/dev-login 탈퇴 차단</td></tr>
+    <tr><td><code>User</code> · <code>OauthAccount</code> · 리포지토리 3종</td><td><span class="tag domain">domain</span></td><td><code>softDelete</code>, 애플 토큰 컬럼, 탈퇴용 파생 쿼리(FCM 토큰 bulk delete 포함)</td></tr>
+    <tr><td><code>V35__add_oauth_apple_refresh_token.sql</code></td><td><span class="tag domain">domain</span></td><td><code>oauth_accounts.apple_refresh_token_encrypted</code> 추가</td></tr>
+  </table>
+
+  <h2>8. 테스트 구성</h2>
+  <div class="grid2">
+    <div class="card"><b>MemberWithdrawalIntegrationTest</b> <span class="tag test">통합·실 MySQL</span>
+      <p class="kpi">위험영역 정합성의 본체. 탈퇴 후 4가지 정리 확인, <b>revoke 실패해도 탈퇴 유지</b>(롤백 안 됨), 재가입 시 새 계정 생성·옛 계정 보존, 탈퇴 직후 살아남은 refresh token 회전 거부, 애플 암복호화 왕복(저장한 암호문이 원문으로 복원돼 revoke에 전달), 중복 탈퇴 404.</p></div>
+    <div class="card"><b>외부 클라이언트 단위 테스트 4종</b> <span class="tag test">mock server</span>
+      <p class="kpi"><code>AppleTokenExchangeClient</code>·<code>AppleRevokeClient</code>·<code>KakaoUnlinkClient</code>·<code>AppleClientSecretFactory</code> — 성공 파라미터 계약, 4xx/5xx 에러 변환, 시크릿 미설정 fail-closed, 실제 P-256 키로 서명한 JWT 검증까지.</p></div>
+    <div class="card"><b>AppleRefreshTokenCipherTest</b> <span class="tag test">단위</span>
+      <p class="kpi">암복호화 왕복, IV 무작위성(같은 평문 ≠ 같은 암호문), 키 미설정 fail-closed, 다른 키 복호화 거부.</p></div>
+    <div class="card"><b>컨트롤러·보안 테스트</b> <span class="tag test">WebMvc·통합</span>
+      <p class="kpi"><code>DELETE /api/v1/me</code> 204/404, 미인증 401(보안 필터 통과 검증), 애플 로그인의 <code>authorizationCode</code> 누락 400 등 계약 커버.</p></div>
+  </div>
+  <p class="kpi">전체 <b>810개 테스트 통과</b> · verifier <b>PASS</b> · reviewer blocking 지적(탈퇴자 push 발송)은 수정 후 재검증 <b>통과</b>.</p>
+
+  <h2>9. 데이터 모델</h2>
+  <pre>users
+  deleted_at TIMESTAMP NULL          -- 탈퇴 시각(soft delete). null = 활성 회원
+
+oauth_accounts                       -- 탈퇴 시 row 삭제 → 재가입 허용의 핵심
+  apple_refresh_token_encrypted      -- V35 신규. 애플 revoke용(AES-256-GCM 암호문)
+  VARCHAR(1000) NULL                 -- provider=APPLE일 때만 채워짐
+
+refresh_tokens
+  revoked_at TIMESTAMP NULL          -- 탈퇴 시 active 전량 세팅
+
+user_device_token                    -- 탈퇴 시 row 삭제(리마인더 push 차단)</pre>
+
+  <h2>10. 아직 안 정한 것 (후속)</h2>
+  <div class="note">
+    <b>사람 결정 대기</b>
+    <ul style="margin:6px 0 0; padding-left:20px">
+      <li>애플 로그인 fail-open 여부 — 교환 실패 시 refresh token 없이 로그인을 성공시킬지(현재는 fail-closed로 로그인 실패)</li>
+      <li>탈퇴 후 개인정보(email·nickname·bio·프로필 key) 파기 정책 — 현재 무기한 보존. 익명화 또는 보관기간 결정 필요</li>
+    </ul>
+  </div>
+  <ul>
+    <li>house/room/캐릭터/아이템/재화(장진형 도메인)의 탈퇴 회원 처리 — 소유 house 처리, 길드북 닉네임 노출, 잔여 재화 데이터. dependency로만 남김</li>
+    <li>리마인더 배치가 탈퇴자 루틴을 계속 후보로 잡아 매일 FAILED 알림 행이 쌓임(push는 안 감) — 후보 쿼리에 <code>user.deletedAt is null</code> 필터 추가로 해결 가능</li>
+    <li>교환·revoke용 client_id를 <code>apple.allowed-client-ids</code> 첫 항목으로 유추 — 목록에 Service ID를 추가하게 되면 별도 프로퍼티 분리 필요</li>
+    <li>revoke 실패 운영 모니터링·알림, 외부 호출 타임아웃 설정</li>
+  </ul>
+
+  <p class="muted" style="font-size:12px; margin-top:48px; text-align:center">
+    Rougether · member · 회원탈퇴 walkthrough
+  </p>
+
+</div>
+</body>
+</html>
