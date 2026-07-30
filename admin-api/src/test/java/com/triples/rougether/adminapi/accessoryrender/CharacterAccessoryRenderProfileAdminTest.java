@@ -117,6 +117,24 @@ class CharacterAccessoryRenderProfileAdminTest {
                 .andExpect(jsonPath("$.code").value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
     }
 
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 전체_CDN_URL은_렌더_프로필_asset_key로_저장할_수_없다() throws Exception {
+        String body = profileBody("0.31000")
+                .replace(
+                        "\"assetKey\": \"items/character-accessories/eyewear/cat-sunglasses/thumbnail.png\"",
+                        "\"assetKey\": \"https://cdn.example.com/cat-sunglasses.png\"");
+
+        mockMvc.perform(post("/admin/character-accessory-render-profiles/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
+
+        assertThat(renderProfileRepository.count()).isZero();
+    }
+
     private String profileBody(String positionY) {
         return """
                 [

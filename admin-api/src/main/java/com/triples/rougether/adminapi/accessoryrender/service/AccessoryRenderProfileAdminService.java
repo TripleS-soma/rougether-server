@@ -16,6 +16,7 @@ import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,8 @@ public class AccessoryRenderProfileAdminService {
     private static final BigDecimal POSITION_MAX = BigDecimal.ONE;
     private static final BigDecimal WIDTH_RATIO_MAX = new BigDecimal("2.0000");
     private static final int ROTATION_LIMIT = 360;
+    private static final Pattern ITEM_ASSET_KEY_PATTERN = Pattern.compile(
+            "^items/[a-z0-9][a-z0-9_./-]*\\.(png|jpg|jpeg|webp)$");
 
     private final ItemRepository itemRepository;
     private final CharacterRepository characterRepository;
@@ -131,10 +134,10 @@ public class AccessoryRenderProfileAdminService {
     }
 
     private void validateValues(AccessoryRenderProfileImportRequest request) {
-        requireText(request.itemAssetKey(), 255, "itemAssetKey");
+        requireItemAssetKey(request.itemAssetKey(), "itemAssetKey");
         requireText(request.characterCode(), 50, "characterCode");
         requireText(request.renderState(), 40, "renderState");
-        requireText(request.assetKey(), 255, "assetKey");
+        requireItemAssetKey(request.assetKey(), "assetKey");
         requirePositive(request.canvasWidth(), "canvasWidth");
         requirePositive(request.canvasHeight(), "canvasHeight");
         requirePositive(request.assetWidth(), "assetWidth");
@@ -163,6 +166,15 @@ public class AccessoryRenderProfileAdminService {
     private void requireText(String value, int maxLength, String field) {
         if (value == null || value.isBlank() || value.length() > maxLength) {
             throw invalid(field + "는 비어 있지 않은 " + maxLength + "자 이하 문자열이어야 합니다.");
+        }
+    }
+
+    private void requireItemAssetKey(String value, String field) {
+        requireText(value, 255, field);
+        if (!ITEM_ASSET_KEY_PATTERN.matcher(value).matches()
+                || value.contains("..")
+                || value.contains("//")) {
+            throw invalid(field + "는 전체 URL이 아닌 items/ 하위 이미지 object key여야 합니다.");
         }
     }
 
