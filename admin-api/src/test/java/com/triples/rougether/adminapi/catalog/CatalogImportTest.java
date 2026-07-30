@@ -7,11 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.domain.shop.repository.ItemRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,12 @@ class CatalogImportTest {
 
     @Autowired
     ItemRepository itemRepository;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    EntityManager entityManager;
 
     private static final String JSON = """
             {
@@ -60,7 +68,7 @@ class CatalogImportTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 캐릭터_악세사리는_가격_입력과_무관하게_뽑기_전용으로_적재한다() throws Exception {
+    void 캐릭터_악세사리는_등급없이_동일_가중치로_뽑기_풀에_자동_등록한다() throws Exception {
         String accessoryCatalog = """
                 {
                   "themes": [{"code": "character_accessories", "name": "캐릭터 꾸미기", "active": true}],
@@ -90,6 +98,58 @@ class CatalogImportTest {
         ).orElseThrow();
         assertThat(accessory.getPurchaseCurrencyType()).isNull();
         assertThat(accessory.getPriceAmount()).isNull();
+
+        var entry = jdbcTemplate.queryForMap("""
+                SELECT e.reward_type, e.rarity, e.weight
+                FROM gacha_pool_entries e
+                JOIN gacha g ON g.id = e.gacha_id
+                WHERE e.item_id = ? AND e.is_active = TRUE AND g.is_active = TRUE
+                """, accessory.getId());
+        assertThat(entry.get("reward_type")).isEqualTo("ITEM");
+        assertThat(entry.get("rarity")).isNull();
+        assertThat(entry.get("weight")).isEqualTo(1);
+
+        Integer gachaCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM gacha
+                WHERE theme_id = ? AND cost_currency_type = 'COIN'
+                  AND cost_amount = 25 AND draw_count = 1 AND is_active = TRUE
+                """, Integer.class, accessory.getTheme().getId());
+        assertThat(gachaCount).isEqualTo(1);
+
+        itemRepository.flush();
+        jdbcTemplate.update("""
+                UPDATE items
+                SET purchase_currency_type = 'DIAMOND', price_amount = 999
+                WHERE id = ?
+                """, accessory.getId());
+        jdbcTemplate.update("""
+                UPDATE gacha_pool_entries
+                SET rarity = '희귀', weight = 7
+                WHERE item_id = ?
+                """, accessory.getId());
+        entityManager.clear();
+
+        mockMvc.perform(post("/admin/catalog/import")
+                        .contentType(MediaType.APPLICATION_JSON).content(accessoryCatalog).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemsCreated").value(0));
+
+        var normalizedAccessory = itemRepository.findById(accessory.getId()).orElseThrow();
+        assertThat(normalizedAccessory.getPurchaseCurrencyType()).isNull();
+        assertThat(normalizedAccessory.getPriceAmount()).isNull();
+        var normalizedEntry = jdbcTemplate.queryForMap("""
+                SELECT rarity, weight
+                FROM gacha_pool_entries
+                WHERE item_id = ? AND is_active = TRUE
+                """, accessory.getId());
+        assertThat(normalizedEntry.get("rarity")).isNull();
+        assertThat(normalizedEntry.get("weight")).isEqualTo(1);
+
+        Integer entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM gacha_pool_entries WHERE item_id = ? AND is_active = TRUE",
+                Integer.class, accessory.getId());
+        assertThat(entryCount).isEqualTo(1);
     }
 
     @Test

@@ -596,22 +596,17 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 캐릭터_악세사리에_등급을_지정하면_아이템_뽑기_풀에_등록된다() throws Exception {
+    void 캐릭터_악세사리는_가구_등급_관리_대상이_아니다() throws Exception {
         mockMvc.perform(put("/admin/items/{itemId}/rarity", characterAccessory.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rarity\": \"희귀\"}").with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rarity").value("희귀"))
-                .andExpect(jsonPath("$.rarityEditable").value(true));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
 
-        Map<String, Object> entry = jdbcTemplate.queryForMap("""
-                SELECT reward_type, rarity, weight
-                FROM gacha_pool_entries
-                WHERE item_id = ? AND is_active = TRUE
-                """, characterAccessory.getId());
-        assertThat(entry.get("reward_type")).isEqualTo("ITEM");
-        assertThat(entry.get("rarity")).isEqualTo("희귀");
-        assertThat(entry.get("weight")).isEqualTo(1);
+        Integer entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM gacha_pool_entries WHERE item_id = ?",
+                Integer.class, characterAccessory.getId());
+        assertThat(entryCount).isZero();
     }
 
     @Test

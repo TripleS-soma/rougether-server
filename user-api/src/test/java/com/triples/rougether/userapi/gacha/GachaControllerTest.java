@@ -65,7 +65,7 @@ class GachaControllerTest {
                 new GachaRewardResponse(
                         "ITEM", 100L, null, "분홍 하트 선글라스",
                         "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
-                        "희귀", true, "character_accessory", "character", null, "eyewear"))));
+                        null, true, "character_accessory", "character", null, "eyewear"))));
 
         mockMvc.perform(get("/api/v1/gacha/10/rewards"))
                 .andExpect(status().isOk())
@@ -75,7 +75,7 @@ class GachaControllerTest {
                 .andExpect(jsonPath("$.items[0].name").value("분홍 하트 선글라스"))
                 .andExpect(jsonPath("$.items[0].assetKey")
                         .value("items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png"))
-                .andExpect(jsonPath("$.items[0].rarity").value("희귀"))
+                .andExpect(jsonPath("$.items[0].rarity").doesNotExist())
                 .andExpect(jsonPath("$.items[0].owned").value(true))
                 .andExpect(jsonPath("$.items[0].categoryCode").value("character_accessory"))
                 .andExpect(jsonPath("$.items[0].placementType").value("character"))
