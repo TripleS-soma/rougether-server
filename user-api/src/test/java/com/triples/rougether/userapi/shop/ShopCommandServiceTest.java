@@ -124,6 +124,21 @@ class ShopCommandServiceTest {
     }
 
     @Test
+    void 캐릭터_악세사리는_직접_구매할_수_없다() {
+        Item item = mock(Item.class);
+        when(item.isActive()).thenReturn(true);
+        when(item.getPlacementType()).thenReturn("character");
+        when(itemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> shopCommandService.purchase(1L, 100L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(ShopErrorCode.ITEM_NOT_PURCHASABLE));
+        verify(userWalletRepository, never()).findWithLockByUserIdAndCurrencyType(any(), any());
+        verify(userItemRepository, never()).save(any());
+    }
+
+    @Test
     void 비활성_아이템은_구매할_수_없다() {
         Item item = mock(Item.class);
         when(item.isActive()).thenReturn(false);

@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CatalogImportService {
 
+    private static final String PLACEMENT_CHARACTER = "character";
+
     private final ThemeRepository themeRepository;
     private final CharacterRepository characterRepository;
     private final ItemRepository itemRepository;
@@ -66,11 +68,14 @@ public class CatalogImportService {
                 theme = themeRepository.findByCode(i.themeCode())
                         .orElseThrow(() -> new IllegalArgumentException("unknown theme code: " + i.themeCode()));
             }
-            // 상점 구매 재화는 다이아 (코인은 루틴 보상·뽑기 전용, 프론트·스펙 기준).
+            // 캐릭터 악세사리는 뽑기 전용이므로 입력 가격과 무관하게 구매 정보를 비운다.
+            // 나머지 상점 아이템의 구매 재화는 다이아(코인은 루틴 보상·뽑기 전용).
+            boolean gachaOnly = PLACEMENT_CHARACTER.equals(i.placementType());
             itemRepository.save(new Item(
                     theme, i.categoryCode(), i.placementType(),
                     blankToNull(i.surfaceSlotType()), blankToNull(i.characterSlotType()),
-                    i.name(), CurrencyType.DIAMOND, i.priceAmount(), i.assetKey(),
+                    i.name(), gachaOnly ? null : CurrencyType.DIAMOND,
+                    gachaOnly ? null : i.priceAmount(), i.assetKey(),
                     i.limited(), i.active()));
             itemsCreated++;
         }

@@ -59,6 +59,40 @@ class CatalogImportTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
+    void 캐릭터_악세사리는_가격_입력과_무관하게_뽑기_전용으로_적재한다() throws Exception {
+        String accessoryCatalog = """
+                {
+                  "themes": [{"code": "character_accessories", "name": "캐릭터 꾸미기", "active": true}],
+                  "characters": [],
+                  "items": [{
+                    "themeCode": "character_accessories",
+                    "categoryCode": "character_accessory",
+                    "placementType": "character",
+                    "surfaceSlotType": null,
+                    "characterSlotType": "eyewear",
+                    "name": "분홍 하트 선글라스",
+                    "priceAmount": 999,
+                    "assetKey": "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
+                    "limited": false,
+                    "active": true
+                  }]
+                }
+                """;
+
+        mockMvc.perform(post("/admin/catalog/import")
+                        .contentType(MediaType.APPLICATION_JSON).content(accessoryCatalog).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemsCreated").value(1));
+
+        var accessory = itemRepository.findByAssetKey(
+                "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png"
+        ).orElseThrow();
+        assertThat(accessory.getPurchaseCurrencyType()).isNull();
+        assertThat(accessory.getPriceAmount()).isNull();
+    }
+
+    @Test
     void 미인증이면_적재_불가() throws Exception {
         mockMvc.perform(post("/admin/catalog/import")
                         .contentType(MediaType.APPLICATION_JSON).content("{}").with(csrf()))

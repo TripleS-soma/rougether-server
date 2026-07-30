@@ -51,6 +51,7 @@ class ItemSlotTest {
 
     private Item positionedItem;
     private Item surfaceItem;
+    private Item characterAccessory;
     private Item animatedItem;
     private Item positionedItemWithoutPool;
 
@@ -63,6 +64,11 @@ class ItemSlotTest {
         surfaceItem = itemRepository.save(new Item(
                 theme, "wallpaper", "surface_slot", "wallpaper", null,
                 "테스트 벽지", CurrencyType.COIN, 100, "items/slot-test/wallpaper.png", false, true));
+        characterAccessory = itemRepository.save(new Item(
+                theme, "character_accessory", "character", null, "eyewear",
+                "분홍 하트 선글라스", null, null,
+                "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
+                false, true));
         animatedItem = itemRepository.save(new Item(
                 theme, "furniture", "positioned", null, null,
                 "움직이는 미니 오븐", CurrencyType.COIN, 100,
@@ -586,6 +592,26 @@ class ItemSlotTest {
                         .content("{\"rarity\": \"희귀\"}").with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 캐릭터_악세사리에_등급을_지정하면_아이템_뽑기_풀에_등록된다() throws Exception {
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", characterAccessory.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rarity").value("희귀"))
+                .andExpect(jsonPath("$.rarityEditable").value(true));
+
+        Map<String, Object> entry = jdbcTemplate.queryForMap("""
+                SELECT reward_type, rarity, weight
+                FROM gacha_pool_entries
+                WHERE item_id = ? AND is_active = TRUE
+                """, characterAccessory.getId());
+        assertThat(entry.get("reward_type")).isEqualTo("ITEM");
+        assertThat(entry.get("rarity")).isEqualTo("희귀");
+        assertThat(entry.get("weight")).isEqualTo(1);
     }
 
     @Test

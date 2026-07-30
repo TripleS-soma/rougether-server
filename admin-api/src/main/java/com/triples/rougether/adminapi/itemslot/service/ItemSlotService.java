@@ -30,13 +30,14 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// positioned 아이템의 기본 배치 슬롯(items.default_slot)과 뽑기 등급 관리.
+// positioned 아이템의 기본 배치 슬롯(items.default_slot)과 꾸미기 아이템의 뽑기 등급 관리.
 // 단건 변경(어드민 화면) + 벌크 적재(deploy/seed/slot_assignments.json). 적재는 asset_key 매칭이라 멱등.
 @Service
 public class ItemSlotService {
 
     private static final String PLACEMENT_POSITIONED = "positioned";
     private static final String PLACEMENT_SURFACE = "surface_slot";
+    private static final String PLACEMENT_CHARACTER = "character";
     private static final BigDecimal MIN_DEFAULT_SCALE = new BigDecimal("0.50");
     private static final BigDecimal MAX_DEFAULT_SCALE = new BigDecimal("2.00");
     private static final BigDecimal MIN_DEFAULT_POSITION = BigDecimal.ZERO;
@@ -148,8 +149,8 @@ public class ItemSlotService {
 
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemRarityInvalidException("item 이 없습니다: " + itemId));
-        if (!PLACEMENT_POSITIONED.equals(item.getPlacementType())) {
-            throw new ItemRarityInvalidException("positioned 아이템이 아닙니다: " + itemId);
+        if (!isGachaItem(item)) {
+            throw new ItemRarityInvalidException("뽑기 등록 대상 꾸미기 아이템이 아닙니다: " + itemId);
         }
 
         List<GachaPoolEntry> activeItemEntries = findActiveItemEntries(itemId);
@@ -222,6 +223,11 @@ public class ItemSlotService {
 
     private static String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private static boolean isGachaItem(Item item) {
+        return PLACEMENT_POSITIONED.equals(item.getPlacementType())
+                || PLACEMENT_CHARACTER.equals(item.getPlacementType());
     }
 
     private static void validateDefaultScale(BigDecimal defaultScale) {

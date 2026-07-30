@@ -27,6 +27,18 @@ public record GachaRewardListResponse(
             @Schema(description = "등급. 등급 미부여 풀은 null", example = "희귀")
             String rarity,
             @Schema(description = "인증 사용자가 해당 보상을 현재 보유 중인지", example = "true")
-            boolean owned) {
+            boolean owned,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "아이템 카테고리 (ITEM 보상일 때)", example = "character_accessory")
+            String categoryCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "아이템 배치 종류 (ITEM 보상일 때)", example = "character")
+            String placementType,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "방 표면 슬롯 종류 (해당 ITEM 보상일 때)", example = "wallpaper")
+            String surfaceSlotType,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "캐릭터 착용 슬롯 종류 (해당 ITEM 보상일 때)", example = "eyewear")
+            String characterSlotType) {
     }
 }

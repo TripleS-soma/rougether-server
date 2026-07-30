@@ -157,14 +157,18 @@ class GachaServiceTest {
     }
 
     @Test
-    void 활성_풀의_아이템과_캐릭터를_보유여부와_함께_조회한다() {
+    void 활성_풀의_꾸미기_아이템과_캐릭터를_보유여부와_함께_조회한다() {
         Gacha gacha = availableGacha();
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
 
         Item item = mock(Item.class);
         when(item.getId()).thenReturn(100L);
-        when(item.getName()).thenReturn("한옥 좌식상");
-        when(item.getAssetKey()).thenReturn("items/calm-hanok/furniture/low-table.png");
+        when(item.getName()).thenReturn("분홍 하트 선글라스");
+        when(item.getAssetKey()).thenReturn(
+                "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png");
+        when(item.getCategoryCode()).thenReturn("character_accessory");
+        when(item.getPlacementType()).thenReturn("character");
+        when(item.getCharacterSlotType()).thenReturn("eyewear");
         GachaPoolEntry itemEntry = mock(GachaPoolEntry.class);
         when(itemEntry.getRewardType()).thenReturn(RewardType.ITEM);
         when(itemEntry.getItem()).thenReturn(item);
@@ -192,10 +196,18 @@ class GachaServiceTest {
         assertThat(response.items().get(0).characterId()).isNull();
         assertThat(response.items().get(0).rarity()).isEqualTo("희귀");
         assertThat(response.items().get(0).owned()).isTrue();
+        assertThat(response.items().get(0).categoryCode()).isEqualTo("character_accessory");
+        assertThat(response.items().get(0).placementType()).isEqualTo("character");
+        assertThat(response.items().get(0).surfaceSlotType()).isNull();
+        assertThat(response.items().get(0).characterSlotType()).isEqualTo("eyewear");
         assertThat(response.items().get(1).rewardType()).isEqualTo("CHARACTER");
         assertThat(response.items().get(1).itemId()).isNull();
         assertThat(response.items().get(1).characterId()).isEqualTo(5L);
         assertThat(response.items().get(1).owned()).isFalse();
+        assertThat(response.items().get(1).categoryCode()).isNull();
+        assertThat(response.items().get(1).placementType()).isNull();
+        assertThat(response.items().get(1).surfaceSlotType()).isNull();
+        assertThat(response.items().get(1).characterSlotType()).isNull();
     }
 
     @Test

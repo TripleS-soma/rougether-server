@@ -202,14 +202,17 @@ public class GachaService {
             Item item = entry.getItem();
             return new GachaRewardResponse(
                     RewardType.ITEM.name(), item.getId(), null, item.getName(), item.getAssetKey(),
-                    entry.getRarity(), ownedItemIds.contains(item.getId()));
+                    entry.getRarity(), ownedItemIds.contains(item.getId()),
+                    item.getCategoryCode(), item.getPlacementType(),
+                    item.getSurfaceSlotType(), item.getCharacterSlotType());
         }
 
         Character character = entry.getCharacter();
         return new GachaRewardResponse(
                 RewardType.CHARACTER.name(), null, character.getId(), character.getName(),
                 character.getBaseAssetKey(), entry.getRarity(),
-                ownedCharacterIds.contains(character.getId()));
+                ownedCharacterIds.contains(character.getId()),
+                null, null, null, null);
     }
 
     // 아이템(가구) 지급. 이미 보유 시 다이아로 전환하고 전환액 반환.
