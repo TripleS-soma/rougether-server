@@ -5,6 +5,7 @@ import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest.Character
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest.ItemDto;
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest.ThemeDto;
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportResult;
+import com.triples.rougether.adminapi.catalog.error.CatalogImportInvalidException;
 import com.triples.rougether.adminapi.itemslot.service.ItemSlotService;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
@@ -43,6 +44,25 @@ public class CatalogImportService {
 
     @Transactional
     public CatalogImportResult importCatalog(CatalogImportRequest request) {
+        if (request.items().stream()
+                .anyMatch(item -> PLACEMENT_CHARACTER.equals(item.placementType()))) {
+            throw new CatalogImportInvalidException(
+                    "캐릭터 악세사리는 렌더 프로필과 함께 전용 API로 적재해야 합니다.");
+        }
+        return importCatalogRows(request);
+    }
+
+    @Transactional
+    public CatalogImportResult importCharacterAccessoryCatalog(CatalogImportRequest request) {
+        if (request.items().stream()
+                .anyMatch(item -> !PLACEMENT_CHARACTER.equals(item.placementType()))) {
+            throw new CatalogImportInvalidException(
+                    "캐릭터 악세사리 전용 적재에는 placementType=character 아이템만 허용됩니다.");
+        }
+        return importCatalogRows(request);
+    }
+
+    private CatalogImportResult importCatalogRows(CatalogImportRequest request) {
         Map<String, Theme> themeByCode = new HashMap<>();
         int themesCreated = 0;
         for (ThemeDto t : request.themes()) {

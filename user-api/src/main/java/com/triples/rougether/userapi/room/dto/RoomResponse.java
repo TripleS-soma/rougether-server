@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.room.dto;
 
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 // GET /api/v1/rooms/me 응답: 방 성장 + 착용 캐릭터 + 슬롯 배치 + 자유배치 + 스트릭.
 // layoutFormat/layoutRevision/placements 는 자유배치 도입으로 추가된 additive 필드 — 구버전 앱은 무시하고 slots 만 쓴다.
@@ -43,7 +45,9 @@ public record RoomResponse(
     public static RoomResponse of(PersonalRoom room, List<RoomSurfaceSlot> slots,
                                   List<RoomItemPlacement> placements, Streak streak,
                                   UserCharacter selectedCharacter,
-                                  List<UserCharacterAccessory> accessories) {
+                                  List<UserCharacterAccessory> accessories,
+                                  Map<Long, Map<Long,
+                                          List<CharacterAccessoryRenderProfile>>> renderProfiles) {
         List<RoomSlotResponse> slotResponses = slots.stream()
                 .map(RoomSlotResponse::of)
                 .toList();
@@ -55,7 +59,7 @@ public record RoomResponse(
                 room.getGrowthLevel(),
                 room.getLayoutFormat(),
                 room.getLayoutRevision(),
-                RoomCharacterResponse.of(selectedCharacter, accessories),
+                RoomCharacterResponse.of(selectedCharacter, accessories, renderProfiles),
                 slotResponses,
                 placementResponses,
                 RoomStreakResponse.of(streak),
@@ -79,15 +83,24 @@ public record RoomResponse(
             List<EquippedAccessoryResponse> accessories) {
         public static RoomCharacterResponse of(
                 UserCharacter userCharacter,
-                List<UserCharacterAccessory> accessories) {
+                List<UserCharacterAccessory> accessories,
+                Map<Long, Map<Long,
+                        List<CharacterAccessoryRenderProfile>>> renderProfiles) {
             if (userCharacter == null) {
                 return null;
             }
             Character character = userCharacter.getCharacter();
+            Map<Long, List<CharacterAccessoryRenderProfile>> byItem =
+                    renderProfiles.getOrDefault(userCharacter.getId(), Map.of());
             return new RoomCharacterResponse(
                     character.getId(), character.getCode(), character.getName(), character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
-                    accessories.stream().map(EquippedAccessoryResponse::of).toList());
+                    accessories.stream()
+                            .map(accessory -> EquippedAccessoryResponse.of(
+                                    accessory,
+                                    byItem.getOrDefault(
+                                            accessory.getUserItem().getItem().getId(), List.of())))
+                            .toList());
         }
     }
 

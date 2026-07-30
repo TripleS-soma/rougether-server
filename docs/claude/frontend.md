@@ -23,6 +23,37 @@
 
 방 slot 응답은 frontend가 바로 렌더링할 수 있도록 `slotKey`, `assetKey`, `objectKey`, `category`를 포함합니다.
 
+## 캐릭터 악세사리 합성
+
+캐릭터 악세사리 `renderProfiles[]`는 화면의 고정 pt/dp 크기가 아니라 원본 이미지 기준
+메타데이터를 내려줍니다.
+
+- `canvasWidth`, `canvasHeight`: 좌표 기준 캐릭터 원본 캔버스 크기
+- `assetWidth`, `assetHeight`: 단품 악세사리 이미지 원본 크기
+- `positionX`, `positionY`: 캐릭터 캔버스 기준 악세사리 중심점 정규화 좌표
+- `widthRatio`: 악세사리 표시 너비 / 실제 캐릭터 렌더 영역 너비
+
+프론트가 `contentFit="contain"`을 사용하면 바깥 컨테이너와 실제 캐릭터 렌더 영역이
+다를 수 있으므로 다음 순서로 계산합니다.
+
+```text
+scale = min(containerWidth / canvasWidth, containerHeight / canvasHeight)
+renderWidth = canvasWidth * scale
+renderHeight = canvasHeight * scale
+offsetX = (containerWidth - renderWidth) / 2
+offsetY = (containerHeight - renderHeight) / 2
+
+accessoryWidth = renderWidth * widthRatio
+accessoryHeight = accessoryWidth * assetHeight / assetWidth
+centerX = offsetX + renderWidth * positionX
+centerY = offsetY + renderHeight * positionY
+```
+
+`left = centerX - accessoryWidth / 2`, `top = centerY - accessoryHeight / 2`로 배치합니다.
+현재 고양이 CDN 애니메이션 캔버스는 `180x172`, 단품 악세사리는 `320x160`이며,
+카탈로그 적재 전 실제 S3 파일 크기와 프로필 값을 함께 검증합니다. 모바일 내장
+fallback sprite는 별도 캔버스이므로 CDN 프로필을 그대로 적용하지 않습니다.
+
 ## 공동집 화면
 
 공동집 화면은 여러 사용자의 방 정보를 한 번에 봐야 하므로 응답이 무거워지기 쉽습니다.

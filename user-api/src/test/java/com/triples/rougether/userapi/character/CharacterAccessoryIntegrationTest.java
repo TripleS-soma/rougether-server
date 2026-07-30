@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
@@ -26,6 +28,7 @@ import com.triples.rougether.userapi.character.service.MyCharacterCommandService
 import com.triples.rougether.userapi.character.service.MyCharacterQueryService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +48,7 @@ class CharacterAccessoryIntegrationTest {
     @Autowired private CharacterRepository characterRepository;
     @Autowired private UserCharacterRepository userCharacterRepository;
     @Autowired private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    @Autowired private CharacterAccessoryRenderProfileRepository renderProfileRepository;
     @Autowired private ThemeRepository themeRepository;
     @Autowired private ItemRepository itemRepository;
     @Autowired private UserItemRepository userItemRepository;
@@ -69,6 +73,10 @@ class CharacterAccessoryIntegrationTest {
         sunglasses = own(accessory(theme, "선글라스", "eyewear", "sunglasses.png", true));
         glasses = own(accessory(theme, "검은 뿔테안경", "eyewear", "glasses.png", true));
         crown = own(accessory(theme, "왕관", "headwear", "crown.png", true));
+        support(sunglasses.getItem(), cat.getCharacter(), "0.50000", "0.31000", "0.5200", 20);
+        support(glasses.getItem(), cat.getCharacter(), "0.50000", "0.31000", "0.5200", 20);
+        support(crown.getItem(), cat.getCharacter(), "0.50000", "0.17000", "0.3500", 10);
+        support(glasses.getItem(), bear.getCharacter(), "0.50000", "0.30000", "0.5000", 20);
     }
 
     @Test
@@ -84,6 +92,13 @@ class CharacterAccessoryIntegrationTest {
                 .containsExactly(glasses.getId(), crown.getId());
         assertThat(response.items()).extracting("characterSlotType")
                 .containsExactly("eyewear", "headwear");
+        assertThat(response.items().get(0).renderProfiles()).singleElement()
+                .satisfies(profile -> {
+                    assertThat(profile.canvasWidth()).isEqualTo(180);
+                    assertThat(profile.canvasHeight()).isEqualTo(172);
+                    assertThat(profile.assetWidth()).isEqualTo(320);
+                    assertThat(profile.assetHeight()).isEqualTo(160);
+                });
         assertThat(userCharacterAccessoryRepository.findByUserCharacterId(cat.getId())).hasSize(2);
     }
 
@@ -164,6 +179,15 @@ class CharacterAccessoryIntegrationTest {
                         .isEqualTo(CharacterAccessoryErrorCode.ACCESSORY_INVALID));
     }
 
+    @Test
+    void 렌더_프로필이_없는_캐릭터에는_악세사리를_적용할_수_없다() {
+        assertThatThrownBy(() ->
+                characterAccessoryCommandService.equip(user.getId(), bear.getId(), sunglasses.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode().code())
+                        .isEqualTo("CHARACTER_ACCESSORY_UNSUPPORTED_CHARACTER"));
+    }
+
     private Character character(String code) {
         return characterRepository.save(
                 new Character(code + "_" + System.nanoTime(), code, "characters/" + code + ".png", 10, true));
@@ -177,5 +201,28 @@ class CharacterAccessoryIntegrationTest {
 
     private UserItem own(Item item) {
         return userItemRepository.save(UserItem.create(user, item));
+    }
+
+    private void support(
+            Item item,
+            Character character,
+            String positionX,
+            String positionY,
+            String widthRatio,
+            int zIndex) {
+        renderProfileRepository.save(new CharacterAccessoryRenderProfile(
+                item,
+                character,
+                CharacterAccessoryRenderProfile.DEFAULT_STATE,
+                item.getAssetKey(),
+                180,
+                172,
+                320,
+                160,
+                new BigDecimal(positionX),
+                new BigDecimal(positionY),
+                new BigDecimal(widthRatio),
+                0,
+                zIndex));
     }
 }

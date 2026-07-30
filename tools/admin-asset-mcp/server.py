@@ -8,8 +8,14 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
                         기존 큐레이션 key 관행은 S3 직접 업로드로 유지한다)
 - asset_exists:        S3 에 해당 key 가 이미 있는지 확인
 - import_catalog:      테마/캐릭터/아이템 카탈로그 멱등 적재 (POST /admin/catalog/import)
+- import_character_accessory_catalog:
+                       캐릭터 악세사리 카탈로그·렌더 프로필을 원자적으로 멱등 적재
 - import_default_slots: positioned 가구의 기본 슬롯 멱등 적재 (POST /admin/items/slots/import)
 - list_item_slots:     positioned 아이템·슬롯 현황 조회 (GET /admin/items/slots)
+- import_character_accessory_render_profiles:
+                       캐릭터별 악세사리 합성 위치 멱등 적재
+- list_character_accessory_render_profiles:
+                       캐릭터별 악세사리 합성 위치 조회
 
 실행 (Python >= 3.10 필요, uv 가 의존성을 처리):
 
@@ -166,6 +172,72 @@ def _validate_asset_key(asset_key: str) -> str:
     return ""
 
 
+def _validate_catalog_asset_references(
+        payload: dict[str, list[dict[str, Any]]]) -> tuple[list[str], list[str]]:
+    asset_references = [
+        (f"characters[{index}].baseAssetKey", "characters", character.get("baseAssetKey"))
+        for index, character in enumerate(payload["characters"])
+    ] + [
+        (f"items[{index}].assetKey", "items", item.get("assetKey"))
+        for index, item in enumerate(payload["items"])
+    ]
+    invalid = []
+    asset_keys = []
+    for field, expected_kind, asset_key in asset_references:
+        if not isinstance(asset_key, str) or not asset_key:
+            invalid.append(f"{field}: 비어 있거나 문자열이 아닙니다")
+            continue
+        error = _validate_asset_key(asset_key)
+        if error:
+            invalid.append(f"{field}: {error}")
+            continue
+        if not asset_key.startswith(f"{expected_kind}/"):
+            invalid.append(f"{field}: {expected_kind}/ 로 시작해야 합니다")
+            continue
+        asset_keys.append(asset_key)
+    return invalid, asset_keys
+
+
+def _validate_render_profile_asset_references(
+        profiles: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
+    asset_references = []
+    for index, profile in enumerate(profiles):
+        asset_references.append(
+            (f"profiles[{index}].itemAssetKey", profile.get("itemAssetKey")))
+        asset_references.append(
+            (f"profiles[{index}].assetKey", profile.get("assetKey")))
+
+    invalid = []
+    asset_keys = []
+    for index, profile in enumerate(profiles):
+        for size_field in ("canvasWidth", "canvasHeight", "assetWidth", "assetHeight"):
+            size = profile.get(size_field)
+            if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+                invalid.append(
+                    f"profiles[{index}].{size_field}: 양의 정수여야 합니다")
+
+    for field, asset_key in asset_references:
+        if not isinstance(asset_key, str) or not asset_key:
+            invalid.append(f"{field}: 비어 있거나 문자열이 아닙니다")
+            continue
+        error = _validate_asset_key(asset_key)
+        if error:
+            invalid.append(f"{field}: {error}")
+            continue
+        if not asset_key.startswith("items/"):
+            invalid.append(f"{field}: items/ 로 시작해야 합니다")
+            continue
+        asset_keys.append(asset_key)
+    return invalid, asset_keys
+
+
+def _missing_asset_keys(asset_keys: list[str]) -> list[str]:
+    return [
+        asset_key for asset_key in dict.fromkeys(asset_keys)
+        if not _object_exists(asset_key)
+    ]
+
+
 def _object_exists(asset_key: str) -> bool:
     try:
         _s3().head_object(Bucket=ASSET_BUCKET, Key=asset_key)
@@ -274,45 +346,90 @@ def import_catalog(themes: list[dict[str, Any]] | None = None,
     themes 항목: {code, name, active}
     characters 항목: {code, name, baseAssetKey, sortOrder, active}
     items 항목: {themeCode, categoryCode, placementType(positioned|surface_slot),
-                 surfaceSlotType(wallpaper|floor|background|null), characterSlotType(null 가능),
+                 surfaceSlotType(wallpaper|floor|background|null), characterSlotType(null),
                  name, priceAmount(null=뽑기 전용), assetKey, limited, active}
 
     assetKey 는 먼저 upload_asset 으로 올린 key 를 그대로 사용한다.
     이미 존재하는 code/assetKey 는 건너뛴다(skip — 기존 값이 수정되지 않음). 재실행해도
     중복 생성은 없지만, 가격·이름 등 기존 항목의 변경은 이 툴로 할 수 없다.
+    캐릭터 악세사리는 필수 렌더 프로필과 함께 import_character_accessory_catalog 로 적재한다.
     """
     payload = {"themes": themes or [], "characters": characters or [], "items": items or []}
 
-    asset_references = [
-        (f"characters[{index}].baseAssetKey", "characters", character.get("baseAssetKey"))
-        for index, character in enumerate(payload["characters"])
-    ] + [
-        (f"items[{index}].assetKey", "items", item.get("assetKey"))
-        for index, item in enumerate(payload["items"])
+    character_items = [
+        item for item in payload["items"]
+        if item.get("placementType") == "character"
     ]
-    invalid = []
-    asset_keys = []
-    for field, expected_kind, asset_key in asset_references:
-        if not isinstance(asset_key, str) or not asset_key:
-            invalid.append(f"{field}: 비어 있거나 문자열이 아닙니다")
-            continue
-        error = _validate_asset_key(asset_key)
-        if error:
-            invalid.append(f"{field}: {error}")
-            continue
-        if not asset_key.startswith(f"{expected_kind}/"):
-            invalid.append(f"{field}: {expected_kind}/ 로 시작해야 합니다")
-            continue
-        asset_keys.append(asset_key)
+    if character_items:
+        return {
+            "ok": False,
+            "error": "캐릭터 악세사리는 import_character_accessory_catalog 로 적재해야 합니다.",
+        }
+
+    invalid, asset_keys = _validate_catalog_asset_references(payload)
     if invalid:
         return {"ok": False, "error": f"올바르지 않은 카탈로그 에셋 key: {invalid}"}
 
-    unique_asset_keys = list(dict.fromkeys(asset_keys))
-    missing = [asset_key for asset_key in unique_asset_keys if not _object_exists(asset_key)]
+    missing = _missing_asset_keys(asset_keys)
     if missing:
         return {"ok": False,
                 "error": f"S3 에 없는 assetKey 가 포함돼 있습니다 (먼저 upload_asset 실행): {missing}"}
     response = _admin_request("POST", "/admin/catalog/import", json=payload)
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def import_character_accessory_catalog(
+        catalog: dict[str, list[dict[str, Any]]],
+        render_profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    """캐릭터 악세사리 카탈로그·뽑기 풀·렌더 프로필을 한 트랜잭션으로 멱등 적재한다.
+
+    catalog: {themes, characters, items}. items 는 모두 placementType=character 여야 한다.
+    render_profiles 항목:
+    {itemAssetKey, characterCode, renderState, assetKey,
+     canvasWidth, canvasHeight, assetWidth, assetHeight,
+     positionX, positionY, widthRatio, rotationDeg, zIndex}
+
+    모든 아이템은 renderState=default 프로필을 포함해야 한다. 어느 항목이든 검증 또는
+    저장에 실패하면 아이템과 활성 뽑기 풀까지 전부 롤백된다.
+    """
+    payload_catalog = {
+        "themes": catalog.get("themes") or [],
+        "characters": catalog.get("characters") or [],
+        "items": catalog.get("items") or [],
+    }
+    invalid_placements = [
+        item for item in payload_catalog["items"]
+        if item.get("placementType") != "character"
+    ]
+    if invalid_placements:
+        return {
+            "ok": False,
+            "error": f"캐릭터 악세사리 items 는 placementType=character 여야 합니다: {invalid_placements}",
+        }
+
+    catalog_invalid, catalog_asset_keys = _validate_catalog_asset_references(
+        payload_catalog)
+    profile_invalid, profile_asset_keys = _validate_render_profile_asset_references(
+        render_profiles)
+    invalid = catalog_invalid + profile_invalid
+    if invalid:
+        return {
+            "ok": False,
+            "error": f"올바르지 않은 캐릭터 악세사리 에셋 key 또는 크기: {invalid}",
+        }
+
+    missing = _missing_asset_keys(catalog_asset_keys + profile_asset_keys)
+    if missing:
+        return {
+            "ok": False,
+            "error": f"S3 에 없는 assetKey 가 포함돼 있습니다: {missing}",
+        }
+
+    response = _admin_request(
+        "POST",
+        "/admin/catalog/character-accessories/import",
+        json={"catalog": payload_catalog, "renderProfiles": render_profiles})
     return {"ok": True, "result": response.json()}
 
 
@@ -336,6 +453,45 @@ def import_default_slots(assignments: list[dict[str, str]]) -> dict[str, Any]:
 def list_item_slots() -> dict[str, Any]:
     """positioned 아이템 목록과 현재 기본 슬롯 배정을 조회한다 (admin GET /admin/items/slots)."""
     response = _admin_request("GET", "/admin/items/slots")
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def import_character_accessory_render_profiles(
+        profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    """캐릭터별 악세사리 합성 위치를 dev DB 에 멱등 적재한다.
+
+    profiles 항목:
+    {itemAssetKey, characterCode, renderState, assetKey,
+     canvasWidth, canvasHeight, assetWidth, assetHeight,
+     positionX, positionY, widthRatio, rotationDeg, zIndex}
+
+    좌표는 canvasWidth x canvasHeight 캐릭터 원본 캔버스 기준 중심점 0.0~1.0,
+    widthRatio 는 악세사리 표시 너비 / 캐릭터 캔버스 너비다.
+    assetWidth/assetHeight 는 프론트가 단품 이미지의 표시 높이를 계산할 때 사용한다.
+    renderState=default 프로필이 있어야 해당 캐릭터에 장착할 수 있다.
+    같은 아이템·캐릭터·상태를 다시 보내면 좌표를 갱신한다.
+    """
+    invalid, asset_keys = _validate_render_profile_asset_references(profiles)
+    if invalid:
+        return {"ok": False, "error": f"올바르지 않은 렌더 프로필 에셋 key: {invalid}"}
+
+    missing = _missing_asset_keys(asset_keys)
+    if missing:
+        return {
+            "ok": False,
+            "error": f"S3 에 없는 assetKey 가 포함돼 있습니다: {missing}",
+        }
+
+    response = _admin_request(
+        "POST", "/admin/character-accessory-render-profiles/import", json=profiles)
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def list_character_accessory_render_profiles() -> dict[str, Any]:
+    """캐릭터별 악세사리 합성 위치를 조회한다."""
+    response = _admin_request("GET", "/admin/character-accessory-render-profiles")
     return {"ok": True, "result": response.json()}
 
 

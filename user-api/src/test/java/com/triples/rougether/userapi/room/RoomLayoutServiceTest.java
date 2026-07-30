@@ -23,6 +23,7 @@ import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.PlacementItem;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlotAssignment;
@@ -49,6 +50,7 @@ class RoomLayoutServiceTest {
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomCommandService roomCommandService;
 

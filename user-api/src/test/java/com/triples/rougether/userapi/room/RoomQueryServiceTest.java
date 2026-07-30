@@ -21,6 +21,7 @@ import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,7 @@ class RoomQueryServiceTest {
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomQueryService roomQueryService;
 
@@ -112,6 +114,7 @@ class RoomQueryServiceTest {
         when(selected.getCharacter()).thenReturn(character);
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId))
                 .thenReturn(Optional.of(selected));
+        when(renderProfileQueryService.findFor(any())).thenReturn(java.util.Map.of());
 
         RoomResponse response = roomQueryService.getMyRoom(userId);
 
