@@ -49,6 +49,8 @@ public class ItemSlotService {
             "기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다.";
     // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (5+1회 = x5 는 user-api GachaService 가 계산)
     private static final int ITEM_GACHA_COST_COIN = 25;
+    private static final int GACHA_CODE_MAX_LENGTH = 50;
+    private static final String ACCESSORY_GACHA_CODE_SUFFIX = "_accessories";
 
     private final ItemRepository itemRepository;
     private final ThemeRepository themeRepository;
@@ -182,7 +184,9 @@ public class ItemSlotService {
             return alreadyRegistered;
         }
 
-        List<Gacha> themeGachas = gachaRepository.findActiveByThemeIdForUpdate(theme.getId());
+        String accessoryGachaCode = accessoryGachaCode(theme.getCode());
+        List<Gacha> themeGachas = gachaRepository
+                .findActiveByThemeIdAndCodeNotForUpdate(theme.getId(), accessoryGachaCode);
         if (themeGachas.isEmpty()) {
             themeGachas = List.of(gachaRepository.save(new Gacha(
                     theme.getCode(), theme.getName() + " 뽑기",
@@ -197,12 +201,7 @@ public class ItemSlotService {
     // 캐릭터 악세사리는 카탈로그 적재 시 자동 등록한다. 등급을 두지 않고 모든 엔트리를 weight=1로 통일한다.
     @Transactional
     public void registerUniformCharacterAccessory(Item item) {
-        List<GachaPoolEntry> activeItemEntries = findActiveItemEntries(item.getId());
-        if (activeItemEntries.isEmpty()) {
-            activeItemEntries = registerUniformToThemeGachas(item);
-        } else {
-            activeItemEntries.forEach(GachaPoolEntry::configureUniformDistribution);
-        }
+        registerUniformToThemeGachas(item);
         gachaPoolEntryRepository.flush();
     }
 
@@ -216,21 +215,33 @@ public class ItemSlotService {
 
         List<GachaPoolEntry> alreadyRegistered =
                 gachaPoolEntryRepository.findActiveItemEntriesForUpdate(item.getId());
-        if (!alreadyRegistered.isEmpty()) {
-            alreadyRegistered.forEach(GachaPoolEntry::configureUniformDistribution);
-            return alreadyRegistered;
+        String accessoryGachaCode = accessoryGachaCode(theme.getCode());
+        List<GachaPoolEntry> dedicatedEntries = alreadyRegistered.stream()
+                .filter(entry -> accessoryGachaCode.equals(entry.getGacha().getCode()))
+                .toList();
+        alreadyRegistered.stream()
+                .filter(entry -> !accessoryGachaCode.equals(entry.getGacha().getCode()))
+                .forEach(GachaPoolEntry::deactivate);
+        if (!dedicatedEntries.isEmpty()) {
+            dedicatedEntries.forEach(GachaPoolEntry::configureUniformDistribution);
+            return dedicatedEntries;
         }
 
-        List<Gacha> themeGachas = gachaRepository.findActiveByThemeIdForUpdate(theme.getId());
-        if (themeGachas.isEmpty()) {
-            themeGachas = List.of(gachaRepository.save(new Gacha(
-                    theme.getCode(), theme.getName() + " 뽑기",
-                    CurrencyType.COIN, ITEM_GACHA_COST_COIN, 1, theme, true)));
-        }
-        List<GachaPoolEntry> entries = themeGachas.stream()
-                .map(gacha -> GachaPoolEntry.uniformItemEntry(gacha, item))
-                .toList();
-        return gachaPoolEntryRepository.saveAll(entries);
+        Gacha accessoryGacha = gachaRepository
+                .findActiveByThemeIdAndCodeForUpdate(theme.getId(), accessoryGachaCode)
+                .orElseGet(() -> gachaRepository.save(new Gacha(
+                        accessoryGachaCode, theme.getName() + " 악세사리 뽑기",
+                        CurrencyType.COIN, ITEM_GACHA_COST_COIN, 1, theme, true)));
+        return List.of(gachaPoolEntryRepository.save(
+                GachaPoolEntry.uniformItemEntry(accessoryGacha, item)));
+    }
+
+    private static String accessoryGachaCode(String themeCode) {
+        int prefixLength = GACHA_CODE_MAX_LENGTH - ACCESSORY_GACHA_CODE_SUFFIX.length();
+        String prefix = themeCode.length() <= prefixLength
+                ? themeCode
+                : themeCode.substring(0, prefixLength);
+        return prefix + ACCESSORY_GACHA_CODE_SUFFIX;
     }
 
     @Transactional

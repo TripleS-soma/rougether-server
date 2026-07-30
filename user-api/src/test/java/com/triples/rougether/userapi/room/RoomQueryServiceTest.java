@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -37,6 +38,7 @@ class RoomQueryServiceTest {
     @Mock private RoomItemPlacementRepository roomItemPlacementRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
+    @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomQueryService roomQueryService;
 

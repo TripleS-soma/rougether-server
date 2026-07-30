@@ -69,6 +69,20 @@ class CatalogImportTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void 캐릭터_악세사리는_등급없이_동일_가중치로_뽑기_풀에_자동_등록한다() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO themes (code, name, is_active)
+                VALUES ('character_accessories', '캐릭터 꾸미기', TRUE)
+                """);
+        Long themeId = jdbcTemplate.queryForObject(
+                "SELECT id FROM themes WHERE code = 'character_accessories'", Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO gacha
+                    (code, name, cost_currency_type, cost_amount, draw_count, is_active,
+                     created_at, updated_at, theme_id)
+                VALUES ('character_accessories_furniture', '캐릭터 꾸미기 가구 뽑기',
+                        'COIN', 25, 1, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+                """, themeId);
+
         String accessoryCatalog = """
                 {
                   "themes": [{"code": "character_accessories", "name": "캐릭터 꾸미기", "active": true}],
@@ -100,7 +114,7 @@ class CatalogImportTest {
         assertThat(accessory.getPriceAmount()).isNull();
 
         var entry = jdbcTemplate.queryForMap("""
-                SELECT e.reward_type, e.rarity, e.weight
+                SELECT e.reward_type, e.rarity, e.weight, g.code
                 FROM gacha_pool_entries e
                 JOIN gacha g ON g.id = e.gacha_id
                 WHERE e.item_id = ? AND e.is_active = TRUE AND g.is_active = TRUE
@@ -108,6 +122,7 @@ class CatalogImportTest {
         assertThat(entry.get("reward_type")).isEqualTo("ITEM");
         assertThat(entry.get("rarity")).isNull();
         assertThat(entry.get("weight")).isEqualTo(1);
+        assertThat(entry.get("code")).isEqualTo("character_accessories_accessories");
 
         Integer gachaCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
@@ -115,7 +130,15 @@ class CatalogImportTest {
                 WHERE theme_id = ? AND cost_currency_type = 'COIN'
                   AND cost_amount = 25 AND draw_count = 1 AND is_active = TRUE
                 """, Integer.class, accessory.getTheme().getId());
-        assertThat(gachaCount).isEqualTo(1);
+        assertThat(gachaCount).isEqualTo(2);
+
+        Integer furniturePoolCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM gacha_pool_entries e
+                JOIN gacha g ON g.id = e.gacha_id
+                WHERE e.item_id = ? AND g.code = 'character_accessories_furniture'
+                """, Integer.class, accessory.getId());
+        assertThat(furniturePoolCount).isZero();
 
         itemRepository.flush();
         jdbcTemplate.update("""

@@ -73,6 +73,10 @@ public class GachaPoolEntry {
         this.weight = 1;
     }
 
+    public void deactivate() {
+        this.active = false;
+    }
+
     // 아이템 보상 엔트리 신규 등록용. 추첨 확률은 rarity 티어(70/25/5)로 계산하므로 weight 는 1 고정.
     public static GachaPoolEntry itemEntry(Gacha gacha, Item item, String rarity) {
         if (!GachaRarity.isSupported(rarity)) {
