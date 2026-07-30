@@ -10,12 +10,15 @@ import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseJoinRequestRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinRequestListResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.house.error.ApplicantWithdrawnException;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -103,11 +106,15 @@ public class HouseJoinService {
         return new HouseJoinRequestListResponse(items);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ApplicantWithdrawnException.class)
     public HouseJoinDetailResponse acceptRequest(Long ownerUserId, Long houseId, Long requestId) {
         House house = findHouseWithLock(houseId);
         requireOwner(house, ownerUserId);
         HouseJoinRequest request = findPendingRequestWithLock(houseId, requestId);
+        if (request.getUser().isDeleted()) {
+            request.reject();
+            throw new ApplicantWithdrawnException();
+        }
 
         HouseMember member = join(house, request.getUser().getId());
         request.accept();
@@ -124,6 +131,11 @@ public class HouseJoinService {
     // 공용 참여 판정: 중복(active)/강퇴 이력 -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
     // 호출자는 house 를 행 락으로 조회한 상태여야 한다.
     private HouseMember join(House house, Long userId) {
+        // 탈퇴 계정 가드 - 잔여 access token(최대 30분)의 참여로 탈퇴 트랜잭션의 멤버십 정리(LEFT·정원 감소)가
+        // 되돌아가는 것을 차단함(#236 INVALID_TOKEN 컨벤션). user 행 락(current read)이라 동시 탈퇴와도 직렬화됨.
+        User joiner = userRepository.findByIdForUpdate(userId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
         HouseMember existing = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
                 .orElse(null);
         if (existing != null && existing.isActive()) {
@@ -148,7 +160,7 @@ public class HouseJoinService {
             member = existing;
         } else {
             member = houseMemberRepository.save(
-                    HouseMember.create(house, userRepository.getReferenceById(userId), HouseMemberRole.MEMBER));
+                    HouseMember.create(house, joiner, HouseMemberRole.MEMBER));
         }
         house.increaseMemberCount();
         notifyMemberJoined(recipients, member);
