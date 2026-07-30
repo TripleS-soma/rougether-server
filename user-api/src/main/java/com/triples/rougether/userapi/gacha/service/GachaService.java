@@ -97,12 +97,9 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.GACHA_NOT_FOUND);
         }
 
-        Set<Long> ownedItemIds = userItemRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
-                .map(userItem -> userItem.getItem().getId())
-                .collect(Collectors.toSet());
-        Set<Long> ownedCharacterIds = userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
-                .map(userCharacter -> userCharacter.getCharacter().getId())
-                .collect(Collectors.toSet());
+        Set<Long> ownedItemIds = new HashSet<>(userItemRepository.findOwnedItemIdsByUserId(userId));
+        Set<Long> ownedCharacterIds =
+                new HashSet<>(userCharacterRepository.findOwnedCharacterIdsByUserId(userId));
 
         List<GachaRewardResponse> rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
                 .filter(this::hasReward)

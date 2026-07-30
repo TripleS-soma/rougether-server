@@ -151,10 +151,8 @@ class GachaServiceTest {
         when(poolRepository.findActiveRewardsByGachaId(10L))
                 .thenReturn(List.of(itemEntry, characterEntry));
 
-        UserItem ownedItem = mock(UserItem.class);
-        when(ownedItem.getItem()).thenReturn(item);
-        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of(ownedItem));
-        when(userCharacterRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userItemRepository.findOwnedItemIdsByUserId(1L)).thenReturn(List.of(100L));
+        when(userCharacterRepository.findOwnedCharacterIdsByUserId(1L)).thenReturn(List.of());
 
         GachaRewardListResponse response = gachaService.getRewards(1L, 10L);
 
@@ -176,12 +174,14 @@ class GachaServiceTest {
         GachaPoolEntry brokenItemEntry = mock(GachaPoolEntry.class);
         when(brokenItemEntry.getRewardType()).thenReturn(RewardType.ITEM);
         when(poolRepository.findActiveRewardsByGachaId(10L)).thenReturn(List.of(brokenItemEntry));
-        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
-        when(userCharacterRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userItemRepository.findOwnedItemIdsByUserId(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findOwnedCharacterIdsByUserId(1L)).thenReturn(List.of());
 
         GachaRewardListResponse response = gachaService.getRewards(1L, 10L);
 
         assertThat(response.items()).isEmpty();
+        verify(userItemRepository, never()).findByUserIdAndDeletedAtIsNull(1L);
+        verify(userCharacterRepository, never()).findByUserIdAndDeletedAtIsNull(1L);
     }
 
     @Test
