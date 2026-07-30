@@ -44,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class GachaServiceTest {
@@ -76,6 +77,20 @@ class GachaServiceTest {
         return g;
     }
 
+    @Test
+    void 뽑기_목록은_활성이고_운영_기간_안인_머신만_조회한다() {
+        Instant now = Instant.now();
+        Gacha available = gacha("available", true, null, null);
+        Gacha notStarted = gacha("not_started", true, now.plusSeconds(60), null);
+        Gacha expired = gacha("expired", true, null, now.minusSeconds(60));
+        Gacha inactive = gacha("inactive", false, null, null);
+        when(gachaRepository.findAll()).thenReturn(List.of(available, notStarted, expired, inactive));
+
+        assertThat(gachaService.getGachaList().items())
+                .extracting(response -> response.name())
+                .containsExactly("available");
+    }
+
     // pool 을 1개 아이템(rarity 일반)으로 만들어 추첨 결과를 결정적으로 고정.
     private Item singleItemPool(Long itemId, Long gachaId) {
         Item item = mock(Item.class);
@@ -88,6 +103,13 @@ class GachaServiceTest {
         when(entry.getRarity()).thenReturn("일반");
         when(poolRepository.findByGachaIdAndActiveIsTrue(gachaId)).thenReturn(List.of(entry));
         return item;
+    }
+
+    private Gacha gacha(String name, boolean active, Instant startsAt, Instant endsAt) {
+        Gacha gacha = new Gacha(name, name, CurrencyType.COIN, 25, 1, null, active);
+        ReflectionTestUtils.setField(gacha, "startsAt", startsAt);
+        ReflectionTestUtils.setField(gacha, "endsAt", endsAt);
+        return gacha;
     }
 
     @Test
