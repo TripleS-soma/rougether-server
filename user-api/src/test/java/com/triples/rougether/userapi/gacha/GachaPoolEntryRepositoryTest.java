@@ -75,6 +75,37 @@ class GachaPoolEntryRepositoryTest {
     }
 
     @Test
+    void 보상_미리보기와_추첨_풀은_회수된_캐릭터를_제외한다() {
+        Theme theme = themeRepository.save(new Theme("reward_character", "캐릭터 보상", null, true));
+        Gacha gacha = gachaRepository.save(
+                new Gacha("reward_character", "캐릭터 뽑기", CurrencyType.COIN, 500, 1, null, true));
+        Item placeholder = itemRepository.save(
+                item(theme, "캐릭터 엔트리 생성용", "items/reward-character/placeholder.png"));
+        Character activeCharacter = characterRepository.save(
+                new Character("reward_active_cat", "활성 고양이",
+                        "characters/reward-character/active.png", 1, true));
+        Character retiredCharacter = characterRepository.save(
+                new Character("reward_retired_cat", "회수 고양이",
+                        "characters/reward-character/retired.png", 2, false));
+
+        GachaPoolEntry activeEntry = poolRepository.save(
+                GachaPoolEntry.itemEntry(gacha, placeholder, GachaRarity.NORMAL));
+        GachaPoolEntry retiredEntry = poolRepository.save(
+                GachaPoolEntry.itemEntry(gacha, placeholder, GachaRarity.NORMAL));
+        poolRepository.flush();
+        changeToCharacterEntry(activeEntry.getId(), activeCharacter.getId());
+        changeToCharacterEntry(retiredEntry.getId(), retiredCharacter.getId());
+        entityManager.clear();
+
+        assertThat(poolRepository.findActiveRewardsByGachaId(gacha.getId()))
+                .extracting(entry -> entry.getCharacter().getId())
+                .containsExactly(activeCharacter.getId());
+        assertThat(poolRepository.findByGachaIdAndActiveIsTrue(gacha.getId()))
+                .extracting(entry -> entry.getCharacter().getId())
+                .containsExactly(activeCharacter.getId());
+    }
+
+    @Test
     void 보유_여부용_projection은_삭제되지_않은_보상_ID만_조회한다() {
         User user = userRepository.save(User.signUp("gacha-reward-owner@rougether.dev"));
         Theme theme = themeRepository.save(new Theme("reward_owned", "보유 보상", null, true));
@@ -107,5 +138,13 @@ class GachaPoolEntryRepositoryTest {
     private Item item(Theme theme, String name, String assetKey) {
         return new Item(theme, "furniture", "positioned", null, null,
                 name, null, null, assetKey, false, true);
+    }
+
+    private void changeToCharacterEntry(Long entryId, Long characterId) {
+        jdbcTemplate.update("""
+                update gacha_pool_entries
+                set reward_type = 'CHARACTER', item_id = null, character_id = ?
+                where id = ?
+                """, characterId, entryId);
     }
 }

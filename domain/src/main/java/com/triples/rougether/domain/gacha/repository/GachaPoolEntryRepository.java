@@ -11,16 +11,28 @@ import org.springframework.data.repository.query.Param;
 
 public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, Long> {
 
-    List<GachaPoolEntry> findByGachaIdAndActiveIsTrue(Long gachaId);
+    @Query("""
+            select entry
+            from GachaPoolEntry entry
+            left join fetch entry.item
+            left join fetch entry.character character
+            where entry.gacha.id = :gachaId
+              and entry.active = true
+              and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.CHARACTER
+                   or character.active = true)
+            """)
+    List<GachaPoolEntry> findByGachaIdAndActiveIsTrue(@Param("gachaId") Long gachaId);
 
     // 사용자 보상 미리보기용. 활성 엔트리만 ID 순으로 반환하고 보상 참조를 한 번에 조회함.
     @Query("""
             select entry
             from GachaPoolEntry entry
             left join fetch entry.item
-            left join fetch entry.character
+            left join fetch entry.character character
             where entry.gacha.id = :gachaId
               and entry.active = true
+              and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.CHARACTER
+                   or character.active = true)
             order by entry.id asc
             """)
     List<GachaPoolEntry> findActiveRewardsByGachaId(@Param("gachaId") Long gachaId);
