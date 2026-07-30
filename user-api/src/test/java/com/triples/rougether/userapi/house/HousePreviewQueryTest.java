@@ -15,7 +15,9 @@ import com.triples.rougether.domain.house.repository.HouseGoalRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.entity.User;
@@ -73,6 +75,7 @@ class HousePreviewQueryTest {
     @Autowired private UserItemRepository userItemRepository;
     @Autowired private CharacterRepository characterRepository;
     @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private CharacterAccessoryRenderProfileRepository renderProfileRepository;
     @Autowired private CharacterAccessoryCommandService characterAccessoryCommandService;
 
     private User owner;
@@ -186,6 +189,20 @@ class HousePreviewQueryTest {
         Item sunglasses = itemRepository.save(new Item(
                 theme, "character_accessory", "character", null, "eyewear",
                 "미리보기 선글라스", null, null, "items/preview/sunglasses.png", false, true));
+        renderProfileRepository.save(new CharacterAccessoryRenderProfile(
+                sunglasses,
+                cat,
+                CharacterAccessoryRenderProfile.DEFAULT_STATE,
+                sunglasses.getAssetKey(),
+                180,
+                172,
+                320,
+                160,
+                new BigDecimal("0.50000"),
+                new BigDecimal("0.46000"),
+                new BigDecimal("0.5200"),
+                0,
+                20));
         UserItem sunglassesOwned = userItemRepository.save(UserItem.create(owner, sunglasses));
         characterAccessoryCommandService.equip(
                 owner.getId(), selectedCat.getId(), sunglassesOwned.getId());
@@ -220,6 +237,17 @@ class HousePreviewQueryTest {
                 .satisfies(accessory -> {
                     assertThat(accessory.characterSlotType()).isEqualTo("eyewear");
                     assertThat(accessory.assetKey()).isEqualTo("items/preview/sunglasses.png");
+                    assertThat(accessory.renderProfiles()).singleElement()
+                            .satisfies(profile -> {
+                                assertThat(profile.renderState()).isEqualTo("default");
+                                assertThat(profile.canvasWidth()).isEqualTo(180);
+                                assertThat(profile.canvasHeight()).isEqualTo(172);
+                                assertThat(profile.assetWidth()).isEqualTo(320);
+                                assertThat(profile.assetHeight()).isEqualTo(160);
+                                assertThat(profile.positionX()).isEqualByComparingTo("0.50000");
+                                assertThat(profile.positionY()).isEqualByComparingTo("0.46000");
+                                assertThat(profile.widthRatio()).isEqualByComparingTo("0.5200");
+                            });
                 });
         // 방 미생성 구성원은 room null - 프론트는 기본 방 타일로 표시
         MemberRoomSummary noRoom = response.memberRooms().get(1);

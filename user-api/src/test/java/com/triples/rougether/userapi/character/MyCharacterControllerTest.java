@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.character.dto.AccessoryRenderProfileResponse;
 import com.triples.rougether.userapi.character.dto.CharacterAccessoriesResponse;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.character.dto.EquippedAccessoryResponse;
@@ -20,6 +21,7 @@ import com.triples.rougether.userapi.character.service.MyCharacterQueryService;
 import com.triples.rougether.userapi.character.web.MyCharacterController;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +53,20 @@ class MyCharacterControllerTest {
                 .thenReturn(new AuthUser(7L, null));
         sunglasses = new EquippedAccessoryResponse(
                 77L, 15L, "검은 뿔테안경", "items/accessories/glasses.png",
-                "eyewear", Instant.parse("2026-07-30T09:00:00Z"));
+                "eyewear",
+                List.of(new AccessoryRenderProfileResponse(
+                        "default",
+                        "items/accessories/glasses.png",
+                        180,
+                        172,
+                        320,
+                        160,
+                        new BigDecimal("0.50000"),
+                        new BigDecimal("0.31000"),
+                        new BigDecimal("0.5200"),
+                        0,
+                        20)),
+                Instant.parse("2026-07-30T09:00:00Z"));
     }
 
     @Test
@@ -69,7 +84,26 @@ class MyCharacterControllerTest {
                 .andExpect(jsonPath("$.items[0].accessories[0].assetKey")
                         .value("items/accessories/glasses.png"))
                 .andExpect(jsonPath("$.items[0].accessories[0].characterSlotType")
-                        .value("eyewear"));
+                        .value("eyewear"))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles").isArray())
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].renderState")
+                        .value("default"))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].canvasWidth")
+                        .value(180))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].canvasHeight")
+                        .value(172))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].assetWidth")
+                        .value(320))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].assetHeight")
+                        .value(160))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].positionX")
+                        .value(0.5))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].positionY")
+                        .value(0.31))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].widthRatio")
+                        .value(0.52))
+                .andExpect(jsonPath("$.items[0].accessories[0].renderProfiles[0].zIndex")
+                        .value(20));
     }
 
     @Test

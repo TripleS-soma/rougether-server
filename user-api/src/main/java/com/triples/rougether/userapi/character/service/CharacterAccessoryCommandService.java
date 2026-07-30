@@ -1,8 +1,10 @@
 package com.triples.rougether.userapi.character.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
+import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -24,16 +26,22 @@ public class CharacterAccessoryCommandService {
     private final UserCharacterRepository userCharacterRepository;
     private final UserItemRepository userItemRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    private final CharacterAccessoryRenderProfileRepository renderProfileRepository;
+    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
 
     public CharacterAccessoryCommandService(
             UserRepository userRepository,
             UserCharacterRepository userCharacterRepository,
             UserItemRepository userItemRepository,
-            UserCharacterAccessoryRepository userCharacterAccessoryRepository) {
+            UserCharacterAccessoryRepository userCharacterAccessoryRepository,
+            CharacterAccessoryRenderProfileRepository renderProfileRepository,
+            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
         this.userRepository = userRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.userItemRepository = userItemRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
+        this.renderProfileRepository = renderProfileRepository;
+        this.renderProfileQueryService = renderProfileQueryService;
     }
 
     @Transactional
@@ -45,6 +53,7 @@ public class CharacterAccessoryCommandService {
                         CharacterAccessoryErrorCode.ACCESSORY_NOT_OWNED));
         Item item = userItem.getItem();
         validateAccessory(item);
+        validateCompatible(item, userCharacter);
 
         userCharacterAccessoryRepository
                 .findByUserCharacterIdAndCharacterSlotType(
@@ -93,9 +102,23 @@ public class CharacterAccessoryCommandService {
         }
     }
 
+    private void validateCompatible(Item item, UserCharacter userCharacter) {
+        boolean supported = renderProfileRepository.existsByItemIdAndCharacterIdAndRenderState(
+                item.getId(),
+                userCharacter.getCharacter().getId(),
+                CharacterAccessoryRenderProfile.DEFAULT_STATE);
+        if (!supported) {
+            throw new BusinessException(
+                    CharacterAccessoryErrorCode.ACCESSORY_UNSUPPORTED_CHARACTER);
+        }
+    }
+
     private CharacterAccessoriesResponse response(Long userCharacterId) {
+        var accessories =
+                userCharacterAccessoryRepository.findActiveByUserCharacterId(userCharacterId);
         return CharacterAccessoriesResponse.of(
                 userCharacterId,
-                userCharacterAccessoryRepository.findActiveByUserCharacterId(userCharacterId));
+                accessories,
+                renderProfileQueryService.findFor(accessories));
     }
 }

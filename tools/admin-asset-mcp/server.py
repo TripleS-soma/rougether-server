@@ -10,6 +10,10 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
 - import_catalog:      테마/캐릭터/아이템 카탈로그 멱등 적재 (POST /admin/catalog/import)
 - import_default_slots: positioned 가구의 기본 슬롯 멱등 적재 (POST /admin/items/slots/import)
 - list_item_slots:     positioned 아이템·슬롯 현황 조회 (GET /admin/items/slots)
+- import_character_accessory_render_profiles:
+                       캐릭터별 악세사리 합성 위치 멱등 적재
+- list_character_accessory_render_profiles:
+                       캐릭터별 악세사리 합성 위치 조회
 
 실행 (Python >= 3.10 필요, uv 가 의존성을 처리):
 
@@ -273,7 +277,7 @@ def import_catalog(themes: list[dict[str, Any]] | None = None,
 
     themes 항목: {code, name, active}
     characters 항목: {code, name, baseAssetKey, sortOrder, active}
-    items 항목: {themeCode, categoryCode, placementType(positioned|surface_slot),
+    items 항목: {themeCode, categoryCode, placementType(positioned|surface_slot|character),
                  surfaceSlotType(wallpaper|floor|background|null), characterSlotType(null 가능),
                  name, priceAmount(null=뽑기 전용), assetKey, limited, active}
 
@@ -336,6 +340,75 @@ def import_default_slots(assignments: list[dict[str, str]]) -> dict[str, Any]:
 def list_item_slots() -> dict[str, Any]:
     """positioned 아이템 목록과 현재 기본 슬롯 배정을 조회한다 (admin GET /admin/items/slots)."""
     response = _admin_request("GET", "/admin/items/slots")
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def import_character_accessory_render_profiles(
+        profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    """캐릭터별 악세사리 합성 위치를 dev DB 에 멱등 적재한다.
+
+    profiles 항목:
+    {itemAssetKey, characterCode, renderState, assetKey,
+     canvasWidth, canvasHeight, assetWidth, assetHeight,
+     positionX, positionY, widthRatio, rotationDeg, zIndex}
+
+    좌표는 canvasWidth x canvasHeight 캐릭터 원본 캔버스 기준 중심점 0.0~1.0,
+    widthRatio 는 악세사리 표시 너비 / 캐릭터 캔버스 너비다.
+    assetWidth/assetHeight 는 프론트가 단품 이미지의 표시 높이를 계산할 때 사용한다.
+    renderState=default 프로필이 있어야 해당 캐릭터에 장착할 수 있다.
+    같은 아이템·캐릭터·상태를 다시 보내면 좌표를 갱신한다.
+    """
+    asset_references = []
+    for index, profile in enumerate(profiles):
+        asset_references.append(
+            (f"profiles[{index}].itemAssetKey", profile.get("itemAssetKey")))
+        asset_references.append(
+            (f"profiles[{index}].assetKey", profile.get("assetKey")))
+
+    invalid = []
+    asset_keys = []
+    for index, profile in enumerate(profiles):
+        for size_field in ("canvasWidth", "canvasHeight", "assetWidth", "assetHeight"):
+            size = profile.get(size_field)
+            if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+                invalid.append(
+                    f"profiles[{index}].{size_field}: 양의 정수여야 합니다")
+
+    for field, asset_key in asset_references:
+        if not isinstance(asset_key, str) or not asset_key:
+            invalid.append(f"{field}: 비어 있거나 문자열이 아닙니다")
+            continue
+        error = _validate_asset_key(asset_key)
+        if error:
+            invalid.append(f"{field}: {error}")
+            continue
+        if not asset_key.startswith("items/"):
+            invalid.append(f"{field}: items/ 로 시작해야 합니다")
+            continue
+        asset_keys.append(asset_key)
+    if invalid:
+        return {"ok": False, "error": f"올바르지 않은 렌더 프로필 에셋 key: {invalid}"}
+
+    missing = [
+        asset_key for asset_key in dict.fromkeys(asset_keys)
+        if not _object_exists(asset_key)
+    ]
+    if missing:
+        return {
+            "ok": False,
+            "error": f"S3 에 없는 assetKey 가 포함돼 있습니다: {missing}",
+        }
+
+    response = _admin_request(
+        "POST", "/admin/character-accessory-render-profiles/import", json=profiles)
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def list_character_accessory_render_profiles() -> dict[str, Any]:
+    """캐릭터별 악세사리 합성 위치를 조회한다."""
+    response = _admin_request("GET", "/admin/character-accessory-render-profiles")
     return {"ok": True, "result": response.json()}
 
 

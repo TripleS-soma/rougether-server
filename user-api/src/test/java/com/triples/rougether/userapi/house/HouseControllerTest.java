@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.character.dto.AccessoryRenderProfileResponse;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
@@ -594,7 +595,12 @@ class HouseControllerTest {
                                                 CharacterAnimations.of("cat"),
                                                 List.of(new RoomRenderResponse.RenderAccessory(
                                                         15L, "검은 뿔테안경",
-                                                        "items/preview/glasses.png", "eyewear"))),
+                                                        "items/preview/glasses.png", "eyewear",
+                                                        List.of(new AccessoryRenderProfileResponse(
+                                                                "default", "items/preview/glasses.png",
+                                                                180, 172, 320, 160,
+                                                                new BigDecimal("0.5"), new BigDecimal("0.31"),
+                                                                new BigDecimal("0.52"), 0, 20))))),
                                         List.of(new RoomRenderResponse.RenderSlot(
                                                 "wallpaper", "items/preview/wall.png")),
                                         List.of(new RoomRenderResponse.RenderPlacement(
@@ -628,6 +634,30 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].room.placements[0].assetKey").value("items/preview/chair.png"))
                 .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].assetKey")
                         .value("items/preview/glasses.png"))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].renderState")
+                        .value("default"))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].canvasWidth")
+                        .value(180))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].canvasHeight")
+                        .value(172))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].assetWidth")
+                        .value(320))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].assetHeight")
+                        .value(160))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].positionX")
+                        .value(0.5))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].positionY")
+                        .value(0.31))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].widthRatio")
+                        .value(0.52))
                 .andExpect(jsonPath("$.memberRooms[1].room").value(nullValue()))
                 // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
                 .andExpect(jsonPath("$.myRole").doesNotExist())

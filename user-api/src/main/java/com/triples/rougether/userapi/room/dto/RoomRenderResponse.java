@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.room.dto;
 
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -8,10 +9,12 @@ import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.shop.entity.UserItem;
+import com.triples.rougether.userapi.character.dto.AccessoryRenderProfileResponse;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 // 방 렌더링 부분집합 - 화면에 방을 그리는 데 필요한 것만.
 // 집 미리보기(#177)처럼 비구성원에게 내려가는 자리에 쓰므로 활동 정보(streak)·편집용 값
@@ -33,11 +36,13 @@ public record RoomRenderResponse(
     public static RoomRenderResponse of(PersonalRoom room, List<RoomSurfaceSlot> slots,
                                         List<RoomItemPlacement> placements,
                                         UserCharacter selectedCharacter,
-                                        List<UserCharacterAccessory> accessories) {
+                                        List<UserCharacterAccessory> accessories,
+                                        Map<Long, Map<Long,
+                                                List<CharacterAccessoryRenderProfile>>> renderProfiles) {
         return new RoomRenderResponse(
                 room.getGrowthLevel(),
                 room.getLayoutFormat(),
-                RenderCharacter.of(selectedCharacter, accessories),
+                RenderCharacter.of(selectedCharacter, accessories, renderProfiles),
                 slots.stream().map(RenderSlot::of).toList(),
                 placements.stream().map(RenderPlacement::of).toList());
     }
@@ -54,18 +59,27 @@ public record RoomRenderResponse(
 
         public static RenderCharacter of(
                 UserCharacter userCharacter,
-                List<UserCharacterAccessory> accessories) {
+                List<UserCharacterAccessory> accessories,
+                Map<Long, Map<Long,
+                        List<CharacterAccessoryRenderProfile>>> renderProfiles) {
             if (userCharacter == null) {
                 return null;
             }
             Character character = userCharacter.getCharacter();
+            Map<Long, List<CharacterAccessoryRenderProfile>> byItem =
+                    renderProfiles.getOrDefault(userCharacter.getId(), Map.of());
             return new RenderCharacter(
                     character.getId(),
                     character.getCode(),
                     character.getName(),
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
-                    accessories.stream().map(RenderAccessory::of).toList());
+                    accessories.stream()
+                            .map(accessory -> RenderAccessory.of(
+                                    accessory,
+                                    byItem.getOrDefault(
+                                            accessory.getUserItem().getItem().getId(), List.of())))
+                            .toList());
         }
     }
 
@@ -73,15 +87,19 @@ public record RoomRenderResponse(
             Long itemId,
             String name,
             String assetKey,
-            String characterSlotType) {
+            String characterSlotType,
+            List<AccessoryRenderProfileResponse> renderProfiles) {
 
-        public static RenderAccessory of(UserCharacterAccessory accessory) {
+        public static RenderAccessory of(
+                UserCharacterAccessory accessory,
+                List<CharacterAccessoryRenderProfile> renderProfiles) {
             UserItem userItem = accessory.getUserItem();
             return new RenderAccessory(
                     userItem.getItem().getId(),
                     userItem.getItem().getName(),
                     userItem.getItem().getAssetKey(),
-                    accessory.getCharacterSlotType());
+                    accessory.getCharacterSlotType(),
+                    renderProfiles.stream().map(AccessoryRenderProfileResponse::of).toList());
         }
     }
 

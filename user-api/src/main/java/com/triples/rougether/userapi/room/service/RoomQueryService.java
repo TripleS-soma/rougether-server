@@ -17,6 +17,7 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ public class RoomQueryService {
     private final StreakRepository streakRepository;
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
@@ -43,6 +45,7 @@ public class RoomQueryService {
                             StreakRepository streakRepository,
                             UserCharacterRepository userCharacterRepository,
                             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
+                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
                             UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
@@ -50,6 +53,7 @@ public class RoomQueryService {
         this.streakRepository = streakRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
+        this.renderProfileQueryService = renderProfileQueryService;
         this.userRepository = userRepository;
     }
 
@@ -73,7 +77,8 @@ public class RoomQueryService {
 
     // 여러 사용자의 방 렌더 데이터를 한 번에 조회(집 미리보기 등 비구성원 노출 자리).
     // 방 없는 사용자는 결과 map 에 없다 - lazy 생성 없음, streak 같은 활동 정보는 조회하지 않는다(공개 범위 밖).
-    // 사용자 수와 무관하게 고정 5쿼리(방·슬롯·자유배치·캐릭터·악세사리) - 사용자별 반복 조회(N+1)를 만들지 않는다.
+    // 사용자 수와 무관하게 고정 6쿼리(방·슬롯·자유배치·캐릭터·악세사리·렌더 프로필)
+    // - 사용자별 반복 조회(N+1)를 만들지 않는다.
     @Transactional(readOnly = true)
     public Map<Long, RoomRenderResponse> findRendersOf(Collection<Long> roomUserIds) {
         if (roomUserIds.isEmpty()) {
@@ -94,14 +99,14 @@ public class RoomQueryService {
         List<UserCharacter> selectedCharacters = userCharacterRepository.findSelectedByUserIdIn(withRoom);
         Map<Long, UserCharacter> characterByUser = selectedCharacters.stream()
                 .collect(Collectors.toMap(uc -> uc.getUser().getId(), Function.identity()));
+        List<UserCharacterAccessory> allAccessories = selectedCharacters.isEmpty()
+                ? List.of()
+                : userCharacterAccessoryRepository.findActiveByUserCharacterIdIn(
+                        selectedCharacters.stream().map(UserCharacter::getId).toList());
         Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId =
-                selectedCharacters.isEmpty()
-                        ? Map.of()
-                        : userCharacterAccessoryRepository.findActiveByUserCharacterIdIn(
-                                        selectedCharacters.stream().map(UserCharacter::getId).toList())
-                                .stream()
-                                .collect(Collectors.groupingBy(
-                                        accessory -> accessory.getUserCharacter().getId()));
+                allAccessories.stream().collect(Collectors.groupingBy(
+                        accessory -> accessory.getUserCharacter().getId()));
+        var renderProfiles = renderProfileQueryService.findFor(allAccessories);
         return rooms.stream().collect(Collectors.toMap(
                 PersonalRoom::getUserId,
                 room -> {
@@ -114,7 +119,8 @@ public class RoomQueryService {
                             selectedCharacter == null
                                     ? List.of()
                                     : accessoriesByUserCharacterId.getOrDefault(
-                                            selectedCharacter.getId(), List.of()));
+                                            selectedCharacter.getId(), List.of()),
+                            renderProfiles);
                 }));
     }
 
@@ -128,6 +134,13 @@ public class RoomQueryService {
                 ? List.of()
                 : userCharacterAccessoryRepository.findActiveByUserCharacterId(
                         selectedCharacter.getId());
-        return RoomResponse.of(room, slots, placements, streak, selectedCharacter, accessories);
+        return RoomResponse.of(
+                room,
+                slots,
+                placements,
+                streak,
+                selectedCharacter,
+                accessories,
+                renderProfileQueryService.findFor(accessories));
     }
 }

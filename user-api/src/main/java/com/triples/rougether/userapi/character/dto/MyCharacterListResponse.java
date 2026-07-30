@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.character.dto;
 
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,7 +35,9 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
             Instant acquiredAt) {
 
         public static MyCharacterItem of(
-                UserCharacter userCharacter, List<UserCharacterAccessory> accessories) {
+                UserCharacter userCharacter,
+                List<UserCharacterAccessory> accessories,
+                Map<Long, List<CharacterAccessoryRenderProfile>> renderProfilesByItemId) {
             Character character = userCharacter.getCharacter();
             return new MyCharacterItem(
                     userCharacter.getId(),
@@ -44,18 +47,25 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     userCharacter.isSelected(),
-                    accessories.stream().map(EquippedAccessoryResponse::of).toList(),
+                    accessories.stream()
+                            .map(accessory -> EquippedAccessoryResponse.of(
+                                    accessory,
+                                    renderProfilesByItemId.getOrDefault(
+                                            accessory.getUserItem().getItem().getId(), List.of())))
+                            .toList(),
                     userCharacter.getAcquiredAt());
         }
     }
 
     public static MyCharacterListResponse of(
             List<UserCharacter> owned,
-            Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId) {
+            Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId,
+            Map<Long, Map<Long, List<CharacterAccessoryRenderProfile>>> renderProfiles) {
         return new MyCharacterListResponse(owned.stream()
                 .map(userCharacter -> MyCharacterItem.of(
                         userCharacter,
-                        accessoriesByUserCharacterId.getOrDefault(userCharacter.getId(), List.of())))
+                        accessoriesByUserCharacterId.getOrDefault(userCharacter.getId(), List.of()),
+                        renderProfiles.getOrDefault(userCharacter.getId(), Map.of())))
                 .toList());
     }
 }

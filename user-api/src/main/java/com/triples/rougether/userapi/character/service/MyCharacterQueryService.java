@@ -18,26 +18,33 @@ public class MyCharacterQueryService {
 
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
 
     public MyCharacterQueryService(
             UserCharacterRepository userCharacterRepository,
-            UserCharacterAccessoryRepository userCharacterAccessoryRepository) {
+            UserCharacterAccessoryRepository userCharacterAccessoryRepository,
+            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
+        this.renderProfileQueryService = renderProfileQueryService;
     }
 
     @Transactional(readOnly = true)
     public MyCharacterListResponse getMyCharacters(Long userId) {
         List<UserCharacter> owned = userCharacterRepository.findOwnedWithCharacter(userId);
         if (owned.isEmpty()) {
-            return MyCharacterListResponse.of(List.of(), Map.of());
+            return MyCharacterListResponse.of(List.of(), Map.of(), Map.of());
         }
-        Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId =
+        List<UserCharacterAccessory> accessories =
                 userCharacterAccessoryRepository.findActiveByUserCharacterIdIn(
-                                owned.stream().map(UserCharacter::getId).toList())
-                        .stream()
+                        owned.stream().map(UserCharacter::getId).toList());
+        Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId =
+                accessories.stream()
                         .collect(Collectors.groupingBy(
                                 accessory -> accessory.getUserCharacter().getId()));
-        return MyCharacterListResponse.of(owned, accessoriesByUserCharacterId);
+        return MyCharacterListResponse.of(
+                owned,
+                accessoriesByUserCharacterId,
+                renderProfileQueryService.findFor(accessories));
     }
 }

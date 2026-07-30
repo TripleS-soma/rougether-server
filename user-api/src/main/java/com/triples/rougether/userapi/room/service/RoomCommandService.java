@@ -23,6 +23,7 @@ import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlo
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ public class RoomCommandService {
     private final UserItemRepository userItemRepository;
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     private final StreakRepository streakRepository;
     private final UserRepository userRepository;
 
@@ -64,6 +66,7 @@ public class RoomCommandService {
                               UserItemRepository userItemRepository,
                               UserCharacterRepository userCharacterRepository,
                               UserCharacterAccessoryRepository userCharacterAccessoryRepository,
+                              CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
                               StreakRepository streakRepository,
                               UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
@@ -72,6 +75,7 @@ public class RoomCommandService {
         this.userItemRepository = userItemRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
+        this.renderProfileQueryService = renderProfileQueryService;
         this.streakRepository = streakRepository;
         this.userRepository = userRepository;
     }
@@ -265,6 +269,13 @@ public class RoomCommandService {
                 ? List.of()
                 : userCharacterAccessoryRepository.findActiveByUserCharacterId(
                         selectedCharacter.getId());
-        return RoomResponse.of(room, slots, placements, streak, selectedCharacter, accessories);
+        return RoomResponse.of(
+                room,
+                slots,
+                placements,
+                streak,
+                selectedCharacter,
+                accessories,
+                renderProfileQueryService.findFor(accessories));
     }
 }
