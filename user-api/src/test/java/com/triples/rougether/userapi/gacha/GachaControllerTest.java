@@ -57,25 +57,30 @@ class GachaControllerTest {
     }
 
     @Test
-    void 뽑기_보상_목록은_확률없이_보유여부를_내려준다() throws Exception {
+    void 뽑기_보상_목록은_확률없이_꾸미기_메타데이터와_보유여부를_내려준다() throws Exception {
         when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
         when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
                 .thenReturn(new AuthUser(1L, null));
         when(gachaService.getRewards(1L, 10L)).thenReturn(new GachaRewardListResponse(List.of(
                 new GachaRewardResponse(
-                        "ITEM", 100L, null, "한옥 좌식상",
-                        "items/calm-hanok/furniture/low-table.png", "희귀", true))));
+                        "ITEM", 100L, null, "분홍 하트 선글라스",
+                        "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
+                        null, true, "character_accessory", "character", null, "eyewear"))));
 
         mockMvc.perform(get("/api/v1/gacha/10/rewards"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].rewardType").value("ITEM"))
                 .andExpect(jsonPath("$.items[0].itemId").value(100))
                 .andExpect(jsonPath("$.items[0].characterId").doesNotExist())
-                .andExpect(jsonPath("$.items[0].name").value("한옥 좌식상"))
+                .andExpect(jsonPath("$.items[0].name").value("분홍 하트 선글라스"))
                 .andExpect(jsonPath("$.items[0].assetKey")
-                        .value("items/calm-hanok/furniture/low-table.png"))
-                .andExpect(jsonPath("$.items[0].rarity").value("희귀"))
+                        .value("items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png"))
+                .andExpect(jsonPath("$.items[0].rarity").doesNotExist())
                 .andExpect(jsonPath("$.items[0].owned").value(true))
+                .andExpect(jsonPath("$.items[0].categoryCode").value("character_accessory"))
+                .andExpect(jsonPath("$.items[0].placementType").value("character"))
+                .andExpect(jsonPath("$.items[0].surfaceSlotType").doesNotExist())
+                .andExpect(jsonPath("$.items[0].characterSlotType").value("eyewear"))
                 .andExpect(jsonPath("$.items[0].weight").doesNotExist())
                 .andExpect(jsonPath("$.items[0].probability").doesNotExist());
     }

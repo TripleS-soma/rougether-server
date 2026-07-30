@@ -2,7 +2,10 @@ package com.triples.rougether.userapi.character.web;
 
 import com.triples.rougether.userapi.character.dto.CharacterSelectRequest;
 import com.triples.rougether.userapi.character.dto.CharacterSelectResponse;
+import com.triples.rougether.userapi.character.dto.CharacterAccessoryEquipRequest;
+import com.triples.rougether.userapi.character.dto.CharacterAccessoriesResponse;
 import com.triples.rougether.userapi.character.dto.MyCharacterListResponse;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryCommandService;
 import com.triples.rougether.userapi.character.service.MyCharacterCommandService;
 import com.triples.rougether.userapi.character.service.MyCharacterQueryService;
 import com.triples.rougether.userapi.global.security.AuthUser;
@@ -11,6 +14,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,11 +28,14 @@ public class MyCharacterController {
 
     private final MyCharacterQueryService myCharacterQueryService;
     private final MyCharacterCommandService myCharacterCommandService;
+    private final CharacterAccessoryCommandService characterAccessoryCommandService;
 
     public MyCharacterController(MyCharacterQueryService myCharacterQueryService,
-                                 MyCharacterCommandService myCharacterCommandService) {
+                                 MyCharacterCommandService myCharacterCommandService,
+                                 CharacterAccessoryCommandService characterAccessoryCommandService) {
         this.myCharacterQueryService = myCharacterQueryService;
         this.myCharacterCommandService = myCharacterCommandService;
+        this.characterAccessoryCommandService = characterAccessoryCommandService;
     }
 
     @Operation(summary = "내 보유 캐릭터 목록 조회",
@@ -50,5 +58,28 @@ public class MyCharacterController {
     public CharacterSelectResponse select(@CurrentUser AuthUser user,
                                           @Valid @RequestBody CharacterSelectRequest request) {
         return new CharacterSelectResponse(myCharacterCommandService.select(user.id(), request.characterId()));
+    }
+
+    @Operation(summary = "캐릭터 악세사리 적용",
+            description = "보유 캐릭터의 악세사리 슬롯에 보유 아이템을 적용합니다. "
+                    + "같은 슬롯의 기존 악세사리는 교체되며 캐릭터별로 상태가 유지됩니다.")
+    @PutMapping("/{userCharacterId}/accessories")
+    public CharacterAccessoriesResponse equipAccessory(
+            @CurrentUser AuthUser user,
+            @PathVariable Long userCharacterId,
+            @Valid @RequestBody CharacterAccessoryEquipRequest request) {
+        return characterAccessoryCommandService.equip(
+                user.id(), userCharacterId, request.userItemId());
+    }
+
+    @Operation(summary = "캐릭터 악세사리 해제",
+            description = "보유 캐릭터의 지정 슬롯을 비웁니다. 이미 비어 있어도 성공합니다.")
+    @DeleteMapping("/{userCharacterId}/accessories/{characterSlotType}")
+    public CharacterAccessoriesResponse unequipAccessory(
+            @CurrentUser AuthUser user,
+            @PathVariable Long userCharacterId,
+            @PathVariable String characterSlotType) {
+        return characterAccessoryCommandService.unequip(
+                user.id(), userCharacterId, characterSlotType);
     }
 }

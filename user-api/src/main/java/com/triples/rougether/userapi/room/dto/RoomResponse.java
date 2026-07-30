@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.room.dto;
 
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
@@ -9,6 +10,7 @@ import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
+import com.triples.rougether.userapi.character.dto.EquippedAccessoryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -40,7 +42,8 @@ public record RoomResponse(
 
     public static RoomResponse of(PersonalRoom room, List<RoomSurfaceSlot> slots,
                                   List<RoomItemPlacement> placements, Streak streak,
-                                  UserCharacter selectedCharacter) {
+                                  UserCharacter selectedCharacter,
+                                  List<UserCharacterAccessory> accessories) {
         List<RoomSlotResponse> slotResponses = slots.stream()
                 .map(RoomSlotResponse::of)
                 .toList();
@@ -52,7 +55,7 @@ public record RoomResponse(
                 room.getGrowthLevel(),
                 room.getLayoutFormat(),
                 room.getLayoutRevision(),
-                RoomCharacterResponse.of(selectedCharacter),
+                RoomCharacterResponse.of(selectedCharacter, accessories),
                 slotResponses,
                 placementResponses,
                 RoomStreakResponse.of(streak),
@@ -71,15 +74,20 @@ public record RoomResponse(
                     example = "characters/cat.png")
             String assetKey,
             @Schema(description = "애니메이션(APNG) asset key 묶음 (idle/poseCycle/wave)")
-            CharacterAnimations animations) {
-        public static RoomCharacterResponse of(UserCharacter userCharacter) {
+            CharacterAnimations animations,
+            @Schema(description = "이 캐릭터에 저장된 악세사리 착용 목록")
+            List<EquippedAccessoryResponse> accessories) {
+        public static RoomCharacterResponse of(
+                UserCharacter userCharacter,
+                List<UserCharacterAccessory> accessories) {
             if (userCharacter == null) {
                 return null;
             }
             Character character = userCharacter.getCharacter();
             return new RoomCharacterResponse(
                     character.getId(), character.getCode(), character.getName(), character.getBaseAssetKey(),
-                    CharacterAnimations.of(character.getCode()));
+                    CharacterAnimations.of(character.getCode()),
+                    accessories.stream().map(EquippedAccessoryResponse::of).toList());
         }
     }
 

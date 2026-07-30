@@ -35,7 +35,9 @@ import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -119,6 +121,22 @@ class GachaServiceTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.INVALID_DRAW_COUNT));
     }
 
+    @Test
+    void 등급없는_풀은_등급_추첨없이_전체에서_균등_추첨한다() {
+        Random random = mock(Random.class);
+        ReflectionTestUtils.setField(gachaService, "random", random);
+        GachaPoolEntry first = mock(GachaPoolEntry.class);
+        GachaPoolEntry second = mock(GachaPoolEntry.class);
+        when(random.nextInt(2)).thenReturn(1);
+
+        GachaPoolEntry picked = ReflectionTestUtils.invokeMethod(
+                gachaService, "pickEntry", List.of(first, second), Map.of());
+
+        assertThat(picked).isSameAs(second);
+        verify(random, never()).nextInt(100);
+        verify(random).nextInt(2);
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {6, 10})
     void 신규_6과_구버전_10요청은_다섯회_비용으로_여섯개를_뽑는다(int requestCount) {
@@ -157,18 +175,21 @@ class GachaServiceTest {
     }
 
     @Test
-    void 활성_풀의_아이템과_캐릭터를_보유여부와_함께_조회한다() {
+    void 활성_풀의_꾸미기_아이템과_캐릭터를_보유여부와_함께_조회한다() {
         Gacha gacha = availableGacha();
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
 
         Item item = mock(Item.class);
         when(item.getId()).thenReturn(100L);
-        when(item.getName()).thenReturn("한옥 좌식상");
-        when(item.getAssetKey()).thenReturn("items/calm-hanok/furniture/low-table.png");
+        when(item.getName()).thenReturn("분홍 하트 선글라스");
+        when(item.getAssetKey()).thenReturn(
+                "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png");
+        when(item.getCategoryCode()).thenReturn("character_accessory");
+        when(item.getPlacementType()).thenReturn("character");
+        when(item.getCharacterSlotType()).thenReturn("eyewear");
         GachaPoolEntry itemEntry = mock(GachaPoolEntry.class);
         when(itemEntry.getRewardType()).thenReturn(RewardType.ITEM);
         when(itemEntry.getItem()).thenReturn(item);
-        when(itemEntry.getRarity()).thenReturn("희귀");
 
         Character character = mock(Character.class);
         when(character.getId()).thenReturn(5L);
@@ -190,12 +211,20 @@ class GachaServiceTest {
         assertThat(response.items().get(0).rewardType()).isEqualTo("ITEM");
         assertThat(response.items().get(0).itemId()).isEqualTo(100L);
         assertThat(response.items().get(0).characterId()).isNull();
-        assertThat(response.items().get(0).rarity()).isEqualTo("희귀");
+        assertThat(response.items().get(0).rarity()).isNull();
         assertThat(response.items().get(0).owned()).isTrue();
+        assertThat(response.items().get(0).categoryCode()).isEqualTo("character_accessory");
+        assertThat(response.items().get(0).placementType()).isEqualTo("character");
+        assertThat(response.items().get(0).surfaceSlotType()).isNull();
+        assertThat(response.items().get(0).characterSlotType()).isEqualTo("eyewear");
         assertThat(response.items().get(1).rewardType()).isEqualTo("CHARACTER");
         assertThat(response.items().get(1).itemId()).isNull();
         assertThat(response.items().get(1).characterId()).isEqualTo(5L);
         assertThat(response.items().get(1).owned()).isFalse();
+        assertThat(response.items().get(1).categoryCode()).isNull();
+        assertThat(response.items().get(1).placementType()).isNull();
+        assertThat(response.items().get(1).surfaceSlotType()).isNull();
+        assertThat(response.items().get(1).characterSlotType()).isNull();
     }
 
     @Test
@@ -284,7 +313,7 @@ class GachaServiceTest {
     }
 
     @Test
-    void 이미_소유한_아이템은_지급대신_다이아3으로_전환된다() {
+    void 이미_소유한_캐릭터_악세사리는_다른_아이템처럼_다이아3으로_전환된다() {
         Gacha g = activeGacha(25);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);

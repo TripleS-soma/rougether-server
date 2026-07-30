@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
@@ -587,7 +588,13 @@ class HouseControllerTest {
                         null, null, false, Instant.parse("2026-07-28T01:00:00Z"))),
                 List.of(
                         new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
-                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1, null,
+                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1,
+                                        new RoomRenderResponse.RenderCharacter(
+                                                1L, "cat", "고양이", "characters/cat.png",
+                                                CharacterAnimations.of("cat"),
+                                                List.of(new RoomRenderResponse.RenderAccessory(
+                                                        15L, "검은 뿔테안경",
+                                                        "items/preview/glasses.png", "eyewear"))),
                                         List.of(new RoomRenderResponse.RenderSlot(
                                                 "wallpaper", "items/preview/wall.png")),
                                         List.of(new RoomRenderResponse.RenderPlacement(
@@ -619,6 +626,8 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].room.layoutFormat").value("FREE_V1"))
                 .andExpect(jsonPath("$.memberRooms[0].room.slots[0].assetKey").value("items/preview/wall.png"))
                 .andExpect(jsonPath("$.memberRooms[0].room.placements[0].assetKey").value("items/preview/chair.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].assetKey")
+                        .value("items/preview/glasses.png"))
                 .andExpect(jsonPath("$.memberRooms[1].room").value(nullValue()))
                 // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
                 .andExpect(jsonPath("$.myRole").doesNotExist())
@@ -630,6 +639,8 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].room.slots[0].savedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].room.placements[0].userItemId").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].room.placements[0].updatedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].equippedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].lastAccessedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].userId").doesNotExist());
     }

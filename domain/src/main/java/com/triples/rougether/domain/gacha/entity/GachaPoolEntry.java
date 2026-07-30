@@ -67,6 +67,16 @@ public class GachaPoolEntry {
         this.rarity = rarity;
     }
 
+    // 등급이 없는 풀에서 모든 엔트리를 동일 확률로 다루기 위한 설정.
+    public void configureUniformDistribution() {
+        this.rarity = null;
+        this.weight = 1;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
     // 아이템 보상 엔트리 신규 등록용. 추첨 확률은 rarity 티어(70/25/5)로 계산하므로 weight 는 1 고정.
     public static GachaPoolEntry itemEntry(Gacha gacha, Item item, String rarity) {
         if (!GachaRarity.isSupported(rarity)) {
@@ -78,6 +88,17 @@ public class GachaPoolEntry {
         entry.item = item;
         entry.rarity = rarity;
         entry.weight = 1;
+        entry.active = true;
+        return entry;
+    }
+
+    // 캐릭터 악세사리처럼 등급 없이 풀 전체에서 균등 추첨하는 아이템 보상 엔트리.
+    public static GachaPoolEntry uniformItemEntry(Gacha gacha, Item item) {
+        GachaPoolEntry entry = new GachaPoolEntry();
+        entry.gacha = gacha;
+        entry.rewardType = RewardType.ITEM;
+        entry.item = item;
+        entry.configureUniformDistribution();
         entry.active = true;
         return entry;
     }

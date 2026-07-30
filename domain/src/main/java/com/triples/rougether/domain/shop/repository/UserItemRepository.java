@@ -2,6 +2,7 @@ package com.triples.rougether.domain.shop.repository;
 
 import com.triples.rougether.domain.shop.entity.UserItem;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -24,4 +25,15 @@ public interface UserItemRepository extends JpaRepository<UserItem, Long> {
                                          @Param("categoryCode") String categoryCode);
 
     boolean existsByUserIdAndItemIdAndDeletedAtIsNull(Long userId, Long itemId);
+
+    @Query("""
+            select userItem from UserItem userItem
+            join fetch userItem.item item
+            join fetch item.theme
+            where userItem.id = :userItemId
+              and userItem.user.id = :userId
+              and userItem.deletedAt is null
+            """)
+    Optional<UserItem> findOwnedWithItem(@Param("userId") Long userId,
+                                         @Param("userItemId") Long userItemId);
 }

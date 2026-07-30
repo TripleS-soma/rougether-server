@@ -114,4 +114,9 @@ public class Item {
         this.defaultPositionX = defaultPositionX;
         this.defaultPositionY = defaultPositionY;
     }
+
+    public void makeGachaOnly() {
+        this.purchaseCurrencyType = null;
+        this.priceAmount = null;
+    }
 }

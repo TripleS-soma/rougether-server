@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -41,6 +42,7 @@ class RoomCommandServiceTest {
     @Mock private UserItemRepository userItemRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
+    @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomCommandService roomCommandService;
 

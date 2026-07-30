@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// positioned 아이템의 기본 배치 슬롯(items.default_slot)과 뽑기 등급 관리.
+// positioned 아이템의 기본 배치 슬롯(items.default_slot)과 가구의 뽑기 등급 관리.
 // 단건 변경(어드민 화면) + 벌크 적재(deploy/seed/slot_assignments.json). 적재는 asset_key 매칭이라 멱등.
 @Service
 public class ItemSlotService {
@@ -49,6 +49,8 @@ public class ItemSlotService {
             "기본 위치 X와 Y는 0 이상 1 이하의 숫자여야 합니다.";
     // 가구(테마) 뽑기 단가 — spec domains/gacha/api.md (5+1회 = x5 는 user-api GachaService 가 계산)
     private static final int ITEM_GACHA_COST_COIN = 25;
+    private static final int GACHA_CODE_MAX_LENGTH = 50;
+    private static final String ACCESSORY_GACHA_CODE_SUFFIX = "_accessories";
 
     private final ItemRepository itemRepository;
     private final ThemeRepository themeRepository;
@@ -149,7 +151,7 @@ public class ItemSlotService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemRarityInvalidException("item 이 없습니다: " + itemId));
         if (!PLACEMENT_POSITIONED.equals(item.getPlacementType())) {
-            throw new ItemRarityInvalidException("positioned 아이템이 아닙니다: " + itemId);
+            throw new ItemRarityInvalidException("가구 뽑기 등급 관리 대상이 아닙니다: " + itemId);
         }
 
         List<GachaPoolEntry> activeItemEntries = findActiveItemEntries(itemId);
@@ -182,7 +184,9 @@ public class ItemSlotService {
             return alreadyRegistered;
         }
 
-        List<Gacha> themeGachas = gachaRepository.findActiveByThemeIdForUpdate(theme.getId());
+        String accessoryGachaCode = accessoryGachaCode(theme.getCode());
+        List<Gacha> themeGachas = gachaRepository
+                .findActiveByThemeIdAndCodeNotForUpdate(theme.getId(), accessoryGachaCode);
         if (themeGachas.isEmpty()) {
             themeGachas = List.of(gachaRepository.save(new Gacha(
                     theme.getCode(), theme.getName() + " 뽑기",
@@ -192,6 +196,52 @@ public class ItemSlotService {
                 .map(gacha -> GachaPoolEntry.itemEntry(gacha, item, rarity))
                 .toList();
         return gachaPoolEntryRepository.saveAll(entries);
+    }
+
+    // 캐릭터 악세사리는 카탈로그 적재 시 자동 등록한다. 등급을 두지 않고 모든 엔트리를 weight=1로 통일한다.
+    @Transactional
+    public void registerUniformCharacterAccessory(Item item) {
+        registerUniformToThemeGachas(item);
+        gachaPoolEntryRepository.flush();
+    }
+
+    private List<GachaPoolEntry> registerUniformToThemeGachas(Item item) {
+        if (!item.isActive() || !item.getTheme().isActive()) {
+            return List.of();
+        }
+        Theme theme = themeRepository.findWithLockById(item.getTheme().getId())
+                .orElseThrow(() -> new ItemRarityInvalidException(
+                        "theme 이 없습니다: " + item.getTheme().getId()));
+
+        List<GachaPoolEntry> alreadyRegistered =
+                gachaPoolEntryRepository.findActiveItemEntriesForUpdate(item.getId());
+        String accessoryGachaCode = accessoryGachaCode(theme.getCode());
+        List<GachaPoolEntry> dedicatedEntries = alreadyRegistered.stream()
+                .filter(entry -> accessoryGachaCode.equals(entry.getGacha().getCode()))
+                .toList();
+        alreadyRegistered.stream()
+                .filter(entry -> !accessoryGachaCode.equals(entry.getGacha().getCode()))
+                .forEach(GachaPoolEntry::deactivate);
+        if (!dedicatedEntries.isEmpty()) {
+            dedicatedEntries.forEach(GachaPoolEntry::configureUniformDistribution);
+            return dedicatedEntries;
+        }
+
+        Gacha accessoryGacha = gachaRepository
+                .findActiveByThemeIdAndCodeForUpdate(theme.getId(), accessoryGachaCode)
+                .orElseGet(() -> gachaRepository.save(new Gacha(
+                        accessoryGachaCode, theme.getName() + " 악세사리 뽑기",
+                        CurrencyType.COIN, ITEM_GACHA_COST_COIN, 1, theme, true)));
+        return List.of(gachaPoolEntryRepository.save(
+                GachaPoolEntry.uniformItemEntry(accessoryGacha, item)));
+    }
+
+    private static String accessoryGachaCode(String themeCode) {
+        int prefixLength = GACHA_CODE_MAX_LENGTH - ACCESSORY_GACHA_CODE_SUFFIX.length();
+        String prefix = themeCode.length() <= prefixLength
+                ? themeCode
+                : themeCode.substring(0, prefixLength);
+        return prefix + ACCESSORY_GACHA_CODE_SUFFIX;
     }
 
     @Transactional

@@ -39,7 +39,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 뽑기 조회 + 실행. 2단계 추첨(등급 70/25/5 -> 등급 pool 균등), COIN 차감.
+// 뽑기 조회 + 실행. 가구는 2단계 추첨(등급 70/25/5 -> 등급 pool 균등),
+// 등급 없는 캐릭터/악세사리 전용 풀은 전체 균등 추첨, COIN 차감.
 // 보상은 아이템(가구) 또는 캐릭터. 중복 보유 시 아이템은 다이아, 캐릭터는 코인으로 전환(프론트 재화 규칙).
 @Service
 public class GachaService {
@@ -202,14 +203,17 @@ public class GachaService {
             Item item = entry.getItem();
             return new GachaRewardResponse(
                     RewardType.ITEM.name(), item.getId(), null, item.getName(), item.getAssetKey(),
-                    entry.getRarity(), ownedItemIds.contains(item.getId()));
+                    entry.getRarity(), ownedItemIds.contains(item.getId()),
+                    item.getCategoryCode(), item.getPlacementType(),
+                    item.getSurfaceSlotType(), item.getCharacterSlotType());
         }
 
         Character character = entry.getCharacter();
         return new GachaRewardResponse(
                 RewardType.CHARACTER.name(), null, character.getId(), character.getName(),
                 character.getBaseAssetKey(), entry.getRarity(),
-                ownedCharacterIds.contains(character.getId()));
+                ownedCharacterIds.contains(character.getId()),
+                null, null, null, null);
     }
 
     // 아이템(가구) 지급. 이미 보유 시 다이아로 전환하고 전환액 반환.
@@ -242,9 +246,12 @@ public class GachaService {
         return 0;
     }
 
-    // 등급을 먼저 뽑고(일반70/희귀25/전설5) 해당 등급 pool 에서 균등 추첨.
-    // 등급 pool 이 비면(예: 캐릭터 뽑기처럼 rarity 미부여) 전체 pool 에서 균등.
+    // 모든 엔트리에 등급이 없으면(캐릭터/악세사리 전용 풀) 전체에서 바로 균등 추첨한다.
+    // 가구 풀은 등급을 먼저 뽑고(일반70/희귀25/전설5) 해당 등급 pool 에서 균등 추첨한다.
     private GachaPoolEntry pickEntry(List<GachaPoolEntry> pool, Map<String, List<GachaPoolEntry>> byRarity) {
+        if (pool.stream().allMatch(entry -> entry.getRarity() == null)) {
+            return pool.get(random.nextInt(pool.size()));
+        }
         int roll = random.nextInt(100);
         String rarity = roll < TIER_NORMAL_MAX
                 ? GachaRarity.NORMAL

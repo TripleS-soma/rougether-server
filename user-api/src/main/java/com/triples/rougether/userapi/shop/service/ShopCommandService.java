@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ShopCommandService {
 
+    private static final String PLACEMENT_CHARACTER = "character";
+
     private final ItemRepository itemRepository;
     private final UserItemRepository userItemRepository;
     private final UserWalletRepository userWalletRepository;
@@ -38,8 +40,10 @@ public class ShopCommandService {
     public PurchaseResponse purchase(Long userId, Long itemId) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ShopErrorCode.ITEM_NOT_FOUND));
-        // 비활성이거나 구매 재화/가격이 없는(뽑기 전용) 아이템은 구매 불가.
-        if (!item.isActive() || item.getPurchaseCurrencyType() == null
+        // 캐릭터 악세사리는 카탈로그 값과 무관하게 뽑기 전용이다.
+        // 그 외에도 비활성이거나 구매 재화/가격이 없는 아이템은 구매 불가.
+        if (!item.isActive() || PLACEMENT_CHARACTER.equals(item.getPlacementType())
+                || item.getPurchaseCurrencyType() == null
                 || item.getPriceAmount() == null || item.getPriceAmount() <= 0) {
             throw new BusinessException(ShopErrorCode.ITEM_NOT_PURCHASABLE);
         }

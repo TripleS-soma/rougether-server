@@ -21,6 +21,8 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     Optional<UserCharacter> findByUserIdAndCharacterIdAndDeletedAtIsNull(Long userId, Long characterId);
 
+    Optional<UserCharacter> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
+
     Optional<UserCharacter> findByUserIdAndSelectedTrueAndDeletedAtIsNull(Long userId);
 
     // 착용(대표) 캐릭터. 단일 착용(is_selected 는 동시에 1개만 true).

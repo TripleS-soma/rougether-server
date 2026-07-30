@@ -36,6 +36,7 @@ import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryCommandService;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.PlacementItem;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlotAssignment;
@@ -72,6 +73,7 @@ class HousePreviewQueryTest {
     @Autowired private UserItemRepository userItemRepository;
     @Autowired private CharacterRepository characterRepository;
     @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private CharacterAccessoryCommandService characterAccessoryCommandService;
 
     private User owner;
     private User stranger;
@@ -180,7 +182,13 @@ class HousePreviewQueryTest {
                 List.of(new PlacementItem(chairOwned.getId(), new BigDecimal("0.32"), new BigDecimal("0.68"),
                         3, new BigDecimal("1.1"), 15, false))));
         Character cat = characterRepository.save(new Character("preview_cat", "고양이", "characters/cat.png", 1, true));
-        userCharacterRepository.save(UserCharacter.createSelected(owner, cat));
+        UserCharacter selectedCat = userCharacterRepository.save(UserCharacter.createSelected(owner, cat));
+        Item sunglasses = itemRepository.save(new Item(
+                theme, "character_accessory", "character", null, "eyewear",
+                "미리보기 선글라스", null, null, "items/preview/sunglasses.png", false, true));
+        UserItem sunglassesOwned = userItemRepository.save(UserItem.create(owner, sunglasses));
+        characterAccessoryCommandService.equip(
+                owner.getId(), selectedCat.getId(), sunglassesOwned.getId());
     }
 
     @Test
@@ -208,6 +216,11 @@ class HousePreviewQueryTest {
                     assertThat(slot.assetKey()).isEqualTo("items/preview/wall.png");
                 });
         assertThat(first.room().character().code()).isEqualTo("preview_cat");
+        assertThat(first.room().character().accessories()).singleElement()
+                .satisfies(accessory -> {
+                    assertThat(accessory.characterSlotType()).isEqualTo("eyewear");
+                    assertThat(accessory.assetKey()).isEqualTo("items/preview/sunglasses.png");
+                });
         // 방 미생성 구성원은 room null - 프론트는 기본 방 타일로 표시
         MemberRoomSummary noRoom = response.memberRooms().get(1);
         assertThat(noRoom.membershipId()).isEqualTo(second.getId());

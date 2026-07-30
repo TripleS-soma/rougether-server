@@ -1,7 +1,13 @@
 package com.triples.rougether.userapi.character.service;
 
+import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
+import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.userapi.character.dto.MyCharacterListResponse;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,13 +17,27 @@ import org.springframework.transaction.annotation.Transactional;
 public class MyCharacterQueryService {
 
     private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
 
-    public MyCharacterQueryService(UserCharacterRepository userCharacterRepository) {
+    public MyCharacterQueryService(
+            UserCharacterRepository userCharacterRepository,
+            UserCharacterAccessoryRepository userCharacterAccessoryRepository) {
         this.userCharacterRepository = userCharacterRepository;
+        this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
     }
 
     @Transactional(readOnly = true)
     public MyCharacterListResponse getMyCharacters(Long userId) {
-        return MyCharacterListResponse.of(userCharacterRepository.findOwnedWithCharacter(userId));
+        List<UserCharacter> owned = userCharacterRepository.findOwnedWithCharacter(userId);
+        if (owned.isEmpty()) {
+            return MyCharacterListResponse.of(List.of(), Map.of());
+        }
+        Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId =
+                userCharacterAccessoryRepository.findActiveByUserCharacterIdIn(
+                                owned.stream().map(UserCharacter::getId).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                accessory -> accessory.getUserCharacter().getId()));
+        return MyCharacterListResponse.of(owned, accessoriesByUserCharacterId);
     }
 }
