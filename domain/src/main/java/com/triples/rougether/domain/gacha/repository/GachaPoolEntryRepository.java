@@ -13,6 +13,18 @@ public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, 
 
     List<GachaPoolEntry> findByGachaIdAndActiveIsTrue(Long gachaId);
 
+    // 사용자 보상 미리보기용. 활성 엔트리만 ID 순으로 반환하고 보상 참조를 한 번에 조회함.
+    @Query("""
+            select entry
+            from GachaPoolEntry entry
+            left join fetch entry.item
+            left join fetch entry.character
+            where entry.gacha.id = :gachaId
+              and entry.active = true
+            order by entry.id asc
+            """)
+    List<GachaPoolEntry> findActiveRewardsByGachaId(@Param("gachaId") Long gachaId);
+
     // 비활성 머신의 잔존 엔트리는 등록/등급 관리 대상이 아니므로 머신 활성까지 함께 검사함.
     @Query("""
             select entry

@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.gacha.web;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import com.triples.rougether.userapi.global.security.AuthUser;
@@ -45,6 +46,17 @@ public class GachaController {
             @Parameter(description = "뽑기 머신 ID. GET /api/v1/gacha (뽑기 머신 목록) 응답의 gachaId 값")
             @PathVariable Long id) {
         return gachaService.getGacha(id);
+    }
+
+    @Operation(summary = "뽑기 보상 목록 조회",
+            description = "현재 활성 풀에 등록된 아이템·캐릭터의 이름, 이미지 asset key, 등급, "
+                    + "인증 사용자의 보유 여부를 반환합니다. 추첨 weight 와 계산 확률은 노출하지 않습니다.")
+    @GetMapping("/{id}/rewards")
+    public GachaRewardListResponse rewards(
+            @CurrentUser AuthUser user,
+            @Parameter(description = "뽑기 머신 ID. GET /api/v1/gacha 응답의 gachaId 값")
+            @PathVariable Long id) {
+        return gachaService.getRewards(user.id(), id);
     }
 
     @Operation(summary = "뽑기 실행",

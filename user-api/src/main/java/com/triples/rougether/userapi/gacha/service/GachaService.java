@@ -23,6 +23,8 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse.DrawResult;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse.WalletSummary;
 import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewardResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
@@ -87,6 +89,26 @@ public class GachaService {
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
         return GachaResponse.of(gacha);
+    }
+
+    @Transactional(readOnly = true)
+    public GachaRewardListResponse getRewards(Long userId, Long gachaId) {
+        if (!gachaRepository.existsById(gachaId)) {
+            throw new BusinessException(GachaErrorCode.GACHA_NOT_FOUND);
+        }
+
+        Set<Long> ownedItemIds = userItemRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
+                .map(userItem -> userItem.getItem().getId())
+                .collect(Collectors.toSet());
+        Set<Long> ownedCharacterIds = userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
+                .map(userCharacter -> userCharacter.getCharacter().getId())
+                .collect(Collectors.toSet());
+
+        List<GachaRewardResponse> rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
+                .filter(this::hasReward)
+                .map(entry -> toRewardResponse(entry, ownedItemIds, ownedCharacterIds))
+                .toList();
+        return new GachaRewardListResponse(rewards);
     }
 
     @Transactional
@@ -170,6 +192,23 @@ public class GachaService {
     private boolean hasReward(GachaPoolEntry e) {
         return (e.getRewardType() == RewardType.ITEM && e.getItem() != null)
                 || (e.getRewardType() == RewardType.CHARACTER && e.getCharacter() != null);
+    }
+
+    private GachaRewardResponse toRewardResponse(GachaPoolEntry entry,
+                                                 Set<Long> ownedItemIds,
+                                                 Set<Long> ownedCharacterIds) {
+        if (entry.getRewardType() == RewardType.ITEM) {
+            Item item = entry.getItem();
+            return new GachaRewardResponse(
+                    RewardType.ITEM.name(), item.getId(), null, item.getName(), item.getAssetKey(),
+                    entry.getRarity(), ownedItemIds.contains(item.getId()));
+        }
+
+        Character character = entry.getCharacter();
+        return new GachaRewardResponse(
+                RewardType.CHARACTER.name(), null, character.getId(), character.getName(),
+                character.getBaseAssetKey(), entry.getRarity(),
+                ownedCharacterIds.contains(character.getId()));
     }
 
     // 아이템(가구) 지급. 이미 보유 시 다이아로 전환하고 전환액 반환.
