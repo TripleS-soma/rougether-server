@@ -40,4 +40,18 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
     @Query("select hm from HouseMember hm where hm.house.id = :houseId and hm.user.id = :userId")
     Optional<HouseMember> findWithLockByHouseIdAndUserId(@Param("houseId") Long houseId,
                                                          @Param("userId") Long userId);
+
+    // 회원탈퇴 정리 전용 - 정리 대상 집 id 만 스칼라로 스냅샷함.
+    // 멤버 엔티티를 PC 에 싣지 않아야 이후 락 조회가 1차 캐시에 가려지지 않고 최신 상태를 읽는다.
+    @Query("select hm.house.id from HouseMember hm where hm.user.id = :userId and hm.status = :status")
+    List<Long> findHouseIdsByUserIdAndStatus(@Param("userId") Long userId,
+                                             @Param("status") HouseMemberStatus status);
+
+    // 회원탈퇴 정리 전용 - 락 조회(current read)로 동시 강퇴·가입의 선행 커밋을 반영한 활성 멤버를
+    // 가입순(동률 시 id 오름차순)으로 읽는다. 소유권 승계의 최선임 판정 순서와 동일.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select hm from HouseMember hm where hm.house.id = :houseId and hm.status = :status "
+            + "order by hm.joinedAt asc, hm.id asc")
+    List<HouseMember> findAllWithLockByHouseIdAndStatus(@Param("houseId") Long houseId,
+                                                        @Param("status") HouseMemberStatus status);
 }

@@ -11,6 +11,7 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;
 import com.triples.rougether.userapi.invite.error.InviteErrorCode;
@@ -67,6 +68,13 @@ public class InviteService {
 
         lockUsersInIdOrder(inviterUserId, inviteeUserId);
 
+        if (inviteCode.getUser().isDeleted()) {
+            throw new BusinessException(InviteErrorCode.INVITE_CODE_NOT_FOUND);
+        }
+        if (requireUser(inviteeUserId).isDeleted()) {
+            throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
+        }
+
         // 락 이후 재확인 - 동시 요청이 먼저 커밋했을 수 있다. 최종 방어선은 uq_invite_rewards_invitee.
         if (!inviteRewardRepository.findForUpdateByInviteeId(inviteeUserId).isEmpty()) {
             throw new BusinessException(InviteErrorCode.INVITE_ALREADY_REDEEMED);
@@ -111,8 +119,8 @@ public class InviteService {
         requireUser(larger);
     }
 
-    private void requireUser(Long userId) {
-        userRepository.findByIdForUpdate(userId)
+    private User requireUser(Long userId) {
+        return userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
     }
 
