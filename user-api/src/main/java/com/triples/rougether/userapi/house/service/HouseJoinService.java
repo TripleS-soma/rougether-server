@@ -118,6 +118,7 @@ public class HouseJoinService {
 
         HouseMember member = join(house, request.getUser().getId());
         request.accept();
+        notifyJoinRequestAccepted(request, house);
         return HouseJoinDetailResponse.of(member, houseId, request.getUser().getId());
     }
 
@@ -125,7 +126,9 @@ public class HouseJoinService {
     public void rejectRequest(Long ownerUserId, Long houseId, Long requestId) {
         House house = findHouseWithLock(houseId);
         requireOwner(house, ownerUserId);
-        findPendingRequestWithLock(houseId, requestId).reject();
+        HouseJoinRequest request = findPendingRequestWithLock(houseId, requestId);
+        request.reject();
+        notifyJoinRequestRejected(request, house);
     }
 
     // 공용 참여 판정: 중복(active)/강퇴 이력 -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
@@ -199,6 +202,19 @@ public class HouseJoinService {
         var content = NotificationMessages.houseMemberJoined(joined.getUser().getNickname());
         recipients.forEach(recipient -> notificationService.send(
                 recipient.getUser().getId(), content, joined.getId()));
+    }
+
+    // 거절 알림 - 신청자 본인에게만 감. refId 는 신청(request) 자체.
+    private void notifyJoinRequestRejected(HouseJoinRequest request, House house) {
+        var content = NotificationMessages.houseJoinRequestRejected(house.getName());
+        notificationService.send(request.getUser().getId(), content, request.getId());
+    }
+
+    // 승인 알림 - 신청자 본인에게만 감(기존 멤버 알림은 join() 내부 notifyMemberJoined 가 별도 처리).
+    // refId 는 거절 알림과 대칭으로 신청(request) 자체.
+    private void notifyJoinRequestAccepted(HouseJoinRequest request, House house) {
+        var content = NotificationMessages.houseJoinRequestAccepted(house.getName());
+        notificationService.send(request.getUser().getId(), content, request.getId());
     }
 
     @Transactional(readOnly = true)

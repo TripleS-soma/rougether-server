@@ -7,7 +7,9 @@ public enum NotificationType {
     FRIEND_CHEER(NotificationSettingType.HOUSE),
     HOUSE_MISSION_ACHIEVED(NotificationSettingType.HOUSE),
     HOUSE_MEMBER_JOINED(NotificationSettingType.HOUSE),
-    HOUSE_MEMBER_LEFT(NotificationSettingType.HOUSE);
+    HOUSE_MEMBER_LEFT(NotificationSettingType.HOUSE),
+    HOUSE_JOIN_REQUEST_REJECTED(NotificationSettingType.HOUSE),
+    HOUSE_JOIN_REQUEST_ACCEPTED(NotificationSettingType.HOUSE);
 
     // 소속 알림 설정 그룹. 생성자 인자라 새 타입 추가 시 그룹 지정이 컴파일 타임에 강제됨.
     private final NotificationSettingType settingType;

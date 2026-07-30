@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -28,6 +29,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +46,7 @@ class HouseJoinServiceTest {
     @Mock private HouseMemberRepository houseMemberRepository;
     @Mock private HouseJoinRequestRepository houseJoinRequestRepository;
     @Mock private UserRepository userRepository;
+    @Mock private NotificationService notificationService;
     @InjectMocks private HouseJoinService houseJoinService;
 
     private House joinableHouse(Long id) {
@@ -333,6 +336,7 @@ class HouseJoinServiceTest {
         assertThat(response.status()).isEqualTo(HouseMemberStatus.ACTIVE);
         assertThat(request.getStatus()).isEqualTo(HouseJoinRequestStatus.ACCEPTED);
         verify(house).increaseMemberCount();
+        verify(notificationService).send(eq(7L), any(), eq(request.getId()));
     }
 
     @Test
@@ -341,7 +345,9 @@ class HouseJoinServiceTest {
         User owner = mock(User.class);
         User applicant = mock(User.class);
         when(owner.getId()).thenReturn(3L);
+        when(applicant.getId()).thenReturn(5L);
         when(house.getOwner()).thenReturn(owner);
+        lenient().when(house.getName()).thenReturn("거절 테스트 하우스");
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
         when(houseJoinRequestRepository.findWithLockByIdAndHouseId(21L, 1L))
@@ -352,6 +358,7 @@ class HouseJoinServiceTest {
         assertThat(request.getStatus()).isEqualTo(HouseJoinRequestStatus.REJECTED);
         verify(house, never()).increaseMemberCount();
         verify(houseMemberRepository, never()).save(any());
+        verify(notificationService).send(eq(5L), any(), eq(request.getId()));
     }
 
     @Test

@@ -45,8 +45,10 @@ class HouseJoinRequestConcurrencyTest {
 
     @AfterEach
     void cleanup() {
-        if (ownerId != null) {
-            jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", ownerId);
+        for (Long userId : new Long[]{ownerId, firstApplicantId, secondApplicantId}) {
+            if (userId != null) {
+                jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", userId);
+            }
         }
         if (houseId != null) {
             jdbcTemplate.update("DELETE FROM house_join_requests WHERE house_id = ?", houseId);
