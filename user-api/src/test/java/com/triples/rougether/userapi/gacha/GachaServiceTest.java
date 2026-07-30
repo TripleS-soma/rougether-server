@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -32,6 +33,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,9 +64,14 @@ class GachaServiceTest {
                 .thenReturn(Optional.of(mock(com.triples.rougether.domain.member.entity.User.class)));
     }
 
-    private Gacha activeGacha(int cost) {
+    private Gacha availableGacha() {
         Gacha g = mock(Gacha.class);
-        when(g.isActive()).thenReturn(true);
+        when(g.isAvailableAt(any(Instant.class))).thenReturn(true);
+        return g;
+    }
+
+    private Gacha activeGacha(int cost) {
+        Gacha g = availableGacha();
         when(g.getCostAmount()).thenReturn(cost);
         return g;
     }
@@ -120,7 +127,7 @@ class GachaServiceTest {
     @Test
     void 비활성_뽑기는_거부한다() {
         Gacha g = mock(Gacha.class);
-        when(g.isActive()).thenReturn(false);
+        when(g.isAvailableAt(any(Instant.class))).thenReturn(false);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
 
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
@@ -129,7 +136,8 @@ class GachaServiceTest {
 
     @Test
     void 활성_풀의_아이템과_캐릭터를_보유여부와_함께_조회한다() {
-        when(gachaRepository.existsById(10L)).thenReturn(true);
+        Gacha gacha = availableGacha();
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
 
         Item item = mock(Item.class);
         when(item.getId()).thenReturn(100L);
@@ -170,7 +178,8 @@ class GachaServiceTest {
 
     @Test
     void 보상_목록은_참조가_깨진_풀_엔트리를_제외한다() {
-        when(gachaRepository.existsById(10L)).thenReturn(true);
+        Gacha gacha = availableGacha();
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
         GachaPoolEntry brokenItemEntry = mock(GachaPoolEntry.class);
         when(brokenItemEntry.getRewardType()).thenReturn(RewardType.ITEM);
         when(poolRepository.findActiveRewardsByGachaId(10L)).thenReturn(List.of(brokenItemEntry));
@@ -186,7 +195,7 @@ class GachaServiceTest {
 
     @Test
     void 없는_뽑기의_보상_목록은_조회할_수_없다() {
-        when(gachaRepository.existsById(10L)).thenReturn(false);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> gachaService.getRewards(1L, 10L))
                 .isInstanceOf(BusinessException.class)
@@ -194,6 +203,22 @@ class GachaServiceTest {
                         .isEqualTo(GachaErrorCode.GACHA_NOT_FOUND));
 
         verify(poolRepository, never()).findActiveRewardsByGachaId(10L);
+    }
+
+    @Test
+    void 비활성이나_운영_기간_밖인_뽑기의_보상_목록은_조회할_수_없다() {
+        Gacha gacha = mock(Gacha.class);
+        when(gacha.isAvailableAt(any(Instant.class))).thenReturn(false);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
+
+        assertThatThrownBy(() -> gachaService.getRewards(1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(GachaErrorCode.GACHA_INACTIVE));
+
+        verify(poolRepository, never()).findActiveRewardsByGachaId(anyLong());
+        verify(userItemRepository, never()).findOwnedItemIdsByUserId(anyLong());
+        verify(userCharacterRepository, never()).findOwnedCharacterIdsByUserId(anyLong());
     }
 
     @Test

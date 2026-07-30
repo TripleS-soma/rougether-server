@@ -28,6 +28,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewa
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -77,8 +78,9 @@ public class GachaService {
 
     @Transactional(readOnly = true)
     public GachaListResponse getGachaList() {
+        Instant now = Instant.now();
         List<GachaResponse> items = gachaRepository.findAll().stream()
-                .filter(Gacha::isActive)
+                .filter(gacha -> gacha.isAvailableAt(now))
                 .map(GachaResponse::of)
                 .toList();
         return new GachaListResponse(items);
@@ -93,8 +95,10 @@ public class GachaService {
 
     @Transactional(readOnly = true)
     public GachaRewardListResponse getRewards(Long userId, Long gachaId) {
-        if (!gachaRepository.existsById(gachaId)) {
-            throw new BusinessException(GachaErrorCode.GACHA_NOT_FOUND);
+        Gacha gacha = gachaRepository.findById(gachaId)
+                .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
+        if (!gacha.isAvailableAt(Instant.now())) {
+            throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 
         Set<Long> ownedItemIds = new HashSet<>(userItemRepository.findOwnedItemIdsByUserId(userId));
@@ -118,7 +122,7 @@ public class GachaService {
 
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        if (!gacha.isActive()) {
+        if (!gacha.isAvailableAt(Instant.now())) {
             throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 

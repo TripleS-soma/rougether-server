@@ -70,4 +70,12 @@ public class Gacha extends BaseEntity {
         this.theme = theme;
         this.active = active;
     }
+
+    // 활성 플래그와 운영 기간을 함께 만족할 때만 사용자에게 노출·실행한다.
+    public boolean isAvailableAt(Instant now) {
+        if (!active || (startsAt != null && now.isBefore(startsAt))) {
+            return false;
+        }
+        return endsAt == null || !now.isAfter(endsAt);
+    }
 }
