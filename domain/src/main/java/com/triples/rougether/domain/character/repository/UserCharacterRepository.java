@@ -14,6 +14,11 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     List<UserCharacter> findByUserIdAndDeletedAtIsNull(Long userId);
 
+    // 보유 여부 판정용 ID projection. LAZY character 접근에 따른 보유 건수만큼의 추가 조회를 피함.
+    @Query("select uc.character.id from UserCharacter uc "
+            + "where uc.user.id = :userId and uc.deletedAt is null")
+    List<Long> findOwnedCharacterIdsByUserId(@Param("userId") Long userId);
+
     Optional<UserCharacter> findByUserIdAndCharacterIdAndDeletedAtIsNull(Long userId, Long characterId);
 
     Optional<UserCharacter> findByUserIdAndSelectedTrueAndDeletedAtIsNull(Long userId);

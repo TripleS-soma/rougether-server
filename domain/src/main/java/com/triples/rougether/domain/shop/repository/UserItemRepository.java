@@ -10,6 +10,11 @@ public interface UserItemRepository extends JpaRepository<UserItem, Long> {
 
     List<UserItem> findByUserIdAndDeletedAtIsNull(Long userId);
 
+    // 보유 여부 판정용 ID projection. LAZY item 접근에 따른 보유 건수만큼의 추가 조회를 피함.
+    @Query("select ui.item.id from UserItem ui "
+            + "where ui.user.id = :userId and ui.deletedAt is null")
+    List<Long> findOwnedItemIdsByUserId(@Param("userId") Long userId);
+
     // 인벤토리 조회: item+theme fetch join(N+1 회피), 최근 획득 먼저. categoryCode 는 선택 필터.
     @Query("select ui from UserItem ui join fetch ui.item i join fetch i.theme "
             + "where ui.user.id = :userId and ui.deletedAt is null "

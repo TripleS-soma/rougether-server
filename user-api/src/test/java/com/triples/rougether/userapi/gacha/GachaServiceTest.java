@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -29,8 +30,10 @@ import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class GachaServiceTest {
@@ -61,11 +65,30 @@ class GachaServiceTest {
                 .thenReturn(Optional.of(mock(com.triples.rougether.domain.member.entity.User.class)));
     }
 
-    private Gacha activeGacha(int cost) {
+    private Gacha availableGacha() {
         Gacha g = mock(Gacha.class);
-        when(g.isActive()).thenReturn(true);
+        when(g.isAvailableAt(any(Instant.class))).thenReturn(true);
+        return g;
+    }
+
+    private Gacha activeGacha(int cost) {
+        Gacha g = availableGacha();
         when(g.getCostAmount()).thenReturn(cost);
         return g;
+    }
+
+    @Test
+    void 뽑기_목록은_활성이고_운영_기간_안인_머신만_조회한다() {
+        Instant now = Instant.now();
+        Gacha available = gacha("available", true, null, null);
+        Gacha notStarted = gacha("not_started", true, now.plusSeconds(60), null);
+        Gacha expired = gacha("expired", true, null, now.minusSeconds(60));
+        Gacha inactive = gacha("inactive", false, null, null);
+        when(gachaRepository.findAll()).thenReturn(List.of(available, notStarted, expired, inactive));
+
+        assertThat(gachaService.getGachaList().items())
+                .extracting(response -> response.name())
+                .containsExactly("available");
     }
 
     // pool 을 1개 아이템(rarity 일반)으로 만들어 추첨 결과를 결정적으로 고정.
@@ -80,6 +103,13 @@ class GachaServiceTest {
         when(entry.getRarity()).thenReturn("일반");
         when(poolRepository.findByGachaIdAndActiveIsTrue(gachaId)).thenReturn(List.of(entry));
         return item;
+    }
+
+    private Gacha gacha(String name, boolean active, Instant startsAt, Instant endsAt) {
+        Gacha gacha = new Gacha(name, name, CurrencyType.COIN, 25, 1, null, active);
+        ReflectionTestUtils.setField(gacha, "startsAt", startsAt);
+        ReflectionTestUtils.setField(gacha, "endsAt", endsAt);
+        return gacha;
     }
 
     @Test
@@ -119,11 +149,98 @@ class GachaServiceTest {
     @Test
     void 비활성_뽑기는_거부한다() {
         Gacha g = mock(Gacha.class);
-        when(g.isActive()).thenReturn(false);
+        when(g.isAvailableAt(any(Instant.class))).thenReturn(false);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
 
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.GACHA_INACTIVE));
+    }
+
+    @Test
+    void 활성_풀의_아이템과_캐릭터를_보유여부와_함께_조회한다() {
+        Gacha gacha = availableGacha();
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
+
+        Item item = mock(Item.class);
+        when(item.getId()).thenReturn(100L);
+        when(item.getName()).thenReturn("한옥 좌식상");
+        when(item.getAssetKey()).thenReturn("items/calm-hanok/furniture/low-table.png");
+        GachaPoolEntry itemEntry = mock(GachaPoolEntry.class);
+        when(itemEntry.getRewardType()).thenReturn(RewardType.ITEM);
+        when(itemEntry.getItem()).thenReturn(item);
+        when(itemEntry.getRarity()).thenReturn("희귀");
+
+        Character character = mock(Character.class);
+        when(character.getId()).thenReturn(5L);
+        when(character.getName()).thenReturn("고양이");
+        when(character.getBaseAssetKey()).thenReturn("characters/cat/thumbnail.png");
+        GachaPoolEntry characterEntry = mock(GachaPoolEntry.class);
+        when(characterEntry.getRewardType()).thenReturn(RewardType.CHARACTER);
+        when(characterEntry.getCharacter()).thenReturn(character);
+
+        when(poolRepository.findActiveRewardsByGachaId(10L))
+                .thenReturn(List.of(itemEntry, characterEntry));
+
+        when(userItemRepository.findOwnedItemIdsByUserId(1L)).thenReturn(List.of(100L));
+        when(userCharacterRepository.findOwnedCharacterIdsByUserId(1L)).thenReturn(List.of());
+
+        GachaRewardListResponse response = gachaService.getRewards(1L, 10L);
+
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items().get(0).rewardType()).isEqualTo("ITEM");
+        assertThat(response.items().get(0).itemId()).isEqualTo(100L);
+        assertThat(response.items().get(0).characterId()).isNull();
+        assertThat(response.items().get(0).rarity()).isEqualTo("희귀");
+        assertThat(response.items().get(0).owned()).isTrue();
+        assertThat(response.items().get(1).rewardType()).isEqualTo("CHARACTER");
+        assertThat(response.items().get(1).itemId()).isNull();
+        assertThat(response.items().get(1).characterId()).isEqualTo(5L);
+        assertThat(response.items().get(1).owned()).isFalse();
+    }
+
+    @Test
+    void 보상_목록은_참조가_깨진_풀_엔트리를_제외한다() {
+        Gacha gacha = availableGacha();
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
+        GachaPoolEntry brokenItemEntry = mock(GachaPoolEntry.class);
+        when(brokenItemEntry.getRewardType()).thenReturn(RewardType.ITEM);
+        when(poolRepository.findActiveRewardsByGachaId(10L)).thenReturn(List.of(brokenItemEntry));
+        when(userItemRepository.findOwnedItemIdsByUserId(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findOwnedCharacterIdsByUserId(1L)).thenReturn(List.of());
+
+        GachaRewardListResponse response = gachaService.getRewards(1L, 10L);
+
+        assertThat(response.items()).isEmpty();
+        verify(userItemRepository, never()).findByUserIdAndDeletedAtIsNull(1L);
+        verify(userCharacterRepository, never()).findByUserIdAndDeletedAtIsNull(1L);
+    }
+
+    @Test
+    void 없는_뽑기의_보상_목록은_조회할_수_없다() {
+        when(gachaRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> gachaService.getRewards(1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(GachaErrorCode.GACHA_NOT_FOUND));
+
+        verify(poolRepository, never()).findActiveRewardsByGachaId(10L);
+    }
+
+    @Test
+    void 비활성이나_운영_기간_밖인_뽑기의_보상_목록은_조회할_수_없다() {
+        Gacha gacha = mock(Gacha.class);
+        when(gacha.isAvailableAt(any(Instant.class))).thenReturn(false);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
+
+        assertThatThrownBy(() -> gachaService.getRewards(1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(GachaErrorCode.GACHA_INACTIVE));
+
+        verify(poolRepository, never()).findActiveRewardsByGachaId(anyLong());
+        verify(userItemRepository, never()).findOwnedItemIdsByUserId(anyLong());
+        verify(userCharacterRepository, never()).findOwnedCharacterIdsByUserId(anyLong());
     }
 
     @Test
