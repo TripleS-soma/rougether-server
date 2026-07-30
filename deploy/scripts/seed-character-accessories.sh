@@ -40,17 +40,10 @@ if [[ "$LOGIN_REDIRECT" == *error* ]]; then
     exit 1
 fi
 
-echo "카탈로그 적재: $BASE_URL/admin/catalog/import"
-jq -c '.catalog' "$SEED_FILE" \
-    | curl -sf -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/catalog/import" \
-        -H "Content-Type: application/json" \
-        -d @-
-echo
-
-echo "렌더 프로필 적재: $BASE_URL/admin/character-accessory-render-profiles/import"
-jq -c '.renderProfiles' "$SEED_FILE" \
+echo "카탈로그·렌더 프로필 원자적 적재: $BASE_URL/admin/catalog/character-accessories/import"
+jq -c '.' "$SEED_FILE" \
     | curl -sf -b "$COOKIE_JAR" -X POST \
-        "$BASE_URL/admin/character-accessory-render-profiles/import" \
+        "$BASE_URL/admin/catalog/character-accessories/import" \
         -H "Content-Type: application/json" \
         -d @-
 echo

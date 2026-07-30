@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -85,27 +86,51 @@ class CatalogImportTest {
 
         String accessoryCatalog = """
                 {
-                  "themes": [{"code": "character_accessories", "name": "캐릭터 꾸미기", "active": true}],
-                  "characters": [],
-                  "items": [{
-                    "themeCode": "character_accessories",
-                    "categoryCode": "character_accessory",
-                    "placementType": "character",
-                    "surfaceSlotType": null,
-                    "characterSlotType": "eyewear",
-                    "name": "분홍 하트 선글라스",
-                    "priceAmount": 999,
+                  "catalog": {
+                    "themes": [{"code": "character_accessories", "name": "캐릭터 꾸미기", "active": true}],
+                    "characters": [{
+                      "code": "catalog_import_cat",
+                      "name": "고양이",
+                      "baseAssetKey": "characters/catalog-import-cat.png",
+                      "sortOrder": 1,
+                      "active": true
+                    }],
+                    "items": [{
+                      "themeCode": "character_accessories",
+                      "categoryCode": "character_accessory",
+                      "placementType": "character",
+                      "surfaceSlotType": null,
+                      "characterSlotType": "eyewear",
+                      "name": "분홍 하트 선글라스",
+                      "priceAmount": 999,
+                      "assetKey": "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
+                      "limited": false,
+                      "active": true
+                    }]
+                  },
+                  "renderProfiles": [{
+                    "itemAssetKey": "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
+                    "characterCode": "catalog_import_cat",
+                    "renderState": "default",
                     "assetKey": "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png",
-                    "limited": false,
-                    "active": true
+                    "canvasWidth": 180,
+                    "canvasHeight": 172,
+                    "assetWidth": 320,
+                    "assetHeight": 160,
+                    "positionX": 0.43373,
+                    "positionY": 0.43167,
+                    "widthRatio": 0.7422,
+                    "rotationDeg": 0,
+                    "zIndex": 20
                   }]
                 }
                 """;
 
-        mockMvc.perform(post("/admin/catalog/import")
+        mockMvc.perform(post("/admin/catalog/character-accessories/import")
                         .contentType(MediaType.APPLICATION_JSON).content(accessoryCatalog).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itemsCreated").value(1));
+                .andExpect(jsonPath("$.catalog.itemsCreated").value(1))
+                .andExpect(jsonPath("$.renderProfiles.created").value(1));
 
         var accessory = itemRepository.findByAssetKey(
                 "items/character-accessories/eyewear/cat-pink-heart-sunglasses/thumbnail.png"
@@ -153,10 +178,11 @@ class CatalogImportTest {
                 """, accessory.getId());
         entityManager.clear();
 
-        mockMvc.perform(post("/admin/catalog/import")
+        mockMvc.perform(post("/admin/catalog/character-accessories/import")
                         .contentType(MediaType.APPLICATION_JSON).content(accessoryCatalog).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itemsCreated").value(0));
+                .andExpect(jsonPath("$.catalog.itemsCreated").value(0))
+                .andExpect(jsonPath("$.renderProfiles.updated").value(1));
 
         var normalizedAccessory = itemRepository.findById(accessory.getId()).orElseThrow();
         assertThat(normalizedAccessory.getPurchaseCurrencyType()).isNull();
@@ -173,6 +199,114 @@ class CatalogImportTest {
                 "SELECT COUNT(*) FROM gacha_pool_entries WHERE item_id = ? AND is_active = TRUE",
                 Integer.class, accessory.getId());
         assertThat(entryCount).isEqualTo(1);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void 렌더_프로필_적재가_실패하면_아이템과_뽑기_풀도_함께_롤백한다() throws Exception {
+        String themeCode = "accessory_atomic_rollback";
+        String characterCode = "accessory_atomic_rollback_cat";
+        String itemAssetKey = "items/test/accessory-atomic-rollback.png";
+        String body = """
+                {
+                  "catalog": {
+                    "themes": [{"code": "%s", "name": "원자성 테스트", "active": true}],
+                    "characters": [{
+                      "code": "%s",
+                      "name": "원자성 고양이",
+                      "baseAssetKey": "characters/test/atomic-cat.png",
+                      "sortOrder": 1,
+                      "active": true
+                    }],
+                    "items": [{
+                      "themeCode": "%s",
+                      "categoryCode": "character_accessory",
+                      "placementType": "character",
+                      "surfaceSlotType": null,
+                      "characterSlotType": "eyewear",
+                      "name": "롤백 선글라스",
+                      "priceAmount": null,
+                      "assetKey": "%s",
+                      "limited": false,
+                      "active": true
+                    }]
+                  },
+                  "renderProfiles": [{
+                    "itemAssetKey": "%s",
+                    "characterCode": "%s",
+                    "renderState": "default",
+                    "assetKey": "%s",
+                    "canvasWidth": 180,
+                    "canvasHeight": 172,
+                    "assetWidth": 320,
+                    "assetHeight": 160,
+                    "positionX": 1.10000,
+                    "positionY": 0.40000,
+                    "widthRatio": 0.5000,
+                    "rotationDeg": 0,
+                    "zIndex": 20
+                  }]
+                }
+                """.formatted(
+                themeCode,
+                characterCode,
+                themeCode,
+                itemAssetKey,
+                itemAssetKey,
+                characterCode,
+                itemAssetKey);
+
+        mockMvc.perform(post("/admin/catalog/character-accessories/import")
+                        .contentType(MediaType.APPLICATION_JSON).content(body).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_CATALOG_IMPORT_INVALID"));
+
+        assertThat(itemRepository.existsByAssetKey(itemAssetKey)).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM themes WHERE code = ?",
+                Integer.class,
+                themeCode)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM characters WHERE code = ?",
+                Integer.class,
+                characterCode)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM gacha WHERE code = ?",
+                Integer.class,
+                themeCode + "_accessories")).isZero();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 일반_카탈로그_API로_캐릭터_악세사리만_먼저_노출할_수_없다() throws Exception {
+        String itemAssetKey = "items/test/accessory-without-profile.png";
+        String body = """
+                {
+                  "themes": [{"code": "accessory_without_profile", "name": "미완성 악세사리", "active": true}],
+                  "characters": [],
+                  "items": [{
+                    "themeCode": "accessory_without_profile",
+                    "categoryCode": "character_accessory",
+                    "placementType": "character",
+                    "surfaceSlotType": null,
+                    "characterSlotType": "eyewear",
+                    "name": "미완성 안경",
+                    "priceAmount": null,
+                    "assetKey": "%s",
+                    "limited": false,
+                    "active": true
+                  }]
+                }
+                """.formatted(itemAssetKey);
+
+        mockMvc.perform(post("/admin/catalog/import")
+                        .contentType(MediaType.APPLICATION_JSON).content(body).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CATALOG_IMPORT_INVALID"));
+
+        assertThat(itemRepository.existsByAssetKey(itemAssetKey)).isFalse();
     }
 
     @Test

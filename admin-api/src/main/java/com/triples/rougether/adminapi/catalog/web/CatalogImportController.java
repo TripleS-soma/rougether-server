@@ -2,7 +2,11 @@ package com.triples.rougether.adminapi.catalog.web;
 
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest;
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportResult;
+import com.triples.rougether.adminapi.catalog.error.CatalogImportInvalidException;
 import com.triples.rougether.adminapi.catalog.service.CatalogImportService;
+import com.triples.rougether.common.error.ErrorResponse;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,5 +26,13 @@ public class CatalogImportController {
     @PostMapping("/import")
     public CatalogImportResult importCatalog(@RequestBody CatalogImportRequest request) {
         return catalogImportService.importCatalog(request);
+    }
+
+    @ExceptionHandler(CatalogImportInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleInvalid(
+            CatalogImportInvalidException exception) {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(
+                "CATALOG_IMPORT_INVALID",
+                exception.getMessage()));
     }
 }
