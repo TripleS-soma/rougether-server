@@ -30,7 +30,9 @@ public class HouseMemberCommandService {
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
-        House house = houseRepository.findById(houseId)
+        // house 행 락으로 탈퇴·강퇴·재발급과 직렬화 - 락 없이 구성원을 읽고 role 을 flush 하면
+        // 전체 컬럼 UPDATE 가 동시에 커밋된 개인 초대코드·상태 변경을 stale 값으로 되덮는다.
+        House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
 

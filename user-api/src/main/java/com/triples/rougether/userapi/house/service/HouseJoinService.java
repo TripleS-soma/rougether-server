@@ -27,7 +27,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 초대코드 즉시가입 + 탐색 입주 신청/승인 + 참여 전 미리보기.
+// 초대코드 참여(집 공용 코드 즉시가입 / 구성원 개인 코드 승인 대기) + 탐색 입주 신청/승인 + 참여 전 미리보기.
 // 정원 검사와 구성원 수 증가는 house 행 락 아래 같은 트랜잭션에서 처리해 동시 참여 초과를 막음.
 @Service
 @RequiredArgsConstructor
@@ -39,20 +39,55 @@ public class HouseJoinService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
+    // 집 공용 코드(소유자 공유)는 즉시가입, 구성원 개인 코드는 방장 승인 대기 신청 생성.
+    // 코드 조회는 집 코드 → 구성원 코드 순이며 두 네임스페이스는 발급 시점에 겹치지 않게 보장된다(InviteCodeGenerator).
     @Transactional
     public HouseJoinResponse joinByCode(Long userId, String inviteCode) {
-        House house = houseRepository.findWithLockByInviteCode(inviteCode)
+        House byHouseCode = houseRepository.findWithLockByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
-                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
-        if (house.isInviteExpired()) {
-            throw new BusinessException(HouseErrorCode.INVITE_CODE_EXPIRED);
+                .orElse(null);
+        if (byHouseCode != null) {
+            if (byHouseCode.isInviteExpired()) {
+                throw new BusinessException(HouseErrorCode.INVITE_CODE_EXPIRED);
+            }
+            return joinImmediately(byHouseCode, userId);
         }
+        return joinByMemberCode(userId, inviteCode);
+    }
 
+    private HouseJoinResponse joinImmediately(House house, Long userId) {
         HouseMember member = join(house, userId);
-        houseJoinRequestRepository.findByHouseIdAndUserId(house.getId(), userId)
+        // 락 조회 - 개인 초대코드 경로의 사전 스냅샷에 가려진 대기 신청도 함께 종결한다.
+        houseJoinRequestRepository.findWithLockByHouseIdAndUserId(house.getId(), userId)
                 .filter(HouseJoinRequest::isPending)
                 .ifPresent(HouseJoinRequest::accept);
-        return new HouseJoinResponse(member.getId(), house.getId(), member.getStatus());
+        return HouseJoinResponse.joined(member.getId(), house.getId(), member.getStatus());
+    }
+
+    // 구성원 개인 코드 참여 - 초대자가 현재 소유자면 집 코드와 동일하게 즉시가입,
+    // 일반 구성원이면 탐색 입주 신청과 같은 PENDING 신청을 만들고 방장 수락으로 확정한다.
+    // 초대자 판정(활성·역할·만료·코드 일치)은 house 락 이후의 락 재조회(current read)로 한다 -
+    // 락 대기 중 커밋된 초대자의 탈퇴·강퇴·코드 회전·소유권 변경을 스냅샷 조회는 못 보기 때문.
+    private HouseJoinResponse joinByMemberCode(Long userId, String inviteCode) {
+        HouseMemberRepository.InviteJoinTarget target = houseMemberRepository
+                .findJoinTargetByInviteCode(inviteCode)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
+
+        // 정원 검사·신청 생성은 다른 참여 경로와 같은 house 행 락 아래에서 처리한다.
+        House house = findHouseWithLock(target.getHouseId());
+        HouseMember inviter = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(house.getId(), target.getUserId())
+                .filter(HouseMember::isActive)
+                .filter(found -> inviteCode.equals(found.getInviteCode()))
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
+        if (inviter.isInviteExpired()) {
+            throw new BusinessException(HouseErrorCode.INVITE_CODE_EXPIRED);
+        }
+        if (inviter.isOwner()) {
+            return joinImmediately(house, userId);
+        }
+        HouseJoinRequest request = createOrReopenPendingRequest(house, house.getId(), userId);
+        return HouseJoinResponse.pending(house.getId(), request.getId());
     }
 
     // 탐색 목록에서는 즉시가입하지 않고 방장 승인을 기다리는 입주 신청만 생성함.
@@ -61,8 +96,17 @@ public class HouseJoinService {
         House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        return HouseJoinRequestResponse.of(createOrReopenPendingRequest(house, houseId, userId));
+    }
 
-        HouseMember existingMember = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+    // 공용 신청 판정: 중복(active)/강퇴 이력 -> 중복 신청 -> 정원 -> 신규 생성 또는 거절 이력 재오픈.
+    // 호출자는 house 를 행 락으로 조회한 상태여야 한다(수락 시 정원 재검사와 직렬화).
+    // 멤버십·신청 판정은 락 조회(current read)로 한다 - 개인 초대코드 참여는 house 락 이전의
+    // 스냅샷 조회로 REPEATABLE READ read view 가 잡혀 있어, 일반 조회는 락 대기 중 커밋된
+    // 즉시가입(ACTIVE)·신청 row 를 못 보고 중복 신청을 만들거나 unique 충돌 500 이 나기 때문.
+    private HouseJoinRequest createOrReopenPendingRequest(House house, Long houseId, Long userId) {
+        HouseMember existingMember = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (existingMember != null && existingMember.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);
@@ -70,7 +114,8 @@ public class HouseJoinService {
         if (existingMember != null && existingMember.isKicked()) {
             throw new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER);
         }
-        HouseJoinRequest request = houseJoinRequestRepository.findByHouseIdAndUserId(houseId, userId)
+        HouseJoinRequest request = houseJoinRequestRepository
+                .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (request != null && request.isPending()) {
             throw new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_ALREADY_PENDING);
@@ -79,12 +124,11 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
         if (request == null) {
-            request = houseJoinRequestRepository.save(
+            return houseJoinRequestRepository.save(
                     HouseJoinRequest.create(house, userRepository.getReferenceById(userId)));
-        } else {
-            request.reopen();
         }
-        return HouseJoinRequestResponse.of(request);
+        request.reopen();
+        return request;
     }
 
     // 기존 서비스 단위 테스트·내부 픽스처용 즉시가입 진입점. 외부 HTTP 경로에는 노출하지 않음.
@@ -139,7 +183,10 @@ public class HouseJoinService {
         User joiner = userRepository.findByIdForUpdate(userId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
-        HouseMember existing = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
+        // 락 조회(current read) - 개인 초대코드 경로는 house 락 이전에 스냅샷이 잡혀 있어
+        // 일반 조회로는 락 대기 중 커밋된 기존 멤버십을 못 보고 중복 등록(unique 충돌)이 난다.
+        HouseMember existing = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(house.getId(), userId)
                 .orElse(null);
         if (existing != null && existing.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);
@@ -217,11 +264,20 @@ public class HouseJoinService {
         notificationService.send(request.getUser().getId(), content, request.getId());
     }
 
+    // 만료 여부·승인 필요 여부는 코드 종류(집 공용/구성원 개인)에 따라 각자의 만료 시각·초대자 역할로 판정한다.
     @Transactional(readOnly = true)
     public HousePreviewResponse preview(String inviteCode) {
-        House house = houseRepository.findByInviteCode(inviteCode)
+        House byHouseCode = houseRepository.findByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
+                .orElse(null);
+        if (byHouseCode != null) {
+            return HousePreviewResponse.of(byHouseCode, byHouseCode.isInviteExpired(), false);
+        }
+        HouseMember inviter = houseMemberRepository.findByInviteCodeWithHouse(inviteCode)
+                .filter(HouseMember::isActive)
+                .filter(found -> !found.getHouse().isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
-        return HousePreviewResponse.of(house);
+        return HousePreviewResponse.of(
+                inviter.getHouse(), inviter.isInviteExpired(), !inviter.isOwner());
     }
 }
