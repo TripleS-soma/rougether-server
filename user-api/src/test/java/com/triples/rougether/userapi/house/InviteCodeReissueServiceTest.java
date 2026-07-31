@@ -59,7 +59,7 @@ class InviteCodeReissueServiceTest {
         when(house.getInviteCode()).thenReturn("WXYZ6789");
         when(house.getInviteExpiresAt()).thenReturn(Instant.now().plus(Duration.ofDays(7)));
         HouseMember owner = memberOf(HouseMemberRole.OWNER);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
         when(inviteCodeGenerator.generate()).thenReturn("WXYZ6789");
 
@@ -80,7 +80,7 @@ class InviteCodeReissueServiceTest {
         HouseMember member = memberOf(HouseMemberRole.MEMBER);
         when(member.getInviteCode()).thenReturn("MBRC2345");
         when(member.getInviteExpiresAt()).thenReturn(Instant.now().plus(Duration.ofDays(7)));
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(member));
         when(inviteCodeGenerator.generate()).thenReturn("MBRC2345");
 
@@ -99,7 +99,7 @@ class InviteCodeReissueServiceTest {
     void 비구성원은_403() {
         House house = mock(House.class);
         when(house.isDeleted()).thenReturn(false);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.reissueInviteCode(7L, 1L))
@@ -112,7 +112,7 @@ class InviteCodeReissueServiceTest {
         when(house.isDeleted()).thenReturn(false);
         HouseMember leftMember = mock(HouseMember.class);
         when(leftMember.isActive()).thenReturn(false);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(leftMember));
 
         assertThatThrownBy(() -> houseCommandService.reissueInviteCode(7L, 1L))
@@ -121,7 +121,7 @@ class InviteCodeReissueServiceTest {
 
     @Test
     void 없는_집은_404() {
-        when(houseRepository.findById(99L)).thenReturn(Optional.empty());
+        when(houseRepository.findWithLockById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.reissueInviteCode(7L, 99L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
@@ -131,7 +131,7 @@ class InviteCodeReissueServiceTest {
     void 삭제된_집은_404() {
         House house = mock(House.class);
         when(house.isDeleted()).thenReturn(true);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
 
         assertThatThrownBy(() -> houseCommandService.reissueInviteCode(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));

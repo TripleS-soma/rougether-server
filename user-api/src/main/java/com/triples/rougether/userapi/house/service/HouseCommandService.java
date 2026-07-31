@@ -114,9 +114,11 @@ public class HouseCommandService {
 
     // 초대코드 재발급 - 활성 구성원 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
     // 소유자는 집 공용 코드(즉시가입)를, 일반 구성원은 본인 개인 코드(방장 승인 대기)를 재발급한다.
+    // house 행 락으로 탈퇴·강퇴·참여와 직렬화한다 - 락 없이 읽고 갱신하면 dirty flush(전체 컬럼
+    // UPDATE)가 동시에 커밋된 탈퇴·강퇴의 status/left_at 을 stale 값으로 되덮을 수 있다.
     @Transactional
     public InviteCodeResponse reissueInviteCode(Long userId, Long houseId) {
-        House house = houseRepository.findById(houseId)
+        House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         HouseMember member = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)

@@ -16,6 +16,7 @@ import com.triples.rougether.domain.house.repository.HouseJoinRequestRepository;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
+import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +38,7 @@ class HouseJoinRequestConcurrencyTest {
 
     @Autowired private HouseJoinService houseJoinService;
     @Autowired private HouseCommandService houseCommandService;
+    @Autowired private HouseMemberCommandService houseMemberCommandService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseJoinRequestRepository houseJoinRequestRepository;
@@ -189,5 +191,66 @@ class HouseJoinRequestConcurrencyTest {
                 .isEmpty();
         assertThat(houseRepository.findById(houseId).orElseThrow().getCurrentMemberCount())
                 .isEqualTo(2);
+    }
+
+    // 재발급의 dirty flush(전체 컬럼 UPDATE)가 동시 탈퇴의 status/left_at 을 되덮지 않는지 검증.
+    // house 락 직렬화가 없으면 탈퇴 커밋 후 재발급 플러시가 ACTIVE 를 복구해 인원수와 어긋난다.
+    @Test
+    void 재발급과_탈퇴가_경합해도_탈퇴_상태가_유지된다() throws Exception {
+        User owner = userRepository.save(User.signUp("reissue-race-owner@rougether.dev"));
+        User member = userRepository.save(User.signUp("reissue-race-member@rougether.dev"));
+        House house = houseRepository.save(House.create(
+                owner, "재발급 경합 집", null, null, 4, "RRACE234",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
+        houseMemberRepository.save(HouseMember.create(house, member, HouseMemberRole.MEMBER));
+        house.increaseMemberCount();
+        houseRepository.save(house);
+        ownerId = owner.getId();
+        firstApplicantId = member.getId();
+        houseId = house.getId();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        List<Throwable> unexpected = new CopyOnWriteArrayList<>();
+
+        pool.submit(() -> {
+            try {
+                start.await();
+                houseCommandService.reissueInviteCode(firstApplicantId, houseId);
+            } catch (BusinessException error) {
+                // 탈퇴가 먼저 커밋되면 HOUSE_NOT_MEMBER 로 거부되는 것이 정상.
+                if (error.getErrorCode() != HouseErrorCode.HOUSE_NOT_MEMBER) {
+                    unexpected.add(error);
+                }
+            } catch (Throwable error) {
+                unexpected.add(error);
+            } finally {
+                done.countDown();
+            }
+        });
+        pool.submit(() -> {
+            try {
+                start.await();
+                houseMemberCommandService.leave(firstApplicantId, houseId);
+            } catch (Throwable error) {
+                unexpected.add(error);
+            } finally {
+                done.countDown();
+            }
+        });
+
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        assertThat(unexpected).isEmpty();
+        var stored = houseMemberRepository.findByHouseIdAndUserId(houseId, firstApplicantId)
+                .orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(HouseMemberStatus.LEFT);
+        assertThat(stored.getInviteCode()).isNull();
+        assertThat(houseRepository.findById(houseId).orElseThrow().getCurrentMemberCount())
+                .isEqualTo(1);
     }
 }
