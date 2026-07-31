@@ -221,12 +221,15 @@ jobs:
 
           # 앱이 실제로 쓰는 경로는 CloudFront(HTTPS)이므로 origin 도달 여부까지 검증한다.
           # comment 는 terraform(cloudfront.tf)의 "${local.name} user-api HTTPS entrypoint" 와 일치해야 한다.
-          # CloudFront 배포가 아직 없으면(terraform apply 전) 경고만 남기고 건너뛴다 —
-          # batch ECR 처럼 terraform 선적용이 안 된 환경에서 배포 자체를 막지 않기 위함이다.
+          # 조회 자체가 실패하면(AccessDenied·throttling 등) 배포를 실패시킨다 — 조회 오류를
+          # "배포 없음"으로 오인해 HTTPS 검증을 건너뛴 채 :dev 승격까지 가는 것을 막기 위함이다.
+          # 따라서 deploy role 의 cloudfront:ListDistributions 권한(terraform)이 먼저 적용돼 있어야
+          # 한다(README 의 CloudFront 롤아웃 순서 참고). 조회가 성공했지만 배포가 없을 때만
+          # (최초 terraform apply 전) 경고 후 건너뛴다.
           cf_domain="$(
             aws cloudfront list-distributions \
               --query "DistributionList.Items[?Comment=='rougether-dev user-api HTTPS entrypoint'].DomainName | [0]" \
-              --output text 2>/dev/null || echo "None"
+              --output text
           )"
           if [ -z "$cf_domain" ] || [ "$cf_domain" = "None" ]; then
             echo "::warning::CloudFront distribution not found; skipping HTTPS health check (apply deploy/terraform/ec2 first)"
