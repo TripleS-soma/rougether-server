@@ -219,6 +219,27 @@ jobs:
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8080/api/v1/health"
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8081/admin/health"
 
+          # 앱이 실제로 쓰는 경로는 CloudFront(HTTPS)이므로 origin 도달 여부까지 검증한다.
+          # comment 는 terraform(cloudfront.tf)의 "${local.name} user-api HTTPS entrypoint" 와 일치해야 한다.
+          # 조회 자체가 실패하면(AccessDenied·throttling 등) 배포를 실패시킨다 — 조회 오류를
+          # "배포 없음"으로 오인해 HTTPS 검증을 건너뛴 채 :dev 승격까지 가는 것을 막기 위함이다.
+          # 따라서 deploy role 의 cloudfront:ListDistributions 권한(terraform)이 먼저 적용돼 있어야
+          # 한다(README 의 CloudFront 롤아웃 순서 참고). 조회가 성공했지만 배포가 없을 때만
+          # (최초 terraform apply 전) 경고 후 건너뛴다.
+          cf_domain="$(
+            aws cloudfront list-distributions \
+              --query "DistributionList.Items[?Comment=='rougether-dev user-api HTTPS entrypoint'].DomainName | [0]" \
+              --output text
+          )"
+          if [ -z "$cf_domain" ] || [ "$cf_domain" = "None" ]; then
+            echo "::warning::CloudFront distribution not found; skipping HTTPS health check (apply deploy/terraform/ec2 first)"
+          else
+            # 최초 apply·-replace 직후에는 엣지 전파에 5~10분이 걸려 도메인은 조회되지만 아직
+            # 응답이 안 될 수 있다. direct 체크(위)가 이미 통과한 상태이므로, 재시도 예산을
+            # 전파 시간보다 길게 잡아(10초×36 ≈ 6분) 그 윈도우의 오탐 실패를 막는다.
+            curl --retry 36 --retry-all-errors --retry-delay 10 -fsS "https://${cf_domain}/api/v1/health"
+          fi
+
       # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
       # 끝난 뒤에만 실행 — 배포 실패로 롤백된 이미지가 :dev 로 남는 것을 막는다.
       # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
