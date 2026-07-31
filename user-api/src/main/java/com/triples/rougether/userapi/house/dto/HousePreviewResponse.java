@@ -16,16 +16,19 @@ public record HousePreviewResponse(
         int currentMemberCount,
         @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
         Integer maxMembers,
-        @Schema(description = "초대코드 만료 여부. true 면 이 코드로는 참여(POST /api/v1/houses/join-by-code)할 수 없어 소유자의 재발급이 필요하므로 화면에 만료 안내 표시", example = "false")
-        boolean inviteExpired) {
+        @Schema(description = "초대코드 만료 여부. true 면 이 코드로는 참여(POST /api/v1/houses/join-by-code)할 수 없어 코드를 공유한 구성원의 재발급이 필요하므로 화면에 만료 안내 표시", example = "false")
+        boolean inviteExpired,
+        @Schema(description = "방장 승인 대기 여부. 집 공용 코드(소유자 공유)는 false(즉시가입), 구성원 개인 코드는 true(참여 시 입주 신청이 생성되고 방장 수락 후 입주 확정)", example = "false")
+        boolean requiresApproval) {
 
-    public static HousePreviewResponse of(House house) {
+    public static HousePreviewResponse of(House house, boolean inviteExpired, boolean requiresApproval) {
         return new HousePreviewResponse(
                 house.getId(),
                 house.getName(),
                 house.getCoverImageKey(),
                 house.getCurrentMemberCount(),
                 house.getMaxMembers(),
-                house.isInviteExpired());
+                inviteExpired,
+                requiresApproval);
     }
 }

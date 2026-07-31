@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class InviteCodeGeneratorTest {
 
     @Mock private HouseRepository houseRepository;
+    @Mock private HouseMemberRepository houseMemberRepository;
     @InjectMocks private InviteCodeGenerator inviteCodeGenerator;
 
     @Test
@@ -33,6 +35,16 @@ class InviteCodeGeneratorTest {
     @Test
     void 충돌하면_재시도해서_다른_코드를_발급한다() {
         when(houseRepository.existsByInviteCode(anyString())).thenReturn(true, true, false);
+
+        String code = inviteCodeGenerator.generate();
+
+        assertThat(code).hasSize(8);
+    }
+
+    @Test
+    void 구성원_개인_코드와_겹치면_재시도해서_다른_코드를_발급한다() {
+        when(houseRepository.existsByInviteCode(anyString())).thenReturn(false);
+        when(houseMemberRepository.existsByInviteCode(anyString())).thenReturn(true, false);
 
         String code = inviteCodeGenerator.generate();
 

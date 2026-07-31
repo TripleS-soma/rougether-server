@@ -49,6 +49,13 @@ public class HouseMember {
     @Column(name = "left_at")
     private Instant leftAt;
 
+    // 구성원 개인 초대코드 - 이 코드로 참여하면 즉시가입이 아니라 방장 승인 대기(house_join_requests)로 들어간다.
+    @Column(name = "invite_code", length = 50)
+    private String inviteCode;
+
+    @Column(name = "invite_expires_at")
+    private Instant inviteExpiresAt;
+
     // 구성원 등록. 참여는 즉시가입 정책이라 항상 ACTIVE 로 시작.
     public static HouseMember create(House house, User user, HouseMemberRole role) {
         HouseMember member = new HouseMember();
@@ -72,9 +79,11 @@ public class HouseMember {
     }
 
     // 강퇴 - KICKED 전환 + left_at 기록. 강퇴자는 재가입할 수 없다(참여 판정에서 차단).
+    // 개인 초대코드도 함께 비운다 - 코드가 즉시 무효라는 계약을 row 상태로도 보장.
     public void kick() {
         this.status = HouseMemberStatus.KICKED;
         this.leftAt = Instant.now();
+        clearInviteCode();
     }
 
     public boolean isKicked() {
@@ -82,9 +91,12 @@ public class HouseMember {
     }
 
     // 탈퇴 - LEFT 전환 + left_at 기록. 기여 기록은 유지되고 재가입 시 reactivate 로 되돌린다.
+    // 개인 초대코드는 여기서 비운다 - reactivate 는 코드를 되살리지 않으므로, 탈퇴 전에 공유된
+    // 코드가 재가입과 함께 다시 유효해지는 일이 없다(재가입 후에는 재발급으로 새 코드를 받는다).
     public void leave() {
         this.status = HouseMemberStatus.LEFT;
         this.leftAt = Instant.now();
+        clearInviteCode();
     }
 
     // 소유권 양도 - 반드시 기존 소유자 demote 와 한 트랜잭션으로 묶는다(소유자 2명 방지).
@@ -98,5 +110,20 @@ public class HouseMember {
 
     public boolean isOwner() {
         return role == HouseMemberRole.OWNER;
+    }
+
+    // 개인 초대코드 재발급 - 새 코드로 교체하면 기존 코드는 즉시 무효가 된다(invite_code 단일 컬럼).
+    public void updateInviteCode(String inviteCode, Instant inviteExpiresAt) {
+        this.inviteCode = inviteCode;
+        this.inviteExpiresAt = inviteExpiresAt;
+    }
+
+    public boolean isInviteExpired() {
+        return inviteExpiresAt == null || inviteExpiresAt.isBefore(Instant.now());
+    }
+
+    private void clearInviteCode() {
+        this.inviteCode = null;
+        this.inviteExpiresAt = null;
     }
 }

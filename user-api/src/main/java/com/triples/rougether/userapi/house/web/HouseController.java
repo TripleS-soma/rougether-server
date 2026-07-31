@@ -90,10 +90,13 @@ public class HouseController {
     }
 
     @Operation(summary = "초대코드로 집 참여",
-            description = "초대코드로 집에 즉시 가입합니다. 승인 절차 없이 MEMBER 역할·ACTIVE 상태로 바로 등록되며, 참여가 확정되면 집의 현재 구성원 수가 1 증가합니다. "
-                    + "만료 전 초대코드로, 정원에 여유가 있는 집에, 아직 이 집의 활성 구성원이 아니고 강퇴 이력이 없는 회원만 참여할 수 있습니다. "
-                    + "탈퇴(LEFT) 이력이 있으면 기존 구성원 정보를 재활성화합니다(membershipId 유지, 가입 시각 갱신). "
-                    + "inviteCode 는 집 생성(POST /api/v1/houses) 응답 또는 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자)의 inviteCode 값을 사용합니다.")
+            description = "초대코드로 집에 참여합니다. 소유자가 공유한 집 공용 코드면 승인 절차 없이 MEMBER 역할·ACTIVE 상태로 즉시 가입되고(pendingApproval=false), "
+                    + "일반 구성원이 공유한 개인 코드면 입주 신청(PENDING)이 생성되어 방장이 수락해야 입주가 확정됩니다(pendingApproval=true, joinRequestId 반환). "
+                    + "만료 전 초대코드로, 정원에 여유가 있는 집에, 아직 이 집의 활성 구성원이 아니고 강퇴 이력이 없는 회원만 참여·신청할 수 있습니다. "
+                    + "개인 코드는 공유한 구성원이 탈퇴·강퇴되면 즉시 무효가 됩니다. 이미 입주 신청 중이면 409를 반환합니다. "
+                    + "탈퇴(LEFT) 이력이 있으면 즉시가입 시 기존 구성원 정보를 재활성화합니다(membershipId 유지, 가입 시각 갱신). "
+                    + "inviteCode 는 집 생성(POST /api/v1/houses) 응답, 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자), "
+                    + "또는 초대코드 재발급(POST /api/v1/houses/{houseId}/invite-code) 응답의 inviteCode 값을 사용합니다.")
     @PostMapping("/join-by-code")
     public HouseJoinResponse joinByCode(@CurrentUser AuthUser user,
                                         @Valid @RequestBody HouseJoinByCodeRequest request) {
@@ -193,8 +196,9 @@ public class HouseController {
     }
 
     @Operation(summary = "초대코드 재발급",
-            description = "초대코드를 새로 발급합니다. 집 소유자만 호출할 수 있습니다. "
-                    + "새 코드는 영대문자+숫자 8자로 재발급 시점부터 7일간 유효하며, 기존 코드는 즉시 사용할 수 없게 됩니다.")
+            description = "내가 공유할 초대코드를 새로 발급합니다. 해당 집의 활성(ACTIVE) 구성원만 호출할 수 있습니다. "
+                    + "소유자는 집 공용 코드(즉시가입)를, 일반 구성원은 본인 개인 코드(참여 시 방장 승인 대기)를 재발급합니다. "
+                    + "새 코드는 영대문자+숫자 8자로 재발급 시점부터 7일간 유효하며, 같은 종류의 기존 코드는 즉시 사용할 수 없게 됩니다.")
     @PostMapping("/{houseId}/invite-code")
     public InviteCodeResponse reissueInviteCode(@CurrentUser AuthUser user,
                                                 @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId) {
@@ -238,11 +242,12 @@ public class HouseController {
 
     @Operation(summary = "초대코드로 집 미리보기",
             description = "참여 전에 초대코드로 집 정보와 정원, 코드 만료 여부를 확인합니다. 로그인한 회원 누구나(해당 집 비구성원 포함) 호출할 수 있습니다. "
+                    + "집 공용 코드와 구성원 개인 코드 모두 인식하며, requiresApproval 이 true 면 참여 시 즉시가입 대신 방장 승인 대기(입주 신청)로 들어갑니다. "
                     + "만료된 코드도 집 정보가 그대로 반환되며 inviteExpired 필드로 만료 여부를 표시합니다. "
                     + "만료 전 코드로만 참여(POST /api/v1/houses/join-by-code)할 수 있으므로 화면의 만료 안내에 사용합니다.")
     @GetMapping("/by-code/{inviteCode}")
     public HousePreviewResponse preview(
-            @Parameter(description = "초대코드 (영대문자+숫자 8자). 집 생성(POST /api/v1/houses) 응답 또는 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자)의 inviteCode 값")
+            @Parameter(description = "초대코드 (영대문자+숫자 8자). 집 생성(POST /api/v1/houses) 응답, 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자), 또는 초대코드 재발급(POST /api/v1/houses/{houseId}/invite-code) 응답의 inviteCode 값")
             @PathVariable String inviteCode) {
         return houseJoinService.preview(inviteCode);
     }
