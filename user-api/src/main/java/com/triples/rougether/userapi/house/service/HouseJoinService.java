@@ -80,7 +80,7 @@ public class HouseJoinService {
         if (inviter.isOwner()) {
             return joinImmediately(house, userId);
         }
-        HouseJoinRequest request = createOrReopenPendingRequest(house, userId);
+        HouseJoinRequest request = createOrReopenPendingRequest(house, house.getId(), userId);
         return HouseJoinResponse.pending(house.getId(), request.getId());
     }
 
@@ -90,13 +90,13 @@ public class HouseJoinService {
         House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
-        return HouseJoinRequestResponse.of(createOrReopenPendingRequest(house, userId));
+        return HouseJoinRequestResponse.of(createOrReopenPendingRequest(house, houseId, userId));
     }
 
     // 공용 신청 판정: 중복(active)/강퇴 이력 -> 중복 신청 -> 정원 -> 신규 생성 또는 거절 이력 재오픈.
     // 호출자는 house 를 행 락으로 조회한 상태여야 한다(수락 시 정원 재검사와 직렬화).
-    private HouseJoinRequest createOrReopenPendingRequest(House house, Long userId) {
-        HouseMember existingMember = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
+    private HouseJoinRequest createOrReopenPendingRequest(House house, Long houseId, Long userId) {
+        HouseMember existingMember = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (existingMember != null && existingMember.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);
@@ -104,7 +104,7 @@ public class HouseJoinService {
         if (existingMember != null && existingMember.isKicked()) {
             throw new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER);
         }
-        HouseJoinRequest request = houseJoinRequestRepository.findByHouseIdAndUserId(house.getId(), userId)
+        HouseJoinRequest request = houseJoinRequestRepository.findByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (request != null && request.isPending()) {
             throw new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_ALREADY_PENDING);
