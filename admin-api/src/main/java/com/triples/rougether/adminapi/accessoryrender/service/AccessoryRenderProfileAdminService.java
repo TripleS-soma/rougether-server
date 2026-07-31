@@ -95,7 +95,7 @@ public class AccessoryRenderProfileAdminService {
                         request.assetHeight(),
                         normalizePosition(request.positionX()),
                         normalizePosition(request.positionY()),
-                        request.widthRatio().setScale(4, RoundingMode.HALF_UP),
+                        normalizeWidthRatio(request.widthRatio()),
                         request.rotationDeg(),
                         request.zIndex()));
                 created++;
@@ -133,7 +133,7 @@ public class AccessoryRenderProfileAdminService {
                 request.assetHeight(),
                 normalizePosition(request.positionX()),
                 normalizePosition(request.positionY()),
-                request.widthRatio().setScale(4, RoundingMode.HALF_UP),
+                normalizeWidthRatio(request.widthRatio()),
                 request.rotationDeg(),
                 request.zIndex());
     }
@@ -194,6 +194,7 @@ public class AccessoryRenderProfileAdminService {
                 || widthRatio.compareTo(WIDTH_RATIO_MAX) > 0) {
             throw invalid("widthRatio는 0보다 크고 2 이하여야 합니다.");
         }
+        normalizeWidthRatio(widthRatio);
         if (rotationDeg == null
                 || rotationDeg < -ROTATION_LIMIT
                 || rotationDeg > ROTATION_LIMIT) {
@@ -238,7 +239,11 @@ public class AccessoryRenderProfileAdminService {
     }
 
     private BigDecimal normalizeWidthRatio(BigDecimal value) {
-        return value.setScale(4, RoundingMode.HALF_UP);
+        BigDecimal normalized = value.setScale(4, RoundingMode.HALF_UP);
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
+            throw invalid("widthRatio는 소수점 4자리 반올림 후에도 0보다 커야 합니다.");
+        }
+        return normalized;
     }
 
     private AccessoryRenderProfileInvalidException invalid(String message) {

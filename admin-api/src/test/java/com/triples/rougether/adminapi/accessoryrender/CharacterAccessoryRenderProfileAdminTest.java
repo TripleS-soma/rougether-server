@@ -238,6 +238,43 @@ class CharacterAccessoryRenderProfileAdminTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void width_ratio는_반올림_후에도_양수여야_한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody().replace(
+                                "\"widthRatio\": 0.33335",
+                                "\"widthRatio\": 0.00001"))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
+
+        var stored = renderProfileRepository.findById(profileId).orElseThrow();
+        assertThat(stored.getWidthRatio()).isEqualByComparingTo("0.5200");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void width_ratio의_최소_반올림_양수값을_저장한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody().replace(
+                                "\"widthRatio\": 0.33335",
+                                "\"widthRatio\": 0.00005"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.widthRatio").value(0.0001));
+
+        var stored = renderProfileRepository.findById(profileId).orElseThrow();
+        assertThat(stored.getWidthRatio()).isEqualByComparingTo("0.0001");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 없는_프로필_단건_수정은_404를_반환한다() throws Exception {
         mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", 999999L)
                         .contentType(MediaType.APPLICATION_JSON)
