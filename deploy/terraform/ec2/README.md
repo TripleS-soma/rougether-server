@@ -231,10 +231,11 @@ terraform output -raw user_api_https_base_url
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
 - origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
 - 배포 workflow 는 direct HTTP 와 함께 CloudFront 경유 health check 도 수행합니다(배포가 origin 까지 실제로 도달하는지 검증). CloudFront 배포가 아직 없으면(조회는 성공했지만 결과가 빈 경우) 그 단계만 경고 후 건너뛰고, 조회 자체가 실패하면(권한 부족·API 오류) 배포를 실패시킵니다.
-- **롤아웃 순서**: batch ECR 과 같은 이유로, 이 브랜치가 main 에 머지된 뒤 첫 배포가 돌기 전에 Terraform 을 먼저 적용해야 합니다. deploy role 의 `cloudfront:ListDistributions` 권한이 Terraform 으로만 생성되므로, 선적용하지 않으면 health check 단계가 AccessDenied 로 실패합니다.
+- **롤아웃 순서**: main push 는 즉시 배포 workflow 를 실행하므로 "머지 후 apply" 라는 순서는 존재하지 않습니다. batch ECR 도입 때와 동일하게 **머지 전에** 이 변경이 담긴 브랜치 기준으로 Terraform 을 선적용합니다. deploy role 의 `cloudfront:ListDistributions` 권한이 Terraform 으로만 생성되기 때문입니다.
+- 선적용 없이 머지된 경우: 첫 배포가 HTTPS health check 단계에서 AccessDenied 로 실패합니다. 이 시점에 컨테이너 배포와 로컬 health check 는 이미 성공했고 `:dev` 승격만 건너뛴 상태이므로, `terraform apply` 후 실패한 workflow run 을 re-run 하면 복구됩니다(서비스 중단 없음).
 
 ```bash
-# 최소 선적용 (전체 apply 를 해도 무방)
+# 머지 전 최소 선적용 (이 브랜치 checkout 상태에서. 전체 apply 를 해도 무방)
 terraform apply \
   -target=aws_iam_role_policy.github_actions_deploy \
   -target=aws_eip.app \
