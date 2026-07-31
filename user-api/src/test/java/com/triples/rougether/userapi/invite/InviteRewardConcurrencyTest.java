@@ -44,6 +44,8 @@ class InviteRewardConcurrencyTest {
                     userId, userId);
         }
         for (Long userId : createdUserIds) {
+            // redeem 이 재화 원장(wallet_histories, users FK)을 남기므로 users 보다 먼저 지워야 함(#253)
+            jdbcTemplate.update("DELETE FROM wallet_histories WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_invite_codes WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
