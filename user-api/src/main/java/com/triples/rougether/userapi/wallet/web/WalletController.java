@@ -10,6 +10,7 @@ import com.triples.rougether.userapi.wallet.service.WalletQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,9 +31,9 @@ public class WalletController {
 
     @Operation(summary = "내 재화 잔액 조회",
             description = "로그인한 회원의 모든 재화(코인·다이아) 잔액을 반환합니다. 아직 발급되지 않은 지갑은 잔액 0으로 내려줍니다. "
-                    + "코인(COIN)은 루틴 완료(+10)·투두 완료(+5)·뽑기 캐릭터 중복 전환(+200)으로 적립되고 "
+                    + "코인(COIN)은 루틴 완료(+10)·투두 완료(+10)·뽑기 캐릭터 중복 전환(+100)으로 적립되고 "
                     + "뽑기 실행(POST /api/v1/gacha/{id}/draw) 비용으로 사용합니다. "
-                    + "다이아(DIAMOND)는 뽑기 아이템 중복 전환(+30)으로 적립되고 "
+                    + "다이아(DIAMOND)는 뽑기 아이템 중복 전환(+3)으로 적립되고 "
                     + "상점 아이템 구매(POST /api/v1/items/{itemId}/purchase)에 사용합니다.")
     @GetMapping
     public WalletListResponse getWallets(@CurrentUser AuthUser user) {
@@ -54,7 +55,8 @@ public class WalletController {
                     + "SPEND(사용 — amount 음수 이력만). 미지정 시 전체")
             @RequestParam(required = false) WalletHistoryDirection direction,
             @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
-            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") @Min(1) int size) {
+            @Parameter(description = "페이지 크기 (1~50)")
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
         return walletQueryService.getHistories(user.id(), currencyType, direction, page, size);
     }
 }

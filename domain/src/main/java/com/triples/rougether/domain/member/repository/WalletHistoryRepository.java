@@ -25,6 +25,8 @@ public interface WalletHistoryRepository extends JpaRepository<WalletHistory, Lo
                                       @Param("earn") Boolean earn,
                                       Pageable pageable);
 
-    // 완료 취소 시 원 획득 row 삭제용. source_id 는 source_type 별 원본 테이블 PK 라 조합으로 유일함
-    void deleteByReasonAndSourceTypeAndSourceId(WalletHistoryReason reason, String sourceType, Long sourceId);
+    // 완료 취소 시 원 획득 row 삭제용. source_id 는 ROUTINE_LOG/TODO 에 한해 원본 PK 로 유일함
+    // (GACHA/ITEM 은 여러 유저가 같은 값을 공유) — 오삭제 방어를 위해 user 스코프를 필수로 둠
+    void deleteByUserIdAndReasonAndSourceTypeAndSourceId(Long userId, WalletHistoryReason reason,
+                                                         String sourceType, Long sourceId);
 }

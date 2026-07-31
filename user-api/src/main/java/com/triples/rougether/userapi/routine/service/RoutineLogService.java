@@ -151,7 +151,7 @@ public class RoutineLogService {
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
         // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
-        walletHistoryRecorder.deleteEarned(WalletHistoryReason.ROUTINE_COMPLETE,
+        walletHistoryRecorder.deleteEarned(userId, WalletHistoryReason.ROUTINE_COMPLETE,
                 WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
 
         if (date.isBefore(today) && wasTargetOn(userId, routine, date)) {
