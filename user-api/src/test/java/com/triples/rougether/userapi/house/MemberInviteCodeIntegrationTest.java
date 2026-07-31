@@ -103,10 +103,27 @@ class MemberInviteCodeIntegrationTest {
         var issued = houseCommandService.reissueInviteCode(member.getId(), house.getId());
         membership.leave();
 
+        assertThat(membership.getInviteCode()).isNull();
         assertThatThrownBy(() -> houseJoinService.joinByCode(newcomer.getId(), issued.inviteCode()))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.INVITE_CODE_INVALID));
         assertThatThrownBy(() -> houseJoinService.preview(issued.inviteCode()))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.INVITE_CODE_INVALID));
+    }
+
+    @Test
+    void 탈퇴_후_재가입해도_이전_개인_코드는_되살아나지_않는다() {
+        var issued = houseCommandService.reissueInviteCode(member.getId(), house.getId());
+        membership.leave();
+        house.decreaseMemberCount();
+
+        var rejoined = houseJoinService.joinByCode(member.getId(), "MBRINV22");
+        assertThat(rejoined.membershipId()).isEqualTo(membership.getId());
+        assertThat(membership.isActive()).isTrue();
+
+        assertThat(membership.getInviteCode()).isNull();
+        assertThatThrownBy(() -> houseJoinService.joinByCode(newcomer.getId(), issued.inviteCode()))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.INVITE_CODE_INVALID));
     }
