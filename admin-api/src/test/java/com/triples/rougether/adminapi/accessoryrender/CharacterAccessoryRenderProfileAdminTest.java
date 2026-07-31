@@ -4,8 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
@@ -81,6 +85,9 @@ class CharacterAccessoryRenderProfileAdminTest {
                 .andExpect(jsonPath("$.items[0].itemAssetKey")
                         .value("items/character-accessories/eyewear/cat-sunglasses/thumbnail.png"))
                 .andExpect(jsonPath("$.items[0].characterCode").value("cat_render"))
+                .andExpect(jsonPath("$.items[0].characterName").value("고양이"))
+                .andExpect(jsonPath("$.items[0].characterAssetKey")
+                        .value("characters/cat.png"))
                 .andExpect(jsonPath("$.items[0].renderState").value("default"))
                 .andExpect(jsonPath("$.items[0].canvasWidth").value(180))
                 .andExpect(jsonPath("$.items[0].canvasHeight").value(172))
@@ -133,6 +140,187 @@ class CharacterAccessoryRenderProfileAdminTest {
                 .andExpect(jsonPath("$.code").value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
 
         assertThat(renderProfileRepository.count()).isZero();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 기존_프로필의_transform만_단건_수정한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(profileId))
+                .andExpect(jsonPath("$.positionX").value(0.51235))
+                .andExpect(jsonPath("$.positionY").value(0.62346))
+                .andExpect(jsonPath("$.widthRatio").value(0.3334))
+                .andExpect(jsonPath("$.rotationDeg").value(-15))
+                .andExpect(jsonPath("$.zIndex").value(25))
+                .andExpect(jsonPath("$.assetKey")
+                        .value("items/character-accessories/eyewear/cat-sunglasses/thumbnail.png"))
+                .andExpect(jsonPath("$.canvasWidth").value(180))
+                .andExpect(jsonPath("$.assetWidth").value(320));
+
+        var stored = renderProfileRepository.findById(profileId).orElseThrow();
+        assertThat(stored.getPositionX()).isEqualByComparingTo("0.51235");
+        assertThat(stored.getPositionY()).isEqualByComparingTo("0.62346");
+        assertThat(stored.getWidthRatio()).isEqualByComparingTo("0.3334");
+        assertThat(stored.getRenderState()).isEqualTo("default");
+        assertThat(stored.getAssetKey())
+                .isEqualTo("items/character-accessories/eyewear/cat-sunglasses/thumbnail.png");
+        assertThat(stored.getCanvasHeight()).isEqualTo(172);
+        assertThat(stored.getAssetHeight()).isEqualTo(160);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 단건_수정의_필수값_누락은_거부한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "positionX": 0.50000,
+                                  "widthRatio": 0.5200,
+                                  "rotationDeg": 0,
+                                  "zIndex": 20
+                                }
+                                """)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 단건_수정의_z_index_누락은_거부한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "positionX": 0.50000,
+                                  "positionY": 0.31000,
+                                  "widthRatio": 0.5200,
+                                  "rotationDeg": 0
+                                }
+                                """)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 단건_수정의_범위_위반은_거부하고_기존값을_유지한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody().replace(
+                                "\"positionX\": 0.5123456",
+                                "\"positionX\": -0.10000"))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"));
+
+        var stored = renderProfileRepository.findById(profileId).orElseThrow();
+        assertThat(stored.getPositionX()).isEqualByComparingTo("0.50000");
+        assertThat(stored.getPositionY()).isEqualByComparingTo("0.31000");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 없는_프로필_단건_수정은_404를_반환한다() throws Exception {
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", 999999L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody())
+                        .with(csrf()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 단건_수정은_csrf_토큰이_필요하다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 단건_수정은_로그인이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody())
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void 단건_수정은_admin_권한이_필요하다() throws Exception {
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody())
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 렌더_프로필_관리_화면은_로그인이_필요하다() throws Exception {
+        mockMvc.perform(get("/accessory-render-profiles"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 렌더_프로필_관리_화면을_연다() throws Exception {
+        mockMvc.perform(get("/accessory-render-profiles"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("accessory-render-profiles"))
+                .andExpect(model().attribute("username", "user"))
+                .andExpect(model().attributeExists("s3BaseUrl"));
+    }
+
+    private Long createProfile() throws Exception {
+        mockMvc.perform(post("/admin/character-accessory-render-profiles/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(profileBody("0.31000"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1));
+        return renderProfileRepository.findByItemIdAndCharacterIdAndRenderState(
+                        sunglasses.getId(),
+                        characterRepository.findByCode("cat_render").orElseThrow().getId(),
+                        "default")
+                .orElseThrow()
+                .getId();
+    }
+
+    private String transformBody() {
+        return """
+                {
+                  "positionX": 0.5123456,
+                  "positionY": 0.623456,
+                  "widthRatio": 0.33335,
+                  "rotationDeg": -15,
+                  "zIndex": 25
+                }
+                """;
     }
 
     private String profileBody(String positionY) {

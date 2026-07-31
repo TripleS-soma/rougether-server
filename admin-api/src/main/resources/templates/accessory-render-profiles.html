@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 악세사리 렌더 스튜디오</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/accessory-render-profiles}" class="active">악세사리 관리</a>
+            <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}">버그 제보</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--accessory">
+        <div class="accessory-heading">
+            <div>
+                <span class="studio-eyebrow">CHARACTER ACCESSORY RENDERER</span>
+                <h2>악세사리 렌더 스튜디오</h2>
+                <p>캐릭터 원본 캔버스 위에서 악세사리 위치와 크기를 조정합니다. 저장값은 착용 중인 캐릭터에도 다음 조회부터 반영됩니다.</p>
+            </div>
+            <div class="accessory-contract" aria-label="좌표 규격">
+                <strong>정규화 좌표 계약</strong>
+                <span>중심점 X·Y 0~1 · 너비는 캐릭터 캔버스 대비 비율</span>
+            </div>
+        </div>
+
+        <div class="alert alert-error accessory-alert" id="error" role="alert" hidden></div>
+        <div class="alert alert-ok accessory-alert" id="notice" role="status" aria-live="polite" hidden></div>
+
+        <div class="accessory-layout">
+            <section class="accessory-card accessory-preview-card" aria-labelledby="preview-title">
+                <div class="accessory-section-heading">
+                    <div>
+                        <h3 id="preview-title">합성 미리보기</h3>
+                        <p>악세사리를 드래그하거나 키보드 방향키로 중심점을 이동할 수 있습니다.</p>
+                    </div>
+                    <span class="accessory-dirty-badge" id="dirty-badge">불러오는 중</span>
+                </div>
+
+                <div class="accessory-selectors" aria-label="렌더 프로필 선택">
+                    <label>
+                        <span>아이템</span>
+                        <select id="item-select" disabled></select>
+                    </label>
+                    <label>
+                        <span>캐릭터</span>
+                        <select id="character-select" disabled></select>
+                    </label>
+                    <label>
+                        <span>렌더 상태</span>
+                        <select id="state-select" disabled></select>
+                    </label>
+                </div>
+
+                <div class="accessory-canvas-shell">
+                    <div class="accessory-canvas" id="preview-canvas"
+                         aria-label="캐릭터와 악세사리 합성 미리보기">
+                        <div class="accessory-canvas-grid" aria-hidden="true"></div>
+                        <div class="accessory-center-guide accessory-center-guide--x" aria-hidden="true"></div>
+                        <div class="accessory-center-guide accessory-center-guide--y" aria-hidden="true"></div>
+                        <img class="accessory-character" id="character-image" alt="">
+                        <button type="button" class="accessory-handle" id="accessory-handle"
+                                aria-label="악세사리 위치 조정. 방향키로 이동할 수 있습니다." disabled>
+                            <img id="accessory-image" alt="">
+                        </button>
+                        <span class="accessory-empty" id="preview-empty">렌더 프로필을 불러오는 중입니다.</span>
+                    </div>
+                </div>
+
+                <div class="accessory-preview-meta">
+                    <span id="canvas-size">캔버스 —</span>
+                    <span id="asset-size">에셋 —</span>
+                    <span id="layer-value">레이어 —</span>
+                </div>
+                <p class="accessory-preview-help">
+                    드래그는 선택한 지점을 유지한 채 이동합니다. 방향키는 0.005, Shift + 방향키는 0.02씩 이동합니다.
+                </p>
+            </section>
+
+            <aside class="accessory-card accessory-inspector" aria-labelledby="inspector-title">
+                <div class="accessory-section-heading">
+                    <div>
+                        <h3 id="inspector-title">렌더 값 조정</h3>
+                        <p id="profile-summary">프로필을 선택하면 조정할 수 있습니다.</p>
+                    </div>
+                    <span class="accessory-profile-id" id="profile-id">ID —</span>
+                </div>
+
+                <div class="accessory-asset-summary">
+                    <div>
+                        <span>캐릭터 에셋</span>
+                        <code id="character-key">—</code>
+                    </div>
+                    <div>
+                        <span>악세사리 에셋</span>
+                        <code id="accessory-key">—</code>
+                    </div>
+                </div>
+
+                <form id="transform-form" class="accessory-form">
+                    <fieldset id="transform-fieldset" disabled>
+                        <legend class="sr-only">악세사리 렌더 transform</legend>
+
+                        <div class="accessory-control-group">
+                            <div class="accessory-control-heading">
+                                <div>
+                                    <strong>중심점 X</strong>
+                                    <span>왼쪽 0 · 오른쪽 1</span>
+                                </div>
+                                <input type="number" id="position-x-number" min="0" max="1"
+                                       step="0.00001" inputmode="decimal" aria-label="중심점 X 숫자 입력"
+                                       required>
+                            </div>
+                            <input type="range" id="position-x-range" min="0" max="1"
+                                   step="0.00001" aria-label="중심점 X 슬라이더">
+                        </div>
+
+                        <div class="accessory-control-group">
+                            <div class="accessory-control-heading">
+                                <div>
+                                    <strong>중심점 Y</strong>
+                                    <span>위 0 · 아래 1</span>
+                                </div>
+                                <input type="number" id="position-y-number" min="0" max="1"
+                                       step="0.00001" inputmode="decimal" aria-label="중심점 Y 숫자 입력"
+                                       required>
+                            </div>
+                            <input type="range" id="position-y-range" min="0" max="1"
+                                   step="0.00001" aria-label="중심점 Y 슬라이더">
+                        </div>
+
+                        <div class="accessory-control-group">
+                            <div class="accessory-control-heading">
+                                <div>
+                                    <strong>너비 비율</strong>
+                                    <span>캐릭터 캔버스 너비 대비 0 초과~2</span>
+                                </div>
+                                <input type="number" id="width-ratio-number" min="0.0001" max="2"
+                                       step="0.0001" inputmode="decimal" aria-label="너비 비율 숫자 입력"
+                                       required>
+                            </div>
+                            <input type="range" id="width-ratio-range" min="0.0001" max="2"
+                                   step="0.0001" aria-label="너비 비율 슬라이더">
+                        </div>
+
+                        <div class="accessory-control-group">
+                            <div class="accessory-control-heading">
+                                <div>
+                                    <strong>회전</strong>
+                                    <span>시계 방향 -360°~360°</span>
+                                </div>
+                                <div class="accessory-unit-input">
+                                    <input type="number" id="rotation-number" min="-360" max="360"
+                                           step="1" inputmode="numeric" aria-label="회전 각도 숫자 입력"
+                                           required>
+                                    <span>°</span>
+                                </div>
+                            </div>
+                            <input type="range" id="rotation-range" min="-360" max="360"
+                                   step="1" aria-label="회전 각도 슬라이더">
+                        </div>
+
+                        <div class="accessory-control-group">
+                            <div class="accessory-control-heading">
+                                <div>
+                                    <strong>레이어 순서</strong>
+                                    <span>값이 클수록 다른 합성 레이어 위</span>
+                                </div>
+                                <input type="number" id="z-index-number" step="1"
+                                       inputmode="numeric" aria-label="레이어 순서 숫자 입력"
+                                       required>
+                            </div>
+                            <input type="range" id="z-index-range" min="-100" max="100"
+                                   step="1" aria-label="레이어 순서 슬라이더">
+                        </div>
+
+                        <div class="accessory-form-actions">
+                            <button type="button" class="btn-ghost" id="reset-button" disabled>저장값으로 초기화</button>
+                            <button type="submit" class="btn-primary accessory-save" id="save-button" disabled>변경 저장</button>
+                        </div>
+                    </fieldset>
+                </form>
+                <p class="accessory-save-status" id="save-status" role="status" aria-live="polite">
+                    목록을 불러오는 중입니다.
+                </p>
+            </aside>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
+
+        const itemSelect = document.getElementById('item-select');
+        const characterSelect = document.getElementById('character-select');
+        const stateSelect = document.getElementById('state-select');
+        const form = document.getElementById('transform-form');
+        const fieldset = document.getElementById('transform-fieldset');
+        const previewCanvas = document.getElementById('preview-canvas');
+        const previewEmpty = document.getElementById('preview-empty');
+        const characterImage = document.getElementById('character-image');
+        const accessoryHandle = document.getElementById('accessory-handle');
+        const accessoryImage = document.getElementById('accessory-image');
+        const errorBox = document.getElementById('error');
+        const noticeBox = document.getElementById('notice');
+        const dirtyBadge = document.getElementById('dirty-badge');
+        const saveButton = document.getElementById('save-button');
+        const resetButton = document.getElementById('reset-button');
+        const saveStatus = document.getElementById('save-status');
+
+        const controls = {
+            positionX: createControl('position-x', 5),
+            positionY: createControl('position-y', 5),
+            widthRatio: createControl('width-ratio', 4),
+            rotationDeg: createControl('rotation', 0),
+            zIndex: createControl('z-index', 0)
+        };
+
+        let profiles = [];
+        let selectedProfile = null;
+        let savedTransform = null;
+        let draftTransform = null;
+        let dragState = null;
+
+        bindControls();
+        bindSelectors();
+        bindPreviewDrag();
+        loadProfiles();
+
+        function createControl(idPrefix, precision) {
+            return {
+                range: document.getElementById(idPrefix + '-range'),
+                number: document.getElementById(idPrefix + '-number'),
+                precision
+            };
+        }
+
+        function bindControls() {
+            Object.entries(controls).forEach(([field, control]) => {
+                control.range.addEventListener('input', () => {
+                    const value = Number(control.range.value);
+                    control.number.value = formatValue(value, control.precision);
+                    updateDraft(field, value);
+                });
+                control.number.addEventListener('input', () => {
+                    if (control.number.value.trim() === '') return;
+                    const value = Number(control.number.value);
+                    if (!Number.isFinite(value)) return;
+                    updateDraft(field, value, false);
+                });
+                control.number.addEventListener('blur', () => writeControl(field));
+            });
+
+            resetButton.addEventListener('click', resetDraft);
+            form.addEventListener('submit', saveProfile);
+        }
+
+        function bindSelectors() {
+            itemSelect.addEventListener('change', () => {
+                if (!confirmDiscard()) return restoreSelection();
+                populateCharacters();
+                selectCurrentProfile();
+            });
+            characterSelect.addEventListener('change', () => {
+                if (!confirmDiscard()) return restoreSelection();
+                populateStates();
+                selectCurrentProfile();
+            });
+            stateSelect.addEventListener('change', () => {
+                if (!confirmDiscard()) return restoreSelection();
+                selectCurrentProfile();
+            });
+            window.addEventListener('beforeunload', (event) => {
+                if (!isDirty()) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
+        }
+
+        function bindPreviewDrag() {
+            accessoryHandle.addEventListener('pointerdown', (event) => {
+                if (!draftTransform || accessoryHandle.disabled) return;
+                const rect = previewCanvas.getBoundingClientRect();
+                dragState = {
+                    pointerId: event.pointerId,
+                    offsetX: event.clientX - (rect.left + draftTransform.positionX * rect.width),
+                    offsetY: event.clientY - (rect.top + draftTransform.positionY * rect.height)
+                };
+                accessoryHandle.setPointerCapture(event.pointerId);
+                accessoryHandle.classList.add('dragging');
+                accessoryHandle.focus({preventScroll: true});
+                event.preventDefault();
+            });
+
+            accessoryHandle.addEventListener('pointermove', (event) => {
+                if (!dragState || dragState.pointerId !== event.pointerId) return;
+                const rect = previewCanvas.getBoundingClientRect();
+                setDraftPosition(
+                        (event.clientX - rect.left - dragState.offsetX) / rect.width,
+                        (event.clientY - rect.top - dragState.offsetY) / rect.height);
+            });
+
+            ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((eventName) => {
+                accessoryHandle.addEventListener(eventName, (event) => {
+                    if (dragState && event.pointerId === dragState.pointerId) {
+                        dragState = null;
+                        accessoryHandle.classList.remove('dragging');
+                    }
+                });
+            });
+
+            accessoryHandle.addEventListener('keydown', (event) => {
+                if (!draftTransform) return;
+                const amount = event.shiftKey ? 0.02 : 0.005;
+                const delta = {
+                    ArrowLeft: [-amount, 0],
+                    ArrowRight: [amount, 0],
+                    ArrowUp: [0, -amount],
+                    ArrowDown: [0, amount]
+                }[event.key];
+                if (!delta) return;
+                event.preventDefault();
+                setDraftPosition(
+                        draftTransform.positionX + delta[0],
+                        draftTransform.positionY + delta[1]);
+            });
+        }
+
+        async function loadProfiles(preferredId) {
+            clearMessages();
+            setLoading(true);
+            try {
+                const response = await fetchWithSession(
+                        '/admin/character-accessory-render-profiles');
+                if (!response.ok) throw await responseError(response, '목록 조회 실패');
+                const data = await response.json();
+                profiles = Array.isArray(data.items) ? data.items : [];
+                populateItems(preferredId);
+                if (profiles.length === 0) {
+                    showEmpty('등록된 악세사리 렌더 프로필이 없습니다.');
+                    saveStatus.textContent = '먼저 렌더 프로필을 일괄 등록해 주세요.';
+                }
+            } catch (error) {
+                profiles = [];
+                showEmpty('렌더 프로필을 불러오지 못했습니다.');
+                showError(error.message);
+                saveStatus.textContent = '목록 조회에 실패했습니다.';
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function populateItems(preferredProfileId) {
+            const currentItemId = preferredProfileId
+                    ? profiles.find((profile) => profile.id === preferredProfileId)?.itemId
+                    : Number(itemSelect.value);
+            const uniqueItems = uniqueBy(profiles, (profile) => profile.itemId);
+            replaceOptions(itemSelect, uniqueItems.map((profile) => ({
+                value: profile.itemId,
+                label: profile.itemName + ' · ' + (profile.characterSlotType || '슬롯 미지정')
+            })));
+            selectOption(itemSelect, currentItemId);
+            populateCharacters(preferredProfileId);
+            selectCurrentProfile(preferredProfileId);
+        }
+
+        function populateCharacters(preferredProfileId) {
+            const itemId = Number(itemSelect.value);
+            const preferred = profiles.find((profile) => profile.id === preferredProfileId);
+            const currentCharacterId = preferred?.characterId || Number(characterSelect.value);
+            const matching = profiles.filter((profile) => profile.itemId === itemId);
+            const characters = uniqueBy(matching, (profile) => profile.characterId);
+            replaceOptions(characterSelect, characters.map((profile) => ({
+                value: profile.characterId,
+                label: (profile.characterName || profile.characterCode) + ' · ' + profile.characterCode
+            })));
+            selectOption(characterSelect, currentCharacterId);
+            populateStates(preferredProfileId);
+        }
+
+        function populateStates(preferredProfileId) {
+            const itemId = Number(itemSelect.value);
+            const characterId = Number(characterSelect.value);
+            const preferred = profiles.find((profile) => profile.id === preferredProfileId);
+            const currentState = preferred?.renderState || stateSelect.value;
+            const states = profiles.filter((profile) =>
+                profile.itemId === itemId && profile.characterId === characterId);
+            replaceOptions(stateSelect, states.map((profile) => ({
+                value: profile.renderState,
+                label: profile.renderState === 'default' ? 'default · fallback' : profile.renderState
+            })));
+            selectOption(stateSelect, currentState);
+        }
+
+        function selectCurrentProfile(preferredProfileId) {
+            selectedProfile = preferredProfileId
+                    ? profiles.find((profile) => profile.id === preferredProfileId)
+                    : profiles.find((profile) =>
+                        String(profile.itemId) === itemSelect.value
+                        && String(profile.characterId) === characterSelect.value
+                        && profile.renderState === stateSelect.value);
+
+            if (!selectedProfile) {
+                clearProfile();
+                return;
+            }
+
+            savedTransform = readTransform(selectedProfile);
+            draftTransform = {...savedTransform};
+            applyProfile();
+        }
+
+        function applyProfile() {
+            clearMessages();
+            fieldset.disabled = false;
+            accessoryHandle.disabled = false;
+            previewEmpty.hidden = true;
+            itemSelect.disabled = false;
+            characterSelect.disabled = false;
+            stateSelect.disabled = false;
+
+            const characterLabel = selectedProfile.characterName || selectedProfile.characterCode;
+            document.getElementById('profile-summary').textContent =
+                    selectedProfile.itemName + ' · ' + characterLabel + ' · ' + selectedProfile.renderState;
+            document.getElementById('profile-id').textContent = 'ID ' + selectedProfile.id;
+            document.getElementById('character-key').textContent =
+                    selectedProfile.characterAssetKey || '캐릭터 에셋 없음';
+            document.getElementById('accessory-key').textContent = selectedProfile.assetKey;
+            document.getElementById('canvas-size').textContent =
+                    '캔버스 ' + selectedProfile.canvasWidth + ' × ' + selectedProfile.canvasHeight;
+            document.getElementById('asset-size').textContent =
+                    '에셋 ' + selectedProfile.assetWidth + ' × ' + selectedProfile.assetHeight;
+
+            previewCanvas.style.aspectRatio =
+                    selectedProfile.canvasWidth + ' / ' + selectedProfile.canvasHeight;
+            setImage(characterImage, selectedProfile.characterAssetKey,
+                    characterLabel + ' 캐릭터');
+            setImage(accessoryImage, selectedProfile.assetKey,
+                    selectedProfile.itemName + ' 악세사리');
+            writeControls();
+            renderDraft();
+            saveStatus.textContent = '악세사리를 드래그하거나 입력값을 조정해 주세요.';
+        }
+
+        function clearProfile() {
+            selectedProfile = null;
+            savedTransform = null;
+            draftTransform = null;
+            fieldset.disabled = true;
+            accessoryHandle.disabled = true;
+            characterImage.removeAttribute('src');
+            accessoryImage.removeAttribute('src');
+            showEmpty(profiles.length ? '선택한 조합의 렌더 프로필이 없습니다.' : '등록된 렌더 프로필이 없습니다.');
+            document.getElementById('profile-summary').textContent = '프로필을 선택하면 조정할 수 있습니다.';
+            document.getElementById('profile-id').textContent = 'ID —';
+            document.getElementById('character-key').textContent = '—';
+            document.getElementById('accessory-key').textContent = '—';
+            document.getElementById('canvas-size').textContent = '캔버스 —';
+            document.getElementById('asset-size').textContent = '에셋 —';
+            document.getElementById('layer-value').textContent = '레이어 —';
+            updateDirtyState();
+        }
+
+        function showEmpty(message) {
+            previewEmpty.textContent = message;
+            previewEmpty.hidden = false;
+        }
+
+        function setImage(image, key, alt) {
+            image.alt = alt;
+            image.classList.remove('load-failed');
+            if (!key) {
+                image.removeAttribute('src');
+                image.classList.add('load-failed');
+                return;
+            }
+            image.src = assetUrl(key);
+        }
+
+        characterImage.addEventListener('error', () => {
+            characterImage.classList.add('load-failed');
+            showError('캐릭터 에셋을 불러오지 못했습니다: ' + (selectedProfile?.characterAssetKey || '키 없음'));
+        });
+        accessoryImage.addEventListener('error', () => {
+            accessoryImage.classList.add('load-failed');
+            showError('악세사리 에셋을 불러오지 못했습니다: ' + (selectedProfile?.assetKey || '키 없음'));
+        });
+
+        function updateDraft(field, value, syncNumber = true) {
+            if (!draftTransform) return;
+            const control = controls[field];
+            let next = value;
+            if (field === 'positionX' || field === 'positionY') next = clamp(value, 0, 1);
+            if (field === 'widthRatio') next = clamp(value, 0.0001, 2);
+            if (field === 'rotationDeg') next = clamp(Math.round(value), -360, 360);
+            if (field === 'zIndex') next = Math.round(value);
+            draftTransform[field] = round(next, control.precision);
+            if (field === 'zIndex') fitZIndexRange(next);
+            control.range.value = String(next);
+            if (syncNumber) {
+                control.number.value = formatValue(next, control.precision);
+            }
+            renderDraft();
+        }
+
+        function setDraftPosition(x, y) {
+            if (!draftTransform) return;
+            draftTransform.positionX = round(clamp(x, 0, 1), 5);
+            draftTransform.positionY = round(clamp(y, 0, 1), 5);
+            writeControl('positionX');
+            writeControl('positionY');
+            renderDraft();
+        }
+
+        function renderDraft() {
+            if (!draftTransform || !selectedProfile) return;
+            accessoryHandle.style.left = (draftTransform.positionX * 100) + '%';
+            accessoryHandle.style.top = (draftTransform.positionY * 100) + '%';
+            accessoryHandle.style.width = (draftTransform.widthRatio * 100) + '%';
+            accessoryHandle.style.aspectRatio =
+                    selectedProfile.assetWidth + ' / ' + selectedProfile.assetHeight;
+            accessoryHandle.style.transform =
+                    'translate(-50%, -50%) rotate(' + draftTransform.rotationDeg + 'deg)';
+            accessoryHandle.style.zIndex = String(draftTransform.zIndex);
+            document.getElementById('layer-value').textContent =
+                    '레이어 ' + draftTransform.zIndex;
+            updateDirtyState();
+        }
+
+        function writeControls() {
+            Object.keys(controls).forEach(writeControl);
+        }
+
+        function writeControl(field) {
+            if (!draftTransform) return;
+            const control = controls[field];
+            const value = draftTransform[field];
+            if (field === 'zIndex') fitZIndexRange(value);
+            control.range.value = String(value);
+            control.number.value = formatValue(value, control.precision);
+        }
+
+        function resetDraft() {
+            if (!savedTransform) return;
+            draftTransform = {...savedTransform};
+            writeControls();
+            renderDraft();
+            saveStatus.textContent = '마지막 저장값으로 되돌렸습니다.';
+            noticeBox.hidden = true;
+        }
+
+        async function saveProfile(event) {
+            event.preventDefault();
+            if (!selectedProfile || !draftTransform) return;
+
+            const validationMessage = validateDraft();
+            if (validationMessage) {
+                showError(validationMessage);
+                return;
+            }
+
+            clearMessages();
+            saveButton.disabled = true;
+            resetButton.disabled = true;
+            saveButton.textContent = '저장 중…';
+            saveStatus.textContent = 'DB에 변경값을 저장하고 있습니다.';
+
+            try {
+                const response = await fetchWithSession(
+                        '/admin/character-accessory-render-profiles/' + selectedProfile.id,
+                        {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                [csrfHeader]: csrfToken
+                            },
+                            body: JSON.stringify(draftTransform)
+                        });
+                if (!response.ok) throw await responseError(response, '저장 실패');
+
+                const updated = await response.json();
+                const index = profiles.findIndex((profile) => profile.id === updated.id);
+                if (index >= 0) profiles[index] = updated;
+                selectedProfile = updated;
+                savedTransform = readTransform(updated);
+                draftTransform = {...savedTransform};
+                writeControls();
+                renderDraft();
+                showNotice('렌더 프로필을 저장했습니다.');
+                saveStatus.textContent = '저장 완료 · 사용자 API의 renderProfiles에 바로 반영됩니다.';
+            } catch (error) {
+                showError(error.message);
+                saveStatus.textContent = '저장하지 못했습니다. 입력값과 서버 상태를 확인해 주세요.';
+            } finally {
+                saveButton.disabled = false;
+                resetButton.disabled = false;
+                saveButton.textContent = '변경 저장';
+                updateDirtyState();
+            }
+        }
+
+        function validateDraft() {
+            if (!Number.isFinite(draftTransform.positionX)
+                    || draftTransform.positionX < 0 || draftTransform.positionX > 1) {
+                return '중심점 X는 0~1 사이여야 합니다.';
+            }
+            if (!Number.isFinite(draftTransform.positionY)
+                    || draftTransform.positionY < 0 || draftTransform.positionY > 1) {
+                return '중심점 Y는 0~1 사이여야 합니다.';
+            }
+            if (!Number.isFinite(draftTransform.widthRatio)
+                    || draftTransform.widthRatio <= 0 || draftTransform.widthRatio > 2) {
+                return '너비 비율은 0보다 크고 2 이하여야 합니다.';
+            }
+            if (!Number.isInteger(draftTransform.rotationDeg)
+                    || draftTransform.rotationDeg < -360 || draftTransform.rotationDeg > 360) {
+                return '회전값은 -360~360 사이 정수여야 합니다.';
+            }
+            if (!Number.isInteger(draftTransform.zIndex)) {
+                return '레이어 순서는 정수여야 합니다.';
+            }
+            return '';
+        }
+
+        function updateDirtyState() {
+            const dirty = isDirty();
+            dirtyBadge.textContent = selectedProfile ? (dirty ? '저장 안 됨' : '저장됨') : '선택 필요';
+            dirtyBadge.classList.toggle('dirty', dirty);
+            saveButton.disabled = !selectedProfile || !dirty;
+            resetButton.disabled = !selectedProfile || !dirty;
+        }
+
+        function isDirty() {
+            return Boolean(selectedProfile && savedTransform && draftTransform
+                    && Object.keys(savedTransform)
+                            .some((key) => savedTransform[key] !== draftTransform[key]));
+        }
+
+        function confirmDiscard() {
+            return !isDirty() || window.confirm('저장하지 않은 변경사항을 버리고 다른 프로필로 이동할까요?');
+        }
+
+        function restoreSelection() {
+            if (!selectedProfile) return;
+            itemSelect.value = String(selectedProfile.itemId);
+            populateCharacters(selectedProfile.id);
+        }
+
+        function setLoading(loading) {
+            itemSelect.disabled = loading || profiles.length === 0;
+            characterSelect.disabled = loading || profiles.length === 0;
+            stateSelect.disabled = loading || profiles.length === 0;
+            if (loading) {
+                dirtyBadge.textContent = '불러오는 중';
+                fieldset.disabled = true;
+            }
+        }
+
+        function readTransform(profile) {
+            return {
+                positionX: round(Number(profile.positionX), 5),
+                positionY: round(Number(profile.positionY), 5),
+                widthRatio: round(Number(profile.widthRatio), 4),
+                rotationDeg: Number(profile.rotationDeg),
+                zIndex: Number(profile.zIndex)
+            };
+        }
+
+        function uniqueBy(items, key) {
+            const seen = new Set();
+            return items.filter((item) => {
+                const value = key(item);
+                if (seen.has(value)) return false;
+                seen.add(value);
+                return true;
+            });
+        }
+
+        function replaceOptions(select, options) {
+            select.replaceChildren(...options.map((option) =>
+                new Option(option.label, String(option.value))));
+            select.disabled = options.length === 0;
+        }
+
+        function selectOption(select, value) {
+            const matching = Array.from(select.options)
+                    .find((option) => option.value === String(value));
+            if (matching) select.value = matching.value;
+        }
+
+        function fitZIndexRange(value) {
+            const range = controls.zIndex.range;
+            if (value < Number(range.min)) range.min = String(Math.floor(value / 10) * 10);
+            if (value > Number(range.max)) range.max = String(Math.ceil(value / 10) * 10);
+        }
+
+        function assetUrl(key) {
+            if (/^https?:\/\//i.test(key)) return key;
+            return s3BaseUrl.replace(/\/+$/, '') + '/' + key.replace(/^\/+/, '');
+        }
+
+        async function responseError(response, fallback) {
+            try {
+                const body = await response.json();
+                return new Error((body.message || body.code || fallback) + ' (HTTP ' + response.status + ')');
+            } catch {
+                return new Error(fallback + ' (HTTP ' + response.status + ')');
+            }
+        }
+
+        async function fetchWithSession(input, init) {
+            const response = await fetch(input, init);
+            if (response.redirected && new URL(response.url).pathname === '/login') {
+                window.location.assign(response.url);
+                throw new Error('로그인 세션이 만료되었습니다.');
+            }
+            return response;
+        }
+
+        function clearMessages() {
+            errorBox.hidden = true;
+            noticeBox.hidden = true;
+        }
+
+        function showError(message) {
+            noticeBox.hidden = true;
+            errorBox.textContent = message;
+            errorBox.hidden = false;
+        }
+
+        function showNotice(message) {
+            errorBox.hidden = true;
+            noticeBox.textContent = message;
+            noticeBox.hidden = false;
+        }
+
+        function round(value, precision) {
+            const multiplier = 10 ** precision;
+            return Math.round((value + Number.EPSILON) * multiplier) / multiplier;
+        }
+
+        function formatValue(value, precision) {
+            return precision ? Number(value).toFixed(precision) : String(Math.round(value));
+        }
+
+        function clamp(value, minimum, maximum) {
+            return Math.min(Math.max(value, minimum), maximum);
+        }
+    </script>
+</body>
+</html>
