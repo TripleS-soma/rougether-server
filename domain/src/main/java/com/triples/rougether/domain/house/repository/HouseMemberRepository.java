@@ -36,12 +36,26 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
 
     boolean existsByInviteCode(String inviteCode);
 
-    // 구성원 개인 초대코드 참여/미리보기 - 초대자와 집을 함께 확정한다. house fetch join(N+1 회피).
+    // 구성원 개인 초대코드 미리보기 전용 - 초대자와 집을 함께 확정한다. house fetch join(N+1 회피).
+    // 참여 경로에서는 쓰지 않는다 - 멤버 엔티티가 PC 에 실리면 이후 락 재조회가 1차 캐시에 가려진다.
     @Query("select hm from HouseMember hm join fetch hm.house where hm.inviteCode = :inviteCode")
     Optional<HouseMember> findByInviteCodeWithHouse(@Param("inviteCode") String inviteCode);
 
-    // 자동 기여 경로 전용 - 락 조회(current read). 완료 트랜잭션의 REPEATABLE READ 스냅샷이 잡힌 뒤
-    // 커밋된 탈퇴·강퇴를 일반 조회는 못 보므로, 강퇴 직후에도 기여가 기록되는 경합 창을 닫는다.
+    // 구성원 개인 초대코드 참여 전용 - 초대자 위치(house_id, user_id)만 스칼라로 스냅샷함.
+    // 멤버 엔티티를 PC 에 싣지 않아야 house 락 이후의 락 재조회가 1차 캐시에 가려지지 않고
+    // 동시 탈퇴·강퇴·코드 회전의 선행 커밋을 반영한 최신 상태를 읽는다(회원탈퇴 정리 패턴과 동일).
+    @Query("select hm.house.id as houseId, hm.user.id as userId from HouseMember hm join hm.house h "
+            + "where hm.inviteCode = :inviteCode and h.deletedAt is null")
+    Optional<InviteJoinTarget> findJoinTargetByInviteCode(@Param("inviteCode") String inviteCode);
+
+    interface InviteJoinTarget {
+        Long getHouseId();
+
+        Long getUserId();
+    }
+
+    // 자동 기여·개인 초대코드 참여 경로용 - 락 조회(current read). REPEATABLE READ 스냅샷이 잡힌 뒤
+    // 커밋된 탈퇴·강퇴를 일반 조회는 못 보므로, 강퇴 직후 기여·무효 코드 참여가 통과하는 경합 창을 닫는다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select hm from HouseMember hm where hm.house.id = :houseId and hm.user.id = :userId")
     Optional<HouseMember> findWithLockByHouseIdAndUserId(@Param("houseId") Long houseId,

@@ -65,18 +65,23 @@ public class HouseJoinService {
 
     // 구성원 개인 코드 참여 - 초대자가 현재 소유자면 집 코드와 동일하게 즉시가입,
     // 일반 구성원이면 탐색 입주 신청과 같은 PENDING 신청을 만들고 방장 수락으로 확정한다.
-    // 초대자 판정(활성·역할)은 참여 시점 기준이라 초대자가 탈퇴·강퇴되면 코드는 곧바로 무효가 된다.
+    // 초대자 판정(활성·역할·만료·코드 일치)은 house 락 이후의 락 재조회(current read)로 한다 -
+    // 락 대기 중 커밋된 초대자의 탈퇴·강퇴·코드 회전·소유권 변경을 스냅샷 조회는 못 보기 때문.
     private HouseJoinResponse joinByMemberCode(Long userId, String inviteCode) {
-        HouseMember inviter = houseMemberRepository.findByInviteCodeWithHouse(inviteCode)
+        HouseMemberRepository.InviteJoinTarget target = houseMemberRepository
+                .findJoinTargetByInviteCode(inviteCode)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
+
+        // 정원 검사·신청 생성은 다른 참여 경로와 같은 house 행 락 아래에서 처리한다.
+        House house = findHouseWithLock(target.getHouseId());
+        HouseMember inviter = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(house.getId(), target.getUserId())
                 .filter(HouseMember::isActive)
-                .filter(found -> !found.getHouse().isDeleted())
+                .filter(found -> inviteCode.equals(found.getInviteCode()))
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
         if (inviter.isInviteExpired()) {
             throw new BusinessException(HouseErrorCode.INVITE_CODE_EXPIRED);
         }
-
-        // 정원 검사·신청 생성은 다른 참여 경로와 같은 house 행 락 아래에서 처리한다.
-        House house = findHouseWithLock(inviter.getHouse().getId());
         if (inviter.isOwner()) {
             return joinImmediately(house, userId);
         }
