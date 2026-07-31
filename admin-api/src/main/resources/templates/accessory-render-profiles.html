@@ -245,6 +245,7 @@
         let savedTransform = null;
         let draftTransform = null;
         let dragState = null;
+        let saving = false;
 
         bindControls();
         bindSelectors();
@@ -436,12 +437,12 @@
 
         function applyProfile() {
             clearMessages();
-            fieldset.disabled = false;
-            accessoryHandle.disabled = false;
+            fieldset.disabled = saving;
+            accessoryHandle.disabled = saving;
             previewEmpty.hidden = true;
-            itemSelect.disabled = false;
-            characterSelect.disabled = false;
-            stateSelect.disabled = false;
+            itemSelect.disabled = saving;
+            characterSelect.disabled = saving;
+            stateSelect.disabled = saving;
 
             const characterLabel = selectedProfile.characterName || selectedProfile.characterCode;
             document.getElementById('profile-summary').textContent =
@@ -578,7 +579,7 @@
 
         async function saveProfile(event) {
             event.preventDefault();
-            if (!selectedProfile || !draftTransform) return;
+            if (saving || !selectedProfile || !draftTransform) return;
 
             const validationMessage = validateDraft();
             if (validationMessage) {
@@ -586,28 +587,33 @@
                 return;
             }
 
+            const savingProfileId = selectedProfile.id;
+            const payload = {...draftTransform};
             clearMessages();
-            saveButton.disabled = true;
-            resetButton.disabled = true;
-            saveButton.textContent = '저장 중…';
+            setSaving(true);
             saveStatus.textContent = 'DB에 변경값을 저장하고 있습니다.';
 
             try {
                 const response = await fetchWithSession(
-                        '/admin/character-accessory-render-profiles/' + selectedProfile.id,
+                        '/admin/character-accessory-render-profiles/' + savingProfileId,
                         {
                             method: 'PUT',
                             headers: {
                                 'Content-Type': 'application/json',
                                 [csrfHeader]: csrfToken
                             },
-                            body: JSON.stringify(draftTransform)
+                            body: JSON.stringify(payload)
                         });
                 if (!response.ok) throw await responseError(response, '저장 실패');
 
                 const updated = await response.json();
                 const index = profiles.findIndex((profile) => profile.id === updated.id);
                 if (index >= 0) profiles[index] = updated;
+                if (selectedProfile?.id !== savingProfileId) {
+                    showNotice('이전에 선택한 렌더 프로필을 저장했습니다.');
+                    saveStatus.textContent = '저장 완료 · 현재 선택한 프로필의 편집 상태는 유지됩니다.';
+                    return;
+                }
                 selectedProfile = updated;
                 savedTransform = readTransform(updated);
                 draftTransform = {...savedTransform};
@@ -619,10 +625,7 @@
                 showError(error.message);
                 saveStatus.textContent = '저장하지 못했습니다. 입력값과 서버 상태를 확인해 주세요.';
             } finally {
-                saveButton.disabled = false;
-                resetButton.disabled = false;
-                saveButton.textContent = '변경 저장';
-                updateDirtyState();
+                setSaving(false);
             }
         }
 
@@ -653,8 +656,8 @@
             const dirty = isDirty();
             dirtyBadge.textContent = selectedProfile ? (dirty ? '저장 안 됨' : '저장됨') : '선택 필요';
             dirtyBadge.classList.toggle('dirty', dirty);
-            saveButton.disabled = !selectedProfile || !dirty;
-            resetButton.disabled = !selectedProfile || !dirty;
+            saveButton.disabled = saving || !selectedProfile || !dirty;
+            resetButton.disabled = saving || !selectedProfile || !dirty;
         }
 
         function isDirty() {
@@ -681,6 +684,17 @@
                 dirtyBadge.textContent = '불러오는 중';
                 fieldset.disabled = true;
             }
+        }
+
+        function setSaving(nextSaving) {
+            saving = nextSaving;
+            itemSelect.disabled = saving || itemSelect.options.length === 0;
+            characterSelect.disabled = saving || characterSelect.options.length === 0;
+            stateSelect.disabled = saving || stateSelect.options.length === 0;
+            fieldset.disabled = saving || !selectedProfile;
+            accessoryHandle.disabled = saving || !selectedProfile;
+            saveButton.textContent = saving ? '저장 중…' : '변경 저장';
+            updateDirtyState();
         }
 
         function readTransform(profile) {

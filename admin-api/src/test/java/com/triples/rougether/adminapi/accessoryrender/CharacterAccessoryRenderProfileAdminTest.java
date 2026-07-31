@@ -275,6 +275,27 @@ class CharacterAccessoryRenderProfileAdminTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 잘못된_json_타입도_공통_400_형식으로_반환한다() throws Exception {
+        Long profileId = createProfile();
+
+        mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transformBody().replace(
+                                "\"zIndex\": 25",
+                                "\"zIndex\": 1.5"))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID"))
+                .andExpect(jsonPath("$.message")
+                        .value("렌더 프로필 요청 형식이 올바르지 않습니다."));
+
+        var stored = renderProfileRepository.findById(profileId).orElseThrow();
+        assertThat(stored.getZIndex()).isEqualTo(20);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 없는_프로필_단건_수정은_404를_반환한다() throws Exception {
         mockMvc.perform(put("/admin/character-accessory-render-profiles/{profileId}", 999999L)
                         .contentType(MediaType.APPLICATION_JSON)

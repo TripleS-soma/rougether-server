@@ -12,6 +12,7 @@ import com.triples.rougether.common.error.ErrorResponse;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,6 +57,13 @@ public class AccessoryRenderProfileAdminController {
         return ResponseEntity.badRequest().body(ErrorResponse.of(
                 "CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID",
                 exception.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableRequest() {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(
+                "CHARACTER_ACCESSORY_RENDER_PROFILE_INVALID",
+                "렌더 프로필 요청 형식이 올바르지 않습니다."));
     }
 
     @ExceptionHandler(AccessoryRenderProfileNotFoundException.class)
