@@ -69,6 +69,7 @@ class RoutineMissionAutoContributeIntegrationTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private RoutineLogRepository routineLogRepository;
     @Autowired private UserWalletRepository userWalletRepository;
+    @Autowired private WalletHistoryRepository walletHistoryRepository;
     @Autowired private StreakRepository streakRepository;
     @Autowired private TodoRepository todoRepository;
     @Autowired private UserRepository userRepository;
