@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -252,5 +253,69 @@ class HouseJoinRequestConcurrencyTest {
         assertThat(stored.getInviteCode()).isNull();
         assertThat(houseRepository.findById(houseId).orElseThrow().getCurrentMemberCount())
                 .isEqualTo(1);
+    }
+
+    // 소유권 양도의 role flush(전체 컬럼 UPDATE)가 동시 재발급된 개인 코드를 되덮지 않는지 검증.
+    // 양도가 house 락에 참여하지 않으면 재발급 커밋 후 stale flush 가 invite_code 를 null 로 되돌린다.
+    @Test
+    void 소유권_양도와_재발급이_경합해도_발급된_개인_코드가_유실되지_않는다() throws Exception {
+        User owner = userRepository.save(User.signUp("transfer-race-owner@rougether.dev"));
+        User member = userRepository.save(User.signUp("transfer-race-member@rougether.dev"));
+        House house = houseRepository.save(House.create(
+                owner, "양도 경합 집", null, null, 4, "TRACE234",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
+        HouseMember targetMembership = houseMemberRepository.save(
+                HouseMember.create(house, member, HouseMemberRole.MEMBER));
+        house.increaseMemberCount();
+        houseRepository.save(house);
+        ownerId = owner.getId();
+        firstApplicantId = member.getId();
+        houseId = house.getId();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        List<Throwable> unexpected = new CopyOnWriteArrayList<>();
+        AtomicReference<String> issuedCode = new AtomicReference<>();
+
+        pool.submit(() -> {
+            try {
+                start.await();
+                issuedCode.set(houseCommandService
+                        .reissueInviteCode(firstApplicantId, houseId).inviteCode());
+            } catch (Throwable error) {
+                unexpected.add(error);
+            } finally {
+                done.countDown();
+            }
+        });
+        pool.submit(() -> {
+            try {
+                start.await();
+                houseMemberCommandService.transferOwnership(
+                        ownerId, houseId, targetMembership.getId());
+            } catch (Throwable error) {
+                unexpected.add(error);
+            } finally {
+                done.countDown();
+            }
+        });
+
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        assertThat(unexpected).isEmpty();
+        var stored = houseMemberRepository.findById(targetMembership.getId()).orElseThrow();
+        assertThat(stored.getRole()).isEqualTo(HouseMemberRole.OWNER);
+        String houseCode = houseRepository.findById(houseId).orElseThrow().getInviteCode();
+        if (issuedCode.get().equals(houseCode)) {
+            // 양도가 먼저 커밋된 경우 - 재발급이 소유자 분기로 흘러 집 공용 코드를 회전시킨 것.
+            assertThat(stored.getInviteCode()).isNull();
+        } else {
+            // 재발급이 먼저 커밋된 경우 - 양도 flush 가 개인 코드를 되덮으면 안 된다.
+            assertThat(stored.getInviteCode()).isEqualTo(issuedCode.get());
+        }
     }
 }
