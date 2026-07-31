@@ -231,7 +231,10 @@ jobs:
           if [ -z "$cf_domain" ] || [ "$cf_domain" = "None" ]; then
             echo "::warning::CloudFront distribution not found; skipping HTTPS health check (apply deploy/terraform/ec2 first)"
           else
-            curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "https://${cf_domain}/api/v1/health"
+            # 최초 apply·-replace 직후에는 엣지 전파에 5~10분이 걸려 도메인은 조회되지만 아직
+            # 응답이 안 될 수 있다. direct 체크(위)가 이미 통과한 상태이므로, 재시도 예산을
+            # 전파 시간보다 길게 잡아(10초×36 ≈ 6분) 그 윈도우의 오탐 실패를 막는다.
+            curl --retry 36 --retry-all-errors --retry-delay 10 -fsS "https://${cf_domain}/api/v1/health"
           fi
 
       # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
