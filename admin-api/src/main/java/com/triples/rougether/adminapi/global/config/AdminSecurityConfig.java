@@ -23,6 +23,10 @@ public class AdminSecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(
+                                "/accessory-render-profiles",
+                                "/admin/character-accessory-render-profiles/**"
+                        ).hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
                 // 일괄 적재(catalog/슬롯/악세사리 렌더 프로필)·재화 지급은 curl/스크립트로 호출

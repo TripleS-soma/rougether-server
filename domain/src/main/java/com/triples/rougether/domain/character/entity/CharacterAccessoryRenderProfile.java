@@ -128,4 +128,17 @@ public class CharacterAccessoryRenderProfile extends BaseEntity {
         this.rotationDeg = rotationDeg;
         this.zIndex = zIndex;
     }
+
+    public void updateTransform(
+            BigDecimal positionX,
+            BigDecimal positionY,
+            BigDecimal widthRatio,
+            int rotationDeg,
+            int zIndex) {
+        this.positionX = positionX;
+        this.positionY = positionY;
+        this.widthRatio = widthRatio;
+        this.rotationDeg = rotationDeg;
+        this.zIndex = zIndex;
+    }
 }

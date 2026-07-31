@@ -4,7 +4,9 @@ import com.triples.rougether.adminapi.accessoryrender.dto.AccessoryRenderProfile
 import com.triples.rougether.adminapi.accessoryrender.dto.AccessoryRenderProfileImportResult;
 import com.triples.rougether.adminapi.accessoryrender.dto.AccessoryRenderProfileListResponse;
 import com.triples.rougether.adminapi.accessoryrender.dto.AccessoryRenderProfileRow;
+import com.triples.rougether.adminapi.accessoryrender.dto.AccessoryRenderProfileTransformUpdateRequest;
 import com.triples.rougether.adminapi.accessoryrender.error.AccessoryRenderProfileInvalidException;
+import com.triples.rougether.adminapi.accessoryrender.error.AccessoryRenderProfileNotFoundException;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
@@ -93,13 +95,30 @@ public class AccessoryRenderProfileAdminService {
                         request.assetHeight(),
                         normalizePosition(request.positionX()),
                         normalizePosition(request.positionY()),
-                        request.widthRatio().setScale(4, RoundingMode.HALF_UP),
+                        normalizeWidthRatio(request.widthRatio()),
                         request.rotationDeg(),
                         request.zIndex()));
                 created++;
             }
         }
         return new AccessoryRenderProfileImportResult(created, updated);
+    }
+
+    @Transactional
+    public AccessoryRenderProfileRow updateTransform(
+            Long profileId,
+            AccessoryRenderProfileTransformUpdateRequest request) {
+        validateTransformRequest(request);
+        CharacterAccessoryRenderProfile profile = renderProfileRepository.findById(profileId)
+                .orElseThrow(() -> new AccessoryRenderProfileNotFoundException(
+                        "렌더 프로필을 찾을 수 없습니다: " + profileId));
+        profile.updateTransform(
+                normalizePosition(request.positionX()),
+                normalizePosition(request.positionY()),
+                normalizeWidthRatio(request.widthRatio()),
+                request.rotationDeg(),
+                request.zIndex());
+        return AccessoryRenderProfileRow.of(profile);
     }
 
     private void update(
@@ -114,7 +133,7 @@ public class AccessoryRenderProfileAdminService {
                 request.assetHeight(),
                 normalizePosition(request.positionX()),
                 normalizePosition(request.positionY()),
-                request.widthRatio().setScale(4, RoundingMode.HALF_UP),
+                normalizeWidthRatio(request.widthRatio()),
                 request.rotationDeg(),
                 request.zIndex());
     }
@@ -142,16 +161,47 @@ public class AccessoryRenderProfileAdminService {
         requirePositive(request.canvasHeight(), "canvasHeight");
         requirePositive(request.assetWidth(), "assetWidth");
         requirePositive(request.assetHeight(), "assetHeight");
-        validatePosition(request.positionX(), "positionX");
-        validatePosition(request.positionY(), "positionY");
-        if (request.widthRatio() == null
-                || request.widthRatio().compareTo(BigDecimal.ZERO) <= 0
-                || request.widthRatio().compareTo(WIDTH_RATIO_MAX) > 0) {
+        validateTransformValues(
+                request.positionX(),
+                request.positionY(),
+                request.widthRatio(),
+                request.rotationDeg(),
+                request.zIndex());
+    }
+
+    private void validateTransformRequest(AccessoryRenderProfileTransformUpdateRequest request) {
+        if (request == null) {
+            throw invalid("렌더 transform 값이 필요합니다.");
+        }
+        validateTransformValues(
+                request.positionX(),
+                request.positionY(),
+                request.widthRatio(),
+                request.rotationDeg(),
+                request.zIndex());
+    }
+
+    private void validateTransformValues(
+            BigDecimal positionX,
+            BigDecimal positionY,
+            BigDecimal widthRatio,
+            Integer rotationDeg,
+            Integer zIndex) {
+        validatePosition(positionX, "positionX");
+        validatePosition(positionY, "positionY");
+        if (widthRatio == null
+                || widthRatio.compareTo(BigDecimal.ZERO) <= 0
+                || widthRatio.compareTo(WIDTH_RATIO_MAX) > 0) {
             throw invalid("widthRatio는 0보다 크고 2 이하여야 합니다.");
         }
-        if (request.rotationDeg() < -ROTATION_LIMIT
-                || request.rotationDeg() > ROTATION_LIMIT) {
+        normalizeWidthRatio(widthRatio);
+        if (rotationDeg == null
+                || rotationDeg < -ROTATION_LIMIT
+                || rotationDeg > ROTATION_LIMIT) {
             throw invalid("rotationDeg는 -360 이상 360 이하여야 합니다.");
+        }
+        if (zIndex == null) {
+            throw invalid("zIndex가 필요합니다.");
         }
     }
 
@@ -186,6 +236,14 @@ public class AccessoryRenderProfileAdminService {
 
     private BigDecimal normalizePosition(BigDecimal value) {
         return value.setScale(5, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal normalizeWidthRatio(BigDecimal value) {
+        BigDecimal normalized = value.setScale(4, RoundingMode.HALF_UP);
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
+            throw invalid("widthRatio는 소수점 4자리 반올림 후에도 0보다 커야 합니다.");
+        }
+        return normalized;
     }
 
     private AccessoryRenderProfileInvalidException invalid(String message) {
