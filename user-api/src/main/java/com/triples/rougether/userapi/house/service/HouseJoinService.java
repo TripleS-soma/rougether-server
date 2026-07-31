@@ -57,7 +57,8 @@ public class HouseJoinService {
 
     private HouseJoinResponse joinImmediately(House house, Long userId) {
         HouseMember member = join(house, userId);
-        houseJoinRequestRepository.findByHouseIdAndUserId(house.getId(), userId)
+        // 락 조회 - 개인 초대코드 경로의 사전 스냅샷에 가려진 대기 신청도 함께 종결한다.
+        houseJoinRequestRepository.findWithLockByHouseIdAndUserId(house.getId(), userId)
                 .filter(HouseJoinRequest::isPending)
                 .ifPresent(HouseJoinRequest::accept);
         return HouseJoinResponse.joined(member.getId(), house.getId(), member.getStatus());
@@ -100,8 +101,12 @@ public class HouseJoinService {
 
     // 공용 신청 판정: 중복(active)/강퇴 이력 -> 중복 신청 -> 정원 -> 신규 생성 또는 거절 이력 재오픈.
     // 호출자는 house 를 행 락으로 조회한 상태여야 한다(수락 시 정원 재검사와 직렬화).
+    // 멤버십·신청 판정은 락 조회(current read)로 한다 - 개인 초대코드 참여는 house 락 이전의
+    // 스냅샷 조회로 REPEATABLE READ read view 가 잡혀 있어, 일반 조회는 락 대기 중 커밋된
+    // 즉시가입(ACTIVE)·신청 row 를 못 보고 중복 신청을 만들거나 unique 충돌 500 이 나기 때문.
     private HouseJoinRequest createOrReopenPendingRequest(House house, Long houseId, Long userId) {
-        HouseMember existingMember = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+        HouseMember existingMember = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (existingMember != null && existingMember.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);
@@ -109,7 +114,8 @@ public class HouseJoinService {
         if (existingMember != null && existingMember.isKicked()) {
             throw new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER);
         }
-        HouseJoinRequest request = houseJoinRequestRepository.findByHouseIdAndUserId(houseId, userId)
+        HouseJoinRequest request = houseJoinRequestRepository
+                .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
         if (request != null && request.isPending()) {
             throw new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_ALREADY_PENDING);
@@ -177,7 +183,10 @@ public class HouseJoinService {
         User joiner = userRepository.findByIdForUpdate(userId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
-        HouseMember existing = houseMemberRepository.findByHouseIdAndUserId(house.getId(), userId)
+        // 락 조회(current read) - 개인 초대코드 경로는 house 락 이전에 스냅샷이 잡혀 있어
+        // 일반 조회로는 락 대기 중 커밋된 기존 멤버십을 못 보고 중복 등록(unique 충돌)이 난다.
+        HouseMember existing = houseMemberRepository
+                .findWithLockByHouseIdAndUserId(house.getId(), userId)
                 .orElse(null);
         if (existing != null && existing.isActive()) {
             throw new BusinessException(HouseErrorCode.HOUSE_ALREADY_MEMBER);

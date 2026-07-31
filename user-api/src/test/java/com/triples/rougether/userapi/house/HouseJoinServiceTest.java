@@ -69,7 +69,7 @@ class HouseJoinServiceTest {
     void 초대코드로_참여하면_MEMBER_ACTIVE로_등록되고_구성원_수가_증가한다() {
         House house = joinableHouse(1L);
         when(houseRepository.findWithLockByInviteCode(CODE)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         liveJoiner(7L);
         when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -137,7 +137,7 @@ class HouseJoinServiceTest {
         when(house.isFull()).thenReturn(true);
         when(houseRepository.findWithLockByInviteCode(CODE)).thenReturn(Optional.of(house));
         liveJoiner(7L);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseJoinService.joinByCode(7L, CODE))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_FULL));
@@ -156,7 +156,7 @@ class HouseJoinServiceTest {
         liveJoiner(7L);
         HouseMember active = mock(HouseMember.class);
         when(active.isActive()).thenReturn(true);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(active));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(active));
 
         assertThatThrownBy(() -> houseJoinService.joinByCode(7L, CODE))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_ALREADY_MEMBER));
@@ -173,7 +173,7 @@ class HouseJoinServiceTest {
         when(left.getId()).thenReturn(12L);
         when(left.isActive()).thenReturn(false);
         when(left.getStatus()).thenReturn(HouseMemberStatus.ACTIVE); // reactivate 후 응답용
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
 
         HouseJoinResponse response = houseJoinService.joinByCode(7L, CODE);
 
@@ -190,7 +190,7 @@ class HouseJoinServiceTest {
         when(house.isDeleted()).thenReturn(false);
         when(house.isFull()).thenReturn(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         liveJoiner(7L);
         when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -230,7 +230,7 @@ class HouseJoinServiceTest {
         when(house.isFull()).thenReturn(true);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         liveJoiner(7L);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseJoinService.join(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_FULL));
@@ -250,7 +250,7 @@ class HouseJoinServiceTest {
         when(left.isActive()).thenReturn(false);
         when(left.getStatus()).thenReturn(HouseMemberStatus.ACTIVE);
         when(left.getRole()).thenReturn(HouseMemberRole.MEMBER);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(left));
 
         HouseJoinDetailResponse response = houseJoinService.join(7L, 1L);
 
@@ -269,7 +269,7 @@ class HouseJoinServiceTest {
         liveJoiner(7L);
         HouseMember active = mock(HouseMember.class);
         when(active.isActive()).thenReturn(true);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(active));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(active));
 
         assertThatThrownBy(() -> houseJoinService.join(7L, 1L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_ALREADY_MEMBER));
@@ -283,8 +283,8 @@ class HouseJoinServiceTest {
         when(applicant.getId()).thenReturn(7L);
         when(applicant.getNickname()).thenReturn("루티니");
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(userRepository.getReferenceById(7L)).thenReturn(applicant);
         when(houseJoinRequestRepository.save(any(HouseJoinRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -305,8 +305,8 @@ class HouseJoinServiceTest {
         User applicant = mock(User.class);
         HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L))
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L))
                 .thenReturn(Optional.of(request));
 
         assertThat(house.isFull()).isTrue();
@@ -327,7 +327,7 @@ class HouseJoinServiceTest {
         HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
         when(houseJoinRequestRepository.findWithLockByIdAndHouseId(21L, 1L))
                 .thenReturn(Optional.of(request));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(applicant));
         when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -366,11 +366,11 @@ class HouseJoinServiceTest {
         House house = joinableHouse(1L);
         User applicant = mock(User.class);
         when(houseRepository.findWithLockByInviteCode(CODE)).thenReturn(Optional.of(house));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(applicant));
         when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
         HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L))
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L))
                 .thenReturn(Optional.of(request));
 
         houseJoinService.joinByCode(7L, CODE);
@@ -412,8 +412,8 @@ class HouseJoinServiceTest {
     void 구성원_개인_코드로_참여하면_PENDING_신청만_만들고_즉시가입하지_않는다() {
         House house = joinableHouse(1L);
         stubMemberCodeLookup(house, inviterOf(false));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         User applicant = mock(User.class);
         when(userRepository.getReferenceById(7L)).thenReturn(applicant);
         when(houseJoinRequestRepository.save(any(HouseJoinRequest.class)))
@@ -434,7 +434,7 @@ class HouseJoinServiceTest {
     void 초대자가_소유자면_개인_코드도_즉시가입한다() {
         House house = joinableHouse(1L);
         stubMemberCodeLookup(house, inviterOf(true));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         liveJoiner(7L);
         when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -495,8 +495,8 @@ class HouseJoinServiceTest {
         User applicant = mock(User.class);
         HouseJoinRequest pending = HouseJoinRequest.create(house, applicant);
         stubMemberCodeLookup(house, inviterOf(false));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(pending));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(pending));
 
         assertThatThrownBy(() -> houseJoinService.joinByCode(7L, CODE))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
@@ -510,8 +510,8 @@ class HouseJoinServiceTest {
         HouseJoinRequest rejected = HouseJoinRequest.create(house, applicant);
         rejected.reject();
         stubMemberCodeLookup(house, inviterOf(false));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(houseJoinRequestRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(rejected));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(rejected));
 
         HouseJoinResponse response = houseJoinService.joinByCode(7L, CODE);
 
@@ -527,7 +527,7 @@ class HouseJoinServiceTest {
         when(kicked.isActive()).thenReturn(false);
         when(kicked.isKicked()).thenReturn(true);
         stubMemberCodeLookup(house, inviterOf(false));
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(kicked));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(kicked));
 
         assertThatThrownBy(() -> houseJoinService.joinByCode(7L, CODE))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
