@@ -32,8 +32,9 @@ resource "aws_cloudfront_distribution" "user_api" {
   price_class = "PriceClass_200"
 
   origin {
-    # EC2 재생성으로 public DNS 가 바뀌면 terraform apply 가 origin 을 함께 갱신한다.
-    domain_name = aws_instance.app.public_dns
+    # EIP 의 public DNS 라 EC2 stop/start·재생성에도 주소가 유지된다. 인스턴스가 아닌
+    # aws_instance.app.public_dns 를 쓰면 stop/start 때 origin 이 stale 호스트명으로 끊긴다.
+    domain_name = aws_eip.app.public_dns
     origin_id   = "${local.name}-user-api-ec2"
 
     custom_origin_config {

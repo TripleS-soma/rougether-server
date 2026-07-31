@@ -1,11 +1,11 @@
 output "ec2_public_ip" {
-  description = "Public IP of the EC2 application instance."
-  value       = aws_instance.app.public_ip
+  description = "Public IP of the EC2 application instance (EIP, stable across stop/start)."
+  value       = aws_eip.app.public_ip
 }
 
 output "user_api_health_url" {
   description = "User API health check URL (direct HTTP, used by the deploy workflow)."
-  value       = "http://${aws_instance.app.public_ip}:8080/api/v1/health"
+  value       = "http://${aws_eip.app.public_ip}:8080/api/v1/health"
 }
 
 output "user_api_https_base_url" {
@@ -20,12 +20,12 @@ output "user_api_https_health_url" {
 
 output "admin_url" {
   description = "Admin login/upload URL."
-  value       = "http://${aws_instance.app.public_ip}:8081/"
+  value       = "http://${aws_eip.app.public_ip}:8081/"
 }
 
 output "admin_health_url" {
   description = "Admin API health check URL."
-  value       = "http://${aws_instance.app.public_ip}:8081/admin/health"
+  value       = "http://${aws_eip.app.public_ip}:8081/admin/health"
 }
 
 output "ecr_registry_server" {

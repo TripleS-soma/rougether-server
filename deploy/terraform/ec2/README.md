@@ -229,7 +229,8 @@ terraform output -raw user_api_https_base_url
 - admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를 태우지 않고 기존 직접 접속을 유지합니다. CloudFront 를 거치면 요청 소스가 CloudFront 엣지 IP 가 되어 IP 제한이 무력화되기 때문입니다.
 - CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
-- EC2 인스턴스를 재생성(`-replace=aws_instance.app`)하면 public DNS 가 바뀌므로, 이어서 `terraform apply` 로 CloudFront origin 도 갱신해야 합니다. CloudFront 주소 자체는 바뀌지 않아 앱 설정은 그대로입니다.
+- origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
+- 배포 workflow 는 direct HTTP 와 함께 CloudFront 경유 health check 도 수행합니다(배포가 origin 까지 실제로 도달하는지 검증). CloudFront 배포가 아직 없으면(terraform apply 전) 그 단계는 건너뜁니다.
 - 정식 도메인을 확보하면 `aliases` + ACM(us-east-1) 인증서를 붙이는 것으로 전환합니다.
 
 최초 생성/변경 배포에는 5~10분 정도 걸립니다.

@@ -219,6 +219,21 @@ jobs:
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8080/api/v1/health"
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8081/admin/health"
 
+          # 앱이 실제로 쓰는 경로는 CloudFront(HTTPS)이므로 origin 도달 여부까지 검증한다.
+          # comment 는 terraform(cloudfront.tf)의 "${local.name} user-api HTTPS entrypoint" 와 일치해야 한다.
+          # CloudFront 배포가 아직 없으면(terraform apply 전) 경고만 남기고 건너뛴다 —
+          # batch ECR 처럼 terraform 선적용이 안 된 환경에서 배포 자체를 막지 않기 위함이다.
+          cf_domain="$(
+            aws cloudfront list-distributions \
+              --query "DistributionList.Items[?Comment=='rougether-dev user-api HTTPS entrypoint'].DomainName | [0]" \
+              --output text 2>/dev/null || echo "None"
+          )"
+          if [ -z "$cf_domain" ] || [ "$cf_domain" = "None" ]; then
+            echo "::warning::CloudFront distribution not found; skipping HTTPS health check (apply deploy/terraform/ec2 first)"
+          else
+            curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "https://${cf_domain}/api/v1/health"
+          fi
+
       # 부트스트랩(terraform user-data)이 쓰는 :dev 태그를 승격한다. EC2 실배포 + health 검증까지
       # 끝난 뒤에만 실행 — 배포 실패로 롤백된 이미지가 :dev 로 남는 것을 막는다.
       # 재빌드 없이 manifest 만 복사하므로 수 초 내 끝난다.
