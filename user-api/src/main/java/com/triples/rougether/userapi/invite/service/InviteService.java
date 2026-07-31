@@ -11,12 +11,14 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;
 import com.triples.rougether.userapi.invite.error.InviteErrorCode;
 import com.triples.rougether.userapi.invite.support.UserInviteCodeGenerator;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +41,7 @@ public class InviteService {
     private final UserRepository userRepository;
     private final UserWalletRepository walletRepository;
     private final UserInviteCodeGenerator codeGenerator;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     @Transactional
     public MyInviteCodeResponse getMyCode(Long userId) {
@@ -147,6 +150,8 @@ public class InviteService {
                         UserWallet.create(userRepository.getReferenceById(userId), CurrencyType.COIN)));
         if (amount > 0) {
             wallet.add(amount);
+            // 지급 상대(초대자/피초대자)별로 각각 1 row. 원본 참조는 두지 않음(회수 경로 없음)
+            walletHistoryRecorder.record(wallet, amount, WalletHistoryReason.INVITE_REWARD, null, null);
         }
         return wallet;
     }

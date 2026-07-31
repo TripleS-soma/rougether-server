@@ -17,9 +17,12 @@ import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
+import com.triples.rougether.domain.member.entity.WalletHistory;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -46,6 +49,7 @@ public class RoutineLogService {
     private final DailyRewardService dailyRewardService;
     private final TransactionTemplate transactionTemplate;
     private final HouseMissionService houseMissionService;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함.
     // @Transactional 대신 template인 이유: unique 충돌 재시도가 롤백된 첫 트랜잭션 밖에서 새로 시작돼야 함
@@ -102,6 +106,8 @@ public class RoutineLogService {
 
         if (reward > 0) {
             wallet.add(reward);
+            walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.ROUTINE_COMPLETE,
+                    WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
         }
 
         Streak streak = isToday
@@ -144,6 +150,9 @@ public class RoutineLogService {
         UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
+        // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
+        walletHistoryRecorder.deleteEarned(WalletHistoryReason.ROUTINE_COMPLETE,
+                WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
 
         if (date.isBefore(today) && wasTargetOn(userId, routine, date)) {
             log.revertToFailed();

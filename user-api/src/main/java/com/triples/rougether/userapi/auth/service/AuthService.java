@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,6 +43,7 @@ public class AuthService {
     private final AppleLoginHandler appleLoginHandler;
     private final AppleTokenExchangeClient appleTokenExchangeClient;
     private final AppleRefreshTokenCipher appleRefreshTokenCipher;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -50,7 +52,9 @@ public class AuthService {
         if (userId == null) {
             user = userRepository.save(User.signUp());
             // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
-            userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
+            // 가입 보너스는 재화 원장에도 기록함(#253).
+            walletHistoryRecorder.recordSignupBonus(
+                    userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user)));
             isNewUser = true;
         } else {
             // 탈퇴(soft delete) 회원은 없는 회원과 동일하게 거부함.

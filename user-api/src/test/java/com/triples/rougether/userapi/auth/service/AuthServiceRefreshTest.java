@@ -66,7 +66,8 @@ class AuthServiceRefreshTest {
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher);
+                appleTokenExchangeClient, appleRefreshTokenCipher,
+                org.mockito.Mockito.mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
     }
 
     private User userWithId(long id) {

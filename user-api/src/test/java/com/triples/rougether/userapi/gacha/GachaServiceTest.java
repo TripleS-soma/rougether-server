@@ -24,7 +24,9 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
@@ -57,6 +59,7 @@ class GachaServiceTest {
     @Mock private UserWalletRepository walletRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder walletHistoryRecorder;
     @InjectMocks private GachaService gachaService;
 
     @BeforeEach
@@ -333,6 +336,13 @@ class GachaServiceTest {
         verify(wallet).spend(25);
         verify(wallet).add(0);
         verify(diaWallet).add(3);
+        // 원장 기록(#253): 코인 차감 1건 + 다이아 전환 1건. 전환 0원인 코인 적립은 recorder 가 건너뜀
+        verify(walletHistoryRecorder).record(wallet, -25, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, 10L);
+        verify(walletHistoryRecorder).record(wallet, 0, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, 10L);
+        verify(walletHistoryRecorder).record(diaWallet, 3, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, 10L);
         verify(userItemRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.DIAMOND);
@@ -418,6 +428,11 @@ class GachaServiceTest {
 
         verify(wallet).spend(500);
         verify(wallet).add(100);
+        // 원장 기록(#253): 코인 차감 + 캐릭터 중복 전환 적립
+        verify(walletHistoryRecorder).record(wallet, -500, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, 10L);
+        verify(walletHistoryRecorder).record(wallet, 100, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, 10L);
         verify(userCharacterRepository, never()).save(any());
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.COIN);

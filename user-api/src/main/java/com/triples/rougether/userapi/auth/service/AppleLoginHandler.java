@@ -12,6 +12,7 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.userapi.auth.client.AppleUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ public class AppleLoginHandler {
     private final OauthAccountRepository oauthAccountRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     // encryptedRefreshToken: 탈퇴 시 revoke 호출용으로 저장함. 재로그인 시마다 최신 값으로 갱신됨.
     @Transactional
@@ -58,7 +60,9 @@ public class AppleLoginHandler {
         // 애플은 최초 로그인에만 email을 주므로 가입 시점 값만 저장하고 재로그인으로 갱신하지 않음.
         User user = userRepository.save(User.signUp(appleUser.email()));
         // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
-        userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
+        // 가입 보너스는 재화 원장에도 기록함(#253).
+        walletHistoryRecorder.recordSignupBonus(
+                userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user)));
         OauthAccount account = OauthAccount.link(user, OauthProvider.APPLE, appleUser.id());
         account.updateAppleRefreshToken(encryptedRefreshToken);
         // IDENTITY 전략이라 즉시 INSERT됨 → 경쟁 패자는 여기서 unique 충돌이 발생함.

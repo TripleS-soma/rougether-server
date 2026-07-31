@@ -12,9 +12,11 @@ import com.triples.rougether.domain.gacha.repository.GachaPoolEntryRepository;
 import com.triples.rougether.domain.gacha.repository.GachaRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
@@ -28,6 +30,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewa
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -61,6 +64,7 @@ public class GachaService {
     private final UserCharacterRepository userCharacterRepository;
     private final UserWalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final WalletHistoryRecorder walletHistoryRecorder;
     private final Random random = new Random();
 
     public GachaService(GachaRepository gachaRepository,
@@ -68,13 +72,15 @@ public class GachaService {
                         UserItemRepository userItemRepository,
                         UserCharacterRepository userCharacterRepository,
                         UserWalletRepository walletRepository,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                        WalletHistoryRecorder walletHistoryRecorder) {
         this.gachaRepository = gachaRepository;
         this.poolRepository = poolRepository;
         this.userItemRepository = userItemRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.walletRepository = walletRepository;
         this.userRepository = userRepository;
+        this.walletHistoryRecorder = walletHistoryRecorder;
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +148,8 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
         }
         wallet.spend(cost);
+        walletHistoryRecorder.record(wallet, -cost, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, gachaId);
 
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
                 .filter(this::hasReward)
@@ -174,6 +182,9 @@ public class GachaService {
             }
         }
         wallet.add(coinRefund);
+        // 여러 번 뽑기의 중복 전환은 재화별 합산 1 row 로 기록함(0 이면 recorder 가 건너뜀)
+        walletHistoryRecorder.record(wallet, coinRefund, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, gachaId);
 
         // 전환 적립도 행 락으로 조회해 동시 요청의 적립 유실을 막는다. 지갑이 없으면 최초 전환 시점에 발급
         // (가입 시엔 코인 지갑만 생성됨. 동시 발급은 uq_user_wallets_user_currency 가 막는다).
@@ -184,6 +195,8 @@ public class GachaService {
                 diaWallet = walletRepository.save(UserWallet.create(user, CurrencyType.DIAMOND));
             }
             diaWallet.add(diaRefund);
+            walletHistoryRecorder.record(diaWallet, diaRefund, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                    WalletHistory.SOURCE_GACHA, gachaId);
         }
 
         return new GachaDrawResponse(results, List.of(

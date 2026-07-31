@@ -8,6 +8,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
@@ -52,6 +54,8 @@ class RoutineCompletionServiceIntegrationTest {
     @Autowired
     private UserWalletRepository userWalletRepository;
     @Autowired
+    private WalletHistoryRepository walletHistoryRepository;
+    @Autowired
     private StreakRepository streakRepository;
     @Autowired
     private UserRepository userRepository;
@@ -72,7 +76,8 @@ class RoutineCompletionServiceIntegrationTest {
         service = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, dailyRewardService,
                 new TransactionTemplate(transactionManager),
-                org.mockito.Mockito.mock(HouseMissionService.class));
+                org.mockito.Mockito.mock(HouseMissionService.class),
+                new WalletHistoryRecorder(walletHistoryRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         routineId = persistRoutine(user);
