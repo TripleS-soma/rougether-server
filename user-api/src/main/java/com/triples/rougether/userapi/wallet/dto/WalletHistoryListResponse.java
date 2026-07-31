@@ -20,7 +20,8 @@ public record WalletHistoryListResponse(
     public record WalletHistoryResponse(
             @Schema(description = "이력 ID", example = "1")
             Long id,
-            @Schema(description = "재화 종류. 허용값: COIN(코인), DIAMOND(다이아)", example = "COIN")
+            @Schema(description = "재화 종류. 허용값: COIN(코인 — 루틴/투두 완료·초대·가입 보상으로 획득, 뽑기에 사용), "
+                    + "DIAMOND(다이아 — 뽑기 아이템 중복 전환으로 획득, 상점 구매에 사용)", example = "COIN")
             CurrencyType currencyType,
             @Schema(description = "증감액. 적립은 양수, 사용은 음수", example = "10")
             int amount,

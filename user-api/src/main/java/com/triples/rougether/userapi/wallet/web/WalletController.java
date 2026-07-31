@@ -47,9 +47,11 @@ public class WalletController {
     @GetMapping("/histories")
     public WalletHistoryListResponse getHistories(
             @CurrentUser AuthUser user,
-            @Parameter(description = "재화 종류 필터 (선택). 허용값: COIN, DIAMOND")
+            @Parameter(description = "재화 종류 필터 (선택). 허용값: COIN(코인 — 루틴/투두 완료·초대·가입 보상으로 획득, "
+                    + "뽑기에 사용), DIAMOND(다이아 — 뽑기 아이템 중복 전환으로 획득, 상점 구매에 사용). 미지정 시 전체 재화")
             @RequestParam(required = false) CurrencyType currencyType,
-            @Parameter(description = "증감 방향 필터 (선택). 허용값: EARN(적립), SPEND(사용)")
+            @Parameter(description = "증감 방향 필터 (선택). 허용값: EARN(적립 — amount 양수 이력만), "
+                    + "SPEND(사용 — amount 음수 이력만). 미지정 시 전체")
             @RequestParam(required = false) WalletHistoryDirection direction,
             @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") @Min(1) int size) {
