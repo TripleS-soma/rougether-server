@@ -4,8 +4,18 @@ output "ec2_public_ip" {
 }
 
 output "user_api_health_url" {
-  description = "User API health check URL."
+  description = "User API health check URL (direct HTTP, used by the deploy workflow)."
   value       = "http://${aws_instance.app.public_ip}:8080/api/v1/health"
+}
+
+output "user_api_https_base_url" {
+  description = "User API HTTPS base URL via CloudFront. Use this as the app's API base URL."
+  value       = "https://${aws_cloudfront_distribution.user_api.domain_name}"
+}
+
+output "user_api_https_health_url" {
+  description = "User API health check URL via CloudFront."
+  value       = "https://${aws_cloudfront_distribution.user_api.domain_name}/api/v1/health"
 }
 
 output "admin_url" {

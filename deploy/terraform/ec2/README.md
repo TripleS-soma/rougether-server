@@ -4,7 +4,7 @@ This stack is a small team/dev deployment:
 
 - EC2 Amazon Linux 2023 instance
 - RDS MySQL in the default VPC
-- `user-api` on port `8080`
+- `user-api` on port `8080`, fronted by CloudFront for HTTPS (`*.cloudfront.net`)
 - `admin-api` on port `8081`
 - `batch` (루틴 리마인드 발송) — 외부 접근 없이 `127.0.0.1:8082` 헬스체크만 노출
 - EC2 instance role for S3 uploads to the existing asset bucket
@@ -215,11 +215,31 @@ ENVIRONMENT_TAG=staging \
   deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
 
+## HTTPS (CloudFront)
+
+iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하기 때문에, 앱스토어 제출용으로 user-api 앞에 CloudFront 를 둡니다(`cloudfront.tf`). 도메인 구매 없이 `xxxx.cloudfront.net` 기본 도메인과 기본 인증서(TLS 1.2+)로 ATS 요건을 충족합니다.
+
+- 앱(RN)의 API base URL 은 반드시 CloudFront 주소를 사용합니다.
+
+```bash
+terraform output -raw user_api_https_base_url
+```
+
+- 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
+- admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를 태우지 않고 기존 직접 접속을 유지합니다. CloudFront 를 거치면 요청 소스가 CloudFront 엣지 IP 가 되어 IP 제한이 무력화되기 때문입니다.
+- CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
+- `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
+- EC2 인스턴스를 재생성(`-replace=aws_instance.app`)하면 public DNS 가 바뀌므로, 이어서 `terraform apply` 로 CloudFront origin 도 갱신해야 합니다. CloudFront 주소 자체는 바뀌지 않아 앱 설정은 그대로입니다.
+- 정식 도메인을 확보하면 `aliases` + ACM(us-east-1) 인증서를 붙이는 것으로 전환합니다.
+
+최초 생성/변경 배포에는 5~10분 정도 걸립니다.
+
 ## Health Checks
 
 ```bash
 curl "$(terraform output -raw user_api_health_url)"
 curl "$(terraform output -raw admin_health_url)"
+curl "$(terraform output -raw user_api_https_health_url)"
 ```
 
 Open:

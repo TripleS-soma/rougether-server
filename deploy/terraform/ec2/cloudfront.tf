@@ -1,0 +1,69 @@
+# user-api HTTPS 진입점.
+#
+# iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하므로, 앱스토어 제출용으로
+# 유효한 공인 인증서가 붙은 HTTPS 주소가 필요하다. 도메인 없이 이를 해결하기 위해 CloudFront 의
+# 기본 도메인(*.cloudfront.net)과 기본 인증서를 사용한다. 도메인을 확보하면 aliases + ACM(us-east-1)
+# 인증서를 추가하는 것으로 전환한다.
+#
+# 범위는 user-api(:8080)만이다. admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를
+# 거치면 오히려 IP 제한이 무력화되므로 기존 직접 접속을 유지한다.
+#
+# CloudFront → EC2 origin 구간은 HTTP 다(origin 에 인증서가 없어 https 불가). dev 스택에서 수용한
+# 트레이드오프이며, 외부(앱↔CloudFront) 구간은 TLS 로 보호된다. 기존 :8080 직접 접속도 배포
+# workflow 의 public health check 가 사용하므로 그대로 열어 둔다.
+
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+# API 응답을 캐시하지 않고 쿼리스트링·쿠키·헤더(Authorization 포함)를 모두 origin 으로 전달한다.
+# Host 는 제외해야 한다 — viewer 의 Host(xxx.cloudfront.net)가 그대로 가면 custom origin 라우팅이 깨진다.
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
+}
+
+resource "aws_cloudfront_distribution" "user_api" {
+  enabled         = true
+  comment         = "${local.name} user-api HTTPS entrypoint"
+  http_version    = "http2and3"
+  is_ipv6_enabled = true
+
+  # PriceClass_100 은 아시아 엣지가 빠져 한국 사용자 지연이 커진다. 서울 엣지를 포함하는 200 사용.
+  price_class = "PriceClass_200"
+
+  origin {
+    # EC2 재생성으로 public DNS 가 바뀌면 terraform apply 가 origin 을 함께 갱신한다.
+    domain_name = aws_instance.app.public_dns
+    origin_id   = "${local.name}-user-api-ec2"
+
+    custom_origin_config {
+      http_port              = 8080
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "${local.name}-user-api-ec2"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    # 기본 *.cloudfront.net 인증서. TLS 1.2+ 라 ATS 요건을 충족한다.
+    cloudfront_default_certificate = true
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-user-api-cdn" })
+}
