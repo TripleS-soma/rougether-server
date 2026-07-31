@@ -49,6 +49,13 @@ public class HouseMember {
     @Column(name = "left_at")
     private Instant leftAt;
 
+    // 구성원 개인 초대코드 - 이 코드로 참여하면 즉시가입이 아니라 방장 승인 대기(house_join_requests)로 들어간다.
+    @Column(name = "invite_code", length = 50)
+    private String inviteCode;
+
+    @Column(name = "invite_expires_at")
+    private Instant inviteExpiresAt;
+
     // 구성원 등록. 참여는 즉시가입 정책이라 항상 ACTIVE 로 시작.
     public static HouseMember create(House house, User user, HouseMemberRole role) {
         HouseMember member = new HouseMember();
@@ -98,5 +105,15 @@ public class HouseMember {
 
     public boolean isOwner() {
         return role == HouseMemberRole.OWNER;
+    }
+
+    // 개인 초대코드 재발급 - 새 코드로 교체하면 기존 코드는 즉시 무효가 된다(invite_code 단일 컬럼).
+    public void updateInviteCode(String inviteCode, Instant inviteExpiresAt) {
+        this.inviteCode = inviteCode;
+        this.inviteExpiresAt = inviteExpiresAt;
+    }
+
+    public boolean isInviteExpired() {
+        return inviteExpiresAt == null || inviteExpiresAt.isBefore(Instant.now());
     }
 }

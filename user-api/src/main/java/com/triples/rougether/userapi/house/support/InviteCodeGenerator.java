@@ -1,11 +1,13 @@
 package com.triples.rougether.userapi.house.support;
 
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import java.security.SecureRandom;
 import org.springframework.stereotype.Component;
 
 // 집 초대코드 발급: 영대문자+숫자 8자, 혼동문자(I,O,L,0,1) 제외.
-// uq_house_invite(UNIQUE) 충돌은 사전 존재 검사 + 재시도로 회피한다.
+// uq_house_invite/uq_house_member_invite(UNIQUE) 충돌은 사전 존재 검사 + 재시도로 회피한다.
+// 참여(join-by-code)가 집 코드 → 구성원 코드 순으로 조회하므로 두 테이블에 걸쳐 겹치지 않아야 한다.
 @Component
 public class InviteCodeGenerator {
 
@@ -14,16 +16,20 @@ public class InviteCodeGenerator {
     private static final int MAX_ATTEMPTS = 5;
 
     private final HouseRepository houseRepository;
+    private final HouseMemberRepository houseMemberRepository;
     private final SecureRandom random = new SecureRandom();
 
-    public InviteCodeGenerator(HouseRepository houseRepository) {
+    public InviteCodeGenerator(HouseRepository houseRepository,
+                               HouseMemberRepository houseMemberRepository) {
         this.houseRepository = houseRepository;
+        this.houseMemberRepository = houseMemberRepository;
     }
 
     public String generate() {
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             String code = randomCode();
-            if (!houseRepository.existsByInviteCode(code)) {
+            if (!houseRepository.existsByInviteCode(code)
+                    && !houseMemberRepository.existsByInviteCode(code)) {
                 return code;
             }
         }

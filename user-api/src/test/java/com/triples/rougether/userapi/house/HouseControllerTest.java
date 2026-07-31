@@ -206,7 +206,7 @@ class HouseControllerTest {
     void 초대코드_참여_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.joinByCode(7L, "ABCD2345"))
-                .thenReturn(new HouseJoinResponse(12L, 1L, HouseMemberStatus.ACTIVE));
+                .thenReturn(HouseJoinResponse.joined(12L, 1L, HouseMemberStatus.ACTIVE));
 
         mockMvc.perform(post("/api/v1/houses/join-by-code")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -214,7 +214,26 @@ class HouseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.membershipId").value(12))
                 .andExpect(jsonPath("$.houseId").value(1))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.pendingApproval").value(false))
+                .andExpect(jsonPath("$.joinRequestId").value((Object) null));
+    }
+
+    @Test
+    void 구성원_개인_코드_참여는_승인_대기_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseJoinService.joinByCode(7L, "ABCD2345"))
+                .thenReturn(HouseJoinResponse.pending(1L, 21L));
+
+        mockMvc.perform(post("/api/v1/houses/join-by-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"inviteCode\": \"ABCD2345\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipId").value((Object) null))
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.status").value((Object) null))
+                .andExpect(jsonPath("$.pendingApproval").value(true))
+                .andExpect(jsonPath("$.joinRequestId").value(21));
     }
 
     @Test
@@ -436,14 +455,14 @@ class HouseControllerTest {
     }
 
     @Test
-    void 소유자가_아닌_재발급은_403과_에러코드를_내려준다() throws Exception {
+    void 구성원이_아닌_재발급은_403과_에러코드를_내려준다() throws Exception {
         authAsUser7();
         when(houseCommandService.reissueInviteCode(7L, 1L))
-                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER));
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
         mockMvc.perform(post("/api/v1/houses/1/invite-code"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("HOUSE_NOT_OWNER"));
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
     }
 
     @Test
@@ -565,14 +584,15 @@ class HouseControllerTest {
     void 초대코드_미리보기_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.preview("ABCD2345")).thenReturn(
-                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false));
+                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false, true));
 
         mockMvc.perform(get("/api/v1/houses/by-code/ABCD2345"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.name").value("아침 루틴 하우스"))
                 .andExpect(jsonPath("$.currentMemberCount").value(3))
-                .andExpect(jsonPath("$.inviteExpired").value(false));
+                .andExpect(jsonPath("$.inviteExpired").value(false))
+                .andExpect(jsonPath("$.requiresApproval").value(true));
     }
 
     @Test

@@ -34,6 +34,12 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
 
     Optional<HouseMember> findByHouseIdAndUserId(Long houseId, Long userId);
 
+    boolean existsByInviteCode(String inviteCode);
+
+    // 구성원 개인 초대코드 참여/미리보기 - 초대자와 집을 함께 확정한다. house fetch join(N+1 회피).
+    @Query("select hm from HouseMember hm join fetch hm.house where hm.inviteCode = :inviteCode")
+    Optional<HouseMember> findByInviteCodeWithHouse(@Param("inviteCode") String inviteCode);
+
     // 자동 기여 경로 전용 - 락 조회(current read). 완료 트랜잭션의 REPEATABLE READ 스냅샷이 잡힌 뒤
     // 커밋된 탈퇴·강퇴를 일반 조회는 못 보므로, 강퇴 직후에도 기여가 기록되는 경합 창을 닫는다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

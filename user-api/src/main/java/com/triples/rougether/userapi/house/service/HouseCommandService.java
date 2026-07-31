@@ -112,22 +112,23 @@ public class HouseCommandService {
                 house.getCoverImageKey(), house.getMaxMembers());
     }
 
-    // 초대코드 재발급 - 소유자 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
+    // 초대코드 재발급 - 활성 구성원 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
+    // 소유자는 집 공용 코드(즉시가입)를, 일반 구성원은 본인 개인 코드(방장 승인 대기)를 재발급한다.
     @Transactional
     public InviteCodeResponse reissueInviteCode(Long userId, Long houseId) {
         House house = houseRepository.findById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
-        boolean isOwner = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+        HouseMember member = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
-                .map(member -> member.getRole() == HouseMemberRole.OWNER)
-                .orElse(false);
-        if (!isOwner) {
-            // 구성원 여부를 노출하지 않도록 비구성원/일반 구성원 모두 같은 코드로 거부.
-            throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
-        }
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
-        house.updateInviteCode(inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL));
-        return new InviteCodeResponse(house.getInviteCode(), house.getInviteExpiresAt());
+        Instant expiresAt = Instant.now().plus(INVITE_CODE_TTL);
+        if (member.isOwner()) {
+            house.updateInviteCode(inviteCodeGenerator.generate(), expiresAt);
+            return new InviteCodeResponse(house.getInviteCode(), house.getInviteExpiresAt());
+        }
+        member.updateInviteCode(inviteCodeGenerator.generate(), expiresAt);
+        return new InviteCodeResponse(member.getInviteCode(), member.getInviteExpiresAt());
     }
 }
