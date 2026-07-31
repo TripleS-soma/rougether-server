@@ -457,6 +457,9 @@
 
             previewCanvas.style.aspectRatio =
                     selectedProfile.canvasWidth + ' / ' + selectedProfile.canvasHeight;
+            previewCanvas.style.setProperty(
+                    '--accessory-canvas-height-width-limit',
+                    (62 * selectedProfile.canvasWidth / selectedProfile.canvasHeight) + 'vh');
             setImage(characterImage, selectedProfile.characterAssetKey,
                     characterLabel + ' 캐릭터');
             setImage(accessoryImage, selectedProfile.assetKey,

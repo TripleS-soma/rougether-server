@@ -1252,8 +1252,7 @@ body {
 }
 .accessory-canvas {
     position: relative;
-    width: min(100%, 560px);
-    max-height: 62vh;
+    width: min(100%, 560px, var(--accessory-canvas-height-width-limit, 62vh));
     aspect-ratio: 1;
     border: 1px solid #cfd3e6;
     border-radius: 14px;
