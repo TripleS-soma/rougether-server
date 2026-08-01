@@ -48,4 +48,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying
     @Query("update Notification n set n.pushStatus = :pushStatus where n.id = :id")
     void updatePushStatus(@Param("id") Long id, @Param("pushStatus") PushStatus pushStatus);
+
+    // 회원탈퇴 시 수신함 전량 삭제 — 본인 전용 데이터라 즉시 파기함.
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Notification n where n.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

@@ -6,6 +6,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface NotificationSettingRepository extends JpaRepository<NotificationSetting, Long> {
 
@@ -14,4 +17,9 @@ public interface NotificationSettingRepository extends JpaRepository<Notificatio
     List<NotificationSetting> findAllByUserId(Long userId);
 
     List<NotificationSetting> findAllByUserIdIn(Collection<Long> userIds);
+
+    // 회원탈퇴 시 알림 설정 전량 삭제 — 본인 전용 데이터라 즉시 파기함.
+    @Modifying(flushAutomatically = true)
+    @Query("delete from NotificationSetting ns where ns.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }
