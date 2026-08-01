@@ -13,3 +13,7 @@ CREATE TABLE purged_asset_keys (
     created_at  TIMESTAMP    NOT NULL,
     PRIMARY KEY (id)
 );
+
+-- purge 배치 대상 스캔(deleted_at IS NOT NULL AND ... AND purged_at IS NULL)용.
+-- 대다수 row 가 deleted_at NULL 이라 이 인덱스로 탈퇴 유저만 좁혀 매시 풀스캔을 피함.
+CREATE INDEX idx_users_deleted_at ON users (deleted_at);
