@@ -33,6 +33,11 @@ management:
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
 
+asset:
+  s3:
+    bucket: rougether-assets
+    region: ap-northeast-2
+
 ---
 spring:
   config:

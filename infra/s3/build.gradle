@@ -1,0 +1,7 @@
+dependencies {
+	// spring 의 dependencyManagement 는 소비자 모듈로 버전이 전파되지 않아 gradle platform 으로 선언함.
+	implementation platform('software.amazon.awssdk:bom:2.31.0')
+	implementation 'org.springframework:spring-context'
+	implementation 'org.springframework.boot:spring-boot-autoconfigure'
+	implementation 'software.amazon.awssdk:s3'
+}

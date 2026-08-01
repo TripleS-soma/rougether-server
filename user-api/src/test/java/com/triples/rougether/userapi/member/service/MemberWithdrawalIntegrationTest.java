@@ -54,7 +54,7 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.auth.service.AuthService;
 import com.triples.rougether.userapi.auth.service.GeneratedRefreshToken;
 import com.triples.rougether.userapi.auth.service.TokenService;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import java.time.Instant;
 import java.time.LocalDate;

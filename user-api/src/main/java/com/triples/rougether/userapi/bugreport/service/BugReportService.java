@@ -10,7 +10,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.error.BugReportErrorCode;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;

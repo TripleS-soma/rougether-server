@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.global.storage;
+package com.triples.rougether.infra.s3;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

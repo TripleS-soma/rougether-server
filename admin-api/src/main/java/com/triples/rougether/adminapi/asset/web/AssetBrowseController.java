@@ -1,7 +1,7 @@
 package com.triples.rougether.adminapi.asset.web;
 
 import com.triples.rougether.adminapi.asset.AssetKinds;
-import com.triples.rougether.adminapi.asset.service.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import com.triples.rougether.adminapi.asset.service.AssetSummary;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -27,7 +27,10 @@ public class AssetBrowseController {
         if (!AssetKinds.ALLOWED.contains(kind)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "허용되지 않은 kind: " + kind);
         }
-        return new AssetListResponse(storage.list(kind));
+        List<AssetSummary> items = storage.list(kind).stream()
+                .map(asset -> new AssetSummary(asset.key(), asset.size(), asset.lastModified()))
+                .toList();
+        return new AssetListResponse(items);
     }
 
     public record AssetListResponse(List<AssetSummary> items) {

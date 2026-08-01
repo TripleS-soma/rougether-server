@@ -12,7 +12,7 @@ import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.error.BugReportErrorCode;
 import com.triples.rougether.userapi.bugreport.service.BugReportService;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ class BugReportServiceTest {
         @Bean
         @Primary
         AssetStorageService stubAssetStorageService() {
-            // delete 추가로 함수형 인터페이스가 아니게 됨 — 익명 클래스로 스텁(delete는 no-op).
+            // upload 외 연산은 이 테스트에서 안 쓰므로 no-op/빈 목록 스텁.
             return new AssetStorageService() {
                 @Override
                 public String upload(byte[] content, String contentType, String kind) {
@@ -46,6 +46,11 @@ class BugReportServiceTest {
 
                 @Override
                 public void delete(String key) {
+                }
+
+                @Override
+                public java.util.List<com.triples.rougether.infra.s3.StoredAsset> list(String kind) {
+                    return java.util.List.of();
                 }
             };
         }

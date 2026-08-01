@@ -1,6 +1,6 @@
 package com.triples.rougether.adminapi.web;
 
-import com.triples.rougether.adminapi.asset.config.AssetProperties;
+import com.triples.rougether.infra.s3.AssetProperties;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;

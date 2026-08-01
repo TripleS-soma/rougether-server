@@ -25,7 +25,7 @@ import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.auth.client.AppleRevokeClient;
 import com.triples.rougether.userapi.auth.client.KakaoUnlinkClient;
 import com.triples.rougether.userapi.auth.service.AppleRefreshTokenCipher;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,8 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-// 회원탈퇴(soft delete). users.deleted_at 세팅 + refresh 전량 폐기 + oauth 연동 삭제를 한 트랜잭션으로 처리하고,
-// provider 측 연동 해제(카카오 unlink·애플 revoke)는 커밋 이후 best-effort로 호출함(NotificationService push 컨벤션과 동일).
 @Slf4j
 @Service
 @RequiredArgsConstructor

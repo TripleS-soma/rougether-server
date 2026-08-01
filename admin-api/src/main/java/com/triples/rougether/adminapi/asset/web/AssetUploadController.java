@@ -1,7 +1,7 @@
 package com.triples.rougether.adminapi.asset.web;
 
 import com.triples.rougether.adminapi.asset.AssetKinds;
-import com.triples.rougether.adminapi.asset.service.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import java.io.IOException;
 import java.util.Set;
 import org.springframework.http.HttpStatus;

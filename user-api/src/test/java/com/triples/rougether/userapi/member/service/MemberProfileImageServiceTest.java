@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import org.junit.jupiter.api.BeforeEach;

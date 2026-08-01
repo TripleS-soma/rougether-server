@@ -9,7 +9,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.s3.AssetStorageService;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.io.IOException;

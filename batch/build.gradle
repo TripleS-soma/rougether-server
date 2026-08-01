@@ -6,11 +6,11 @@ dependencies {
 	implementation project(':common')
 	implementation project(':domain')
 	implementation project(':infra:fcm')
+	implementation project(':infra:s3')
 
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-batch'
-	// mysql 프로필 FlywayMigrationStrategy(validate-only)가 Flyway 타입을 직접 참조함
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-batch-test'

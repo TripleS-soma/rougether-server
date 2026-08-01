@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.triples.rougether.adminapi.asset.service.AssetStorageService;
-import com.triples.rougether.adminapi.asset.service.AssetSummary;
+import com.triples.rougether.infra.s3.AssetStorageService;
+import com.triples.rougether.infra.s3.StoredAsset;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,9 +33,9 @@ class AssetBrowseTest {
     @WithMockUser(roles = "ADMIN")
     void kind별_에셋_목록을_내려준다() throws Exception {
         given(storage.list("items")).willReturn(List.of(
-                new AssetSummary("items/bakery/chair.png", 1024L, Instant.EPOCH),
-                new AssetSummary("items/bakery/static-preview.webp", 1536L, Instant.EPOCH),
-                new AssetSummary("items/bakery/bakery-mini-oven-animated-v1.webp", 2048L, Instant.EPOCH)));
+                new StoredAsset("items/bakery/chair.png", 1024L, Instant.EPOCH),
+                new StoredAsset("items/bakery/static-preview.webp", 1536L, Instant.EPOCH),
+                new StoredAsset("items/bakery/bakery-mini-oven-animated-v1.webp", 2048L, Instant.EPOCH)));
 
         mockMvc.perform(get("/admin/assets").param("kind", "items"))
                 .andExpect(status().isOk())
@@ -52,11 +52,11 @@ class AssetBrowseTest {
     @WithMockUser(roles = "ADMIN")
     void 캐릭터_애니메이션도_움짤로_분류한다() throws Exception {
         given(storage.list("characters")).willReturn(List.of(
-                new AssetSummary("characters/cat/animations/idle.webp", 1024L, Instant.EPOCH),
-                new AssetSummary("characters/cat/animations/pose-cycle.webp", 1024L, Instant.EPOCH),
-                new AssetSummary("characters/cat/animations/wave.webp", 1024L, Instant.EPOCH),
-                new AssetSummary("characters/cat/animations/run.webp", 1024L, Instant.EPOCH),
-                new AssetSummary("characters/cat/base.webp", 1024L, Instant.EPOCH)));
+                new StoredAsset("characters/cat/animations/idle.webp", 1024L, Instant.EPOCH),
+                new StoredAsset("characters/cat/animations/pose-cycle.webp", 1024L, Instant.EPOCH),
+                new StoredAsset("characters/cat/animations/wave.webp", 1024L, Instant.EPOCH),
+                new StoredAsset("characters/cat/animations/run.webp", 1024L, Instant.EPOCH),
+                new StoredAsset("characters/cat/base.webp", 1024L, Instant.EPOCH)));
 
         mockMvc.perform(get("/admin/assets").param("kind", "characters"))
                 .andExpect(status().isOk())
