@@ -21,6 +21,8 @@ import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse.Member
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
+import com.triples.rougether.userapi.house.dto.MyJoinRequestListResponse;
+import com.triples.rougether.userapi.house.dto.MyJoinRequestListResponse.MyJoinRequestSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
@@ -136,6 +138,22 @@ public class HouseQueryService {
                 .map(MyHouseSummary::of)
                 .toList();
         return new MyHouseListResponse(items);
+    }
+
+    // 내가 보낸 입주 신청 목록 - 최신 신청 먼저. 탐색 신청과 개인 코드 신청 모두 같은
+    // house_join_requests 를 쓰므로 user 기준 조회만으로 둘 다 포함된다. 삭제된 집 제외.
+    @Transactional(readOnly = true)
+    public MyJoinRequestListResponse getMyJoinRequests(Long userId, HouseJoinRequestStatus status) {
+        List<HouseJoinRequest> requests = houseJoinRequestRepository
+                .findByUserIdAndStatusWithHouse(userId, status);
+        Map<Long, List<GoalSummary>> goalsByHouseId = loadGoals(
+                requests.stream().map(HouseJoinRequest::getHouse).toList());
+        List<MyJoinRequestSummary> items = requests.stream()
+                .map(request -> MyJoinRequestSummary.of(
+                        request,
+                        goalsByHouseId.getOrDefault(request.getHouse().getId(), List.of())))
+                .toList();
+        return new MyJoinRequestListResponse(items);
     }
 
     // excludeJoined=true 면 내가 가입(ACTIVE)해 있는 집을 제외한다(가입된 집 필터, 프론트 요청).

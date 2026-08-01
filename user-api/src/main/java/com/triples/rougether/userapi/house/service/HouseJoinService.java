@@ -175,6 +175,20 @@ public class HouseJoinService {
         notifyJoinRequestRejected(request, house);
     }
 
+    // 신청자 본인의 철회 - 행을 삭제해 UNIQUE(house_id, user_id) 하에서 재신청이 신규 생성으로 동작함.
+    // 미존재와 타인 신청은 /me 스코프상 동일하게 404 로 숨긴다. 락 조회로 소유자의 동시 accept 와
+    // 직렬화 - accept 가 먼저 커밋되면 PENDING 이 아니므로 409.
+    @Transactional
+    public void withdrawRequest(Long userId, Long requestId) {
+        HouseJoinRequest request = houseJoinRequestRepository.findWithLockById(requestId)
+                .filter(found -> found.getUser().getId().equals(userId))
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_NOT_FOUND));
+        if (!request.isPending()) {
+            throw new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_NOT_PENDING);
+        }
+        houseJoinRequestRepository.delete(request);
+    }
+
     // 공용 참여 판정: 중복(active)/강퇴 이력 -> 정원 -> 재활성화 또는 신규 등록 -> 구성원 수 증가.
     // 호출자는 house 를 행 락으로 조회한 상태여야 한다.
     private HouseMember join(House house, Long userId) {
