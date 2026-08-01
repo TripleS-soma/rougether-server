@@ -10,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 // 탈퇴 유저 1명의 잔여 데이터 하드 삭제(유저 단위 단일 트랜잭션). FK 자식 → 부모 순서 준수.
 // 남기는 것: users(익명 skeleton — 방명록 author 등 FK 앵커), oauth_accounts(탈퇴 시 이미 삭제),
 // house·house_members·house_mission_*(집 이력·미션 기여는 남은 구성원 통계 소유), room_guestbooks(탈퇴한 사용자 표시),
-// invite_rewards(초대 보상 원장 — 초대자 한도·invitee 평생 1회 불변식의 유일한 근거라 지우면 반복 탈퇴로 무한 수령 가능).
+// invite_rewards(초대 보상 원장) — 살아있는 초대자의 지급 한도(10회) 카운트가 invitee 탈퇴로 리셋되지 않게 보존함.
+// 단, 탈퇴→재가입은 새 users.id 를 받아 invitee 평생 1회 판정은 이 보존과 무관하게 뚫림(기존 InviteService 설계 한계, 별도 트래킹).
 // S3 원본(인증사진·버그리포트 이미지)은 아직 삭제하지 않음 — row 만 지워 접근 경로를 끊고, 원본 파기는 후속(IAM delete 권한 정책 확정 후).
 // 이미지 row 가 object key 의 유일한 매핑이라, row 삭제 전에 key 를 purged_asset_keys 로 옮겨 후속 파기 경로를 보존함.
 @Service

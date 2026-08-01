@@ -294,7 +294,7 @@ class WithdrawalPurgeTriggerTest {
         }
         assertThat(accessoryCountFor(withdrawnUserId)).isZero();
         assertThat(accessoryCountFor(activeUserId)).isEqualTo(1);
-        // 초대 보상 원장은 반복 탈퇴 어뷰징 방어선이라 보존된다
+        // 초대 보상 원장은 초대자 지급 한도 카운트 보존을 위해 남긴다
         assertThat(countFor("invite_rewards", "inviter_user_id", withdrawnUserId)).isEqualTo(1);
         // users row 는 FK 앵커(방명록 author 등)로 남고 purged_at 만 찍힌다
         assertThat(purgedAtOf(withdrawnUserId)).isNotNull();
