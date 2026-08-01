@@ -57,6 +57,8 @@ class WithdrawalPurgeTriggerTest {
 
     @AfterEach
     void cleanup() {
+        jdbcTemplate.update("DELETE FROM purged_asset_keys WHERE user_id IN (?, ?)",
+                withdrawnUserId, activeUserId);
         jdbcTemplate.update("DELETE FROM invite_rewards WHERE inviter_user_id IN (?, ?)",
                 withdrawnUserId, activeUserId);
         for (Long userId : new Long[] {withdrawnUserId, activeUserId}) {
@@ -297,6 +299,11 @@ class WithdrawalPurgeTriggerTest {
         // users row 는 FK 앵커(방명록 author 등)로 남고 purged_at 만 찍힌다
         assertThat(purgedAtOf(withdrawnUserId)).isNotNull();
         assertThat(purgedAtOf(activeUserId)).isNull();
+        // 이미지 row 삭제 전에 S3 key 가 파기 대기열로 옮겨진다(후속 원본 삭제 경로 보존)
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT storage_key FROM purged_asset_keys WHERE user_id = ?", String.class, withdrawnUserId))
+                .containsExactlyInAnyOrder("verification/withdrawn.jpg", "bugreport/withdrawn.jpg");
+        assertThat(countFor("purged_asset_keys", "user_id", activeUserId)).isZero();
     }
 
     @Test

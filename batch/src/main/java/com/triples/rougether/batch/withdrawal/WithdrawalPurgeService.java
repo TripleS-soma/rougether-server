@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 // house·house_members·house_mission_*(집 이력·미션 기여는 남은 구성원 통계 소유), room_guestbooks(탈퇴한 사용자 표시),
 // invite_rewards(초대 보상 원장 — 초대자 한도·invitee 평생 1회 불변식의 유일한 근거라 지우면 반복 탈퇴로 무한 수령 가능).
 // S3 원본(인증사진·버그리포트 이미지)은 아직 삭제하지 않음 — row 만 지워 접근 경로를 끊고, 원본 파기는 후속(IAM delete 권한 정책 확정 후).
+// 이미지 row 가 object key 의 유일한 매핑이라, row 삭제 전에 key 를 purged_asset_keys 로 옮겨 후속 파기 경로를 보존함.
 @Service
 @RequiredArgsConstructor
 public class WithdrawalPurgeService {
@@ -20,6 +21,22 @@ public class WithdrawalPurgeService {
 
     @Transactional
     public void purgeUser(Long userId, Instant now) {
+        // 이미지 S3 key 보존 — 아래에서 row 가 지워지기 전에 같은 트랜잭션으로 대기열에 적재.
+        Timestamp nowTs = Timestamp.from(now);
+        jdbcTemplate.update("""
+                INSERT INTO purged_asset_keys (user_id, storage_key, created_at)
+                SELECT r.user_id, pv.storage_key, ? FROM photo_verifications pv
+                JOIN routine_logs rl ON rl.id = pv.routine_log_id
+                JOIN routines r ON r.id = rl.routine_id
+                WHERE r.user_id = ?
+                """, nowTs, userId);
+        jdbcTemplate.update("""
+                INSERT INTO purged_asset_keys (user_id, storage_key, created_at)
+                SELECT br.user_id, bri.storage_key, ? FROM bug_report_images bri
+                JOIN bug_reports br ON br.id = bri.bug_report_id
+                WHERE br.user_id = ?
+                """, nowTs, userId);
+
         // 루틴 계열: 인증사진 → 로그 → 스트릭 → 투두 → 루틴 → 카테고리
         jdbcTemplate.update("""
                 DELETE pv FROM photo_verifications pv
@@ -72,7 +89,6 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM house_join_requests WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_invite_codes WHERE user_id = ?", userId);
 
-        jdbcTemplate.update("UPDATE users SET purged_at = ? WHERE id = ?",
-                Timestamp.from(now), userId);
+        jdbcTemplate.update("UPDATE users SET purged_at = ? WHERE id = ?", nowTs, userId);
     }
 }
