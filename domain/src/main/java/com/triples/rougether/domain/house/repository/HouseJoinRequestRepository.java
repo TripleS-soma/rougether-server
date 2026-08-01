@@ -43,4 +43,12 @@ public interface HouseJoinRequestRepository extends JpaRepository<HouseJoinReque
 
     // 회원탈퇴 정리 전용 - 탈퇴자의 대기 중 신청 전량 조회(철회는 엔티티 reject 로 처리).
     List<HouseJoinRequest> findAllByUserIdAndStatus(Long userId, HouseJoinRequestStatus status);
+
+    // 내가 보낸 신청 목록용 - 카드 요약을 위해 house 를 함께 로드, 삭제된 집 제외.
+    @Query("select request from HouseJoinRequest request join fetch request.house h "
+            + "where request.user.id = :userId and request.status = :status "
+            + "and h.deletedAt is null "
+            + "order by request.requestedAt desc, request.id desc")
+    List<HouseJoinRequest> findByUserIdAndStatusWithHouse(@Param("userId") Long userId,
+                                                          @Param("status") HouseJoinRequestStatus status);
 }
