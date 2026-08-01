@@ -127,6 +127,70 @@ class HouseJoinRequestConcurrencyTest {
                 .isEqualTo(2);
     }
 
+    // 신청자 철회와 소유자 수락의 경합 검증(#260) - 요청 행 락 직렬화로 한쪽만 성공해야 한다.
+    @Test
+    void 철회와_수락이_경합해도_한쪽만_성공한다() throws Exception {
+        User owner = userRepository.save(User.signUp("withdraw-race-owner@rougether.dev"));
+        User applicant = userRepository.save(User.signUp("withdraw-race-applicant@rougether.dev"));
+        House house = houseRepository.save(House.create(
+                owner, "철회 경합 집", null, null, 4, "WRACE234",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
+        ownerId = owner.getId();
+        firstApplicantId = applicant.getId();
+        houseId = house.getId();
+
+        Long requestId = houseJoinService.requestJoin(firstApplicantId, houseId).requestId();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger notPending = new AtomicInteger();
+        List<Throwable> unexpected = new CopyOnWriteArrayList<>();
+
+        Runnable accept = () -> houseJoinService.acceptRequest(ownerId, houseId, requestId);
+        Runnable withdraw = () -> houseJoinService.withdrawRequest(firstApplicantId, requestId);
+        for (Runnable action : List.of(accept, withdraw)) {
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    action.run();
+                    succeeded.incrementAndGet();
+                } catch (BusinessException error) {
+                    if (error.getErrorCode() == HouseErrorCode.HOUSE_JOIN_REQUEST_NOT_PENDING) {
+                        notPending.incrementAndGet();
+                    } else {
+                        unexpected.add(error);
+                    }
+                } catch (Throwable error) {
+                    unexpected.add(error);
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        assertThat(unexpected).isEmpty();
+        assertThat(succeeded.get()).isEqualTo(1);
+        assertThat(notPending.get()).isEqualTo(1);
+        var stored = houseJoinRequestRepository.findById(requestId);
+        boolean joined = houseMemberRepository.findByHouseIdAndUserId(houseId, firstApplicantId)
+                .filter(HouseMember::isActive).isPresent();
+        if (joined) {
+            // 수락이 이긴 경우 - 신청은 ACCEPTED 로 남는다.
+            assertThat(stored).isPresent();
+            assertThat(stored.orElseThrow().getStatus()).isEqualTo(HouseJoinRequestStatus.ACCEPTED);
+        } else {
+            // 철회가 이긴 경우 - 행이 삭제되고 가입도 없다.
+            assertThat(stored).isEmpty();
+        }
+    }
+
     // 개인 초대코드 참여의 스냅샷 경합 방어 검증 - 신청 판정이 house 락 이후 current read 가 아니면
     // 늦은 쪽이 앞선 커밋의 신청 row 를 못 보고 uq_house_join_request 충돌(500)이 난다.
     @Test

@@ -21,6 +21,7 @@ public record MyJoinRequestListResponse(List<MyJoinRequestSummary> items) {
             @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용",
                     example = "house/1f9d1c2e.png")
             String coverImageKey,
+            @Schema(description = "집 목표 태그 목록")
             List<GoalSummary> goals,
             @Schema(description = "신청 상태", example = "PENDING")
             HouseJoinRequestStatus status,
