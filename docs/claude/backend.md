@@ -137,7 +137,7 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 - 이 작업이 백엔드 공통 작업인지, 특정 도메인 작업인지
 - DB migration이 필요한지
 - frontend 응답 형태에 영향을 주는지
-- 임채영 담당 루틴/투두 API와 dependency가 있는지
+- 루틴/투두 API와 dependency가 있는지 (2026-08-01 임채영 팀 이탈로 장진형 담당)
 - 인증이 없더라도 소유권 필드가 보존되는지
 
 ## 검증
