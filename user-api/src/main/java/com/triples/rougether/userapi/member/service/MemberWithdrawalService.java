@@ -12,9 +12,12 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.notification.repository.NotificationRepository;
+import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
@@ -50,6 +53,9 @@ public class MemberWithdrawalService {
     private final HouseMemberRepository houseMemberRepository;
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final UserDeviceTokenRepository userDeviceTokenRepository;
+    private final NotificationRepository notificationRepository;
+    private final NotificationSettingRepository notificationSettingRepository;
+    private final UserGoalRepository userGoalRepository;
     private final RoutineRepository routineRepository;
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
@@ -97,6 +103,11 @@ public class MemberWithdrawalService {
         routineRepository.softDeleteAllByUserId(userId, now);
         todoRepository.softDeleteAllByUserId(userId, now);
         categoryRepository.softDeleteAllByUserId(userId, now);
+        // 본인 전용 데이터(알림 수신함·알림 설정·온보딩 목표)는 row 수가 적어 유예 없이 즉시 파기함.
+        // 대량 데이터(로그·인증사진 row 등)는 purge 배치(batch 모듈)가 하드 삭제함.
+        notificationRepository.deleteAllByUserId(userId);
+        notificationSettingRepository.deleteAllByUserId(userId);
+        userGoalRepository.deleteAllByUserId(userId);
         // FCM 토큰 삭제 — 잔여 push 경로 차단. clearAutomatically 라 반드시 마지막 순서 유지:
         // 위 bulk soft delete 이후 PC에 남은 stale 루틴/투두/카테고리를 여기서 함께 비움.
         userDeviceTokenRepository.deleteAllByUserId(userId);

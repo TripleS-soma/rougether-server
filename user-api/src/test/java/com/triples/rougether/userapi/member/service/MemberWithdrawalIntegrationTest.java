@@ -9,14 +9,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.goal.entity.Goal;
+import com.triples.rougether.domain.goal.entity.UserGoal;
+import com.triples.rougether.domain.goal.repository.GoalRepository;
+import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
+import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationSetting;
+import com.triples.rougether.domain.notification.entity.NotificationSettingType;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
+import com.triples.rougether.domain.notification.repository.NotificationRepository;
+import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Category;
@@ -89,6 +98,14 @@ class MemberWithdrawalIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private UserDeviceTokenRepository userDeviceTokenRepository;
+    @Autowired
+    private NotificationRepository notificationRepository;
+    @Autowired
+    private NotificationSettingRepository notificationSettingRepository;
+    @Autowired
+    private GoalRepository goalRepository;
+    @Autowired
+    private UserGoalRepository userGoalRepository;
     @Autowired
     private RoutineRepository routineRepository;
     @Autowired
@@ -227,7 +244,7 @@ class MemberWithdrawalIntegrationTest {
                 user, category, "옛 루틴", AuthType.CHECK, "DAILY", null, null, LocalDate.now(), null);
         alreadyDeleted.softDelete(earlierDeletedAt);
         alreadyDeleted = routineRepository.save(alreadyDeleted);
-        // 완료 이력·스트릭은 보존 대상(집 통계 의존 가능성).
+        // 완료 이력·스트릭은 탈퇴 트랜잭션에서는 보존함(하드 삭제는 batch 모듈 purge 담당).
         // 이력 날짜는 어제로 둠 — 오늘 COMPLETED면 리마인더 후보 조건(당일 미완료)에서 미리 빠져버림.
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
                 routine, LocalDate.now().minusDays(1), Instant.now(), CurrencyType.COIN, 10));
@@ -258,6 +275,48 @@ class MemberWithdrawalIntegrationTest {
         assertThat(routineRepository.findById(otherRoutine.getId()).orElseThrow().getDeletedAt()).isNull();
         // 루틴 soft delete로 리마인더 후보에서 자연 제외됨.
         assertThat(reminderCandidateIds(nineAm)).doesNotContain(routine.getId());
+    }
+
+    @Test
+    void 탈퇴하면_알림_수신함과_알림_설정_온보딩_목표가_즉시_삭제된다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        Goal goal = goalRepository.save(newGoal("wd-" + UUID.randomUUID().toString().substring(0, 8)));
+        notificationRepository.save(
+                Notification.create(user, NotificationType.ROUTINE_REMINDER, "제목", "내용", null));
+        notificationSettingRepository.save(
+                NotificationSetting.create(user, NotificationSettingType.ALL, true));
+        userGoalRepository.save(UserGoal.of(user, goal, true));
+        // 다른 회원의 본인 전용 데이터는 영향받지 않아야 함(스코프 검증).
+        LoginResponse otherLogin = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User other = userRepository.findById(otherLogin.userId()).orElseThrow();
+        notificationRepository.save(
+                Notification.create(other, NotificationType.ROUTINE_REMINDER, "제목", "내용", null));
+        notificationSettingRepository.save(
+                NotificationSetting.create(other, NotificationSettingType.ALL, true));
+        userGoalRepository.save(UserGoal.of(other, goal, true));
+
+        memberWithdrawalService.withdraw(login.userId());
+
+        assertThat(notificationRepository.findPageByCursor(
+                login.userId(), null, org.springframework.data.domain.Pageable.unpaged())).isEmpty();
+        assertThat(notificationSettingRepository.findAllByUserId(login.userId())).isEmpty();
+        assertThat(userGoalRepository.findByUserId(login.userId())).isEmpty();
+        assertThat(notificationRepository.findPageByCursor(
+                otherLogin.userId(), null, org.springframework.data.domain.Pageable.unpaged())).hasSize(1);
+        assertThat(notificationSettingRepository.findAllByUserId(otherLogin.userId())).hasSize(1);
+        assertThat(userGoalRepository.findByUserId(otherLogin.userId())).hasSize(1);
+    }
+
+    // Goal 은 마스터 데이터라 공개 팩토리가 없음 — 온보딩 테스트와 동일하게 리플렉션으로 생성함.
+    // 비활성으로 만들어 같은 DB 를 쓰는 온보딩 마스터 조회 테스트(활성 목록 검증)에 새지 않게 함.
+    private Goal newGoal(String code) {
+        Goal goal = org.springframework.beans.BeanUtils.instantiateClass(Goal.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(goal, "code", code);
+        org.springframework.test.util.ReflectionTestUtils.setField(goal, "name", code + "-name");
+        org.springframework.test.util.ReflectionTestUtils.setField(goal, "sortOrder", 0);
+        org.springframework.test.util.ReflectionTestUtils.setField(goal, "active", false);
+        return goal;
     }
 
     @Test
