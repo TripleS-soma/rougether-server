@@ -94,10 +94,10 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 
 ## 브랜치 · 머지 규칙
 
-여러 담당자가 같은 main을 공유하므로, 아래를 지켜 main이 깨지지 않게 합니다. (main에 CI 강제(branch protection)가 없으므로 습관으로 예방합니다.)
+여러 브랜치·세션(worktree, AI 에이전트 병행 작업 포함)이 같은 main을 공유하므로, 아래를 지켜 main이 깨지지 않게 합니다. (main에 CI 강제(branch protection)가 없으므로 습관으로 예방합니다.)
 
-- **머지 전 전체 컴파일 확인 (필수)**: 특정 모듈만(`:user-api:test`) 돌리지 말고 최소 `./gradlew compileJava`(전체 모듈)로 다른 모듈·담당자 코드가 함께 컴파일되는지 확인합니다. 한 모듈 테스트만 통과해도 공유 코드를 바꿨다면 다른 모듈(auth/todo/routine 등)이 깨질 수 있습니다.
-- **파일을 복사해 push할 때(worktree 등) main 최신을 덮어쓰지 않기 (필수)**: 새 파일이 아닌 **수정(기존) 파일**은 로컬 working tree가 main보다 오래됐을 수 있어, 복사 시 다른 담당자가 main에서 추가한 메서드/변경을 유실시킬 수 있습니다(공유 엔티티: `UserWallet`, `UserItem` 등). push 전 diff로 의도한 변경만인지, 예상 밖 삭제(`-`)가 없는지 확인합니다.
+- **머지 전 전체 컴파일 확인 (필수)**: 특정 모듈만(`:user-api:test`) 돌리지 말고 최소 `./gradlew compileJava`(전체 모듈)로 다른 모듈 코드가 함께 컴파일되는지 확인합니다. 한 모듈 테스트만 통과해도 공유 코드를 바꿨다면 다른 모듈(auth/todo/routine 등)이 깨질 수 있습니다.
+- **파일을 복사해 push할 때(worktree 등) main 최신을 덮어쓰지 않기 (필수)**: 새 파일이 아닌 **수정(기존) 파일**은 로컬 working tree가 main보다 오래됐을 수 있어, 복사 시 다른 브랜치에서 main에 먼저 들어간 메서드/변경을 유실시킬 수 있습니다(공유 엔티티: `UserWallet`, `UserItem` 등). push 전 diff로 의도한 변경만인지, 예상 밖 삭제(`-`)가 없는지 확인합니다.
   ```bash
   git -C <worktree> diff --cached
   ```
@@ -137,7 +137,7 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 - 이 작업이 백엔드 공통 작업인지, 특정 도메인 작업인지
 - DB migration이 필요한지
 - frontend 응답 형태에 영향을 주는지
-- 임채영 담당 루틴/투두 API와 dependency가 있는지
+- 루틴/투두 등 다른 도메인 API와 dependency가 있는지
 - 인증이 없더라도 소유권 필드가 보존되는지
 
 ## 검증
