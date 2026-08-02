@@ -65,7 +65,7 @@ class TransferOwnershipServiceTest {
         House house = aliveHouse();
         HouseMember requester = ownerRequester(10L);
         HouseMember target = activeTarget(12L, 1L, 8L);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(requester));
         when(houseMemberRepository.findById(12L)).thenReturn(Optional.of(target));
 
@@ -85,7 +85,7 @@ class TransferOwnershipServiceTest {
         HouseMember member = mock(HouseMember.class);
         when(member.isActive()).thenReturn(true);
         when(member.isOwner()).thenReturn(false);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(member));
 
         assertThatThrownBy(() -> houseMemberCommandService.transferOwnership(7L, 1L, 12L))
@@ -97,7 +97,7 @@ class TransferOwnershipServiceTest {
     @Test
     void 비구성원의_양도_시도도_403() {
         House house = aliveHouse();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseMemberCommandService.transferOwnership(7L, 1L, 12L))
@@ -108,7 +108,7 @@ class TransferOwnershipServiceTest {
     void 대상_membership이_없으면_400() {
         House house = aliveHouse();
         HouseMember requester = ownerRequester(10L);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(requester));
         when(houseMemberRepository.findById(12L)).thenReturn(Optional.empty());
 
@@ -121,7 +121,7 @@ class TransferOwnershipServiceTest {
         House house = aliveHouse();
         HouseMember requester = ownerRequester(10L);
         HouseMember otherHouseTarget = activeTarget(12L, 99L, 8L); // 다른 집(99)
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(requester));
         when(houseMemberRepository.findById(12L)).thenReturn(Optional.of(otherHouseTarget));
 
@@ -140,7 +140,7 @@ class TransferOwnershipServiceTest {
         when(self.isActive()).thenReturn(true);
         when(self.getHouse()).thenReturn(sameHouse);
         when(self.getId()).thenReturn(10L); // requester 와 같은 membership
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(requester));
         when(houseMemberRepository.findById(10L)).thenReturn(Optional.of(self));
 
@@ -154,7 +154,7 @@ class TransferOwnershipServiceTest {
         HouseMember requester = ownerRequester(10L);
         HouseMember leftTarget = mock(HouseMember.class);
         when(leftTarget.isActive()).thenReturn(false); // LEFT - isActive 필터에서 걸러짐
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(requester));
         when(houseMemberRepository.findById(12L)).thenReturn(Optional.of(leftTarget));
 
@@ -168,7 +168,7 @@ class TransferOwnershipServiceTest {
         House house = aliveHouse();
         HouseMember leftOwner = mock(HouseMember.class);
         when(leftOwner.isActive()).thenReturn(false); // LEFT row 존재 - isActive 필터에서 걸러짐
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(leftOwner));
 
         assertThatThrownBy(() -> houseMemberCommandService.transferOwnership(7L, 1L, 12L))
@@ -179,7 +179,7 @@ class TransferOwnershipServiceTest {
     void 삭제된_집은_404() {
         House deleted = mock(House.class);
         when(deleted.isDeleted()).thenReturn(true);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(deleted));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(deleted));
 
         assertThatThrownBy(() -> houseMemberCommandService.transferOwnership(7L, 1L, 12L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
@@ -187,7 +187,7 @@ class TransferOwnershipServiceTest {
 
     @Test
     void 없는_집은_404() {
-        when(houseRepository.findById(99L)).thenReturn(Optional.empty());
+        when(houseRepository.findWithLockById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseMemberCommandService.transferOwnership(7L, 99L, 12L))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));

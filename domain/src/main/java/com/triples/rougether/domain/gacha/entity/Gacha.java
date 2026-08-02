@@ -58,4 +58,24 @@ public class Gacha extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "theme_id")
     private Theme theme;
+
+    // 테마 가구 뽑기 머신 생성용. 운영 기간 없이 즉시 활성으로 시작함 (캐릭터 뽑기 머신은 시드로만 관리).
+    public Gacha(String code, String name, CurrencyType costCurrencyType, int costAmount,
+                 int drawCount, Theme theme, boolean active) {
+        this.code = code;
+        this.name = name;
+        this.costCurrencyType = costCurrencyType;
+        this.costAmount = costAmount;
+        this.drawCount = drawCount;
+        this.theme = theme;
+        this.active = active;
+    }
+
+    // 활성 플래그와 운영 기간을 함께 만족할 때만 사용자에게 노출·실행한다.
+    public boolean isAvailableAt(Instant now) {
+        if (!active || (startsAt != null && now.isBefore(startsAt))) {
+            return false;
+        }
+        return endsAt == null || !now.isAfter(endsAt);
+    }
 }

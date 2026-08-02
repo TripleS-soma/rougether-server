@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -27,9 +28,18 @@ public record HouseListResponse(
             Integer maxMembers,
             @Schema(description = "집 레벨", example = "0")
             int level,
-            List<GoalSummary> goals) {
+            List<GoalSummary> goals,
+            @Schema(description = "내 최근 입주 신청 상태. 신청 이력이 없으면 null", example = "PENDING")
+            HouseJoinRequestStatus myJoinRequestStatus) {
 
-        public static HouseSummary of(House house, List<GoalSummary> goals) {
+        public HouseSummary(Long houseId, String name, String coverImageKey,
+                            int currentMemberCount, Integer maxMembers, int level,
+                            List<GoalSummary> goals) {
+            this(houseId, name, coverImageKey, currentMemberCount, maxMembers, level, goals, null);
+        }
+
+        public static HouseSummary of(House house, List<GoalSummary> goals,
+                                      HouseJoinRequestStatus myJoinRequestStatus) {
             return new HouseSummary(
                     house.getId(),
                     house.getName(),
@@ -37,7 +47,8 @@ public record HouseListResponse(
                     house.getCurrentMemberCount(),
                     house.getMaxMembers(),
                     house.getLevel(),
-                    goals);
+                    goals,
+                    myJoinRequestStatus);
         }
     }
 

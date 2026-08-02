@@ -16,6 +16,10 @@ spring:
   batch:
     job:
       enabled: false
+  task:
+    scheduling:
+      pool:
+        size: 2 # day-end catch-up이 오래 돌아도 reminder 정각 발화가 막히지 않게 트리거별 스레드 확보
 
 server:
   port: 8082

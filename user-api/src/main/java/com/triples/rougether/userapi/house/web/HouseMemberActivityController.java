@@ -64,6 +64,8 @@ public class HouseMemberActivityController {
                     + "루틴은 수행 예정 시각 오름차순, 투두는 id 오름차순으로 정렬됩니다. "
                     + "카테고리 공개 범위(visibility)가 HOUSE(집) 또는 PUBLIC(공개)인 루틴·투두만 내려가고, "
                     + "PRIVATE(비공개)·FRIENDS(친한친구) 카테고리와 미분류(카테고리 없음)는 제외됩니다. "
+                    + "루틴·투두가 참조하는 카테고리 정보(id·이름·색상·아이콘)는 categories 로 함께 내려갑니다 — "
+                    + "타인의 카테고리는 내 카테고리 목록 조회(GET /api/v1/categories)로 resolve 할 수 없기 때문입니다. "
                     + "본인을 조회해도 같은 공개 범위 필터가 적용되므로, 내 화면에는 GET /api/v1/today 를 사용하세요.")
     @GetMapping("/day")
     public HouseMemberDayResponse getMemberDay(
@@ -102,7 +104,7 @@ public class HouseMemberActivityController {
             description = "같은 집 멤버에게 원탭 응원을 보냅니다. 요청자와 대상 모두 해당 집(houseId)의 활성(ACTIVE) 구성원이어야 하고, "
                     + "자기 자신에게는 보낼 수 없습니다(400 HOUSE_CHEER_SELF). "
                     + "type 은 great(잘하고 있어!)/support(응원해요!)/best(오늘도 최고!) 3종이며, "
-                    + "같은 대상에게 같은 타입은 하루(KST) 1회만 보낼 수 있습니다(초과 시 409 HOUSE_CHEER_DUPLICATED). "
+                    + "같은 대상에게 같은 타입은 하루(KST) 5회까지 보낼 수 있습니다(초과 시 409 HOUSE_CHEER_LIMIT_EXCEEDED). "
                     + "저장이 확정되면 대상에게 push 알림(응원이 도착했어요)이 발송됩니다 — 알림 실패는 응원 성공에 영향을 주지 않습니다.")
     @PostMapping("/cheer")
     @ResponseStatus(HttpStatus.CREATED)

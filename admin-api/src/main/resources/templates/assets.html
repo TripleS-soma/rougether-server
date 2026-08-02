@@ -18,8 +18,11 @@
         <nav class="app-nav">
             <a th:href="@{/}">에셋 업로드</a>
             <a th:href="@{/assets}" class="active">에셋 조회</a>
-            <a th:href="@{/item-slots}">슬롯 편집</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/accessory-render-profiles}">악세사리 관리</a>
             <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}">버그 제보</a>
         </nav>
         <div class="header-right">
             <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
@@ -46,6 +49,10 @@
 
             <div class="slot-toolbar">
                 <input type="search" id="filter" class="slot-search" placeholder="key 검색 (예: bakery, chair)">
+                <label class="filter-toggle" for="animated-only">
+                    <input type="checkbox" id="animated-only">
+                    <span>움짤만 보기</span>
+                </label>
                 <span class="slot-count" id="count"></span>
             </div>
 
@@ -60,6 +67,7 @@
 
         const grid = document.getElementById('grid');
         const filterInput = document.getElementById('filter');
+        const animatedOnlyInput = document.getElementById('animated-only');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
         const tabs = document.getElementById('tabs');
@@ -103,9 +111,10 @@
 
         function render() {
             const keyword = filterInput.value.trim().toLowerCase();
-            const visible = keyword
-                ? assets.filter((a) => a.key.toLowerCase().includes(keyword))
-                : assets;
+            const animatedOnly = animatedOnlyInput.checked;
+            const visible = assets.filter((asset) =>
+                (!keyword || asset.key.toLowerCase().includes(keyword)) &&
+                (!animatedOnly || asset.animated));
 
             grid.replaceChildren(...visible.map(buildCard));
             countEl.textContent = visible.length + ' / ' + assets.length + '개';
@@ -121,8 +130,17 @@
             img.className = 'asset-thumb';
             img.loading = 'lazy';
             img.alt = asset.key;
-            img.src = s3BaseUrl + '/' + asset.key;
+            // 동일한 S3 key를 덮어쓴 경우에도 브라우저가 이전 이미지를 재사용하지 않도록
+            // 목록 응답의 최종 수정 시각을 썸네일 URL 버전으로 사용한다.
+            const assetVersion = encodeURIComponent(asset.lastModified);
+            img.src = s3BaseUrl + '/' + asset.key + '?v=' + assetVersion;
             thumbWrap.appendChild(img);
+            if (asset.animated) {
+                const badge = document.createElement('span');
+                badge.className = 'asset-animated-badge';
+                badge.textContent = '움짤';
+                thumbWrap.appendChild(badge);
+            }
 
             const keyEl = document.createElement('div');
             keyEl.className = 'asset-key';
@@ -164,6 +182,7 @@
         }
 
         filterInput.addEventListener('input', render);
+        animatedOnlyInput.addEventListener('change', render);
     </script>
 </body>
 </html>

@@ -1,0 +1,80 @@
+{
+  "id": "rougether-room-renderer",
+  "version": 1,
+  "coordinateSpace": {
+    "type": "normalized-square",
+    "origin": "top-left",
+    "furnitureAnchor": "center"
+  },
+  "room": {
+    "aspectRatio": 1,
+    "borderRadiusPx": 16
+  },
+  "surfaces": {
+    "background": { "top": 0, "left": 0, "width": 1, "height": 1, "contentFit": "cover" },
+    "wallpaper": { "top": 0, "left": 0, "width": 1, "height": 0.5, "contentFit": "cover" },
+    "floor": { "top": 0.5, "left": 0, "width": 1, "height": 0.5, "contentFit": "cover" }
+  },
+  "furniture": {
+    "baseWidth": 0.28,
+    "aspectRatio": 1,
+    "imagePaddingPx": 4,
+    "borderRadiusPx": 12,
+    "newPlacementCenter": { "x": 0.5, "y": 0.55 },
+    "previewCenter": { "x": 0.8, "y": 0.52 },
+    "editorScale": { "min": 0.5, "max": 2, "step": 0.01 },
+    "slots": {
+      "topLeft": { "top": 0.08, "left": 0.05, "width": 0.28 },
+      "topCenter": { "top": 0.08, "left": 0.36, "width": 0.28 },
+      "topRight": { "top": 0.08, "left": 0.67, "width": 0.28 },
+      "midLeft": { "top": 0.38, "left": 0.06, "width": 0.28 },
+      "midRight": { "top": 0.38, "left": 0.66, "width": 0.28 },
+      "bottomLeft": { "top": 0.68, "left": 0.05, "width": 0.24 },
+      "bottomCenter": { "top": 0.64, "left": 0.36, "width": 0.28 },
+      "bottomRight": { "top": 0.68, "left": 0.71, "width": 0.24 }
+    }
+  },
+  "character": {
+    "centerX": 0.5,
+    "bottom": 0.16,
+    "width": 0.42,
+    "height": 0.42,
+    "contentFit": "contain"
+  },
+  "referenceFixture": {
+    "id": "summer-beach-scale-studio-v1",
+    "surfaces": {
+      "background": {
+        "id": "reference-background",
+        "name": "여름 바다 배경",
+        "assetKey": "items/summer-beach-room-v2/wallpaper/summer-beach-room-v2-background-1205x1169.png"
+      },
+      "wallpaper": {
+        "id": "reference-wallpaper",
+        "name": "야자수 조개 벽지",
+        "assetKey": "items/summer-beach-room-v2/wallpaper/summer-beach-room-v2-subtle-palm-shell-wallpaper-1205x585.png"
+      },
+      "floor": {
+        "id": "reference-floor",
+        "name": "밝은 모래 원목 바닥",
+        "assetKey": "items/summer-beach-room-v2/wallpaper/summer-beach-room-v2-light-sand-wood-floor-1205x584.png"
+      }
+    },
+    "furniture": {
+      "id": "reference-furniture",
+      "name": "바다 창문",
+      "assetKey": "items/summer-beach-room-v2/furniture/summer-beach-room-v2-arched-palm-ocean-window-animated-v1.webp",
+      "slot": "midRight",
+      "defaultScale": 1
+    },
+    "character": {
+      "id": "cat",
+      "name": "고양이",
+      "animations": {
+        "idle": "characters/cat/animations/idle.webp",
+        "poseCycle": "characters/cat/animations/pose-cycle.webp",
+        "wave": "characters/cat/animations/wave.webp"
+      }
+    }
+  }
+}

@@ -3,9 +3,12 @@ package com.triples.rougether.userapi.house.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
+import com.triples.rougether.domain.house.entity.HouseJoinRequest;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
+import com.triples.rougether.domain.house.repository.HouseJoinRequestRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
@@ -14,10 +17,15 @@ import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse.MemberSummary;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
+import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse.MemberRoomSummary;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.HouseSummary;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse.MyHouseSummary;
+import com.triples.rougether.userapi.house.dto.MyJoinRequestListResponse;
+import com.triples.rougether.userapi.house.dto.MyJoinRequestListResponse.MyJoinRequestSummary;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
+import com.triples.rougether.userapi.room.service.RoomQueryService;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,12 +42,21 @@ public class HouseQueryService {
     private final HouseRepository houseRepository;
     private final HouseGoalRepository houseGoalRepository;
     private final HouseMemberRepository houseMemberRepository;
+    private final HouseJoinRequestRepository houseJoinRequestRepository;
+    private final RoomQueryService roomQueryService;
+    private final HouseMissionService houseMissionService;
 
     public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository,
-                             HouseMemberRepository houseMemberRepository) {
+                             HouseMemberRepository houseMemberRepository,
+                             HouseJoinRequestRepository houseJoinRequestRepository,
+                             RoomQueryService roomQueryService,
+                             HouseMissionService houseMissionService) {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.houseMemberRepository = houseMemberRepository;
+        this.houseJoinRequestRepository = houseJoinRequestRepository;
+        this.roomQueryService = roomQueryService;
+        this.houseMissionService = houseMissionService;
     }
 
     // 집 상세 - ACTIVE 구성원만 조회 가능. 초대코드는 소유자에게만 내려간다.
@@ -72,7 +89,24 @@ public class HouseQueryService {
         List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
-        return HousePreviewDetailResponse.of(house, goals, isMember);
+        // 구성원 타일 렌더용 방 데이터(#177). 방 렌더는 미리보기를 통해 전체공개로 확정 -
+        // 활동 정보(streak·lastAccessedAt)는 구성원 전용이라 렌더 부분집합만 내린다.
+        // 방 데이터는 구성원 수와 무관하게 배치 조회(고정 4쿼리)로 한 번에 가져온다.
+        List<HouseMember> activeMembers = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE);
+        Map<Long, RoomRenderResponse> renders = roomQueryService.findRendersOf(
+                activeMembers.stream().map(member -> member.getUser().getId()).toList());
+        List<MemberRoomSummary> memberRooms = activeMembers.stream()
+                .map(member -> MemberRoomSummary.of(member, renders.get(member.getUser().getId())))
+                .toList();
+        HouseJoinRequestStatus requestStatus = isMember ? null
+                : houseJoinRequestRepository.findByHouseIdAndUserId(houseId, userId)
+                        .map(HouseJoinRequest::getStatus)
+                        .filter(HouseQueryService::isVisibleJoinRequestStatus)
+                        .orElse(null);
+        return HousePreviewDetailResponse.of(
+                house, goals, isMember, requestStatus,
+                houseMissionService.getPreviewMissions(house), memberRooms);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
@@ -106,18 +140,68 @@ public class HouseQueryService {
         return new MyHouseListResponse(items);
     }
 
+    // 내가 보낸 입주 신청 목록 - 최신 신청 먼저. 탐색 신청과 개인 코드 신청 모두 같은
+    // house_join_requests 를 쓰므로 user 기준 조회만으로 둘 다 포함된다. 삭제된 집 제외.
     @Transactional(readOnly = true)
-    public HouseListResponse explore(int page, int size, String goalCode) {
+    public MyJoinRequestListResponse getMyJoinRequests(Long userId, HouseJoinRequestStatus status) {
+        List<HouseJoinRequest> requests = houseJoinRequestRepository
+                .findByUserIdAndStatusWithHouse(userId, status);
+        Map<Long, List<GoalSummary>> goalsByHouseId = loadGoals(
+                requests.stream().map(HouseJoinRequest::getHouse).toList());
+        List<MyJoinRequestSummary> items = requests.stream()
+                .map(request -> MyJoinRequestSummary.of(
+                        request,
+                        goalsByHouseId.getOrDefault(request.getHouse().getId(), List.of())))
+                .toList();
+        return new MyJoinRequestListResponse(items);
+    }
+
+    // excludeJoined=true 면 내가 가입(ACTIVE)해 있는 집을 제외한다(가입된 집 필터, 프론트 요청).
+    @Transactional(readOnly = true)
+    public HouseListResponse explore(Long userId, int page, int size, String goalCode,
+                                     boolean excludeJoined) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<House> houses = (goalCode == null || goalCode.isBlank())
-                ? houseRepository.findExplorePage(pageable)
-                : houseRepository.findExplorePageByGoalCode(goalCode, pageable);
+        boolean noGoalFilter = goalCode == null || goalCode.isBlank();
+        Page<House> houses;
+        if (noGoalFilter) {
+            houses = excludeJoined
+                    ? houseRepository.findExplorePageExcludingMemberStatus(
+                            userId, HouseMemberStatus.ACTIVE, pageable)
+                    : houseRepository.findExplorePage(pageable);
+        } else {
+            houses = excludeJoined
+                    ? houseRepository.findExplorePageByGoalCodeExcludingMemberStatus(
+                            goalCode, userId, HouseMemberStatus.ACTIVE, pageable)
+                    : houseRepository.findExplorePageByGoalCode(goalCode, pageable);
+        }
 
         Map<Long, List<GoalSummary>> goalsByHouseId = loadGoals(houses.getContent());
+        Map<Long, HouseJoinRequestStatus> requestStatusByHouseId = loadJoinRequestStatuses(
+                userId, houses.getContent());
         List<HouseSummary> items = houses.getContent().stream()
-                .map(house -> HouseSummary.of(house, goalsByHouseId.getOrDefault(house.getId(), List.of())))
+                .map(house -> HouseSummary.of(
+                        house,
+                        goalsByHouseId.getOrDefault(house.getId(), List.of()),
+                        requestStatusByHouseId.get(house.getId())))
                 .toList();
         return new HouseListResponse(items, page, size, houses.getTotalElements());
+    }
+
+    private Map<Long, HouseJoinRequestStatus> loadJoinRequestStatuses(Long userId, List<House> houses) {
+        if (houses.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> houseIds = houses.stream().map(House::getId).toList();
+        return houseJoinRequestRepository.findByHouseIdInAndUserId(houseIds, userId).stream()
+                .filter(request -> isVisibleJoinRequestStatus(request.getStatus()))
+                .collect(Collectors.toMap(
+                        request -> request.getHouse().getId(),
+                        HouseJoinRequest::getStatus));
+    }
+
+    private static boolean isVisibleJoinRequestStatus(HouseJoinRequestStatus status) {
+        return status == HouseJoinRequestStatus.PENDING
+                || status == HouseJoinRequestStatus.REJECTED;
     }
 
     // 페이지의 goals 를 한 번에 조회해 N+1 을 피한다.

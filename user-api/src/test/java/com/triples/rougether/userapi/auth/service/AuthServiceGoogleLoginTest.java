@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.GoogleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
@@ -40,6 +41,14 @@ class AuthServiceGoogleLoginTest {
     private GoogleTokenVerifier googleTokenVerifier;
     @Mock
     private GoogleLoginHandler googleLoginHandler;
+    @Mock
+    private AppleTokenVerifier appleTokenVerifier;
+    @Mock
+    private AppleLoginHandler appleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
+    @Mock
+    private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
     private AuthService authService;
 
@@ -48,7 +57,9 @@ class AuthServiceGoogleLoginTest {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler);
+                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                appleTokenExchangeClient, appleRefreshTokenCipher,
+                org.mockito.Mockito.mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
     }
 
     @Test

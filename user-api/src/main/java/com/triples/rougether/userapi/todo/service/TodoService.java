@@ -11,8 +11,11 @@ import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.member.entity.WalletHistory;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.dto.TodoListResponse;
@@ -32,15 +35,16 @@ public class TodoService {
 
     // KST 고정 — 완료 가능 여부(마감일) 판정 기준
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 투두 보상: 루틴(10)과 별도로 5코인 고정
+    // 투두 보상: 루틴과 같은 10코인 고정
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
-    private static final int REWARD_AMOUNT = 5;
+    private static final int REWARD_AMOUNT = 10;
 
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
     private final DailyRewardService dailyRewardService;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     @Transactional(readOnly = true)
     public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
@@ -68,9 +72,8 @@ public class TodoService {
     @Transactional
     public TodoResponse update(Long userId, Long todoId, TodoUpdateRequest request) {
         Todo todo = findOwned(userId, todoId);
-        if (request.categoryId() != null) {
-            todo.changeCategory(findOwnedCategory(userId, request.categoryId()));
-        }
+        todo.changeCategory(request.categoryId() != null
+                ? findOwnedCategory(userId, request.categoryId()) : null);
         todo.update(request.title(), request.description(), request.dueDate(), request.dueTime());
         return TodoResponse.from(todo);
     }
@@ -97,14 +100,18 @@ public class TodoService {
         if (dueDate != null && dueDate.isAfter(today)) {
             throw new BusinessException(TodoErrorCode.TODO_FUTURE_NOT_COMPLETABLE);
         }
-        // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
-        int reward = today.equals(dueDate) && dailyRewardService.canReward(userId, today)
-                ? REWARD_AMOUNT : 0;
+        // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
+        // 당일 마감 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
+        int reward = today.equals(dueDate)
+                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
+                : 0;
 
         todo.complete(REWARD_CURRENCY, reward, Instant.now());
 
         if (reward > 0) {
             wallet.add(reward);
+            walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.TODO_COMPLETE,
+                    WalletHistory.SOURCE_TODO, todo.getId());
         }
 
         return TodoCompleteResponse.from(todo);
@@ -120,6 +127,9 @@ public class TodoService {
         UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(todo.getRewardAmount());
+        // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
+        walletHistoryRecorder.deleteEarned(userId, WalletHistoryReason.TODO_COMPLETE,
+                WalletHistory.SOURCE_TODO, todo.getId());
 
         todo.cancelComplete();
         return TodoResponse.from(todo);

@@ -2,6 +2,8 @@ package com.triples.rougether.userapi.room.service;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
+import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -21,6 +23,7 @@ import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlo
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -52,6 +55,8 @@ public class RoomCommandService {
     private final RoomItemPlacementRepository roomItemPlacementRepository;
     private final UserItemRepository userItemRepository;
     private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     private final StreakRepository streakRepository;
     private final UserRepository userRepository;
 
@@ -60,6 +65,8 @@ public class RoomCommandService {
                               RoomItemPlacementRepository roomItemPlacementRepository,
                               UserItemRepository userItemRepository,
                               UserCharacterRepository userCharacterRepository,
+                              UserCharacterAccessoryRepository userCharacterAccessoryRepository,
+                              CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
                               StreakRepository streakRepository,
                               UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
@@ -67,6 +74,8 @@ public class RoomCommandService {
         this.roomItemPlacementRepository = roomItemPlacementRepository;
         this.userItemRepository = userItemRepository;
         this.userCharacterRepository = userCharacterRepository;
+        this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
+        this.renderProfileQueryService = renderProfileQueryService;
         this.streakRepository = streakRepository;
         this.userRepository = userRepository;
     }
@@ -256,6 +265,17 @@ public class RoomCommandService {
         Streak streak = streakRepository.findByUserId(userId).orElse(null);
         UserCharacter selectedCharacter = userCharacterRepository
                 .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
-        return RoomResponse.of(room, slots, placements, streak, selectedCharacter);
+        List<UserCharacterAccessory> accessories = selectedCharacter == null
+                ? List.of()
+                : userCharacterAccessoryRepository.findActiveByUserCharacterId(
+                        selectedCharacter.getId());
+        return RoomResponse.of(
+                room,
+                slots,
+                placements,
+                streak,
+                selectedCharacter,
+                accessories,
+                renderProfileQueryService.findFor(accessories));
     }
 }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
@@ -19,6 +20,7 @@ import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
+import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest.SlotAssignment;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
@@ -41,6 +43,8 @@ class RoomCommandServiceTest {
     @Mock private UserItemRepository userItemRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
+    @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
+    @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
     @InjectMocks private RoomCommandService roomCommandService;
 

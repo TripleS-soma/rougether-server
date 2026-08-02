@@ -7,12 +7,22 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
 
     List<RoutineLog> findByRoutineIdAndRoutineDate(Long routineId, LocalDate routineDate);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from RoutineLog l where l.routine.id in "
+            + "(select r.id from Routine r where r.category.id = :categoryId "
+            + "  and not exists (select 1 from Routine live "
+            + "    where coalesce(live.originRoutineId, live.id) = coalesce(r.originRoutineId, r.id) "
+            + "    and live.deletedAt is null)) "
+            + "and not (l.routineDate = :today and l.rewardAmount > 0)")
+    int deleteByCategoryId(@Param("categoryId") Long categoryId, @Param("today") LocalDate today);
 
     Optional<RoutineLog> findByRoutineIdAndRoutineDateAndStatus(
             Long routineId, LocalDate routineDate, RoutineLogStatus status);
@@ -59,11 +69,11 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("toDate") LocalDate toDate,
             @Param("visibilities") List<PrivacyScope> visibilities);
 
-    // 일일 보상 상한: 오늘 지급된 완료 건수(reward_amount > 0)
-    @Query("select count(l) from RoutineLog l "
+    // 일일 보상 상한: 오늘 루틴 완료로 지급된 코인 합계
+    @Query("select coalesce(sum(l.rewardAmount), 0) from RoutineLog l "
             + "where l.routine.user.id = :userId and l.routineDate = :routineDate "
-            + "and l.status = :status and l.rewardAmount > 0")
-    long countByRoutine_UserIdAndRoutineDateAndStatusAndRewardAmountGreaterThan(
+            + "and l.status = :status")
+    int sumRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
             @Param("userId") Long userId,
             @Param("routineDate") LocalDate routineDate,
             @Param("status") RoutineLogStatus status);

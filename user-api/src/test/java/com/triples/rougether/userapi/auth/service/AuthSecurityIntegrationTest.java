@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -45,6 +46,13 @@ class AuthSecurityIntegrationTest {
     @Test
     void 토큰_없이_보호자원_접근하면_401_과_code_를_준다() throws Exception {
         mockMvc.perform(get("/api/v1/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
+    }
+
+    @Test
+    void 토큰_없이_회원탈퇴를_요청하면_401_과_code_를_준다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
     }

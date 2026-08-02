@@ -94,6 +94,8 @@ DB_URL=${db_url}
 DB_USERNAME=${db_username}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
+ASSET_S3_BUCKET=${asset_bucket_name}
+ASSET_S3_REGION=${asset_region}
 EOF
 
 if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then

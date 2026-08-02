@@ -8,16 +8,21 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
 import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationSetting;
+import com.triples.rougether.domain.notification.entity.NotificationSettingType;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
+import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
@@ -86,11 +91,15 @@ class RoutineReminderJobIntegrationTest {
     @Autowired
     private RoutineLogRepository routineLogRepository;
     @Autowired
+    private TodoRepository todoRepository;
+    @Autowired
     private NotificationRepository notificationRepository;
     @Autowired
     private UserRepository userRepository;
     @Autowired
     private UserDeviceTokenRepository userDeviceTokenRepository;
+    @Autowired
+    private NotificationSettingRepository notificationSettingRepository;
     @Autowired
     private TestFcmSender testFcmSender;
 
@@ -98,9 +107,11 @@ class RoutineReminderJobIntegrationTest {
     void cleanUp() {
         // Step2 reader가 날짜 무관 전체 PENDING을 훑으므로 테스트 간 알림이 남으면 서로 간섭함
         notificationRepository.deleteAll();
+        notificationSettingRepository.deleteAll();
         routineLogRepository.deleteAll();
         userDeviceTokenRepository.deleteAll();
         routineRepository.deleteAll();
+        todoRepository.deleteAll();
         userRepository.deleteAll();
         testFcmSender.nextResult = new FcmSendResult(1, List.of());
         testFcmSender.calls.clear();
@@ -201,6 +212,69 @@ class RoutineReminderJobIntegrationTest {
     }
 
     @Test
+    void 루틴과_투두를_한_job에서_함께_적재하고_발송한다() throws Exception {
+        LocalDate date = LocalDate.of(2026, 1, 12);
+        User user = userRepository.save(User.signUp());
+        Routine routine = persistRoutine(user, "아침 운동", "DAILY", null, LocalTime.of(9, 0), null, null);
+        Todo todo = persistTodo(user, "장보기", date, LocalTime.of(9, 0));
+
+        runJob(date, LocalTime.of(9, 0));
+
+        List<Notification> notifications = notificationRepository.findAll();
+        assertThat(notifications).hasSize(2);
+        assertThat(notifications).allMatch(n -> n.getPushStatus() != PushStatus.PENDING);
+        Notification routineNotification = notifications.stream()
+                .filter(n -> n.getType() == NotificationType.ROUTINE_REMINDER).findFirst().orElseThrow();
+        assertThat(routineNotification.getRefId()).isEqualTo(routine.getId());
+        Notification todoNotification = notifications.stream()
+                .filter(n -> n.getType() == NotificationType.TODO_REMINDER).findFirst().orElseThrow();
+        assertThat(todoNotification.getRefId()).isEqualTo(todo.getId());
+        assertThat(todoNotification.getTitle()).isEqualTo(ReminderMessage.TODO_TITLE);
+        assertThat(todoNotification.getBody()).isEqualTo("『장보기』 할 시간이에요!");
+    }
+
+    @Test
+    void 대상_분이_다른_투두는_적재하지_않는다() throws Exception {
+        LocalDate date = LocalDate.of(2026, 1, 13);
+        User user = userRepository.save(User.signUp());
+        persistTodo(user, "장보기", date, LocalTime.of(9, 5));
+
+        runJob(date, LocalTime.of(9, 0));
+
+        assertThat(notificationRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void 당일_기발송된_투두는_재실행에서도_중복_적재하지_않는다() throws Exception {
+        // 기발송 판정은 createdAt(auditing, 실제 현재 시각) 기준 당일 윈도우라 date도 실제 오늘이어야 함.
+        // 시각은 같은 날짜(오늘)를 쓰는 루틴 기발송 테스트와 targetMinute(JobInstance 파라미터)이 겹치지 않게 9:05로 분리
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        User user = userRepository.save(User.signUp());
+        Todo todo = persistTodo(user, "장보기", date, LocalTime.of(9, 5));
+        notificationRepository.save(Notification.create(user, NotificationType.TODO_REMINDER,
+                ReminderMessage.TODO_TITLE, ReminderMessage.todoBody("장보기"), todo.getId()));
+
+        runJob(date, LocalTime.of(9, 5));
+
+        assertThat(notificationRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void 투두_알림도_발송_스텝에서_SENT로_전이한다() throws Exception {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.TODO_REMINDER, ReminderMessage.TODO_TITLE, ReminderMessage.todoBody("장보기"), 1L));
+        testFcmSender.nextResult = new FcmSendResult(1, List.of());
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.SENT);
+        assertThat(testFcmSender.calls).hasSize(1);
+    }
+
+    @Test
     void 같은_분_재실행은_JobInstance_유일성으로_막힌다() throws Exception {
         LocalDate date = LocalDate.of(2026, 1, 11);
         JobParameters params = targetMinuteParams(date, LocalTime.of(9, 0));
@@ -219,7 +293,7 @@ class RoutineReminderJobIntegrationTest {
                 NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
         testFcmSender.nextResult = new FcmSendResult(1, List.of());
 
-        jobOperatorTestUtils.startStep("routineReminderPushStep");
+        jobOperatorTestUtils.startStep("reminderPushStep");
 
         Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
         assertThat(updated.getPushStatus()).isEqualTo(PushStatus.SENT);
@@ -235,13 +309,85 @@ class RoutineReminderJobIntegrationTest {
                 NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
         testFcmSender.nextResult = new FcmSendResult(0, List.of("invalid-token"));
 
-        jobOperatorTestUtils.startStep("routineReminderPushStep");
+        jobOperatorTestUtils.startStep("reminderPushStep");
 
         Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
         assertThat(updated.getPushStatus()).isEqualTo(PushStatus.FAILED);
         Optional<UserDeviceToken> remaining = userDeviceTokenRepository.findByToken("invalid-token");
         assertThat(remaining).isEmpty();
         assertThat(token.getId()).isNotNull();
+    }
+
+    @Test
+    void 리마인더_알림을_끈_사용자는_push를_보내지_않고_BLOCKED로_종결한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.REMINDER);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.BLOCKED);
+        assertThat(testFcmSender.calls).isEmpty();
+    }
+
+    @Test
+    void 마스터를_끈_사용자는_리마인더_그룹이_켜져있어도_차단한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.ALL);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.TODO_REMINDER, ReminderMessage.TODO_TITLE, ReminderMessage.todoBody("장보기"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.BLOCKED);
+        assertThat(testFcmSender.calls).isEmpty();
+    }
+
+    @Test
+    void 집_알림만_끈_사용자에게는_리마인더를_그대로_발송한다() {
+        User user = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(UserDeviceToken.register(user, "token-1", DevicePlatform.ANDROID, Instant.now()));
+        disableSetting(user, NotificationSettingType.HOUSE);
+        Notification notification = notificationRepository.save(Notification.create(user,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        Notification updated = notificationRepository.findById(notification.getId()).orElseThrow();
+        assertThat(updated.getPushStatus()).isEqualTo(PushStatus.SENT);
+        assertThat(testFcmSender.calls).hasSize(1);
+    }
+
+    @Test
+    void 한_chunk에_off_사용자가_섞여도_그_사용자만_차단한다() {
+        User blocked = userRepository.save(User.signUp());
+        User allowed = userRepository.save(User.signUp());
+        userDeviceTokenRepository.save(
+                UserDeviceToken.register(blocked, "token-blocked", DevicePlatform.ANDROID, Instant.now()));
+        userDeviceTokenRepository.save(
+                UserDeviceToken.register(allowed, "token-allowed", DevicePlatform.IOS, Instant.now()));
+        disableSetting(blocked, NotificationSettingType.REMINDER);
+        Notification blockedNotification = notificationRepository.save(Notification.create(blocked,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 1L));
+        Notification allowedNotification = notificationRepository.save(Notification.create(allowed,
+                NotificationType.ROUTINE_REMINDER, ReminderMessage.TITLE, ReminderMessage.body("아침 운동"), 2L));
+
+        jobOperatorTestUtils.startStep("reminderPushStep");
+
+        assertThat(notificationRepository.findById(blockedNotification.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.BLOCKED);
+        assertThat(notificationRepository.findById(allowedNotification.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.SENT);
+        assertThat(testFcmSender.calls).containsExactly(List.of("token-allowed"));
+    }
+
+    private void disableSetting(User user, NotificationSettingType type) {
+        notificationSettingRepository.save(NotificationSetting.create(user, type, false));
     }
 
     private void runJob(LocalDate date, LocalTime time) throws Exception {
@@ -254,6 +400,10 @@ class RoutineReminderJobIntegrationTest {
         return new JobParametersBuilder()
                 .addString(RoutineReminderJobConfig.TARGET_MINUTE_PARAM, targetMinute)
                 .toJobParameters();
+    }
+
+    private Todo persistTodo(User user, String title, LocalDate dueDate, LocalTime dueTime) {
+        return todoRepository.save(Todo.create(user, null, title, null, dueDate, dueTime));
     }
 
     private Routine persistRoutine(User user, String title, String repeatType, String repeatDays,

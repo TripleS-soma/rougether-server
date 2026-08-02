@@ -8,6 +8,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
@@ -47,6 +49,8 @@ class TodoCompletionServiceIntegrationTest {
     @Autowired
     private UserWalletRepository userWalletRepository;
     @Autowired
+    private WalletHistoryRepository walletHistoryRepository;
+    @Autowired
     private RoutineLogRepository routineLogRepository;
 
     private TodoService service;
@@ -58,7 +62,8 @@ class TodoCompletionServiceIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService);
+                userWalletRepository, dailyRewardService,
+                new WalletHistoryRecorder(walletHistoryRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         // 코인은 dueDate가 오늘인 완료에만 지급되므로 기본 픽스처는 오늘 마감으로 만듦
@@ -68,14 +73,14 @@ class TodoCompletionServiceIntegrationTest {
     }
 
     @Test
-    void 완료하면_COMPLETED에_코인5가_지급된다() {
+    void 완료하면_COMPLETED에_코인10이_지급된다() {
         TodoCompleteResponse response = service.complete(userId, todoId);
 
         assertThat(response.status()).isEqualTo(TodoStatus.COMPLETED);
         assertThat(response.completedAt()).isNotNull();
         assertThat(response.rewardCurrencyType()).isEqualTo(CurrencyType.COIN);
-        assertThat(response.rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(5);
+        assertThat(response.rewardAmount()).isEqualTo(10);
+        assertThat(walletBalance()).isEqualTo(10);
     }
 
     @Test
@@ -140,7 +145,7 @@ class TodoCompletionServiceIntegrationTest {
 
     @Test
     void 받은_코인을_소비한_뒤_취소하면_잔액이_음수가_되어도_취소된다() {
-        service.complete(userId, todoId); // 잔액 5
+        service.complete(userId, todoId); // 잔액 10
         spendAllCoins();                  // 다른 곳에서 소비해 잔액 0
 
         service.cancelComplete(userId, todoId);
@@ -148,8 +153,8 @@ class TodoCompletionServiceIntegrationTest {
         // 음수 잔액을 허용하므로 취소가 성공하고 상태가 PENDING으로 되돌아감
         assertThat(todoRepository.findById(todoId).orElseThrow().getStatus())
                 .isEqualTo(TodoStatus.PENDING);
-        // 잔액 0에서 5를 회수해 -5가 됨
-        assertThat(walletBalance()).isEqualTo(-5);
+        // 잔액 0에서 10을 회수해 -10이 됨
+        assertThat(walletBalance()).isEqualTo(-10);
     }
 
     @Test

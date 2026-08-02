@@ -2,10 +2,18 @@ plugins {
 	id 'org.springframework.boot'
 }
 
+dependencyManagement {
+	imports {
+		mavenBom 'software.amazon.awssdk:bom:2.31.0'
+	}
+}
+
 dependencies {
 	implementation project(':common')
 	implementation project(':domain')
 	implementation project(':infra:fcm')
+
+	implementation 'software.amazon.awssdk:s3'
 
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-security'

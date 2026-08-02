@@ -126,7 +126,7 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"idToken\":\"bad\"}"))
+                        .content("{\"idToken\":\"bad\",\"authorizationCode\":\"authcode\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_OAUTH_GOOGLE_TOKEN_INVALID"));
     }
@@ -141,6 +141,68 @@ class AuthControllerTest {
                         .content("{\"idToken\":\"tok\"}"))
                 .andExpect(status().is(502))
                 .andExpect(jsonPath("$.code").value("AUTH_OAUTH_GOOGLE_UNAVAILABLE"));
+    }
+
+    @Test
+    void apple_login_성공_응답_계약() throws Exception {
+        when(authService.appleLogin("apple-id", "authcode")).thenReturn(new LoginResponse(7L, "acc", "ref", true));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"apple-id\",\"authorizationCode\":\"authcode\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.accessToken").value("acc"))
+                .andExpect(jsonPath("$.refreshToken").value("ref"))
+                .andExpect(jsonPath("$.isNewUser").value(true));
+    }
+
+    @Test
+    void apple_login_은_idToken_이_없으면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void apple_login_은_idToken_이_공백이면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"  \",\"authorizationCode\":\"authcode\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void apple_login_은_authorizationCode_가_없으면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"apple-id\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void apple_login_은_애플_토큰이_무효면_401_과_code_를_준다() throws Exception {
+        when(authService.appleLogin("bad", "authcode"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"bad\",\"authorizationCode\":\"authcode\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_APPLE_TOKEN_INVALID"));
+    }
+
+    @Test
+    void apple_login_은_애플_서버_오류면_502_와_code_를_준다() throws Exception {
+        when(authService.appleLogin("tok", "authcode"))
+                .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE));
+
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"tok\",\"authorizationCode\":\"authcode\"}"))
+                .andExpect(status().is(502))
+                .andExpect(jsonPath("$.code").value("AUTH_OAUTH_APPLE_UNAVAILABLE"));
     }
 
     @Test

@@ -6,27 +6,33 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
+import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
+import com.triples.rougether.userapi.notification.service.NotificationService;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 구성원 관리 명령(양도·탈퇴·강퇴). 소유권 양도는 role 전환 2건 + owner_user_id 갱신을 단일 트랜잭션으로.
 @Service
+@RequiredArgsConstructor
 public class HouseMemberCommandService {
 
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
-
-    public HouseMemberCommandService(HouseRepository houseRepository,
-                                     HouseMemberRepository houseMemberRepository) {
-        this.houseRepository = houseRepository;
-        this.houseMemberRepository = houseMemberRepository;
-    }
+    private final NotificationService notificationService;
+    private final RoutineRepository routineRepository;
+    private final CategoryRepository categoryRepository;
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
-        House house = houseRepository.findById(houseId)
+        // house 행 락으로 탈퇴·강퇴·재발급과 직렬화 - 락 없이 구성원을 읽고 role 을 flush 하면
+        // 전체 컬럼 UPDATE 가 동시에 커밋된 개인 초대코드·상태 변경을 stale 값으로 되덮는다.
+        House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
 
@@ -65,12 +71,38 @@ public class HouseMemberCommandService {
             throw new BusinessException(HouseErrorCode.HOUSE_OWNER_MUST_TRANSFER);
         }
 
+        // 수신 대상은 탈퇴자를 뺀 남은 활성 멤버 - 상태 전환 전에 확정해야 본인이 섞이지 않음.
+        List<HouseMember> recipients = houseMemberRepository
+                .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE).stream()
+                .filter(member -> !member.getId().equals(me.getId()))
+                .toList();
+
         me.leave();
         house.decreaseMemberCount();
         if (activeCount == 1) {
             // 마지막 구성원 - 빈 집이 탐색에 남지 않게 정리.
             house.softDelete();
         }
+        notifyMemberLeft(recipients, me);
+        clearMemberLinks(userId, houseId);
+    }
+
+    // 떠난 집과의 루틴·카테고리 연동 해제 - 연동 표시는 구성원에게만 의미가 있으므로 서버가 원천에서 끊는다.
+    // 루틴·카테고리 자체는 개인 데이터라 삭제하지 않는다(삭제 여부는 클라이언트 UX 결정).
+    // bulk 는 PC 를 우회하므로 이 뒤에서 같은 트랜잭션의 루틴·카테고리 조회 금지 - 트랜잭션 끝에서 호출한다.
+    private void clearMemberLinks(Long userId, Long houseId) {
+        routineRepository.clearHouseMissionLinksOfMember(userId, houseId);
+        categoryRepository.clearHouseLinkOfMember(userId, houseId);
+    }
+
+    // 퇴거 알림 - 탈퇴와 같은 트랜잭션에서 동기 저장(응원 #174 패턴). 강퇴(kick)는 범위 밖이라 붙이지 않음.
+    private void notifyMemberLeft(List<HouseMember> recipients, HouseMember left) {
+        if (recipients.isEmpty()) {
+            return;
+        }
+        var content = NotificationMessages.houseMemberLeft(left.getUser().getNickname());
+        recipients.forEach(recipient -> notificationService.send(
+                recipient.getUser().getId(), content, left.getId()));
     }
 
     // 강퇴 - 소유자 전용. KICKED 전환으로 재가입까지 차단한다. 알림 발송은 알림 도메인 의존(후속).
@@ -95,5 +127,6 @@ public class HouseMemberCommandService {
 
         target.kick();
         house.decreaseMemberCount();
+        clearMemberLinks(target.getUser().getId(), houseId);
     }
 }

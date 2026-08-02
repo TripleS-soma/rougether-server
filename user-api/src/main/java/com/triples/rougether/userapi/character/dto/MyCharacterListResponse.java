@@ -1,10 +1,13 @@
 package com.triples.rougether.userapi.character.dto;
 
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterAccessoryRenderProfile;
 import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 // GET /api/v1/me/characters 응답. 보유 캐릭터 목록 - 마스터 정렬(sortOrder) 순.
 public record MyCharacterListResponse(List<MyCharacterItem> items) {
@@ -26,10 +29,15 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
             CharacterAnimations animations,
             @Schema(description = "착용 여부 (동시에 1개만 true). 방 화면의 캐릭터가 이 항목", example = "true")
             boolean selected,
+            @Schema(description = "이 보유 캐릭터에 저장된 악세사리 착용 목록")
+            List<EquippedAccessoryResponse> accessories,
             @Schema(description = "획득 시각 (온보딩 무료 선택 또는 뽑기 지급)")
             Instant acquiredAt) {
 
-        public static MyCharacterItem of(UserCharacter userCharacter) {
+        public static MyCharacterItem of(
+                UserCharacter userCharacter,
+                List<UserCharacterAccessory> accessories,
+                Map<Long, List<CharacterAccessoryRenderProfile>> renderProfilesByItemId) {
             Character character = userCharacter.getCharacter();
             return new MyCharacterItem(
                     userCharacter.getId(),
@@ -39,11 +47,25 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     userCharacter.isSelected(),
+                    accessories.stream()
+                            .map(accessory -> EquippedAccessoryResponse.of(
+                                    accessory,
+                                    renderProfilesByItemId.getOrDefault(
+                                            accessory.getUserItem().getItem().getId(), List.of())))
+                            .toList(),
                     userCharacter.getAcquiredAt());
         }
     }
 
-    public static MyCharacterListResponse of(List<UserCharacter> owned) {
-        return new MyCharacterListResponse(owned.stream().map(MyCharacterItem::of).toList());
+    public static MyCharacterListResponse of(
+            List<UserCharacter> owned,
+            Map<Long, List<UserCharacterAccessory>> accessoriesByUserCharacterId,
+            Map<Long, Map<Long, List<CharacterAccessoryRenderProfile>>> renderProfiles) {
+        return new MyCharacterListResponse(owned.stream()
+                .map(userCharacter -> MyCharacterItem.of(
+                        userCharacter,
+                        accessoriesByUserCharacterId.getOrDefault(userCharacter.getId(), List.of()),
+                        renderProfiles.getOrDefault(userCharacter.getId(), Map.of())))
+                .toList());
     }
 }

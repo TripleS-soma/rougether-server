@@ -565,6 +565,15 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Resource = "*"
       },
       {
+        # 배포 workflow 의 CloudFront 경유 health check 가 배포 도메인을 조회하는 용도.
+        # ListDistributions 는 리소스 단위 제한을 지원하지 않는 read-only 액션이다.
+        Effect = "Allow"
+        Action = [
+          "cloudfront:ListDistributions"
+        ]
+        Resource = "*"
+      },
+      {
         Effect = "Allow"
         Action = [
           "ssm:SendCommand"
@@ -604,9 +613,9 @@ resource "aws_instance" "app" {
     encrypted   = true
   }
 
-  # dev 인스턴스는 재생성되면 public IP 가 바뀌어 문서/스크립트/deploy 정책이 깨진다.
   # AMI 최신화(data source)와 user_data 개선이 자동으로 인스턴스 교체를 유발하지 않게 무시 -
   # 부트스트랩을 갈아엎을 땐 terraform apply -replace=aws_instance.app 로 의도적으로 재생성한다.
+  # (public IP 는 EIP 로 고정되어 재생성돼도 유지된다 — 아래 aws_eip.app 참고)
   lifecycle {
     ignore_changes = [ami, user_data]
   }
@@ -645,4 +654,19 @@ resource "aws_instance" "app" {
   ]
 
   tags = merge(local.tags, { Name = "${local.name}-app" })
+}
+
+# 고정 public IP. EIP 없이는 stop/start·재생성 때마다 public IP/DNS 가 바뀌어
+# CloudFront origin(EIP public DNS 참조)이 끊기고 문서/스크립트의 주소도 깨진다.
+# 2024-02 부터 AWS 는 모든 public IPv4 에 동일 과금하므로 EIP 로 바꿔도 추가 비용은 없다.
+# associate_public_ip_address 는 유지한다 — 부팅 직후(EIP 연결 전) user-data 가
+# ECR pull 등 아웃바운드를 쓰기 때문이다. 연결되면 EIP 가 자동 할당 IP 를 대체한다.
+resource "aws_eip" "app" {
+  domain = "vpc"
+  tags   = merge(local.tags, { Name = "${local.name}-app" })
+}
+
+resource "aws_eip_association" "app" {
+  instance_id   = aws_instance.app.id
+  allocation_id = aws_eip.app.id
 }

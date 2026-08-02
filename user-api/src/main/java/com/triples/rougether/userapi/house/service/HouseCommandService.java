@@ -17,6 +17,7 @@ import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
 import com.triples.rougether.userapi.house.dto.InviteCodeResponse;
+import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
@@ -39,6 +40,7 @@ public class HouseCommandService {
     private final UserRepository userRepository;
     private final InviteCodeGenerator inviteCodeGenerator;
     private final HouseCoverImageCatalog houseCoverImageCatalog;
+    private final BannedWordChecker bannedWordChecker;
 
     public HouseCommandService(HouseRepository houseRepository,
                                HouseMemberRepository houseMemberRepository,
@@ -46,7 +48,8 @@ public class HouseCommandService {
                                GoalRepository goalRepository,
                                UserRepository userRepository,
                                InviteCodeGenerator inviteCodeGenerator,
-                               HouseCoverImageCatalog houseCoverImageCatalog) {
+                               HouseCoverImageCatalog houseCoverImageCatalog,
+                               BannedWordChecker bannedWordChecker) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseGoalRepository = houseGoalRepository;
@@ -54,10 +57,15 @@ public class HouseCommandService {
         this.userRepository = userRepository;
         this.inviteCodeGenerator = inviteCodeGenerator;
         this.houseCoverImageCatalog = houseCoverImageCatalog;
+        this.bannedWordChecker = bannedWordChecker;
     }
 
     @Transactional
     public HouseCreateResponse create(Long userId, HouseCreateRequest request) {
+        // 금칙어 차단 (#209)
+        if (bannedWordChecker.containsBannedWord(request.name())) {
+            throw new BusinessException(HouseErrorCode.HOUSE_NAME_BANNED);
+        }
         houseCoverImageCatalog.validatePublished(request.coverImageKey());
         List<Long> goalIds = request.goalIds().stream().distinct().toList();
         List<Goal> goals = goalRepository.findByIdInAndActiveIsTrue(goalIds);
@@ -94,28 +102,35 @@ public class HouseCommandService {
             throw new BusinessException(HouseErrorCode.HOUSE_MAX_MEMBERS_BELOW_CURRENT);
         }
 
+        // 금칙어 차단 (#209) - 부분 수정이라 name 이 온 경우에만 검사
+        if (request.name() != null && bannedWordChecker.containsBannedWord(request.name())) {
+            throw new BusinessException(HouseErrorCode.HOUSE_NAME_BANNED);
+        }
         houseCoverImageCatalog.validatePublished(request.coverImageKey());
         house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers());
         return new HouseUpdateResponse(house.getId(), house.getName(), house.getDescription(),
                 house.getCoverImageKey(), house.getMaxMembers());
     }
 
-    // 초대코드 재발급 - 소유자 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
+    // 초대코드 재발급 - 활성 구성원 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.
+    // 소유자는 집 공용 코드(즉시가입)를, 일반 구성원은 본인 개인 코드(방장 승인 대기)를 재발급한다.
+    // house 행 락으로 탈퇴·강퇴·참여와 직렬화한다 - 락 없이 읽고 갱신하면 dirty flush(전체 컬럼
+    // UPDATE)가 동시에 커밋된 탈퇴·강퇴의 status/left_at 을 stale 값으로 되덮을 수 있다.
     @Transactional
     public InviteCodeResponse reissueInviteCode(Long userId, Long houseId) {
-        House house = houseRepository.findById(houseId)
+        House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
-        boolean isOwner = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
+        HouseMember member = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
-                .map(member -> member.getRole() == HouseMemberRole.OWNER)
-                .orElse(false);
-        if (!isOwner) {
-            // 구성원 여부를 노출하지 않도록 비구성원/일반 구성원 모두 같은 코드로 거부.
-            throw new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER);
-        }
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
-        house.updateInviteCode(inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL));
-        return new InviteCodeResponse(house.getInviteCode(), house.getInviteExpiresAt());
+        Instant expiresAt = Instant.now().plus(INVITE_CODE_TTL);
+        if (member.isOwner()) {
+            house.updateInviteCode(inviteCodeGenerator.generate(), expiresAt);
+            return new InviteCodeResponse(house.getInviteCode(), house.getInviteExpiresAt());
+        }
+        member.updateInviteCode(inviteCodeGenerator.generate(), expiresAt);
+        return new InviteCodeResponse(member.getInviteCode(), member.getInviteExpiresAt());
     }
 }

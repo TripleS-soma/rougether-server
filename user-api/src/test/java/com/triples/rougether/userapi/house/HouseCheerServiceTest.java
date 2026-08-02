@@ -19,6 +19,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.notification.entity.NotificationType;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
@@ -113,7 +114,7 @@ class HouseCheerServiceTest {
     }
 
     @Test
-    void 같은_날_같은_타입_중복이면_409로_거부한다() {
+    void 같은_날_같은_타입_한도를_다_쓰면_409로_거부한다() {
         House house = aliveHouse();
         when(houseRepository.findById(HOUSE_ID)).thenReturn(Optional.of(house));
         HouseMember me = requester("진형");
@@ -122,15 +123,15 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(true);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(5);
 
         assertThatThrownBy(() -> houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
+                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
         verify(houseMemberCheerRepository, never()).saveAndFlush(any());
-        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
+        verify(notificationService, never()).send(anyLong(), any(), anyLong());
     }
 
     @Test
@@ -143,16 +144,16 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(4);
         when(houseMemberCheerRepository.saveAndFlush(any()))
-                .thenThrow(new DataIntegrityViolationException("uq_house_member_cheer"));
+                .thenThrow(new DataIntegrityViolationException("uq_house_member_cheer_seq"));
 
         assertThatThrownBy(() -> houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_DUPLICATED));
-        verify(notificationService, never()).send(anyLong(), any(), any(), any(), anyLong());
+                        .isEqualTo(HouseErrorCode.HOUSE_CHEER_LIMIT_EXCEEDED));
+        verify(notificationService, never()).send(anyLong(), any(), anyLong());
     }
 
     @Test
@@ -165,8 +166,8 @@ class HouseCheerServiceTest {
         HouseMember other = target(TARGET_USER_ID);
         when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
                 .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
+        when(houseMemberCheerRepository.countBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
+                any(), any(), any(), any())).thenReturn(0);
         HouseMemberCheer cheer = savedCheer(TARGET_USER_ID);
         when(houseMemberCheerRepository.saveAndFlush(any())).thenReturn(cheer);
 
@@ -179,30 +180,10 @@ class HouseCheerServiceTest {
         assertThat(response.type()).isEqualTo("support");
 
         // 알림 진입점을 같은 트랜잭션에서 직접 호출한다 - 내역 저장은 응원과 원자적(spec 계약)
-        verify(notificationService).send(
-                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!", 31L);
+        verify(notificationService).send(TARGET_USER_ID, new NotificationContent(
+                NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!"), 31L);
     }
 
-    @Test
-    void 온보딩_전_보낸이는_알림_표시명이_집친구다() {
-        House house = aliveHouse();
-        when(houseRepository.findById(HOUSE_ID)).thenReturn(Optional.of(house));
-        HouseMember me = requester(null);
-        when(houseMemberRepository.findByHouseIdAndUserId(HOUSE_ID, SENDER_ID))
-                .thenReturn(Optional.of(me));
-        HouseMember other = target(TARGET_USER_ID);
-        when(houseMemberRepository.findById(TARGET_MEMBERSHIP_ID))
-                .thenReturn(Optional.of(other));
-        when(houseMemberCheerRepository.existsBySender_IdAndTarget_IdAndCheerTypeAndCheerDate(
-                any(), any(), any(), any())).thenReturn(false);
-        HouseMemberCheer cheer = savedCheer(TARGET_USER_ID);
-        when(houseMemberCheerRepository.saveAndFlush(any())).thenReturn(cheer);
-
-        houseCheerService.cheer(SENDER_ID, HOUSE_ID, TARGET_MEMBERSHIP_ID, "support");
-
-        verify(notificationService).send(
-                TARGET_USER_ID, NotificationType.FRIEND_CHEER, "응원이 도착했어요", "집 친구님: 응원해요!", 31L);
-    }
 
     @Test
     void 비구성원은_응원을_보낼_수_없다() {

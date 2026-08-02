@@ -128,6 +128,17 @@ class DayEndCatchUpIntegrationTest {
     }
 
     @Test
+    void 밀린_날짜가_없으면_잡을_실행하지_않는다() {
+        // 매시 정각 재검사의 평시 상태 - 어제까지 처리됐으면 planner가 빈 목록을 반환해 no-op
+        seedExecution(YESTERDAY, BatchStatus.COMPLETED);
+
+        trigger.triggerDayEnd();
+
+        assertThat(countExecutions()).isEqualTo(1);
+        assertThat(targetDatesInInstanceOrder()).containsExactly(YESTERDAY);
+    }
+
+    @Test
     void 재실행해도_중복_실행되지_않는다() {
         seedExecution(YESTERDAY.minusDays(1), BatchStatus.COMPLETED);
 

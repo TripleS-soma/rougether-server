@@ -11,7 +11,7 @@ import java.time.LocalTime;
 public record RoutineUpdateRequest(
         @Schema(description = "루틴 제목(최대 160자). 미지정(null)이거나 공백이면 기존 값 유지", example = "아침 운동")
         @Size(max = 160) String title,
-        @Schema(description = "소속 카테고리 ID(지정하면 해당 카테고리로 변경, null이면 기존 카테고리 유지). 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값", example = "3")
+        @Schema(description = "소속 카테고리 ID(지정하면 해당 카테고리로 변경). null이면 미분류로 해제합니다. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값", example = "3")
         Long categoryId,
         @Schema(description = "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형). 미지정(null)이면 기존 값 유지", example = "CHECK")
         AuthType authType,
@@ -28,6 +28,17 @@ public record RoutineUpdateRequest(
         @Schema(description = "시작일(YYYY-MM-DD). 미지정(null)이면 기존 값 유지. 지정 시 오늘 이전 과거일은 불가", example = "2026-07-01")
         LocalDate startsOn,
         @Schema(description = "종료일(YYYY-MM-DD). null이면 해제합니다. 지정 시 시작일보다 앞설 수 없음", example = "2026-12-31")
-        LocalDate endsOn
+        LocalDate endsOn,
+        @Schema(description = "연동할 집 단체미션 ID. 지정하면 해당 미션으로 연동을 설정/변경하고, 미지정(null)이면 기존 연동을 유지합니다. "
+                + "연동 해제는 DELETE /api/v1/routines/{id}/house-mission-link 를 사용합니다. "
+                + "해당 미션이 있는 집의 활성 구성원만 지정할 수 있습니다", example = "12")
+        Long houseMissionId
 ) {
+
+    // 기존 클라이언트/테스트 호환용 (houseMissionId 미지정 = 기존 연동 유지)
+    public RoutineUpdateRequest(String title, Long categoryId, AuthType authType, String repeatType,
+                                RepeatDays repeatDays, LocalTime scheduledTime,
+                                LocalDate startsOn, LocalDate endsOn) {
+        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, null);
+    }
 }

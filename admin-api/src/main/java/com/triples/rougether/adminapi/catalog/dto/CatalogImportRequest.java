@@ -15,7 +15,8 @@ public record CatalogImportRequest(
                                int sortOrder, boolean active) {
     }
 
-    // placementType 은 문자열(positioned / surface_slot) 그대로, currency 는 서버에서 COIN 고정.
+    // placementType 은 문자열(positioned / surface_slot / character) 그대로 사용한다.
+    // character 는 뽑기 전용으로 구매 정보를 비우고, 나머지는 서버에서 DIAMOND 로 고정한다.
     public record ItemDto(String themeCode, String categoryCode, String placementType,
                           String surfaceSlotType, String characterSlotType, String name,
                           Integer priceAmount, String assetKey, boolean limited, boolean active) {

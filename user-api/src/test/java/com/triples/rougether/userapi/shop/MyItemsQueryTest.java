@@ -13,6 +13,7 @@ import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.shop.dto.MyItemListResponse;
 import com.triples.rougether.userapi.shop.service.ShopQueryService;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,8 @@ class MyItemsQueryTest {
         Item chair = itemRepository.save(new Item(theme, "furniture", "positioned", null, null,
                 "인벤 의자", CurrencyType.DIAMOND, 100, "items/inv/chair.png", false, true));
         chair.updateDefaultSlot("midRight");
+        chair.updateRenderDefaults(
+                new BigDecimal("1.24"), new BigDecimal("0.35"), new BigDecimal("0.65"));
         Item wallpaper = itemRepository.save(new Item(theme, "wallpaper", "surface_slot", "wallpaper", null,
                 "인벤 벽지", CurrencyType.DIAMOND, 100, "items/inv/wall.png", false, true));
         Item rug = itemRepository.save(new Item(theme, "rug", "positioned", null, null,
@@ -93,6 +96,9 @@ class MyItemsQueryTest {
         assertThat(chair.assetKey()).isEqualTo("items/inv/chair.png");
         assertThat(chair.placementType()).isEqualTo("positioned");
         assertThat(chair.defaultSlot()).isEqualTo("midRight");
+        assertThat(chair.defaultScale()).isEqualByComparingTo("1.24");
+        assertThat(chair.defaultPositionX()).isEqualByComparingTo("0.35");
+        assertThat(chair.defaultPositionY()).isEqualByComparingTo("0.65");
         assertThat(chair.theme().code()).isEqualTo("inv_test_theme");
         assertThat(chair.acquiredAt()).isNotNull();
     }

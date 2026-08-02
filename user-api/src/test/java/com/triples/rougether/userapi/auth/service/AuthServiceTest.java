@@ -4,6 +4,7 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +15,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
@@ -22,6 +24,7 @@ import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +53,14 @@ class AuthServiceTest {
     private com.triples.rougether.userapi.auth.client.GoogleTokenVerifier googleTokenVerifier;
     @Mock
     private GoogleLoginHandler googleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenVerifier appleTokenVerifier;
+    @Mock
+    private AppleLoginHandler appleLoginHandler;
+    @Mock
+    private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
+    @Mock
+    private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
     private AuthService authService;
 
@@ -58,7 +69,9 @@ class AuthServiceTest {
         authService = new AuthService(
                 userRepository, userWalletRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler);
+                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                appleTokenExchangeClient, appleRefreshTokenCipher,
+                org.mockito.Mockito.mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
     }
 
     @Test
@@ -77,19 +90,22 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-raw");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
-        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함
-        ArgumentCaptor<UserWallet> walletCaptor = ArgumentCaptor.forClass(UserWallet.class);
-        verify(userWalletRepository, times(CurrencyType.values().length)).save(walletCaptor.capture());
-        assertThat(walletCaptor.getAllValues())
-                .extracting(UserWallet::getCurrencyType)
-                .containsExactlyInAnyOrder(CurrencyType.values());
+        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함. 초기 잔액은 SignupWalletPolicy(코인 100).
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UserWallet>> walletCaptor = ArgumentCaptor.forClass(List.class);
+        verify(userWalletRepository).saveAll(walletCaptor.capture());
+        assertThat(walletCaptor.getValue())
+                .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
+                .containsExactlyInAnyOrder(
+                        tuple(CurrencyType.COIN, SignupWalletPolicy.INITIAL_COIN_BALANCE),
+                        tuple(CurrencyType.DIAMOND, 0));
     }
 
     @Test
     void 기존_userId_는_새로_만들지_않고_last_accessed_갱신_후_토큰을_발급한다() {
         User existing = User.signUp();
         ReflectionTestUtils.setField(existing, "id", 7L);
-        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(existing));
         stubTokenIssue();
 
         LoginResponse response = authService.devLogin(7L);
@@ -104,7 +120,7 @@ class AuthServiceTest {
 
     @Test
     void 존재하지_않는_userId_는_USER_NOT_FOUND_로_거부한다() {
-        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.devLogin(99L))
                 .isInstanceOf(BusinessException.class)

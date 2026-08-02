@@ -15,6 +15,16 @@ public record CategoryUpdateRequest(
         @Schema(description = "정렬 순서(0 이상, 작을수록 먼저). 미지정(null)이면 기존 값 유지", example = "0")
         @Min(0) Integer sortOrder,
         @Schema(description = "공개 범위. 허용값: PRIVATE(비공개), FRIENDS(친한친구), HOUSE(집), PUBLIC(공개). 미지정(null)이면 기존 값 유지", example = "PRIVATE")
-        PrivacyScope visibility
+        PrivacyScope visibility,
+        @Schema(description = "연동할 집 ID. 지정하면 해당 집으로 연동을 설정/변경하고, 미지정(null)이면 기존 연동을 유지합니다. "
+                + "연동 해제는 DELETE /api/v1/categories/{id}/house-link 를 사용합니다. "
+                + "해당 집의 활성 구성원만 지정할 수 있습니다", example = "5")
+        Long houseId
 ) {
+
+    // 기존 클라이언트/테스트 호환용 (houseId 미지정 = 기존 연동 유지)
+    public CategoryUpdateRequest(String name, String colorHex, String iconKey,
+                                 Integer sortOrder, PrivacyScope visibility) {
+        this(name, colorHex, iconKey, sortOrder, visibility, null);
+    }
 }

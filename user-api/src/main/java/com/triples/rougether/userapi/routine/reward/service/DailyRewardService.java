@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DailyRewardService {
 
-    private static final int DAILY_REWARD_CAP = 4;
+    private static final int DAILY_REWARD_COIN_CAP = 50;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RoutineLogRepository routineLogRepository;
@@ -27,22 +27,21 @@ public class DailyRewardService {
         this.todoRepository = todoRepository;
     }
 
-    // 오늘 지급 가능 여부 판정
-    public boolean canReward(Long userId, LocalDate today) {
-        long routineCount = routineLogRepository
-                .countByRoutine_UserIdAndRoutineDateAndStatusAndRewardAmountGreaterThan(
+    public int remainingReward(Long userId, LocalDate today) {
+        int routineReward = routineLogRepository
+                .sumRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
                         userId, today, RoutineLogStatus.COMPLETED);
 
-        long todoCount = countTodayTodos(userId, today);
+        int todoReward = sumTodayTodoReward(userId, today);
 
-        return (routineCount + todoCount) < DAILY_REWARD_CAP;
+        return Math.max(0, DAILY_REWARD_COIN_CAP - (routineReward + todoReward));
     }
 
-    private long countTodayTodos(Long userId, LocalDate today) {
+    private int sumTodayTodoReward(Long userId, LocalDate today) {
         ZonedDateTime startOfDay = today.atStartOfDay(KST);
         ZonedDateTime endOfDay = today.plusDays(1).atStartOfDay(KST);
 
-        return todoRepository.countCompletedByUserIdAndCompletedAtInKstDayAndRewardAmountGreaterThan(
+        return todoRepository.sumRewardAmountByUserIdAndCompletedAtInKstDay(
                 userId, startOfDay.toInstant(), endOfDay.toInstant(), TodoStatus.COMPLETED);
     }
 }

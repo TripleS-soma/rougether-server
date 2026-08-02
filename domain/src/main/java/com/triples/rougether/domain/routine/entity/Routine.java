@@ -74,6 +74,11 @@ public class Routine extends BaseEntity {
     @Column(name = "origin_routine_id")
     private Long originRoutineId;
 
+    // 연동된 집 단체미션 id(미연동이면 null). FK 없이 식별자만 보관 — 미션이 soft delete 돼도
+    // 값은 이력으로 남고, 유효 여부는 클라이언트가 보유한 미션 목록과 id 대조로 판별한다.
+    @Column(name = "house_mission_id")
+    private Long houseMissionId;
+
     private Routine(User user, Category category, String title, AuthType authType,
                     String repeatType, String repeatDays, LocalTime scheduledTime,
                     LocalDate startsOn, LocalDate endsOn) {
@@ -129,14 +134,23 @@ public class Routine extends BaseEntity {
         this.originRoutineId = this.id;
     }
 
+    // 단체미션 연동 지정/변경. 소속 집 구성원 검증은 호출자(서비스) 책임
+    public void linkHouseMission(Long houseMissionId) {
+        this.houseMissionId = houseMissionId;
+    }
+
+    public void unlinkHouseMission() {
+        this.houseMissionId = null;
+    }
+
     // 버전 분기용 복제. 인자가 null이면 이 버전 값을 유지(update와 같은 병합 규칙),
-    // 단 scheduledTime·endsOn은 호출자가 확정한 유효값(해제 시 null 포함)을 그대로 씀.
-    // status·origin은 이 버전에서 승계. created_at은 auditing이 now로 채움
+    // 단 category·scheduledTime·endsOn은 호출자가 확정한 유효값(해제 시 null 포함)을 그대로 씀.
+    // status·origin·단체미션 연동은 이 버전에서 승계. created_at은 auditing이 now로 채움
     public Routine copyAsNewVersion(Category category, String title, AuthType authType,
                                     String repeatType, String repeatDays, LocalTime scheduledTime,
                                     LocalDate startsOn, LocalDate endsOn) {
         Routine copy = new Routine(this.user,
-                category != null ? category : this.category,
+                category,
                 title != null && !title.isBlank() ? title : this.title,
                 authType != null ? authType : this.authType,
                 repeatType != null ? repeatType : this.repeatType,
@@ -146,6 +160,7 @@ public class Routine extends BaseEntity {
                 endsOn);
         copy.status = this.status;
         copy.originRoutineId = this.originRoutineId;
+        copy.houseMissionId = this.houseMissionId;
         return copy;
     }
 

@@ -78,6 +78,8 @@ class HouseCheerNotificationFlowTest {
 
     private HouseMember prepareMembers(String senderEmail, String targetEmail, String houseName, String code) {
         User sender = userRepository.save(User.signUp(senderEmail));
+        sender.changeNickname("보낸이");
+        userRepository.save(sender);
         senderId = sender.getId();
         User target = userRepository.save(User.signUp(targetEmail));
         targetUserId = target.getId();
@@ -108,8 +110,7 @@ class HouseCheerNotificationFlowTest {
         assertThat(rows.get(0).get("type")).isEqualTo("FRIEND_CHEER");
         assertThat(((Number) rows.get(0).get("ref_id")).longValue()).isEqualTo(cheerId);
         assertThat(rows.get(0).get("title")).isEqualTo("응원이 도착했어요");
-        // 온보딩 전(닉네임 null) 보낸이는 "집 친구"로 표시
-        assertThat(rows.get(0).get("body")).isEqualTo("집 친구님: 오늘도 최고!");
+        assertThat(rows.get(0).get("body")).isEqualTo("보낸이님: 오늘도 최고!");
     }
 
     @Test
@@ -118,7 +119,7 @@ class HouseCheerNotificationFlowTest {
                 "cheer-fail-sender@rougether.dev", "cheer-fail-target@rougether.dev", "응원 실패 하우스", "CHEER567");
 
         doThrow(new RuntimeException("알림 저장 실패")).when(notificationService)
-                .send(anyLong(), any(), any(), any(), anyLong());
+                .send(anyLong(), any(), anyLong());
 
         // 내역 저장은 응원과 원자적(spec: 내역 동기 저장) - 반쪽 성공(응원만 저장) 상태를 만들지 않는다
         assertThatThrownBy(() -> houseCheerService.cheer(

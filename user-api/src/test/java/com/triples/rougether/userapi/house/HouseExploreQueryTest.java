@@ -6,7 +6,10 @@ import com.triples.rougether.domain.goal.entity.Goal;
 import com.triples.rougether.domain.goal.repository.GoalRepository;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
+import com.triples.rougether.domain.house.entity.HouseMember;
+import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -29,6 +32,7 @@ class HouseExploreQueryTest {
 
     @Autowired private HouseQueryService houseQueryService;
     @Autowired private HouseRepository houseRepository;
+    @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseGoalRepository houseGoalRepository;
     @Autowired private GoalRepository goalRepository;
     @Autowired private UserRepository userRepository;
@@ -38,10 +42,11 @@ class HouseExploreQueryTest {
     private House middle;
     private House newest;
     private Goal morningGoal;
+    private User owner;
 
     @BeforeEach
     void setUp() {
-        User owner = userRepository.save(User.signUp("house-explore-test@rougether.dev"));
+        owner = userRepository.save(User.signUp("house-explore-test@rougether.dev"));
 
         // goals 는 마스터 테이블(엔티티에 생성자 없음) - 테스트 픽스처는 SQL 로 적재.
         jdbcTemplate.update(
@@ -58,7 +63,7 @@ class HouseExploreQueryTest {
 
     @Test
     void 최신_생성순으로_페이지네이션해_내려준다() {
-        HouseListResponse first = houseQueryService.explore(0, 2, null);
+        HouseListResponse first = houseQueryService.explore(owner.getId(), 0, 2, null, false);
 
         assertThat(first.totalElements()).isGreaterThanOrEqualTo(3);
         assertThat(first.items()).hasSize(2);
@@ -73,7 +78,7 @@ class HouseExploreQueryTest {
     void 삭제된_집은_목록에서_제외한다() {
         jdbcTemplate.update("UPDATE house SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", middle.getId());
 
-        HouseListResponse response = houseQueryService.explore(0, 20, null);
+        HouseListResponse response = houseQueryService.explore(owner.getId(), 0, 20, null, false);
 
         assertThat(response.items()).extracting(HouseListResponse.HouseSummary::houseId)
                 .contains(oldest.getId(), newest.getId())
@@ -82,7 +87,8 @@ class HouseExploreQueryTest {
 
     @Test
     void goalCode로_필터링한다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, "morning_routine");
+        HouseListResponse response = houseQueryService.explore(
+                owner.getId(), 0, 20, "morning_routine", false);
 
         assertThat(response.items()).extracting(HouseListResponse.HouseSummary::houseId)
                 .containsExactly(oldest.getId());
@@ -91,7 +97,7 @@ class HouseExploreQueryTest {
 
     @Test
     void 목록_항목에_goals가_매핑된다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, null);
+        HouseListResponse response = houseQueryService.explore(owner.getId(), 0, 20, null, false);
 
         HouseListResponse.HouseSummary withGoal = response.items().stream()
                 .filter(item -> item.houseId().equals(oldest.getId())).findFirst().orElseThrow();
@@ -106,8 +112,48 @@ class HouseExploreQueryTest {
     }
 
     @Test
+    void excludeJoined면_가입한_집을_제외한다() {
+        houseMemberRepository.save(HouseMember.create(middle, owner, HouseMemberRole.MEMBER));
+
+        HouseListResponse excluded = houseQueryService.explore(owner.getId(), 0, 20, null, true);
+
+        assertThat(excluded.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .contains(oldest.getId(), newest.getId())
+                .doesNotContain(middle.getId());
+
+        // 기본값(false)은 기존과 동일하게 가입한 집도 포함한다.
+        HouseListResponse included = houseQueryService.explore(owner.getId(), 0, 20, null, false);
+        assertThat(included.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .contains(middle.getId());
+    }
+
+    @Test
+    void excludeJoined는_탈퇴한_집은_제외하지_않는다() {
+        HouseMember membership = houseMemberRepository.save(
+                HouseMember.create(middle, owner, HouseMemberRole.MEMBER));
+        membership.leave();
+
+        HouseListResponse response = houseQueryService.explore(owner.getId(), 0, 20, null, true);
+
+        assertThat(response.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .contains(middle.getId());
+    }
+
+    @Test
+    void excludeJoined는_goalCode_필터와_함께_적용된다() {
+        houseMemberRepository.save(HouseMember.create(oldest, owner, HouseMemberRole.MEMBER));
+
+        HouseListResponse response = houseQueryService.explore(
+                owner.getId(), 0, 20, "morning_routine", true);
+
+        assertThat(response.items()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+    }
+
+    @Test
     void 없는_goalCode면_빈_목록이다() {
-        HouseListResponse response = houseQueryService.explore(0, 20, "no_such_goal");
+        HouseListResponse response = houseQueryService.explore(
+                owner.getId(), 0, 20, "no_such_goal", false);
 
         assertThat(response.items()).isEmpty();
         assertThat(response.totalElements()).isZero();

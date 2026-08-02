@@ -76,7 +76,8 @@ public class RoutineController {
 
     @Operation(summary = "루틴 수정",
             description = "소유한 루틴의 속성을 수정합니다. 지정하지 않은(null) 필드는 변경하지 않으며, title은 공백이면 기존 값을 유지합니다. "
-                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동합니다(null이면 기존 카테고리 유지). "
+                    + "단 categoryId·scheduledTime·endsOn은 null이면 해제합니다. "
+                    + "categoryId를 지정하면 소유한 해당 카테고리로 이동하고, 지정하지 않으면 미분류가 됩니다. "
                     + "repeatType을 WEEKLY/BIWEEKLY로 변경할 때는 repeatDays를 함께 전달해야 요일 기준으로 반복되고, "
                     + "MONTHLY/YEARLY로 변경할 때는 각각 dayOfMonth 또는 month/day를 함께 전달해야 합니다.")
     @PutMapping("/{id}")
@@ -84,6 +85,17 @@ public class RoutineController {
                                   @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id,
                                   @Valid @RequestBody RoutineUpdateRequest request) {
         return routineService.update(authUser.id(), id, request);
+    }
+
+    @Operation(summary = "루틴 단체미션 연동 해제",
+            description = "소유한 루틴의 집 단체미션 연동(houseMissionId)을 해제합니다. 루틴 자체는 그대로 남습니다. "
+                    + "이미 연동이 없는 루틴에 호출해도 성공(멱등)하며, 과거에 자동 반영된 미션 기여는 회수되지 않습니다. "
+                    + "루틴 수정(PUT)의 houseMissionId 는 null=기존 유지 규칙이라 해제는 이 API 로만 할 수 있습니다.")
+    @DeleteMapping("/{id}/house-mission-link")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlinkHouseMission(@CurrentUser AuthUser authUser,
+                                   @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id) {
+        routineService.unlinkHouseMission(authUser.id(), id);
     }
 
     @Operation(summary = "루틴 삭제",
@@ -97,11 +109,16 @@ public class RoutineController {
 
     @Operation(summary = "루틴 완료 체크",
             description = "루틴을 완료 처리합니다. 오늘(KST 기준) 이전 날짜만 완료할 수 있으며 과거 날짜도 허용됩니다. "
-                    + "코인 10은 오늘 완료에만 지급하며(일일 상한 4건 적용), 과거 날짜 완료는 0코인입니다. "
+                    + "코인 10은 오늘 완료에만 지급하며(루틴·투두 합산 일일 상한 50코인 적용 — 남은 한도가 10보다 적으면 남은 만큼만 지급), "
+                    + "과거 날짜 완료는 0코인입니다. "
                     + "같은 루틴은 같은 날짜에 한 번만 완료할 수 있습니다. "
                     + "스트릭은 오늘의 첫 완료(루틴 종류 무관)에만 갱신됩니다 — 어제가 성공일이면 currentCount가 1 증가하고, 아니면 1부터 다시 시작합니다. "
                     + "과거 날짜 완료는 스트릭에 반영하지 않고 기존 스트릭 요약을 그대로 반환합니다. "
-                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 스트릭 요약이 포함됩니다.")
+                    + "요청 본문은 생략할 수 있으며(routineDate 미지정 시 오늘로 처리), 응답에 스트릭 요약이 포함됩니다. "
+                    + "집 단체미션에 연동된 루틴(houseMissionId 보유)을 오늘 날짜로 완료하면 해당 미션에 수행 체크(하루 1회)가 자동 반영되고 "
+                    + "결과가 응답의 houseMissionContribution 으로 내려갑니다. 이미 기여한 날이거나 미션이 비활성·기간 밖·삭제됐거나 "
+                    + "그 집의 구성원이 아니면 기여만 조용히 건너뛰고(houseMissionContribution=null) 완료는 정상 처리됩니다. "
+                    + "완료를 취소해도 미션 기여는 회수되지 않습니다.")
     @PostMapping("/{id}/logs")
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineLogResponse complete(

@@ -6,13 +6,17 @@ import com.triples.rougether.domain.notification.repository.NotificationReposito
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -24,11 +28,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
-// routineReminderJob: Step1(판정·적재) -> Step2(발송)
+// reminderJob: Step1(루틴 판정·적재) -> Step2(투두 판정·적재) -> Step3(발송)
 @Configuration
 class RoutineReminderJobConfig {
 
-    static final String JOB_NAME = "routineReminderJob";
+    static final String JOB_NAME = "reminderJob";
     static final String TARGET_MINUTE_PARAM = "targetMinute";
     static final DateTimeFormatter TARGET_MINUTE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -36,11 +40,12 @@ class RoutineReminderJobConfig {
     private static final int SKIP_LIMIT = 50;
 
     @Bean
-    Job routineReminderJob(JobRepository jobRepository, Step routineReminderJudgeAndStageStep,
-            Step routineReminderPushStep) {
+    Job reminderJob(JobRepository jobRepository, Step routineReminderJudgeAndStageStep,
+            Step todoReminderJudgeAndStageStep, Step reminderPushStep) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 .start(routineReminderJudgeAndStageStep)
-                .next(routineReminderPushStep)
+                .next(todoReminderJudgeAndStageStep)
+                .next(reminderPushStep)
                 .build();
     }
 
@@ -62,9 +67,26 @@ class RoutineReminderJobConfig {
     }
 
     @Bean
-    Step routineReminderPushStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+    Step todoReminderJudgeAndStageStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+            TodoReminderCandidateReader todoReminderCandidateReader,
+            NotificationRepository notificationRepository) {
+        return new StepBuilder("todoReminderJudgeAndStageStep", jobRepository)
+                .<Todo, Notification>chunk(CHUNK_SIZE)
+                .transactionManager(transactionManager)
+                .reader(todoReminderCandidateReader)
+                .processor(todo -> Notification.create(todo.getUser(), NotificationType.TODO_REMINDER,
+                        ReminderMessage.TODO_TITLE, ReminderMessage.todoBody(todo.getTitle()), todo.getId()))
+                .writer(chunk -> notificationRepository.saveAll(chunk.getItems()))
+                .faultTolerant()
+                .skip(Exception.class)
+                .skipLimit(SKIP_LIMIT)
+                .build();
+    }
+
+    @Bean
+    Step reminderPushStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
             ReminderPendingReader pendingReminderReader, ReminderPushWriter reminderPushWriter) {
-        return new StepBuilder("routineReminderPushStep", jobRepository)
+        return new StepBuilder("reminderPushStep", jobRepository)
                 .<Notification, Notification>chunk(CHUNK_SIZE)
                 .transactionManager(transactionManager)
                 .reader(pendingReminderReader)
@@ -96,7 +118,22 @@ class RoutineReminderJobConfig {
 
     @Bean
     @StepScope
+    TodoReminderCandidateReader todoReminderCandidateReader(TodoRepository todoRepository,
+            @Value("#{jobParameters['" + TARGET_MINUTE_PARAM + "']}") String targetMinuteParam) {
+        LocalDateTime targetMinute = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT);
+        LocalDate date = targetMinute.toLocalDate();
+        LocalTime time = targetMinute.toLocalTime();
+        Instant dayStart = date.atStartOfDay(KST).toInstant();
+        Instant dayEndExclusive = date.plusDays(1).atStartOfDay(KST).toInstant();
+
+        return new TodoReminderCandidateReader(todoRepository, TodoStatus.PENDING, date, time,
+                NotificationType.TODO_REMINDER, dayStart, dayEndExclusive);
+    }
+
+    @Bean
+    @StepScope
     ReminderPendingReader pendingReminderReader(NotificationRepository notificationRepository) {
-        return new ReminderPendingReader(notificationRepository);
+        return new ReminderPendingReader(notificationRepository,
+                List.of(NotificationType.ROUTINE_REMINDER, NotificationType.TODO_REMINDER));
     }
 }

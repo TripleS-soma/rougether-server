@@ -2,6 +2,11 @@ spring:
   datasource:
     url: jdbc:tc:mysql:8.4:///rougether
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    # 전체 실행 시 컨텍스트가 수십 개 캐시되어 같은 컨테이너에 붙음. 컨텍스트당 기본 풀(10)이면
+    # MySQL max_connections(151)를 초과해 Too many connections 로 컨텍스트 로드가 깨짐 → 풀 상한을 낮게 잡음.
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 0
   jpa:
     hibernate:
       ddl-auto: validate
@@ -19,3 +24,17 @@ jwt:
 google:
   allowed-client-ids:
   certs-url: https://www.googleapis.com/oauth2/v3/certs
+
+# 통합테스트는 AppleTokenVerifier를 mock 하므로 실제 JWK 조회는 없음. keys-url은 빈 생성용(지연 조회).
+apple:
+  allowed-client-ids:
+  keys-url: https://appleid.apple.com/auth/keys
+  # 통합테스트는 AppleTokenExchangeClient를 mock 하므로 시크릿(team-id 등)은 불필요.
+  # 암호화 저장(AppleRefreshTokenCipher)은 실제로 동작해야 해서 테스트 키만 둠.
+  refresh-token-enc-key: test-only-apple-refresh-token-enc-key
+
+# 통합테스트는 AssetStorageService를 mock 하므로 실제 S3 호출은 없음. 값은 S3Client 빈 생성용.
+asset:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2

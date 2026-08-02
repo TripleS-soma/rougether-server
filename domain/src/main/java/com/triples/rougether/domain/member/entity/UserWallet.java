@@ -38,15 +38,20 @@ public class UserWallet extends BaseEntity {
     @Column(name = "balance", nullable = false)
     private int balance;
 
-    private UserWallet(User user, CurrencyType currencyType) {
+    private UserWallet(User user, CurrencyType currencyType, int balance) {
         this.user = user;
         this.currencyType = currencyType;
-        this.balance = 0;
+        this.balance = balance;
     }
 
-    // 가입 시 잔액 0으로 지갑 발급
+    // 잔액 0으로 지갑 발급(가입 이후 지연 발급 등)
     public static UserWallet create(User user, CurrencyType currencyType) {
-        return new UserWallet(user, currencyType);
+        return new UserWallet(user, currencyType, 0);
+    }
+
+    // 초기 잔액을 지정해 지갑 발급(가입 보너스). 정책값은 SignupWalletPolicy 가 소유함.
+    public static UserWallet createWithBalance(User user, CurrencyType currencyType, int initialBalance) {
+        return new UserWallet(user, currencyType, initialBalance);
     }
 
     public void add(int amount) {

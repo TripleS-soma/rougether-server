@@ -5,11 +5,13 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
-import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient;
+import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
+import com.triples.rougether.userapi.auth.client.AppleUser;
 import com.triples.rougether.userapi.auth.client.GoogleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
@@ -17,6 +19,7 @@ import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,6 +39,11 @@ public class AuthService {
     private final KakaoLoginHandler kakaoLoginHandler;
     private final GoogleTokenVerifier googleTokenVerifier;
     private final GoogleLoginHandler googleLoginHandler;
+    private final AppleTokenVerifier appleTokenVerifier;
+    private final AppleLoginHandler appleLoginHandler;
+    private final AppleTokenExchangeClient appleTokenExchangeClient;
+    private final AppleRefreshTokenCipher appleRefreshTokenCipher;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -43,13 +51,14 @@ public class AuthService {
         boolean isNewUser;
         if (userId == null) {
             user = userRepository.save(User.signUp());
-            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매)
-            for (CurrencyType currencyType : CurrencyType.values()) {
-                userWalletRepository.save(UserWallet.create(user, currencyType));
-            }
+            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
+            // 가입 보너스는 재화 원장에도 기록함(#253).
+            walletHistoryRecorder.recordSignupBonus(
+                    userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user)));
             isNewUser = true;
         } else {
-            user = userRepository.findById(userId)
+            // 탈퇴(soft delete) 회원은 없는 회원과 동일하게 거부함.
+            user = userRepository.findByIdAndDeletedAtIsNull(userId)
                     .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
             isNewUser = false;
         }
@@ -86,6 +95,21 @@ public class AuthService {
         }
     }
 
+    // 애플 로그인 오케스트레이션. 트랜잭션은 AppleLoginHandler.login이 소유함(JWK 검증·코드 교환 HTTP를 트랜잭션 밖에 둠).
+    public LoginResponse appleLogin(String idToken, String authorizationCode) {
+        // identityToken 서명·iss·aud·exp 검증 후 sub·email 추출. 실패는 AppleTokenVerifier가 401/502로 변환함.
+        AppleUser appleUser = appleTokenVerifier.verify(idToken);
+        // 탈퇴 시 revoke 호출용 refresh token을 교환·암호화해 연동에 저장함. 교환 실패는 로그인 실패(401/502).
+        String encryptedRefreshToken = appleRefreshTokenCipher.encrypt(
+                appleTokenExchangeClient.exchangeRefreshToken(authorizationCode));
+        try {
+            return appleLoginHandler.login(appleUser, encryptedRefreshToken);
+        } catch (DataIntegrityViolationException race) {
+            // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
+            return appleLoginHandler.login(appleUser, encryptedRefreshToken);
+        }
+    }
+
     @Transactional
     public TokenResponse refresh(String rawRefreshToken) {
         String hash = tokenService.hashRefreshToken(rawRefreshToken);
@@ -98,6 +122,10 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
         }
         if (stored.isExpired(now)) {
+            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
+        }
+        // 탈퇴 회원 잔여 토큰 방어: 탈퇴 트랜잭션의 전량 폐기와 동시에 회전돼 살아남은 토큰도 여기서 거부됨.
+        if (stored.getUser().isDeleted()) {
             throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
         }
 

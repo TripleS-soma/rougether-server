@@ -15,7 +15,10 @@ import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import com.triples.rougether.userapi.notification.service.NotificationService;
+import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
+import com.triples.rougether.userapi.notification.service.NotificationSettingService;
 import com.triples.rougether.userapi.notification.service.NotificationService.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +34,8 @@ class NotificationServiceTest {
     @Mock private NotificationRepository notificationRepository;
     @Mock private UserRepository userRepository;
     @Mock private FcmPushExecutor fcmPushExecutor;
+    @Mock private NotificationSettingService notificationSettingService;
+    @Mock private NotificationPushStatusService notificationPushStatusService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @InjectMocks private NotificationService notificationService;
 
@@ -42,7 +47,7 @@ class NotificationServiceTest {
         when(savedNotification.getId()).thenReturn(100L);
         when(notificationRepository.save(any())).thenReturn(savedNotification);
 
-        notificationService.send(1L, NotificationType.HOUSE_KICK, "제목", "본문");
+        notificationService.send(1L, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
         ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(notificationCaptor.capture());
@@ -54,7 +59,8 @@ class NotificationServiceTest {
 
         ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isEqualTo(new NotificationCreatedEvent(100L, 1L, "제목", "본문"));
+        assertThat(eventCaptor.getValue())
+                .isEqualTo(new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
 
         // push는 커밋 이후 리스너(onNotificationCreated)에서만 나가야 함 — send() 안에서 바로 호출되면 안 됨.
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
@@ -62,7 +68,10 @@ class NotificationServiceTest {
 
     @Test
     void 커밋후_이벤트를_받으면_push를_호출한다() {
-        notificationService.onNotificationCreated(new NotificationCreatedEvent(100L, 1L, "제목", "본문"));
+        when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(true);
+
+        notificationService.onNotificationCreated(
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
 
         verify(fcmPushExecutor).push(100L, 1L, "제목", "본문");
     }
@@ -71,11 +80,23 @@ class NotificationServiceTest {
     // 예외가 새면 안 됨 — 이미 끝난 트랜잭션 커밋 경로를 타고 원래 요청까지 실패로 되돌아간다.
     @Test
     void push_제출이_실패해도_리스너는_예외를_전파하지_않는다() {
+        when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(true);
         doThrow(new org.springframework.core.task.TaskRejectedException("queue full"))
                 .when(fcmPushExecutor).push(100L, 1L, "제목", "본문");
 
         assertThatCode(() -> notificationService.onNotificationCreated(
-                new NotificationCreatedEvent(100L, 1L, "제목", "본문")))
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문")))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 설정이_off면_push_대신_BLOCKED로_종결한다() {
+        when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(false);
+
+        notificationService.onNotificationCreated(
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
+
+        verify(notificationPushStatusService).markBlocked(100L);
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
     }
 }

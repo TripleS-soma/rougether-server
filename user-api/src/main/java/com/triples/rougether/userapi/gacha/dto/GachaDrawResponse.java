@@ -6,7 +6,7 @@ import java.util.List;
 
 // POST /api/v1/gacha/{id}/draw 응답. 뽑은 결과 목록 + 차감/전환 후 재화별 지갑 잔액(코인·다이아 모두).
 public record GachaDrawResponse(
-        @Schema(description = "뽑기 결과 목록 (뽑은 순서대로, 10연이면 10개)")
+        @Schema(description = "뽑기 결과 목록 (뽑은 순서대로, 5+1회 뽑기면 6개)")
         List<DrawResult> results,
         @Schema(description = "차감·전환 반영 후 재화별 지갑 잔액 (코인·다이아 모두 포함, 다이아 지갑 미발급이면 0)")
         List<WalletSummary> wallets) {
@@ -36,7 +36,7 @@ public record GachaDrawResponse(
             @Schema(description = "전환된 재화 종류 (converted=true 일 때, 아이템은 DIAMOND·캐릭터는 COIN)",
                     example = "DIAMOND")
             CurrencyType refundCurrencyType,
-            @Schema(description = "전환 금액 (converted=true 일 때, 아이템 30·캐릭터 200)", example = "30")
+            @Schema(description = "전환 금액 (converted=true 일 때, 아이템 3·캐릭터 100)", example = "3")
             Integer refundAmount) {
     }
 

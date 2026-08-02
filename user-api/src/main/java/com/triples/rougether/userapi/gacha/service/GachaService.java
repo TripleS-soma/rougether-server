@@ -6,14 +6,17 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
+import com.triples.rougether.domain.gacha.entity.GachaRarity;
 import com.triples.rougether.domain.gacha.entity.RewardType;
 import com.triples.rougether.domain.gacha.repository.GachaPoolEntryRepository;
 import com.triples.rougether.domain.gacha.repository.GachaRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
@@ -22,9 +25,13 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse.DrawResult;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse.WalletSummary;
 import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
+import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewardResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -35,17 +42,21 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 뽑기 조회 + 실행. 2단계 추첨(등급 70/25/5 -> 등급 pool 균등), COIN 차감.
+// 뽑기 조회 + 실행. 가구는 2단계 추첨(등급 70/25/5 -> 등급 pool 균등),
+// 등급 없는 캐릭터/악세사리 전용 풀은 전체 균등 추첨, COIN 차감.
 // 보상은 아이템(가구) 또는 캐릭터. 중복 보유 시 아이템은 다이아, 캐릭터는 코인으로 전환(프론트 재화 규칙).
 @Service
 public class GachaService {
 
-    private static final int ITEM_REFUND_DIA = 30;           // 아이템 중복 -> 다이아 전환 (프론트 DUPLICATE_DIA)
-    private static final int CHARACTER_REFUND_COIN = 200;    // 캐릭터 중복 -> 코인 환급 (spec)
+    // 환급값은 단가에 연동한다 — 단가만 낮추면 "뽑기 = 코인을 다이아로 바꾸는 환전기"가 된다.
+    private static final int ITEM_REFUND_DIA = 3;            // 아이템 중복 -> 다이아 전환 (단가 25 의 12%, 프론트 DUPLICATE_DIA)
+    private static final int CHARACTER_REFUND_COIN = 100;    // 캐릭터 중복 -> 코인 환급 (단가 500 의 20%, spec)
     private static final int TIER_NORMAL_MAX = 70;   // roll 0~69 -> 일반
     private static final int TIER_RARE_MAX = 95;     // 70~94 -> 희귀, 95~99 -> 전설
-    private static final int MULTI_COUNT = 10;
-    private static final int MULTI_MULTIPLIER = 5;   // 10연 = 단챠 비용 x5
+    private static final int SINGLE_DRAW_COUNT = 1;
+    private static final int BONUS_DRAW_COUNT = 6;
+    private static final int LEGACY_MULTI_DRAW_COUNT = 10;
+    private static final int BONUS_DRAW_COST_MULTIPLIER = 5;   // 5+1회 = 단챠 비용 x5
 
     private final GachaRepository gachaRepository;
     private final GachaPoolEntryRepository poolRepository;
@@ -53,6 +64,7 @@ public class GachaService {
     private final UserCharacterRepository userCharacterRepository;
     private final UserWalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final WalletHistoryRecorder walletHistoryRecorder;
     private final Random random = new Random();
 
     public GachaService(GachaRepository gachaRepository,
@@ -60,19 +72,22 @@ public class GachaService {
                         UserItemRepository userItemRepository,
                         UserCharacterRepository userCharacterRepository,
                         UserWalletRepository walletRepository,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                        WalletHistoryRecorder walletHistoryRecorder) {
         this.gachaRepository = gachaRepository;
         this.poolRepository = poolRepository;
         this.userItemRepository = userItemRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.walletRepository = walletRepository;
         this.userRepository = userRepository;
+        this.walletHistoryRecorder = walletHistoryRecorder;
     }
 
     @Transactional(readOnly = true)
     public GachaListResponse getGachaList() {
+        Instant now = Instant.now();
         List<GachaResponse> items = gachaRepository.findAll().stream()
-                .filter(Gacha::isActive)
+                .filter(gacha -> gacha.isAvailableAt(now))
                 .map(GachaResponse::of)
                 .toList();
         return new GachaListResponse(items);
@@ -85,20 +100,43 @@ public class GachaService {
         return GachaResponse.of(gacha);
     }
 
+    @Transactional(readOnly = true)
+    public GachaRewardListResponse getRewards(Long userId, Long gachaId) {
+        Gacha gacha = gachaRepository.findById(gachaId)
+                .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
+        if (!gacha.isAvailableAt(Instant.now())) {
+            throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
+        }
+
+        Set<Long> ownedItemIds = new HashSet<>(userItemRepository.findOwnedItemIdsByUserId(userId));
+        Set<Long> ownedCharacterIds =
+                new HashSet<>(userCharacterRepository.findOwnedCharacterIdsByUserId(userId));
+
+        List<GachaRewardResponse> rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
+                .filter(this::hasReward)
+                .map(entry -> toRewardResponse(entry, ownedItemIds, ownedCharacterIds))
+                .toList();
+        return new GachaRewardListResponse(rewards);
+    }
+
     @Transactional
     public GachaDrawResponse draw(Long userId, Long gachaId, GachaDrawRequest request) {
         int count = request.count() == null ? 0 : request.count();
-        if (count != 1 && count != MULTI_COUNT) {
+        boolean bonusDraw = count == BONUS_DRAW_COUNT || count == LEGACY_MULTI_DRAW_COUNT;
+        if (count != SINGLE_DRAW_COUNT && !bonusDraw) {
             throw new BusinessException(GachaErrorCode.INVALID_DRAW_COUNT);
         }
 
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        if (!gacha.isActive()) {
+        if (!gacha.isAvailableAt(Instant.now())) {
             throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 
-        int cost = count == 1 ? gacha.getCostAmount() : gacha.getCostAmount() * MULTI_MULTIPLIER;
+        int resultCount = bonusDraw ? BONUS_DRAW_COUNT : SINGLE_DRAW_COUNT;
+        int cost = bonusDraw
+                ? gacha.getCostAmount() * BONUS_DRAW_COST_MULTIPLIER
+                : gacha.getCostAmount();
         // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
         // 전부 같은 user 행 락을 잡으므로 동시 지급이 같은 캐릭터를 2행 만들 수 없다. 락 순서: user → wallet.
         userRepository.findByIdForUpdate(userId)
@@ -110,6 +148,8 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
         }
         wallet.spend(cost);
+        walletHistoryRecorder.record(wallet, -cost, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, gachaId);
 
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
                 .filter(this::hasReward)
@@ -118,7 +158,8 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.EMPTY_POOL);
         }
         Map<String, List<GachaPoolEntry>> byRarity = pool.stream()
-                .collect(Collectors.groupingBy(e -> e.getRarity() == null ? "일반" : e.getRarity()));
+                .collect(Collectors.groupingBy(
+                        entry -> entry.getRarity() == null ? GachaRarity.NORMAL : entry.getRarity()));
 
         Set<Long> ownedItemIds = userItemRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
                 .map(ui -> ui.getItem().getId())
@@ -132,7 +173,7 @@ public class GachaService {
         List<DrawResult> results = new ArrayList<>();
         int coinRefund = 0;
         int diaRefund = 0;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < resultCount; i++) {
             GachaPoolEntry picked = pickEntry(pool, byRarity);
             if (picked.getRewardType() == RewardType.CHARACTER) {
                 coinRefund += drawCharacter(user, picked, ownedCharacterIds, results);
@@ -141,6 +182,9 @@ public class GachaService {
             }
         }
         wallet.add(coinRefund);
+        // 여러 번 뽑기의 중복 전환은 재화별 합산 1 row 로 기록함(0 이면 recorder 가 건너뜀)
+        walletHistoryRecorder.record(wallet, coinRefund, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, gachaId);
 
         // 전환 적립도 행 락으로 조회해 동시 요청의 적립 유실을 막는다. 지갑이 없으면 최초 전환 시점에 발급
         // (가입 시엔 코인 지갑만 생성됨. 동시 발급은 uq_user_wallets_user_currency 가 막는다).
@@ -151,6 +195,8 @@ public class GachaService {
                 diaWallet = walletRepository.save(UserWallet.create(user, CurrencyType.DIAMOND));
             }
             diaWallet.add(diaRefund);
+            walletHistoryRecorder.record(diaWallet, diaRefund, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                    WalletHistory.SOURCE_GACHA, gachaId);
         }
 
         return new GachaDrawResponse(results, List.of(
@@ -161,6 +207,26 @@ public class GachaService {
     private boolean hasReward(GachaPoolEntry e) {
         return (e.getRewardType() == RewardType.ITEM && e.getItem() != null)
                 || (e.getRewardType() == RewardType.CHARACTER && e.getCharacter() != null);
+    }
+
+    private GachaRewardResponse toRewardResponse(GachaPoolEntry entry,
+                                                 Set<Long> ownedItemIds,
+                                                 Set<Long> ownedCharacterIds) {
+        if (entry.getRewardType() == RewardType.ITEM) {
+            Item item = entry.getItem();
+            return new GachaRewardResponse(
+                    RewardType.ITEM.name(), item.getId(), null, item.getName(), item.getAssetKey(),
+                    entry.getRarity(), ownedItemIds.contains(item.getId()),
+                    item.getCategoryCode(), item.getPlacementType(),
+                    item.getSurfaceSlotType(), item.getCharacterSlotType());
+        }
+
+        Character character = entry.getCharacter();
+        return new GachaRewardResponse(
+                RewardType.CHARACTER.name(), null, character.getId(), character.getName(),
+                character.getBaseAssetKey(), entry.getRarity(),
+                ownedCharacterIds.contains(character.getId()),
+                null, null, null, null);
     }
 
     // 아이템(가구) 지급. 이미 보유 시 다이아로 전환하고 전환액 반환.
@@ -193,11 +259,16 @@ public class GachaService {
         return 0;
     }
 
-    // 등급을 먼저 뽑고(일반70/희귀25/전설5) 해당 등급 pool 에서 균등 추첨.
-    // 등급 pool 이 비면(예: 캐릭터 뽑기처럼 rarity 미부여) 전체 pool 에서 균등.
+    // 모든 엔트리에 등급이 없으면(캐릭터/악세사리 전용 풀) 전체에서 바로 균등 추첨한다.
+    // 가구 풀은 등급을 먼저 뽑고(일반70/희귀25/전설5) 해당 등급 pool 에서 균등 추첨한다.
     private GachaPoolEntry pickEntry(List<GachaPoolEntry> pool, Map<String, List<GachaPoolEntry>> byRarity) {
+        if (pool.stream().allMatch(entry -> entry.getRarity() == null)) {
+            return pool.get(random.nextInt(pool.size()));
+        }
         int roll = random.nextInt(100);
-        String rarity = roll < TIER_NORMAL_MAX ? "일반" : roll < TIER_RARE_MAX ? "희귀" : "전설";
+        String rarity = roll < TIER_NORMAL_MAX
+                ? GachaRarity.NORMAL
+                : roll < TIER_RARE_MAX ? GachaRarity.RARE : GachaRarity.LEGENDARY;
         List<GachaPoolEntry> tier = byRarity.getOrDefault(rarity, pool);
         if (tier.isEmpty()) {
             tier = pool;

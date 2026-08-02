@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.category.web;
 
 import com.triples.rougether.userapi.category.dto.CategoryCreateRequest;
+import com.triples.rougether.userapi.category.dto.CategoryDeleteMode;
 import com.triples.rougether.userapi.category.dto.CategoryListResponse;
 import com.triples.rougether.userapi.category.dto.CategoryResponse;
 import com.triples.rougether.userapi.category.dto.CategoryUpdateRequest;
@@ -63,14 +64,35 @@ public class CategoryController {
         return categoryService.update(authUser.id(), id, request);
     }
 
+    @Operation(summary = "카테고리 집 연동 해제",
+            description = "소유한 카테고리의 집 연동(houseId)을 해제합니다. 카테고리와 소속 루틴·투두는 그대로 남습니다. "
+                    + "이미 연동이 없는 카테고리에 호출해도 성공(멱등)합니다. "
+                    + "카테고리 수정(PUT)의 houseId 는 null=기존 유지 규칙이라 해제는 이 API 로만 할 수 있습니다.")
+    @DeleteMapping("/{id}/house-link")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlinkHouse(@CurrentUser AuthUser authUser,
+                            @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id) {
+        categoryService.unlinkHouse(authUser.id(), id);
+    }
+
     @Operation(summary = "카테고리 삭제",
-            description = "소유한 카테고리를 삭제합니다. 이 카테고리를 사용하는 살아있는 루틴이 없을 때만 삭제할 수 있으며, "
-                    + "투두만 참조하는 경우에는 삭제할 수 있습니다. 삭제 후에도 투두의 categoryId는 그대로 유지되며, "
-                    + "삭제된 카테고리의 이름은 내 카테고리 목록 조회(GET /api/v1/categories?includeDeleted=true)로 조회합니다.")
+            description = "소유한 카테고리를 mode에 따라 삭제합니다. 두 모드 모두 이 카테고리를 사용하는 살아있는 루틴이 없을 때만 삭제할 수 있고, "
+                    + "카테고리 자체는 soft delete되어 이름은 내 카테고리 목록 조회(GET /api/v1/categories?includeDeleted=true)로 계속 조회됩니다. "
+                    + "UNASSIGN은 이 카테고리를 참조하던 옛 버전 루틴과 살아있는 투두를 미분류(categoryId null)로 바꾸고, "
+                    + "PURGE는 이 카테고리 루틴의 과거 수행 기록과 사진 인증을 되돌릴 수 없게 지운 뒤 살아있는 투두도 함께 삭제합니다. "
+                    + "단 PURGE에서도 다음 두 가지 기록은 남습니다. "
+                    + "수정으로 버전이 나뉘어 현재 버전이 다른 카테고리에 살아있는 루틴의 기록은 지우지 않고, "
+                    + "삭제 당일에 완료해 코인을 받은 기록은 일일 보상 상한을 지키기 위해 남으며, 이후에도 지워지지 않고 캘린더에서 계속 조회됩니다. "
+                    + "PURGE는 이미 삭제된 투두와 루틴 자체, 스트릭에는 손대지 않습니다.")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser AuthUser authUser,
-                       @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id) {
-        categoryService.delete(authUser.id(), id);
+                       @Parameter(description = "카테고리 ID. 내 카테고리 목록 조회(GET /api/v1/categories) 응답의 id 값") @PathVariable Long id,
+                       @Parameter(description = "삭제 모드. "
+                               + "UNASSIGN(미분류 전환 — 이 카테고리를 참조하던 옛 버전 루틴과 살아있는 투두의 categoryId를 null로 바꿉니다), "
+                               + "PURGE(완전 삭제 — 이 카테고리 루틴의 과거 수행 기록과 사진 인증을 되돌릴 수 없게 지우고 살아있는 투두도 함께 삭제합니다)",
+                               required = true)
+                       @RequestParam CategoryDeleteMode mode) {
+        categoryService.delete(authUser.id(), id, mode);
     }
 }

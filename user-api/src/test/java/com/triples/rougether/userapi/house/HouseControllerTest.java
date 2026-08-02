@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.house;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -12,16 +13,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.character.dto.AccessoryRenderProfileResponse;
+import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
+import com.triples.rougether.domain.house.entity.HouseMissionStatus;
+import com.triples.rougether.domain.house.entity.HouseMissionType;
+import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
+import com.triples.rougether.userapi.house.dto.HouseJoinRequestListResponse;
 import com.triples.rougether.userapi.house.dto.HouseListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse;
+import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HousePreviewDetailResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateResponse;
@@ -33,6 +44,7 @@ import com.triples.rougether.userapi.house.service.HouseJoinService;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.HouseController;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -194,7 +206,7 @@ class HouseControllerTest {
     void 초대코드_참여_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.joinByCode(7L, "ABCD2345"))
-                .thenReturn(new HouseJoinResponse(12L, 1L, HouseMemberStatus.ACTIVE));
+                .thenReturn(HouseJoinResponse.joined(12L, 1L, HouseMemberStatus.ACTIVE));
 
         mockMvc.perform(post("/api/v1/houses/join-by-code")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -202,7 +214,26 @@ class HouseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.membershipId").value(12))
                 .andExpect(jsonPath("$.houseId").value(1))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.pendingApproval").value(false))
+                .andExpect(jsonPath("$.joinRequestId").value((Object) null));
+    }
+
+    @Test
+    void 구성원_개인_코드_참여는_승인_대기_응답_계약() throws Exception {
+        authAsUser7();
+        when(houseJoinService.joinByCode(7L, "ABCD2345"))
+                .thenReturn(HouseJoinResponse.pending(1L, 21L));
+
+        mockMvc.perform(post("/api/v1/houses/join-by-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"inviteCode\": \"ABCD2345\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipId").value((Object) null))
+                .andExpect(jsonPath("$.houseId").value(1))
+                .andExpect(jsonPath("$.status").value((Object) null))
+                .andExpect(jsonPath("$.pendingApproval").value(true))
+                .andExpect(jsonPath("$.joinRequestId").value(21));
     }
 
     @Test
@@ -231,23 +262,74 @@ class HouseControllerTest {
     @Test
     void 탐색_집_참여_응답_계약() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 1L)).thenReturn(new HouseJoinDetailResponse(
-                12L, 1L, 7L, HouseMemberRole.MEMBER, HouseMemberStatus.ACTIVE,
+        when(houseJoinService.requestJoin(7L, 1L)).thenReturn(new HouseJoinRequestResponse(
+                21L, 1L, 7L, "루티니", HouseJoinRequestStatus.PENDING,
                 Instant.parse("2026-07-03T00:00:00Z")));
 
         mockMvc.perform(post("/api/v1/houses/1/join"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.membershipId").value(12))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requestId").value(21))
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.userId").value(7))
-                .andExpect(jsonPath("$.role").value("MEMBER"))
+                .andExpect(jsonPath("$.nickname").value("루티니"))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void 신규_입주_신청_경로는_201과_PENDING을_내려준다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.requestJoin(7L, 1L)).thenReturn(new HouseJoinRequestResponse(
+                21L, 1L, 7L, "루티니", HouseJoinRequestStatus.PENDING,
+                Instant.parse("2026-07-03T00:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requestId").value(21))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void 방장은_대기_중인_입주_신청을_조회한다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.getPendingRequests(7L, 1L)).thenReturn(
+                new HouseJoinRequestListResponse(List.of(new HouseJoinRequestResponse(
+                        21L, 1L, 8L, "신청자", HouseJoinRequestStatus.PENDING,
+                        Instant.parse("2026-07-03T00:00:00Z")))));
+
+        mockMvc.perform(get("/api/v1/houses/1/join-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].requestId").value(21))
+                .andExpect(jsonPath("$.items[0].nickname").value("신청자"))
+                .andExpect(jsonPath("$.items[0].status").value("PENDING"));
+    }
+
+    @Test
+    void 방장은_입주_신청을_수락한다() throws Exception {
+        authAsUser7();
+        when(houseJoinService.acceptRequest(7L, 1L, 21L)).thenReturn(
+                new HouseJoinDetailResponse(12L, 1L, 8L, HouseMemberRole.MEMBER,
+                        HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T01:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests/21/accept"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipId").value(12))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void 방장은_입주_신청을_거절한다() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(post("/api/v1/houses/1/join-requests/21/reject"))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(houseJoinService).rejectRequest(7L, 1L, 21L);
     }
 
     @Test
     void 없는_집_참여는_404와_에러코드를_내려준다() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 99L))
+        when(houseJoinService.requestJoin(7L, 99L))
                 .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/houses/99/join"))
@@ -258,7 +340,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_기본_경로_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(0, 20, null)).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, null, false)).thenReturn(new HouseListResponse(
                 java.util.List.of(), 0, 20, 0L));
 
         mockMvc.perform(get("/api/v1/houses"))
@@ -288,7 +370,7 @@ class HouseControllerTest {
     @Test
     void 집_탐색_목록_응답_계약() throws Exception {
         authAsUser7();
-        when(houseQueryService.explore(0, 20, "morning_routine")).thenReturn(new HouseListResponse(
+        when(houseQueryService.explore(7L, 0, 20, "morning_routine", false)).thenReturn(new HouseListResponse(
                 java.util.List.of(new HouseListResponse.HouseSummary(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, 0,
                         java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")))),
                 0, 20, 1L));
@@ -373,14 +455,14 @@ class HouseControllerTest {
     }
 
     @Test
-    void 소유자가_아닌_재발급은_403과_에러코드를_내려준다() throws Exception {
+    void 구성원이_아닌_재발급은_403과_에러코드를_내려준다() throws Exception {
         authAsUser7();
         when(houseCommandService.reissueInviteCode(7L, 1L))
-                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_OWNER));
+                .thenThrow(new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
         mockMvc.perform(post("/api/v1/houses/1/invite-code"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("HOUSE_NOT_OWNER"));
+                .andExpect(jsonPath("$.code").value("HOUSE_NOT_MEMBER"));
     }
 
     @Test
@@ -452,7 +534,7 @@ class HouseControllerTest {
     @Test
     void 강퇴자의_재참여는_409와_에러코드를_내려준다() throws Exception {
         authAsUser7();
-        when(houseJoinService.join(7L, 1L))
+        when(houseJoinService.requestJoin(7L, 1L))
                 .thenThrow(new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER));
 
         mockMvc.perform(post("/api/v1/houses/1/join"))
@@ -502,14 +584,15 @@ class HouseControllerTest {
     void 초대코드_미리보기_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.preview("ABCD2345")).thenReturn(
-                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false));
+                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false, true));
 
         mockMvc.perform(get("/api/v1/houses/by-code/ABCD2345"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.name").value("아침 루틴 하우스"))
                 .andExpect(jsonPath("$.currentMemberCount").value(3))
-                .andExpect(jsonPath("$.inviteExpired").value(false));
+                .andExpect(jsonPath("$.inviteExpired").value(false))
+                .andExpect(jsonPath("$.requiresApproval").value(true));
     }
 
     @Test
@@ -519,7 +602,31 @@ class HouseControllerTest {
                 1L, "아침 루틴 하우스", "같이 아침 루틴 지켜요", "house/cover.png",
                 4, 3, 2,
                 List.of(new HouseListResponse.GoalSummary(5L, "morning_routine", "아침 루틴")),
-                false, false));
+                false, false, null,
+                List.of(new MissionSummary(
+                        31L, "오늘 다같이 루틴 지키기", HouseMissionType.DAILY_MEMBER_RATE,
+                        70, 66, HouseMissionStatus.ACTIVE,
+                        null, null, false, Instant.parse("2026-07-28T01:00:00Z"))),
+                List.of(
+                        new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
+                                new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1,
+                                        new RoomRenderResponse.RenderCharacter(
+                                                1L, "cat", "고양이", "characters/cat.png",
+                                                CharacterAnimations.of("cat"),
+                                                List.of(new RoomRenderResponse.RenderAccessory(
+                                                        15L, "검은 뿔테안경",
+                                                        "items/preview/glasses.png", "eyewear",
+                                                        List.of(new AccessoryRenderProfileResponse(
+                                                                "default", "items/preview/glasses.png",
+                                                                180, 172, 320, 160,
+                                                                new BigDecimal("0.5"), new BigDecimal("0.31"),
+                                                                new BigDecimal("0.52"), 0, 20))))),
+                                        List.of(new RoomRenderResponse.RenderSlot(
+                                                "wallpaper", "items/preview/wall.png")),
+                                        List.of(new RoomRenderResponse.RenderPlacement(
+                                                "items/preview/chair.png", new BigDecimal("0.32"),
+                                                new BigDecimal("0.68"), 3, new BigDecimal("1.1"), 15, false)))),
+                        new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null))));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))
                 .andExpect(status().isOk())
@@ -532,8 +639,59 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.goals[0].code").value("morning_routine"))
                 .andExpect(jsonPath("$.isMember").value(false))
                 .andExpect(jsonPath("$.isFull").value(false))
+                .andExpect(jsonPath("$.missions[0].missionId").value(31))
+                .andExpect(jsonPath("$.missions[0].title").value("오늘 다같이 루틴 지키기"))
+                .andExpect(jsonPath("$.missions[0].missionType").value("DAILY_MEMBER_RATE"))
+                .andExpect(jsonPath("$.missions[0].targetValue").value(70))
+                .andExpect(jsonPath("$.missions[0].currentValue").value(66))
+                .andExpect(jsonPath("$.missions[0].todayClaimed").value(false))
+                // 구성원 타일 렌더용 memberRooms(#177) - 방 미생성 구성원은 room null
+                .andExpect(jsonPath("$.memberRooms[0].membershipId").value(12))
+                .andExpect(jsonPath("$.memberRooms[0].nickname").value("진형"))
+                .andExpect(jsonPath("$.memberRooms[0].room.growthLevel").value(1))
+                .andExpect(jsonPath("$.memberRooms[0].room.layoutFormat").value("FREE_V1"))
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].assetKey").value("items/preview/wall.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].assetKey").value("items/preview/chair.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].assetKey")
+                        .value("items/preview/glasses.png"))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].renderState")
+                        .value("default"))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].canvasWidth")
+                        .value(180))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].canvasHeight")
+                        .value(172))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].assetWidth")
+                        .value(320))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].assetHeight")
+                        .value(160))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].positionX")
+                        .value(0.5))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].positionY")
+                        .value(0.31))
+                .andExpect(jsonPath(
+                        "$.memberRooms[0].room.character.accessories[0].renderProfiles[0].widthRatio")
+                        .value(0.52))
+                .andExpect(jsonPath("$.memberRooms[1].room").value(nullValue()))
                 // 구성원 전용 필드는 미리보기 응답에 존재하지 않아야 한다(계약 회귀 방지)
                 .andExpect(jsonPath("$.myRole").doesNotExist())
-                .andExpect(jsonPath("$.inviteCode").doesNotExist());
+                .andExpect(jsonPath("$.inviteCode").doesNotExist())
+                // 방 렌더 부분집합 밖의 값(활동 정보·편집용 값·소유 식별자·배치 시각)은 미리보기로 새지 않아야 한다
+                .andExpect(jsonPath("$.memberRooms[0].room.streak").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.layoutRevision").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.slots[0].savedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.placements[0].updatedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].userItemId").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].equippedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].lastAccessedAt").doesNotExist())
+                .andExpect(jsonPath("$.memberRooms[0].userId").doesNotExist());
     }
 }

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +30,31 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
     // 카테고리 삭제 차단 검사용: status 무관 살아있는 루틴 존재 여부
     boolean existsByCategoryIdAndDeletedAtIsNull(Long categoryId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Routine r set r.category = null where r.category.id = :categoryId")
+    int clearCategoryByCategoryId(@Param("categoryId") Long categoryId);
+
+    // 미션 삭제 시 전 구성원의 연동 일괄 해제. clearAutomatically 는 쓰지 않는다 - 호출 트랜잭션이
+    // 잠근 house/mission 관리 엔티티가 detach 되면 이후·미flush 변경이 유실된다. 대신 이 쿼리 뒤
+    // 같은 트랜잭션에서 루틴을 다시 읽지 않는 위치(트랜잭션 끝)에서 호출한다(PC 의 루틴은 stale).
+    @Modifying(flushAutomatically = true)
+    @Query("update Routine r set r.houseMissionId = null where r.houseMissionId = :missionId")
+    int clearHouseMissionLink(@Param("missionId") Long missionId);
+
+    // 탈퇴·강퇴 시 그 집 미션들과의 연동 해제(해당 회원 것만). clearAutomatically 미사용 사유는 위와 동일.
+    @Modifying(flushAutomatically = true)
+    @Query("update Routine r set r.houseMissionId = null where r.user.id = :userId "
+            + "and r.houseMissionId in (select m.id from HouseMission m where m.house.id = :houseId)")
+    int clearHouseMissionLinksOfMember(@Param("userId") Long userId, @Param("houseId") Long houseId);
+
+    // 회원탈퇴 시 개인 전용 데이터 일괄 soft delete. 이미 삭제된 루틴의 원래 시각은 보존함.
+    // bulk UPDATE 는 auditing 을 우회하므로 updated_at 을 직접 갱신함. clearAutomatically 는 쓰지 않는다
+    // - 호출자(탈퇴 트랜잭션) 영속성 컨텍스트를 불필요하게 비우지 않기 위함. 이후 루틴을 다시 읽지 않는 위치에서 호출.
+    @Modifying(flushAutomatically = true)
+    @Query("update Routine r set r.deletedAt = :now, r.updatedAt = :now "
+            + "where r.user.id = :userId and r.deletedAt is null")
+    int softDeleteAllByUserId(@Param("userId") Long userId, @Param("now") Instant now);
 
     // 리마인드 batch Step1 reader: 지정 분에 예약된 ACTIVE·살아있는 루틴 중 당일 미완료·미발송인 것만 커서 페이징 조회.
     // 반복규칙(요일 등) 판정은 RoutineRecurrence가 processor에서 함(여기서 걸러지지 않음).

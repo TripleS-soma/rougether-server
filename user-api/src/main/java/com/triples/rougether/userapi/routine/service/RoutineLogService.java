@@ -12,12 +12,17 @@ import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
+import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
+import com.triples.rougether.domain.member.entity.WalletHistory;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -43,6 +48,8 @@ public class RoutineLogService {
     private final StreakRepository streakRepository;
     private final DailyRewardService dailyRewardService;
     private final TransactionTemplate transactionTemplate;
+    private final HouseMissionService houseMissionService;
+    private final WalletHistoryRecorder walletHistoryRecorder;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함.
     // @Transactional 대신 template인 이유: unique 충돌 재시도가 롤백된 첫 트랜잭션 밖에서 새로 시작돼야 함
@@ -80,27 +87,45 @@ public class RoutineLogService {
         if (failedLog != null) {
             failedLog.completeFromFailed(Instant.now(), REWARD_CURRENCY);
             Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
-            return RoutineLogResponse.from(failedLog, currentStreak);
+            return RoutineLogResponse.from(failedLog, currentStreak,
+                    contributeLinkedMission(userId, routine, isToday));
         }
 
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
         boolean firstToday = isToday && routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
 
-        // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함
-        int reward = isToday && dailyRewardService.canReward(userId, today) ? REWARD_AMOUNT : 0;
+        // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
+        // 당일 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
+        int reward = isToday
+                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
+                : 0;
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
                 routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
 
         if (reward > 0) {
             wallet.add(reward);
+            walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.ROUTINE_COMPLETE,
+                    WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
         }
 
         Streak streak = isToday
                 ? updateStreakOnComplete(routine, today, firstToday)
                 : streakRepository.findByUserId(userId).orElse(null);
-        return RoutineLogResponse.from(log, streak);
+        return RoutineLogResponse.from(log, streak, contributeLinkedMission(userId, routine, isToday));
+    }
+
+    // 연동 단체미션 자동 기여(#272 프론트 이름 매칭 → 서버 이관) - 완료와 같은 트랜잭션에서 반영한다.
+    // 오늘 완료만 기여한다(미션 기여는 KST 오늘 1회 규칙이라 과거 날짜 완료는 대상 아님).
+    // 기여 불가 사유는 autoContribute 가 null 로 삼키므로 완료 자체는 항상 성공한다.
+    // 완료 취소는 기여를 회수하지 않는다(프론트 정책과 동일 - 취소 화면에서 안내).
+    private HouseMissionContributeResponse contributeLinkedMission(Long userId, Routine routine,
+                                                                   boolean isToday) {
+        if (!isToday || routine.getHouseMissionId() == null) {
+            return null;
+        }
+        return houseMissionService.autoContribute(userId, routine.getHouseMissionId());
     }
 
     // 완료 취소: 코인 차감 + log hard delete + 스트릭 롤백을 한 트랜잭션으로 처리함.
@@ -125,6 +150,9 @@ public class RoutineLogService {
         UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
+        // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
+        walletHistoryRecorder.deleteEarned(userId, WalletHistoryReason.ROUTINE_COMPLETE,
+                WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
 
         if (date.isBefore(today) && wasTargetOn(userId, routine, date)) {
             log.revertToFailed();

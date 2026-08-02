@@ -4,7 +4,7 @@ This stack is a small team/dev deployment:
 
 - EC2 Amazon Linux 2023 instance
 - RDS MySQL in the default VPC
-- `user-api` on port `8080`
+- `user-api` on port `8080`, fronted by CloudFront for HTTPS (`*.cloudfront.net`)
 - `admin-api` on port `8081`
 - `batch` (루틴 리마인드 발송) — 외부 접근 없이 `127.0.0.1:8082` 헬스체크만 노출
 - EC2 instance role for S3 uploads to the existing asset bucket
@@ -215,11 +215,43 @@ ENVIRONMENT_TAG=staging \
   deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
 
+## HTTPS (CloudFront)
+
+iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하기 때문에, 앱스토어 제출용으로 user-api 앞에 CloudFront 를 둡니다(`cloudfront.tf`). 도메인 구매 없이 `xxxx.cloudfront.net` 기본 도메인과 기본 인증서(TLS 1.2+)로 ATS 요건을 충족합니다.
+
+- 앱(RN)의 API base URL 은 반드시 CloudFront 주소를 사용합니다.
+
+```bash
+terraform output -raw user_api_https_base_url
+```
+
+- 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
+- admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를 태우지 않고 기존 직접 접속을 유지합니다. CloudFront 를 거치면 요청 소스가 CloudFront 엣지 IP 가 되어 IP 제한이 무력화되기 때문입니다.
+- CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
+- `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
+- origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
+- 배포 workflow 는 direct HTTP 와 함께 CloudFront 경유 health check 도 수행합니다(배포가 origin 까지 실제로 도달하는지 검증). CloudFront 배포가 아직 없으면(조회는 성공했지만 결과가 빈 경우) 그 단계만 경고 후 건너뛰고, 조회 자체가 실패하면(권한 부족·API 오류) 배포를 실패시킵니다.
+- **롤아웃 순서**: main push 는 즉시 배포 workflow 를 실행하므로 "머지 후 apply" 라는 순서는 존재하지 않습니다. batch ECR 도입 때와 동일하게 **머지 전에** 이 변경이 담긴 브랜치 기준으로 Terraform 을 선적용합니다. deploy role 의 `cloudfront:ListDistributions` 권한이 Terraform 으로만 생성되기 때문입니다.
+- 선적용 없이 머지된 경우: 첫 배포가 HTTPS health check 단계에서 AccessDenied 로 실패합니다. 이 시점에 컨테이너 배포와 로컬 health check 는 이미 성공했고 `:dev` 승격만 건너뛴 상태이므로, `terraform apply` 후 실패한 workflow run 을 re-run 하면 복구됩니다(서비스 중단 없음).
+
+```bash
+# 머지 전 최소 선적용 (이 브랜치 checkout 상태에서. 전체 apply 를 해도 무방)
+terraform apply \
+  -target=aws_iam_role_policy.github_actions_deploy \
+  -target=aws_eip.app \
+  -target=aws_eip_association.app \
+  -target=aws_cloudfront_distribution.user_api
+```
+- 정식 도메인을 확보하면 `aliases` + ACM(us-east-1) 인증서를 붙이는 것으로 전환합니다.
+
+최초 생성/변경 배포에는 5~10분 정도 걸립니다.
+
 ## Health Checks
 
 ```bash
 curl "$(terraform output -raw user_api_health_url)"
 curl "$(terraform output -raw admin_health_url)"
+curl "$(terraform output -raw user_api_https_health_url)"
 ```
 
 Open:

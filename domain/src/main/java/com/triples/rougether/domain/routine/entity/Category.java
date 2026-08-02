@@ -45,6 +45,11 @@ public class Category extends BaseEntity {
     @Column(name = "icon_key", length = 100)
     private String iconKey;
 
+    // 연동된 집 id(미연동이면 null). 집 단체미션용 루틴을 묶는 카테고리임을 표시한다.
+    // FK 없이 식별자만 보관 — 집이 soft delete 돼도 값은 이력으로 남는다.
+    @Column(name = "house_id")
+    private Long houseId;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -84,6 +89,15 @@ public class Category extends BaseEntity {
         if (visibility != null) {
             this.visibility = visibility;
         }
+    }
+
+    // 집 연동 지정/변경. 해당 집 구성원 검증은 호출자(서비스) 책임
+    public void linkHouse(Long houseId) {
+        this.houseId = houseId;
+    }
+
+    public void unlinkHouse() {
+        this.houseId = null;
     }
 
     public void softDelete(Instant deletedAt) {

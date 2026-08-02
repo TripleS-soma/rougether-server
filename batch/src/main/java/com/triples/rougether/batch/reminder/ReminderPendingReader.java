@@ -19,6 +19,7 @@ class ReminderPendingReader implements ItemReader<Notification> {
     private static final int PAGE_SIZE = 200;
 
     private final NotificationRepository notificationRepository;
+    private final List<NotificationType> types;
 
     private Iterator<Notification> currentBatch = Collections.emptyIterator();
     private Long cursorId = 0L;
@@ -43,7 +44,7 @@ class ReminderPendingReader implements ItemReader<Notification> {
     }
 
     private List<Notification> fetchNextBatch() {
-        return notificationRepository.findByTypeAndPushStatusAndIdGreaterThanOrderByIdAsc(
-                NotificationType.ROUTINE_REMINDER, PushStatus.PENDING, cursorId, PageRequest.of(0, PAGE_SIZE));
+        return notificationRepository.findByTypeInAndPushStatusAndIdGreaterThanOrderByIdAsc(
+                types, PushStatus.PENDING, cursorId, PageRequest.of(0, PAGE_SIZE));
     }
 }
