@@ -10,6 +10,17 @@
 - frontend는 환경별 CDN base URL과 `objectKey`를 조합해 이미지를 로드할 수 있어야 합니다.
 - nullable field는 이유를 문서화합니다. 예: snapshot 생성 전에는 `snapshotObjectKey`가 null일 수 있음.
 
+## 캐릭터 포즈
+
+`GET /api/v1/characters`와 `GET /api/v1/me/characters`의 각 캐릭터에는 두 종류의
+애니메이션 정보가 함께 내려갑니다.
+
+- `animations`: 캐릭터 code로 파생하는 표준 `idle`, `poseCycle`, `wave` key
+- `poses[]`: 관리자가 DB에 등록한 추가 포즈의 `id`, `code`, `assetKey`, `sortOrder`
+
+프론트는 `poses[].assetKey`를 CDN base URL과 조합해 재생합니다. `poses[]`에는 활성
+포즈만 포함되며 `sortOrder` 오름차순입니다. 포즈가 없는 캐릭터는 빈 배열을 반환합니다.
+
 ## 방 화면
 
 방 화면은 다음 정보가 필요합니다.

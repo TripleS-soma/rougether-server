@@ -9,4 +9,9 @@ public interface AssetStorageService {
 
     // kind prefix 아래의 에셋 전체 목록 (어드민 조회 화면용).
     List<AssetSummary> list(String kind);
+
+    boolean exists(String key);
+
+    // 원본을 archive/admin-deleted 아래로 복사한 뒤 기존 key를 제거한다.
+    AssetDeleteResult archiveAndDelete(String key);
 }

@@ -74,7 +74,7 @@ class MyCharacterControllerTest {
         when(myCharacterQueryService.getMyCharacters(7L)).thenReturn(new MyCharacterListResponse(
                 List.of(new MyCharacterItem(
                         12L, 1L, "cat", "고양이", "characters/cat.png",
-                        CharacterAnimations.of("cat"), true, List.of(sunglasses),
+                        CharacterAnimations.of("cat"), List.of(), true, List.of(sunglasses),
                         Instant.parse("2026-07-01T00:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/me/characters"))
