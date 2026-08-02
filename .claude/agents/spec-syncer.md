@@ -40,5 +40,4 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 ## 원칙
 
 - 근거(이슈 본문·diff)에 없는 변경을 임의로 spec에 쓰지 않는다.
-- 다른 담당자 도메인 문서는 크게 바꾸지 않는다(CLAUDE.md: 다른 담당 도메인 계약 임의 확정 금지). 필요하면 "확인 필요"로 보고만 한다.
 - 서버 레포(`rougether-server`) 코드는 수정하지 않는다. 쓰기는 `../rougether-spec`에서만 한다.
