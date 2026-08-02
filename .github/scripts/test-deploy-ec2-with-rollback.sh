@@ -103,6 +103,84 @@ assert_not_contains() {
   fi
 }
 
+test_prune_preserves_rollback_tags_and_checks_free_space() {
+  reset_scenario "image-prune"
+  rollback_user_image="registry/user:previous"
+  rollback_admin_image="registry/admin:previous"
+  rollback_batch_image="registry/batch:previous"
+  local docker_calls="$ENV_DIR/docker-calls.log"
+
+  docker() {
+    echo "$*" >> "$docker_calls"
+    if [ "$1" = "inspect" ]; then
+      case "$4" in
+        rougether-user-api) echo "sha256:user" ;;
+        rougether-admin-api) echo "sha256:admin" ;;
+        rougether-batch) echo "sha256:batch" ;;
+      esac
+    elif [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
+      case "$5" in
+        registry/user:previous) echo "sha256:user" ;;
+        registry/admin:previous) echo "sha256:admin" ;;
+        registry/batch:previous) echo "sha256:batch" ;;
+      esac
+    fi
+  }
+  df() {
+    printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+    printf '/dev/mock 16777216 8388608 8388608 50%% /\n'
+  }
+
+  prune_unused_docker_images
+
+  unset -f docker df
+  assert_contains '^image prune -a -f$' "$docker_calls" "deploy must prune unused Docker images before pull"
+  if [ "$(grep -c '^tag sha256:user registry/user:previous$' "$docker_calls")" -ne 2 ] \
+      || [ "$(grep -c '^tag sha256:admin registry/admin:previous$' "$docker_calls")" -ne 2 ] \
+      || [ "$(grep -c '^tag sha256:batch registry/batch:previous$' "$docker_calls")" -ne 2 ]; then
+    echo "not ok - rollback tags must be protected before and restored after prune" >&2
+    return 1
+  fi
+  echo "ok - image cleanup preserves rollback tags and checks free space"
+}
+
+test_prune_fails_when_free_space_is_still_too_low() {
+  reset_scenario "image-prune-low-disk"
+  rollback_user_image="registry/user:previous"
+  rollback_admin_image="registry/admin:previous"
+  rollback_batch_image="registry/batch:previous"
+
+  docker() {
+    if [ "$1" = "inspect" ]; then
+      case "$4" in
+        rougether-user-api) echo "sha256:user" ;;
+        rougether-admin-api) echo "sha256:admin" ;;
+        rougether-batch) echo "sha256:batch" ;;
+      esac
+    elif [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
+      case "$5" in
+        registry/user:previous) echo "sha256:user" ;;
+        registry/admin:previous) echo "sha256:admin" ;;
+        registry/batch:previous) echo "sha256:batch" ;;
+      esac
+    fi
+  }
+  df() {
+    printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+    printf '/dev/mock 16777216 15728640 1048576 94%% /\n'
+  }
+
+  local exit_code=0
+  prune_unused_docker_images >/dev/null 2>&1 || exit_code="$?"
+
+  unset -f docker df
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - deploy must fail before pull when cleanup leaves less than 4 GiB" >&2
+    return 1
+  fi
+  echo "ok - image cleanup fails early when free space is too low"
+}
+
 test_ssm_failure_keeps_existing_credentials() {
   reset_scenario "ssm-failure"
   write_credentials "$FIREBASE_CREDENTIALS_FILE" "existing"
@@ -453,6 +531,8 @@ test_batch_env_bootstrap_is_idempotent() {
 }
 
 test_ssm_failure_keeps_existing_credentials
+test_prune_preserves_rollback_tags_and_checks_free_space
+test_prune_fails_when_free_space_is_still_too_low
 test_invalid_ssm_json_keeps_existing_credentials
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring

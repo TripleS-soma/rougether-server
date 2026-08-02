@@ -222,6 +222,94 @@ wait_health() {
   return 1
 }
 
+tag_running_image_as_rollback() {
+  local container_name="$1"
+  local rollback_image="$2"
+
+  if [ -z "$rollback_image" ]; then
+    echo "cannot protect rollback image for $container_name: image reference is empty" >&2
+    return 1
+  fi
+
+  local running_image_id
+  running_image_id="$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null || true)"
+  if [ -z "$running_image_id" ]; then
+    echo "cannot protect rollback image for $container_name: container is not running" >&2
+    return 1
+  fi
+
+  local rollback_image_id
+  rollback_image_id="$(docker image inspect --format '{{.Id}}' "$rollback_image" 2>/dev/null || true)"
+  if [ -n "$rollback_image_id" ] && [ "$rollback_image_id" != "$running_image_id" ]; then
+    echo "cannot protect rollback image for $container_name: state does not match the running container" >&2
+    return 1
+  fi
+
+  # image prune -a can remove one of multiple tags from an image that is still in use.
+  # Re-applying the deploy-state tag before and after pruning keeps rollback references valid.
+  docker tag "$running_image_id" "$rollback_image"
+}
+
+protect_rollback_images() {
+  local protected=true
+
+  tag_running_image_as_rollback rougether-user-api "$rollback_user_image" || protected=false
+  tag_running_image_as_rollback rougether-admin-api "$rollback_admin_image" || protected=false
+  tag_running_image_as_rollback rougether-batch "$rollback_batch_image" || protected=false
+
+  [ "$protected" = true ]
+}
+
+ensure_deploy_disk_space() {
+  local minimum_free_kb="${ROUGETHER_MIN_FREE_DISK_KB:-4194304}"
+  local docker_path="/var/lib/docker"
+  if [ ! -d "$docker_path" ]; then
+    docker_path="/"
+  fi
+
+  local available_kb
+  available_kb="$(df -Pk "$docker_path" | awk 'NR == 2 {print $4}')"
+  if ! [[ "$available_kb" =~ ^[0-9]+$ ]]; then
+    echo "cannot determine available disk space for $docker_path" >&2
+    return 1
+  fi
+
+  echo "Docker filesystem free space: $(( available_kb / 1024 )) MiB"
+  if [ "$available_kb" -lt "$minimum_free_kb" ]; then
+    echo "insufficient disk space before image pull: need at least $(( minimum_free_kb / 1024 )) MiB" >&2
+    return 1
+  fi
+}
+
+prune_unused_docker_images() {
+  echo "Docker disk usage before image cleanup"
+  docker system df || true
+
+  # 현재 실행 이미지가 곧 롤백 대상이다. 셋 중 하나라도 상태가 어긋나면 삭제하지 않고
+  # 여유 공간 검사만 수행해 복구 가능한 이미지를 실수로 잃지 않는다.
+  if ! protect_rollback_images; then
+    echo "skipping unused image cleanup because rollback images are not safely protected" >&2
+    ensure_deploy_disk_space
+    return
+  fi
+
+  local prune_exit_code=0
+  docker image prune -a -f || prune_exit_code="$?"
+
+  # 동일 image ID에 여러 SHA tag가 있으면 prune이 실행 중 이미지의 deploy-state tag도
+  # 제거할 수 있다. 컨테이너가 보존한 image ID에 롤백 tag를 즉시 복원한다.
+  protect_rollback_images || return 1
+
+  if [ "$prune_exit_code" -ne 0 ]; then
+    echo "unused Docker image cleanup failed" >&2
+    return "$prune_exit_code"
+  fi
+
+  echo "Docker disk usage after image cleanup"
+  docker system df || true
+  ensure_deploy_disk_space
+}
+
 write_units() {
   local user_image="$1"
   local admin_image="$2"
@@ -440,6 +528,7 @@ rollback() {
 }
 
 capture_rollback_images
+prune_unused_docker_images
 backup_firebase_credentials
 refresh_firebase_credentials
 if ! ensure_user_runtime_env; then
