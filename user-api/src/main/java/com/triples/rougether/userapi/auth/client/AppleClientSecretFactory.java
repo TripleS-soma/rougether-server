@@ -16,10 +16,12 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 // 애플 토큰 교환·revoke 공통 client_secret(ES256 JWT) 생성기.
 // fail-closed: team_id/key_id/private key 시크릿이 하나라도 없으면 조용히 건너뛰지 않고 502로 실패함.
+@Slf4j
 @Component
 public class AppleClientSecretFactory {
 
@@ -64,6 +66,8 @@ public class AppleClientSecretFactory {
             SignedJWT jwt = new SignedJWT(
                     new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(keyId).build(), claims);
             jwt.sign(new ECDSASigner(parsePrivateKey(privateKeyPem)));
+            // teamId/keyId/clientId는 시크릿이 아니며(개인키만 시크릿) 애플 콘솔 등록값과 대조용으로 남김.
+            log.info("애플 client_secret 생성 - teamId={}, keyId={}, clientId={}", teamId, keyId, clientId);
             return jwt.serialize();
         } catch (JOSEException | java.security.GeneralSecurityException | IllegalArgumentException e) {
             // 키 형식 오류·서명 실패 = 서버 설정 문제. 클라이언트 입력 탓이 아니므로 502로 통일함.
