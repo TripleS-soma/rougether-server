@@ -19,6 +19,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -37,6 +38,8 @@ class OnboardingMasterQueryServiceIntegrationTest {
     private UserGoalRepository userGoalRepository;
     @Autowired
     private UserCharacterRepository userCharacterRepository;
+    @Autowired
+    private TestEntityManager entityManager;
 
     private OnboardingQueryService onboardingQueryService;
 
@@ -88,6 +91,9 @@ class OnboardingMasterQueryServiceIntegrationTest {
                 character, "hidden", "characters/pose-test-hidden.webp", 5, false));
         characterPoseRepository.save(new CharacterPose(
                 character, "temp1", "characters/pose-test-1.webp", 10, true));
+        // 저장 직후엔 1차 캐시의 character.poses 가 빈 컬렉션이라 flush+clear 로 DB 재조회를 강제함
+        entityManager.flush();
+        entityManager.clear();
 
         var item = onboardingQueryService.getCharacters().items().stream()
                 .filter(candidate -> candidate.code().equals("pose_test_cat"))
