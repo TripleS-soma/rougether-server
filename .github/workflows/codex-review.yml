@@ -90,6 +90,7 @@ jobs:
             echo "base_sha=$(json_field base.sha)"
             echo "head_sha=$(json_field head.sha)"
             echo "head_repo=$head_repo"
+            echo "author=$(json_field user.login)"
             echo "skip=$skip"
             echo "skip_reason=$skip_reason"
           } >> "$GITHUB_OUTPUT"
@@ -156,6 +157,25 @@ jobs:
           command -v codex >/dev/null
           codex --version
 
+      - name: Collect maintainer decisions
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.bot-token.outputs.token }}
+          REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
+        run: |
+          set -euo pipefail
+          if [ -f trusted/.github/review-bot/review_state.py ]; then
+            python3 trusted/.github/review-bot/review_state.py \
+              --repo "${{ github.repository }}" \
+              --pr-number "$REVIEW_PR_NUMBER" \
+              --pr-author "${{ steps.pr.outputs.author }}" \
+              --output "$REVIEW_STATE"
+          else
+            # Bootstrap only: trusted(base) checkout 에 collector 가 들어오기 전까지의 폴백.
+            printf '%s\n' '{"version":1,"decisions":[]}' > "$REVIEW_STATE"
+          fi
+
       - name: Run Codex review
         if: steps.pr.outputs.skip != 'true'
         env:
@@ -163,6 +183,7 @@ jobs:
           REVIEW_BASE_REF: origin/${{ steps.pr.outputs.base_ref }}
           REVIEW_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           REVIEW_SPEC_DIR: ${{ github.workspace }}/rougether-spec
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
           REVIEW_OUT: ${{ github.workspace }}/findings.json
         run: |
           set -euo pipefail
@@ -176,6 +197,7 @@ jobs:
             --pr-number "$REVIEW_PR_NUMBER" \
             --schema trusted/.github/review-bot/findings.schema.json \
             --prompt trusted/.github/review-bot/review-prompt.md \
+            --review-state "$REVIEW_STATE" \
             --output "$REVIEW_OUT"
 
       - name: Post review
@@ -184,6 +206,7 @@ jobs:
           GH_TOKEN: ${{ steps.bot-token.outputs.token }}
           REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
           REVIEW_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-${{ github.run_id }}.json
           REVIEW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -192,4 +215,5 @@ jobs:
             --pr-number "$REVIEW_PR_NUMBER" \
             --head-sha "$REVIEW_HEAD_SHA" \
             --findings findings.json \
+            --review-state "$REVIEW_STATE" \
             --run-url "$REVIEW_RUN_URL"
