@@ -11,8 +11,14 @@ locals {
   jwt_secret_param          = "/${local.name}/jwt/secret"
   # 값은 deploy/scripts/put-firebase-credentials.sh가 관리해 Terraform state 유입을 막는다.
   firebase_credentials_param = "/${local.name}/firebase/credentials-json"
-  ecr_registry_server        = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url            = "https://token.actions.githubusercontent.com"
+  # 애플 client_secret(ES256 JWT) 서명용 시크릿 묶음(team_id/key_id/private_key/refresh_token_enc_key).
+  # firebase_credentials_param과 동일하게 값은 deploy/scripts/put-apple-credentials.sh가 SSM에 직접 등록해
+  # Terraform state에 개인키가 유입되지 않게 한다.
+  apple_credentials_param = "/${local.name}/apple/credentials-json"
+  # 카카오 회원탈퇴 unlink용 어드민 키. 값은 deploy/scripts/put-kakao-admin-key.sh가 SSM에 직접 등록한다.
+  kakao_admin_key_param = "/${local.name}/kakao/admin-key"
+  ecr_registry_server   = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url       = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -420,7 +426,9 @@ resource "aws_iam_role_policy" "app" {
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
             aws_ssm_parameter.jwt_secret.arn,
-            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}"
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_credentials_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.kakao_admin_key_param, "/")}"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
@@ -637,6 +645,8 @@ resource "aws_instance" "app" {
     admin_seed_username        = var.admin_seed_username
     admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
     firebase_credentials_param = local.firebase_credentials_param
+    apple_credentials_param    = local.apple_credentials_param
+    kakao_admin_key_param      = local.kakao_admin_key_param
     asset_bucket_name          = var.asset_bucket_name
     asset_region               = var.asset_region
     asset_public_base_url      = var.asset_public_base_url

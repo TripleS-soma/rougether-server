@@ -215,6 +215,53 @@ ENVIRONMENT_TAG=staging \
   deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
 
+## 애플/카카오 소셜 로그인 시크릿
+
+Firebase와 동일한 이유로, 애플 client_secret 서명용 시크릿(`team_id`/`key_id`/`private_key`/
+`refresh_token_enc_key`)과 카카오 어드민 키도 Terraform 변수·리소스로 전달하지 않습니다.
+`aws_ssm_parameter`로 선언하면 refresh 때 복호화된 값이 state에 그대로 남기 때문입니다. Terraform은
+`/${project_name}-${environment}/apple/credentials-json`, `/${project_name}-${environment}/kakao/admin-key`
+파라미터에 대한 EC2 조회 권한만 관리하고, 실제 값은 인스턴스 최초 부트스트랩(user-data) 시점에 SSM에서
+읽어 `/etc/rougether/user-api.env`에 씁니다. 이후 일반 배포(도커 이미지 업데이트)는 이 값을 다시 읽지
+않고 기존 파일 내용을 그대로 유지합니다 — 인스턴스가 교체될 때만(ASG 재생성, `-replace=aws_instance.app`
+등) 다시 조회합니다. SSM에 값이 없으면 부트스트랩 전체가 죽지 않고, 애플 로그인/revoke·카카오 unlink만
+앱 레벨에서 502로 fail-closed 됩니다.
+
+애플 값은 아래 JSON 모양으로 파일을 만들어 등록합니다.
+
+```json
+{
+  "team_id": "...",
+  "key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "refresh_token_enc_key": "..."
+}
+```
+
+```bash
+deploy/scripts/put-apple-credentials.sh /path/to/apple-credentials.json
+```
+
+카카오 어드민 키는 값만 담은 텍스트 파일로 등록합니다.
+
+```bash
+deploy/scripts/put-kakao-admin-key.sh /path/to/kakao-admin-key.txt
+```
+
+두 스크립트 모두 파라미터가 없으면 생성하고, 있으면 새 버전으로 교체합니다. 값 자체는 커맨드라인
+인자로 넘기지 않고 파일로만 받으며, 스크립트는 값을 출력하지 않습니다. 등록 후에는 해당 값을 반영하려면
+인스턴스를 교체해야 합니다(`terraform apply -replace=aws_instance.app`) — 이미 떠 있는 인스턴스의
+`/etc/rougether/user-api.env`를 즉시 갱신하려면 SSH/SSM으로 접속해 직접 수정 후
+`systemctl restart rougether-user-api`를 실행합니다.
+
+파라미터 이름을 바꾼 환경에서는 Firebase와 동일하게 환경변수로 오버라이드합니다.
+
+```bash
+APPLE_CREDENTIALS_PARAMETER=/rougether-staging/apple/credentials-json \
+ENVIRONMENT_TAG=staging \
+  deploy/scripts/put-apple-credentials.sh /path/to/apple-credentials.json
+```
+
 ## HTTPS (CloudFront)
 
 iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하기 때문에, 앱스토어 제출용으로 user-api 앞에 CloudFront 를 둡니다(`cloudfront.tf`). 도메인 구매 없이 `xxxx.cloudfront.net` 기본 도메인과 기본 인증서(TLS 1.2+)로 ATS 요건을 충족합니다.

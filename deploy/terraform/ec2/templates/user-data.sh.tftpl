@@ -87,6 +87,74 @@ if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
   firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
 fi
 
+# 애플 client_secret 시크릿 묶음(team_id/key_id/private_key/refresh_token_enc_key). firebase와 동일하게
+# SSM 조회 실패 시 인스턴스 부트스트랩 전체를 죽이지 않고, 애플 로그인/revoke만 앱 레벨에서 502로 fail-closed 된다.
+apple_credentials_valid() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+
+  python3 - "$file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as credentials_file:
+        credentials = json.load(credentials_file)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+required = ("team_id", "key_id", "private_key")
+if any(not credentials.get(key) for key in required):
+    raise SystemExit(1)
+PY
+}
+
+# JSON의 private_key(실제 개행 포함)를 env 파일 한 줄에 담을 수 있게 리터럴 \n 으로 이스케이프해
+# APPLE_TEAM_ID/APPLE_KEY_ID/APPLE_PRIVATE_KEY/APPLE_REFRESH_TOKEN_ENC_KEY 줄을 만든다.
+write_apple_env_fragment() {
+  local credentials_file="$1"
+  local output_file="$2"
+
+  python3 - "$credentials_file" "$output_file" <<'PY'
+import json
+import sys
+
+credentials_path, output_path = sys.argv[1], sys.argv[2]
+with open(credentials_path, encoding="utf-8") as credentials_file:
+    credentials = json.load(credentials_file)
+
+with open(output_path, "w", encoding="utf-8") as output_file:
+    output_file.write(f"APPLE_TEAM_ID={credentials['team_id']}\n")
+    output_file.write(f"APPLE_KEY_ID={credentials['key_id']}\n")
+    output_file.write("APPLE_PRIVATE_KEY=" + credentials["private_key"].replace("\n", "\\n") + "\n")
+    if credentials.get("refresh_token_enc_key"):
+        output_file.write(f"APPLE_REFRESH_TOKEN_ENC_KEY={credentials['refresh_token_enc_key']}\n")
+PY
+}
+
+apple_credentials_tmp="$(mktemp "$ENV_DIR/.apple-credentials.json.XXXXXX")"
+apple_env_fragment="$(mktemp "$ENV_DIR/.apple-env.XXXXXX")"
+apple_credentials_available=0
+if aws ssm get-parameter --name '${apple_credentials_param}' --with-decryption \
+    --query 'Parameter.Value' --output text --region '${aws_region}' > "$apple_credentials_tmp" 2>/dev/null \
+    && apple_credentials_valid "$apple_credentials_tmp"; then
+  write_apple_env_fragment "$apple_credentials_tmp" "$apple_env_fragment"
+  apple_credentials_available=1
+  echo "Apple OAuth credentials loaded from SSM"
+else
+  : > "$apple_env_fragment"
+  echo "Apple OAuth credentials unavailable in SSM; Apple login/revoke will fail closed (502) until provisioned" >&2
+fi
+rm -f "$apple_credentials_tmp"
+
+kakao_admin_key_value="$(aws ssm get-parameter --name '${kakao_admin_key_param}' --with-decryption \
+  --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
+if [ -n "$kakao_admin_key_value" ]; then
+  echo "Kakao admin key loaded from SSM"
+else
+  echo "Kakao admin key unavailable in SSM; Kakao unlink will fail closed (502) until provisioned" >&2
+fi
+
 cat > "$ENV_DIR/user-api.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
 SERVER_PORT=8080
@@ -100,6 +168,15 @@ EOF
 
 if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
   printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/user-api.env"
+fi
+
+if [ "$apple_credentials_available" = "1" ]; then
+  cat "$apple_env_fragment" >> "$ENV_DIR/user-api.env"
+fi
+rm -f "$apple_env_fragment"
+
+if [ -n "$kakao_admin_key_value" ]; then
+  printf 'KAKAO_ADMIN_KEY=%s\n' "$kakao_admin_key_value" >> "$ENV_DIR/user-api.env"
 fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF
