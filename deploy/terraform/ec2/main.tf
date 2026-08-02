@@ -438,6 +438,28 @@ resource "aws_iam_role_policy" "app" {
         ]
       },
       {
+        # 어드민 characters 에셋의 존재 확인, archive 복사 원본 읽기, 원본 삭제용.
+        # 삭제 API도 characters/ prefix만 허용해 애플리케이션과 IAM 경계를 맞춘다.
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.asset_bucket_name}/characters/*"
+        ]
+      },
+      {
+        # characters 원본 삭제 전에 남기는 복구용 사본.
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.asset_bucket_name}/archive/admin-deleted/*"
+        ]
+      },
+      {
         # 어드민 에셋 조회(/admin/assets)의 ListObjectsV2 용. 허용 prefix 아래만 나열 가능.
         Effect = "Allow"
         Action = [

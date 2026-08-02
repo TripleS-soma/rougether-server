@@ -10,4 +10,6 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
     Optional<Character> findByCode(String code);
 
     List<Character> findByActiveTrueOrderBySortOrderAsc();
+
+    boolean existsByBaseAssetKey(String baseAssetKey);
 }

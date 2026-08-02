@@ -3,6 +3,8 @@ package com.triples.rougether.userapi.onboarding.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.CharacterPose;
+import com.triples.rougether.domain.character.repository.CharacterPoseRepository;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.goal.entity.Goal;
@@ -29,6 +31,8 @@ class OnboardingMasterQueryServiceIntegrationTest {
     private GoalRepository goalRepository;
     @Autowired
     private CharacterRepository characterRepository;
+    @Autowired
+    private CharacterPoseRepository characterPoseRepository;
     @Autowired
     private UserGoalRepository userGoalRepository;
     @Autowired
@@ -72,6 +76,28 @@ class OnboardingMasterQueryServiceIntegrationTest {
         goalRepository.save(goal("g_x", "비활성", 0, false));
 
         assertThat(onboardingQueryService.getGoals().items()).isEmpty();
+    }
+
+    @Test
+    void 캐릭터_목록에는_활성_포즈만_정렬해서_준다() {
+        Character character = characterRepository.save(new Character(
+                "pose_test_cat", "포즈 테스트", "characters/pose-test.webp", 3, true));
+        characterPoseRepository.save(new CharacterPose(
+                character, "temp2", "characters/pose-test-2.webp", 20, true));
+        characterPoseRepository.save(new CharacterPose(
+                character, "hidden", "characters/pose-test-hidden.webp", 5, false));
+        characterPoseRepository.save(new CharacterPose(
+                character, "temp1", "characters/pose-test-1.webp", 10, true));
+
+        var item = onboardingQueryService.getCharacters().items().stream()
+                .filter(candidate -> candidate.code().equals("pose_test_cat"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(item.poses()).extracting(pose -> pose.code())
+                .containsExactly("temp1", "temp2");
+        assertThat(item.poses()).extracting(pose -> pose.assetKey())
+                .containsExactly("characters/pose-test-1.webp", "characters/pose-test-2.webp");
     }
 
     private Goal goal(String code, String name, int sortOrder, boolean active) {

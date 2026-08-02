@@ -27,6 +27,8 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
             String baseAssetKey,
             @Schema(description = "애니메이션(APNG) asset key 묶음 (idle/poseCycle/wave)")
             CharacterAnimations animations,
+            @Schema(description = "관리자가 등록한 활성 포즈 목록")
+            List<CharacterPoseResponse> poses,
             @Schema(description = "착용 여부 (동시에 1개만 true). 방 화면의 캐릭터가 이 항목", example = "true")
             boolean selected,
             @Schema(description = "이 보유 캐릭터에 저장된 악세사리 착용 목록")
@@ -46,6 +48,7 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
                     character.getName(),
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
+                    CharacterPoseResponse.activeOf(character),
                     userCharacter.isSelected(),
                     accessories.stream()
                             .map(accessory -> EquippedAccessoryResponse.of(

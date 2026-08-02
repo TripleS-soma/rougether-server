@@ -5,7 +5,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -34,6 +38,10 @@ public class Character {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    @OneToMany(mappedBy = "character")
+    @OrderBy("sortOrder ASC, id ASC")
+    private List<CharacterPose> poses = new ArrayList<>();
 
     public Character(String code, String name, String baseAssetKey, int sortOrder, boolean active) {
         this.code = code;

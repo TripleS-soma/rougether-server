@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
+import com.triples.rougether.userapi.character.dto.CharacterPoseResponse;
 import com.triples.rougether.userapi.onboarding.dto.CharacterListResponse;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.util.List;
@@ -35,7 +36,13 @@ class CharacterControllerTest {
         when(onboardingQueryService.getCharacters()).thenReturn(new CharacterListResponse(
                 List.of(new CharacterListResponse.CharacterItem(
                         1L, "cat", "고양이", "characters/cat.png",
-                        CharacterAnimations.of("cat"), 0))));
+                        CharacterAnimations.of("cat"),
+                        List.of(new CharacterPoseResponse(
+                                11L,
+                                "temp1",
+                                "characters/1f9c6b56-9c30-4554-b1ce-0be83642e627.webp",
+                                10)),
+                        0))));
 
         mockMvc.perform(get("/api/v1/characters"))
                 .andExpect(status().isOk())
@@ -46,6 +53,9 @@ class CharacterControllerTest {
                 .andExpect(jsonPath("$.items[0].animations.idle").value("characters/cat/animations/idle.webp"))
                 .andExpect(jsonPath("$.items[0].animations.poseCycle").value("characters/cat/animations/pose-cycle.webp"))
                 .andExpect(jsonPath("$.items[0].animations.wave").value("characters/cat/animations/wave.webp"))
+                .andExpect(jsonPath("$.items[0].poses[0].code").value("temp1"))
+                .andExpect(jsonPath("$.items[0].poses[0].assetKey")
+                        .value("characters/1f9c6b56-9c30-4554-b1ce-0be83642e627.webp"))
                 .andExpect(jsonPath("$.items[0].sortOrder").value(0));
     }
 }

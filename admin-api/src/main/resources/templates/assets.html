@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <title>Rougether Admin · 에셋 조회</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="stylesheet"
@@ -56,6 +58,37 @@
                 <span class="slot-count" id="count"></span>
             </div>
 
+            <section class="pose-admin-panel" id="pose-panel" hidden>
+                <div class="pose-admin-heading">
+                    <div>
+                        <h3>캐릭터 포즈 DB 등록</h3>
+                        <p>카드의 ‘포즈 등록’으로 key를 채운 뒤 캐릭터와 포즈 코드를 저장하세요.</p>
+                    </div>
+                </div>
+                <form class="pose-admin-form" id="pose-form">
+                    <label>캐릭터
+                        <select class="slot-select" id="pose-character" required></select>
+                    </label>
+                    <label>포즈 코드
+                        <input class="slot-search" id="pose-code" maxlength="40"
+                               pattern="[a-z0-9][a-z0-9_-]{0,39}" placeholder="temp1" required>
+                    </label>
+                    <label>정렬
+                        <input class="slot-search" id="pose-sort" type="number" min="0" value="10" required>
+                    </label>
+                    <label class="filter-toggle pose-active">
+                        <input type="checkbox" id="pose-active" checked>
+                        <span>활성</span>
+                    </label>
+                    <label class="pose-key-field">asset key
+                        <input class="slot-search" id="pose-key" maxlength="255"
+                               placeholder="characters/....webp" required>
+                    </label>
+                    <button class="copy-btn pose-save" type="submit">DB 등록</button>
+                </form>
+                <div class="pose-admin-list" id="pose-list"></div>
+            </section>
+
             <div class="alert alert-error" id="error" hidden></div>
             <div class="asset-grid" id="grid"></div>
         </div>
@@ -64,6 +97,8 @@
     <script th:src="@{/js/copy.js}"></script>
     <script th:inline="javascript">
         const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
 
         const grid = document.getElementById('grid');
         const filterInput = document.getElementById('filter');
@@ -71,10 +106,20 @@
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
         const tabs = document.getElementById('tabs');
+        const posePanel = document.getElementById('pose-panel');
+        const poseForm = document.getElementById('pose-form');
+        const poseCharacter = document.getElementById('pose-character');
+        const poseCode = document.getElementById('pose-code');
+        const poseKey = document.getElementById('pose-key');
+        const poseSort = document.getElementById('pose-sort');
+        const poseActive = document.getElementById('pose-active');
+        const poseList = document.getElementById('pose-list');
         // kind 별 목록 캐시 — 탭을 오갈 때 재요청하지 않는다.
         const cache = {};
         let currentKind = 'items';
         let assets = [];
+        let posesLoaded = false;
+        let poses = [];
 
         loadKind(currentKind);
 
@@ -84,6 +129,8 @@
             tabs.querySelectorAll('.asset-tab').forEach((t) => t.classList.remove('active'));
             tab.classList.add('active');
             currentKind = tab.dataset.kind;
+            posePanel.hidden = currentKind !== 'characters';
+            if (currentKind === 'characters') loadPoseAdminData();
             loadKind(currentKind);
         });
 
@@ -161,8 +208,147 @@
                 setTimeout(() => { copyBtn.textContent = 'key 복사'; }, 1200);
             });
 
-            card.append(thumbWrap, keyEl, meta, copyBtn);
+            const actions = document.createElement('div');
+            actions.className = 'asset-card-actions';
+            actions.append(copyBtn);
+
+            if (currentKind === 'characters') {
+                const registerBtn = document.createElement('button');
+                registerBtn.type = 'button';
+                registerBtn.className = 'btn-ghost asset-action-btn';
+                registerBtn.textContent = '포즈 등록';
+                registerBtn.addEventListener('click', () => {
+                    poseKey.value = asset.key;
+                    poseCode.focus();
+                    posePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'btn-ghost asset-action-btn asset-delete-btn';
+                deleteBtn.textContent = 'S3 삭제';
+                deleteBtn.addEventListener('click', () => deleteAsset(asset, deleteBtn));
+                actions.append(registerBtn, deleteBtn);
+            }
+
+            card.append(thumbWrap, keyEl, meta, actions);
             return card;
+        }
+
+        async function loadPoseAdminData(force = false) {
+            if (posesLoaded && !force) return;
+            try {
+                const [charactersRes, posesRes] = await Promise.all([
+                    fetch('/admin/characters'),
+                    fetch('/admin/character-poses')
+                ]);
+                if (!charactersRes.ok || !posesRes.ok) {
+                    throw new Error('캐릭터 또는 포즈 목록을 불러오지 못했습니다.');
+                }
+                const characters = await charactersRes.json();
+                poseCharacter.replaceChildren(...characters.map((character) =>
+                    new Option(character.name + ' (' + character.code + ')', character.code)));
+                poses = await posesRes.json();
+                posesLoaded = true;
+                renderPoseList();
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        function renderPoseList() {
+            if (poses.length === 0) {
+                poseList.textContent = '등록된 포즈가 없습니다.';
+                return;
+            }
+            poseList.replaceChildren(...poses.map((pose) => {
+                const row = document.createElement('div');
+                row.className = 'pose-admin-row';
+                const text = document.createElement('span');
+                text.textContent = pose.characterCode + ' · ' + pose.code + ' · ' + pose.assetKey
+                    + (pose.active ? '' : ' · 비활성');
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn-ghost asset-action-btn asset-delete-btn';
+                removeBtn.textContent = 'DB 연결 해제';
+                removeBtn.addEventListener('click', () => deletePose(pose, removeBtn));
+                row.append(text, removeBtn);
+                return row;
+            }));
+        }
+
+        poseForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const saveBtn = poseForm.querySelector('button[type="submit"]');
+            saveBtn.disabled = true;
+            try {
+                const res = await fetch('/admin/character-poses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify({
+                        characterCode: poseCharacter.value,
+                        code: poseCode.value.trim(),
+                        assetKey: poseKey.value.trim(),
+                        sortOrder: Number(poseSort.value),
+                        active: poseActive.checked
+                    })
+                });
+                const result = await readJson(res);
+                if (!res.ok) throw new Error(result.message || ('HTTP ' + res.status));
+                posesLoaded = false;
+                await loadPoseAdminData(true);
+                saveBtn.textContent = '등록 완료';
+                setTimeout(() => { saveBtn.textContent = 'DB 등록'; }, 1200);
+            } catch (err) {
+                showError('포즈 등록 실패: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+
+        async function deletePose(pose, button) {
+            if (!confirm(pose.characterCode + '/' + pose.code + ' DB 연결을 해제할까요?')) return;
+            button.disabled = true;
+            try {
+                const res = await fetch('/admin/character-poses/' + pose.id, {
+                    method: 'DELETE',
+                    headers: { [csrfHeader]: csrfToken }
+                });
+                if (!res.ok) {
+                    const result = await readJson(res);
+                    throw new Error(result.message || ('HTTP ' + res.status));
+                }
+                poses = poses.filter((item) => item.id !== pose.id);
+                renderPoseList();
+            } catch (err) {
+                showError('DB 연결 해제 실패: ' + err.message);
+                button.disabled = false;
+            }
+        }
+
+        async function deleteAsset(asset, button) {
+            if (!confirm(asset.key + '\n\nS3에서 제거할까요? 복구용 archive 사본은 남습니다.')) return;
+            button.disabled = true;
+            try {
+                const res = await fetch('/admin/assets?key=' + encodeURIComponent(asset.key), {
+                    method: 'DELETE',
+                    headers: { [csrfHeader]: csrfToken }
+                });
+                const result = await readJson(res);
+                if (!res.ok) throw new Error(result.message || ('HTTP ' + res.status));
+                cache.characters = (cache.characters || []).filter((item) => item.key !== asset.key);
+                assets = cache.characters;
+                render();
+            } catch (err) {
+                showError('S3 삭제 실패: ' + err.message);
+                button.disabled = false;
+            }
+        }
+
+        async function readJson(response) {
+            const text = await response.text();
+            if (!text) return {};
+            try { return JSON.parse(text); } catch (err) { return {}; }
         }
 
         function fileName(key) {

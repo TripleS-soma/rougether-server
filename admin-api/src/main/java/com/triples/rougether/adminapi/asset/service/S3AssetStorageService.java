@@ -1,19 +1,30 @@
 package com.triples.rougether.adminapi.asset.service;
 
 import com.triples.rougether.adminapi.asset.config.AssetProperties;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 // 이미지를 S3 에 올리고 object key 를 발급한다. key 규칙: {kind}/{uuid}.{ext}
 // 전체 URL 이 아니라 key 만 저장/반환하고, CDN base URL 조합은 클라이언트가 한다(spec 원칙).
 @Service
 public class S3AssetStorageService implements AssetStorageService {
+
+    private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'")
+                    .withZone(ZoneOffset.UTC);
 
     private static final Map<String, String> EXTENSION_BY_CONTENT_TYPE = Map.of(
             "image/png", "png",
@@ -57,5 +68,38 @@ public class S3AssetStorageService implements AssetStorageService {
                 .contents().stream()
                 .map(object -> new AssetSummary(object.key(), object.size(), object.lastModified()))
                 .toList();
+    }
+
+    @Override
+    public boolean exists(String key) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(properties.s3().bucket())
+                    .key(key)
+                    .build());
+            return true;
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return false;
+            }
+            throw exception;
+        }
+    }
+
+    @Override
+    public AssetDeleteResult archiveAndDelete(String key) {
+        String bucket = properties.s3().bucket();
+        String archiveKey = "archive/admin-deleted/"
+                + ARCHIVE_TIMESTAMP_FORMAT.format(Instant.now()) + "/" + key;
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .bucket(bucket)
+                .copySource(bucket + "/" + key)
+                .key(archiveKey)
+                .build());
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build());
+        return new AssetDeleteResult(key, archiveKey);
     }
 }
