@@ -8,6 +8,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
@@ -47,6 +49,8 @@ class TodoCompletionServiceIntegrationTest {
     @Autowired
     private UserWalletRepository userWalletRepository;
     @Autowired
+    private WalletHistoryRepository walletHistoryRepository;
+    @Autowired
     private RoutineLogRepository routineLogRepository;
 
     private TodoService service;
@@ -58,7 +62,8 @@ class TodoCompletionServiceIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService);
+                userWalletRepository, dailyRewardService,
+                new WalletHistoryRecorder(walletHistoryRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         // 코인은 dueDate가 오늘인 완료에만 지급되므로 기본 픽스처는 오늘 마감으로 만듦

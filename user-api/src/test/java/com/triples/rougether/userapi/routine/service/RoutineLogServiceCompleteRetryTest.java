@@ -46,7 +46,8 @@ class RoutineLogServiceCompleteRetryTest {
 
     private final RoutineLogService service = new RoutineLogService(routineRepository,
             routineLogRepository, userWalletRepository, streakRepository, dailyRewardService,
-            new TransactionTemplate(transactionManager), mock(HouseMissionService.class));
+            new TransactionTemplate(transactionManager), mock(HouseMissionService.class),
+            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
 
     @Test
     void 배치가_먼저_FAILED를_커밋해_unique_충돌이_나면_재시도에서_전이로_흡수한다() {

@@ -37,6 +37,7 @@ class ShopCommandServiceTest {
     @Mock private UserItemRepository userItemRepository;
     @Mock private UserWalletRepository userWalletRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder walletHistoryRecorder;
     @InjectMocks private ShopCommandService shopCommandService;
 
     private Item purchasableItem(Long id, int price) {
@@ -66,6 +67,10 @@ class ShopCommandServiceTest {
         PurchaseResponse response = shopCommandService.purchase(1L, 100L);
 
         verify(wallet).spend(400);
+        // 차감과 같은 트랜잭션에서 원장에 SHOP_PURCHASE 사용 기록을 남긴다(#253)
+        verify(walletHistoryRecorder).record(wallet, -400,
+                com.triples.rougether.domain.shared.WalletHistoryReason.SHOP_PURCHASE,
+                com.triples.rougether.domain.member.entity.WalletHistory.SOURCE_ITEM, 100L);
         assertThat(response.userItemId()).isEqualTo(77L);
         assertThat(response.itemId()).isEqualTo(100L);
         assertThat(response.acquiredAt()).isEqualTo(Instant.EPOCH);
@@ -85,6 +90,7 @@ class ShopCommandServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ShopErrorCode.INSUFFICIENT_BALANCE));
         verify(wallet, never()).spend(anyInt());
+        verify(walletHistoryRecorder, never()).record(any(), anyInt(), any(), any(), any());
         verify(userItemRepository, never()).save(any());
     }
 

@@ -8,6 +8,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
@@ -47,6 +49,8 @@ class TodoServiceIntegrationTest {
     @Autowired
     private UserWalletRepository userWalletRepository;
     @Autowired
+    private WalletHistoryRepository walletHistoryRepository;
+    @Autowired
     private RoutineLogRepository routineLogRepository;
 
     private TodoService service;
@@ -57,7 +61,8 @@ class TodoServiceIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService);
+                userWalletRepository, dailyRewardService,
+                new WalletHistoryRecorder(walletHistoryRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
 
