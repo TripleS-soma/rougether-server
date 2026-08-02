@@ -3,15 +3,21 @@ package com.triples.rougether.userapi.auth.client;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 // 애플 authorizationCode → refresh token 교환. 회원탈퇴 시 연동 해제(revoke)에 쓸 토큰을 확보함.
+@Slf4j
 @Component
 public class AppleTokenExchangeClient {
 
@@ -47,9 +53,11 @@ public class AppleTokenExchangeClient {
                     .retrieve()
                     .onStatus(status -> status.is4xxClientError(), (request, res) -> {
                         // invalid_grant 등 코드 문제(만료·재사용 포함)는 클라이언트 입력 무효로 취급함.
+                        log.warn("애플 code→token 교환 실패(4xx) - status={}, body={}", res.getStatusCode(), readBody(res));
                         throw new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID);
                     })
                     .onStatus(status -> status.isError(), (request, res) -> {
+                        log.warn("애플 code→token 교환 실패 - status={}, body={}", res.getStatusCode(), readBody(res));
                         throw new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE);
                     })
                     .body(TokenResponse.class);
@@ -57,13 +65,23 @@ public class AppleTokenExchangeClient {
             throw e;
         } catch (RestClientException e) {
             // 타임아웃·연결 실패 등 네트워크 오류
+            log.warn("애플 code→token 교환 실패 - 네트워크 오류, reason={}", e.getMessage());
             throw new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE);
         }
 
         if (response == null || response.refreshToken() == null || response.refreshToken().isBlank()) {
+            log.warn("애플 code→token 교환 실패 - 응답에 refresh_token 없음");
             throw new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE);
         }
         return response.refreshToken();
+    }
+
+    private static String readBody(ClientHttpResponse response) {
+        try {
+            return StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "<본문 읽기 실패>";
+        }
     }
 
     private record TokenResponse(@JsonProperty("refresh_token") String refreshToken) {

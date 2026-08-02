@@ -5,6 +5,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.AppleProperties;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 // 애플 identityToken 검증. JwtDecoder(NimbusJwtDecoder)가 JWK 서명·exp를 검증하고,
 // iss/aud(허용 client_id) 비즈니스 규칙은 여기서 검증함(디코더를 갈아끼워 오프라인 단위테스트 가능).
+@Slf4j
 @Component
 public class AppleTokenVerifier {
 
@@ -43,17 +45,22 @@ public class AppleTokenVerifier {
         } catch (JwtException e) {
             // JWK 조회/네트워크 실패만 502로 구분하고, 서명·형식·만료 등은 401(토큰 무효)로 통일함.
             if (isRemoteKeyError(e)) {
+                log.warn("애플 idToken 검증 실패 - JWK 조회 오류(네트워크/원격 키 소스), reason={}", e.getMessage());
                 throw new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE);
             }
+            log.warn("애플 idToken 검증 실패 - 서명/형식/만료 오류, reason={}", e.getMessage());
             throw new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID);
         }
 
-        if (!VALID_ISSUER.equals(jwt.getClaimAsString(JwtClaimNames.ISS))) {
+        String issuer = jwt.getClaimAsString(JwtClaimNames.ISS);
+        if (!VALID_ISSUER.equals(issuer)) {
+            log.warn("애플 idToken 검증 실패 - issuer 불일치, iss={}", issuer);
             throw new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID);
         }
         // 다른 애플 앱에서 발급된 토큰 치환 차단: aud가 우리 허용 client_id와 겹쳐야 함(빈 목록이면 전부 거부).
         List<String> audiences = jwt.getAudience() == null ? List.of() : jwt.getAudience();
         if (audiences.stream().noneMatch(allowedClientIds::contains)) {
+            log.warn("애플 idToken 검증 실패 - audience 불일치, aud={}, allowed={}", audiences, allowedClientIds);
             throw new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID);
         }
 
