@@ -514,6 +514,7 @@ resource "aws_iam_role_policy" "webex_alert_runtime" {
   })
 }
 
+# 운영 state에 Discord alert policy가 먼저 선적용돼 있어 Webex policy로 안전하게 주소를 이전한다.
 moved {
   from = aws_iam_role_policy.discord_alert
   to   = aws_iam_role_policy.webex_alert_runtime

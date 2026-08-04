@@ -21,6 +21,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.HandlerMapping;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -116,7 +117,9 @@ public class GlobalExceptionHandler {
     }
 
     private String endpoint(HttpServletRequest request) {
-        return request.getMethod() + " " + request.getRequestURI();
+        Object matchingPattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String path = matchingPattern == null ? "<unmatched>" : matchingPattern.toString();
+        return request.getMethod() + " " + path;
     }
 
     private void notifySafely(Runnable notification) {

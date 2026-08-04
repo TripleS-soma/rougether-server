@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -36,6 +37,7 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
     private final Clock clock;
     private final ConcurrentHashMap<String, Instant> lastSentAt = new ConcurrentHashMap<>();
 
+    @Autowired
     public WebexOperationalAlertNotifier(
             ObjectMapper objectMapper,
             @Value("${operations.webex.bot-token:}") String botToken,
@@ -83,9 +85,9 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
             return;
         }
 
-        // ID가 포함된 서로 다른 endpoint로 같은 오류를 반복 유발해도 Webex API rate limit을
-        // 소진하지 않게 오류 코드 단위로 중복을 억제함.
-        String deduplicationKey = level + '|' + code;
+        // 같은 종류의 오류가 반복돼도 Webex API rate limit을 소진하지 않게 중복을 억제함.
+        // 예기치 않은 오류는 message에 넣은 exception class까지 구분한다.
+        String deduplicationKey = level + '|' + code + '|' + message;
         Instant now = clock.instant();
         if (!acquireCooldown(deduplicationKey, now)) {
             return;
