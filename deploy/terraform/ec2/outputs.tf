@@ -77,3 +77,8 @@ output "firebase_credentials_parameter" {
   description = "SSM parameter name containing the Firebase service account JSON."
   value       = local.firebase_credentials_param
 }
+
+output "webex_bot_token_parameter" {
+  description = "SSM SecureString parameter name containing the Webex operational-alert bot token."
+  value       = local.webex_bot_token_param
+}

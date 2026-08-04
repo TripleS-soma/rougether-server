@@ -59,6 +59,13 @@ apple:
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
 
+operations:
+  webex:
+    bot-token: ${OPERATIONS_WEBEX_BOT_TOKEN:}
+    room-id: ${OPERATIONS_WEBEX_ROOM_ID:}
+    environment: ${ROUGETHER_ENVIRONMENT:dev}
+    cooldown: ${OPERATIONS_WEBEX_COOLDOWN:PT1M}
+
 asset:
   s3:
     bucket: rougether-assets

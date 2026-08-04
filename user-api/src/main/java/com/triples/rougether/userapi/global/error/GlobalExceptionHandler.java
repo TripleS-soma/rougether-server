@@ -3,10 +3,13 @@ package com.triples.rougether.userapi.global.error;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.common.error.ErrorCode;
 import com.triples.rougether.common.error.ErrorResponse;
+import com.triples.rougether.userapi.global.alert.OperationalAlertNotifier;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -18,11 +21,31 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.HandlerMapping;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final OperationalAlertNotifier NO_OP_NOTIFIER = new OperationalAlertNotifier() {
+        @Override
+        public void notifyBusiness(String endpoint, ErrorCode errorCode) {
+        }
+
+        @Override
+        public void notifyUnexpected(String endpoint, Throwable cause) {
+        }
+    };
+    private final OperationalAlertNotifier operationalAlertNotifier;
+
+    @Autowired
+    public GlobalExceptionHandler(ObjectProvider<OperationalAlertNotifier> notifierProvider) {
+        this(notifierProvider.getIfAvailable(() -> NO_OP_NOTIFIER));
+    }
+
+    public GlobalExceptionHandler(OperationalAlertNotifier operationalAlertNotifier) {
+        this.operationalAlertNotifier = operationalAlertNotifier;
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException exception, HttpServletRequest request) {
@@ -34,6 +57,7 @@ public class GlobalExceptionHandler {
             log.warn("business error: {} code={}, message={}",
                     endpoint(request), errorCode.code(), exception.getMessage());
         }
+        notifySafely(() -> operationalAlertNotifier.notifyBusiness(endpoint(request), errorCode));
         return ResponseEntity.status(errorCode.status())
                 .body(ErrorResponse.of(errorCode.code(), exception.getMessage()));
     }
@@ -87,11 +111,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
         log.error("unexpected error: {}", endpoint(request), exception);
+        notifySafely(() -> operationalAlertNotifier.notifyUnexpected(endpoint(request), exception));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "서버 오류가 발생했습니다."));
     }
 
     private String endpoint(HttpServletRequest request) {
-        return request.getMethod() + " " + request.getRequestURI();
+        Object matchingPattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String path = matchingPattern == null ? "<unmatched>" : matchingPattern.toString();
+        return request.getMethod() + " " + path;
+    }
+
+    private void notifySafely(Runnable notification) {
+        try {
+            notification.run();
+        } catch (RuntimeException exception) {
+            log.warn("operational alert dispatch failed: {}", exception.getClass().getSimpleName());
+        }
     }
 }

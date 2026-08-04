@@ -64,6 +64,8 @@ reset_scenario() {
   firebase_credentials_replaced=false
   AWS_MOCK_MODE="fail"
   AWS_MOCK_PAYLOAD=""
+  WEBEX_ROOM_ID="test-room-id"
+  ENVIRONMENT="dev"
 
   mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"
@@ -209,6 +211,55 @@ test_invalid_ssm_json_keeps_existing_credentials() {
   assert_file_equal "$ENV_DIR/expected.json" "$FIREBASE_CREDENTIALS_FILE" "invalid SSM JSON must not replace existing credentials"
   cleanup_firebase_credentials_backup
   echo "ok - invalid SSM JSON keeps existing credentials"
+}
+
+test_webex_alert_refresh_replaces_only_with_valid_values() {
+  reset_scenario "webex-alert"
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=old-token\nOPERATIONS_WEBEX_ROOM_ID=old-room-id\nOPERATIONS_DISCORD_WEBHOOK_URL=stale\n' >> "$USER_RUNTIME_ENV"
+
+  AWS_MOCK_MODE="payload"
+  AWS_MOCK_PAYLOAD='new-token'
+  refresh_webex_alert_env
+
+  assert_contains '^OPERATIONS_WEBEX_BOT_TOKEN=new-token$' \
+    "$USER_RUNTIME_ENV" "valid SSM token must replace the runtime value"
+  assert_contains '^OPERATIONS_WEBEX_ROOM_ID=test-room-id$' \
+    "$USER_RUNTIME_ENV" "configured Webex room ID must replace the runtime value"
+  assert_contains '^ROUGETHER_ENVIRONMENT=dev$' "$USER_RUNTIME_ENV" \
+    "Webex alerts must include the deployment environment"
+  assert_not_contains '^OPERATIONS_DISCORD_WEBHOOK_URL=' "$USER_RUNTIME_ENV" \
+    "stale Discord configuration must be removed"
+  if [ "$(grep -c '^OPERATIONS_WEBEX_BOT_TOKEN=' "$USER_RUNTIME_ENV")" -ne 1 ]; then
+    echo "not ok - Webex bot token runtime value must not be duplicated" >&2
+    return 1
+  fi
+
+  AWS_MOCK_PAYLOAD='bad token with whitespace'
+  WEBEX_ROOM_ID='bad room id'
+  refresh_webex_alert_env
+
+  assert_contains '^OPERATIONS_WEBEX_BOT_TOKEN=new-token$' \
+    "$USER_RUNTIME_ENV" "invalid SSM token must keep the current runtime value"
+  assert_contains '^OPERATIONS_WEBEX_ROOM_ID=test-room-id$' \
+    "$USER_RUNTIME_ENV" "invalid room ID must keep the current runtime value"
+  assert_not_contains 'bad token' "$USER_RUNTIME_ENV" \
+    "invalid SSM token must never enter the runtime env"
+  echo "ok - Webex alert refresh accepts only valid token and room values"
+}
+
+test_webex_alert_ssm_failure_keeps_existing_token() {
+  reset_scenario "webex-alert-ssm-failure"
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=existing-token\nOPERATIONS_WEBEX_ROOM_ID=existing-room-id\n' >> "$USER_RUNTIME_ENV"
+
+  refresh_webex_alert_env
+
+  assert_contains '^OPERATIONS_WEBEX_BOT_TOKEN=existing-token$' \
+    "$USER_RUNTIME_ENV" "SSM failure must keep the existing Webex bot token"
+  assert_contains '^OPERATIONS_WEBEX_ROOM_ID=test-room-id$' \
+    "$USER_RUNTIME_ENV" "configured room ID must still be reconciled"
+  assert_contains '^ROUGETHER_ENVIRONMENT=dev$' "$USER_RUNTIME_ENV" \
+    "SSM failure must still reconcile the deployment environment"
+  echo "ok - Webex token SSM failure keeps existing value"
 }
 
 test_first_deploy_without_credentials_uses_stub() {
@@ -534,6 +585,8 @@ test_ssm_failure_keeps_existing_credentials
 test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low
 test_invalid_ssm_json_keeps_existing_credentials
+test_webex_alert_refresh_replaces_only_with_valid_values
+test_webex_alert_ssm_failure_keeps_existing_token
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring
 test_restore_failure_is_propagated_and_backup_is_kept
