@@ -114,7 +114,6 @@ if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
 fi
 
 printf '\nROUGETHER_ENVIRONMENT=${environment}\n' >> "$ENV_DIR/user-api.env"
-printf 'OPERATIONS_WEBEX_ROOM_ID=${webex_room_id}\n' >> "$ENV_DIR/user-api.env"
 if printf '%s' "$WEBEX_BOT_TOKEN" | webex_bot_token_valid; then
   printf 'OPERATIONS_WEBEX_BOT_TOKEN=%s\n' "$WEBEX_BOT_TOKEN" >> "$ENV_DIR/user-api.env"
 else

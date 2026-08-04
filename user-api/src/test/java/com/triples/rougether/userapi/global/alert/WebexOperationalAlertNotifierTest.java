@@ -21,6 +21,7 @@ class WebexOperationalAlertNotifierTest {
             "test-room-id",
             "dev",
             Duration.ofMinutes(1),
+            Duration.ofHours(1),
             Clock.fixed(Instant.parse("2026-08-04T08:00:00Z"), ZoneOffset.UTC));
 
     @Test
@@ -45,6 +46,18 @@ class WebexOperationalAlertNotifierTest {
                 .contains("'token' invalid")
                 .doesNotContain("@all")
                 .doesNotContain("test-bot-token");
+    }
+
+    @Test
+    void 잘못된_OAuth_토큰은_공급자_전체를_묶어_한_시간_쿨다운을_적용한다() {
+        assertThat(notifier.deduplicationGroupFor(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID))
+                .isEqualTo("AUTH_OAUTH_TOKEN_INVALID");
+        assertThat(notifier.deduplicationGroupFor(AuthErrorCode.OAUTH_KAKAO_TOKEN_INVALID))
+                .isEqualTo("AUTH_OAUTH_TOKEN_INVALID");
+        assertThat(notifier.cooldownFor(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID))
+                .isEqualTo(Duration.ofHours(1));
+        assertThat(notifier.cooldownFor(AuthErrorCode.OAUTH_GOOGLE_UNAVAILABLE))
+                .isEqualTo(Duration.ofMinutes(1));
     }
 
     private enum TestErrorCode implements ErrorCode {

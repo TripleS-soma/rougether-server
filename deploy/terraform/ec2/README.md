@@ -223,7 +223,8 @@ user-api는 다음 오류만 기존 `Rougether Git Bot`을 통해 Webex 스페�
 - 모든 5xx `BusinessException`
 - 예기치 않은 500 오류
 
-일반 4xx는 알림 폭주를 막기 위해 제외하고, 같은 오류 코드는 기본 1분 동안 한 번만 보냅니다.
+일반 4xx는 알림 폭주를 막기 위해 제외합니다. 5xx는 같은 오류 코드를 기본 1분 동안 한 번만 보내고,
+공개 endpoint에서 발생하는 OAuth 토큰 무효 오류는 공급자 전체를 묶어 기본 1시간에 한 번만 보냅니다.
 메시지에는 요청 본문이나 토큰을 넣지 않으며 mention도 무력화합니다. Webex bot token은 Terraform state나
 저장소에 넣지 않고 `/${project_name}-${environment}/alerts/webex-bot-token` SecureString으로 관리합니다.
 
@@ -243,11 +244,8 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-파라미터 이름이나 Webex 스페이스를 바꾼 환경에서는 deploy workflow 값과 Terraform 변수를 함께 맞춥니다.
-
-```hcl
-webex_room_id = "target-webex-room-id"
-```
+파라미터 이름이나 Webex 스페이스를 바꾼 환경에서는 deploy workflow의 parameter 이름과
+GitHub variable `WEBEX_ROOM_ID`를 함께 맞춥니다.
 
 ## HTTPS (CloudFront)
 

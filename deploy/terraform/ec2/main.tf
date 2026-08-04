@@ -699,7 +699,6 @@ resource "aws_instance" "app" {
     admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
     firebase_credentials_param = local.firebase_credentials_param
     webex_bot_token_param      = local.webex_bot_token_param
-    webex_room_id              = var.webex_room_id
     environment                = var.environment
     asset_bucket_name          = var.asset_bucket_name
     asset_region               = var.asset_region
