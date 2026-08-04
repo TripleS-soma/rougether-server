@@ -34,6 +34,7 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
     private final String roomId;
     private final String environment;
     private final Duration cooldown;
+    private final Duration oauthInvalidTokenCooldown;
     private final Clock clock;
     private final ConcurrentHashMap<String, Instant> lastSentAt = new ConcurrentHashMap<>();
 
@@ -43,20 +44,25 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
             @Value("${operations.webex.bot-token:}") String botToken,
             @Value("${operations.webex.room-id:}") String roomId,
             @Value("${operations.webex.environment:dev}") String environment,
-            @Value("${operations.webex.cooldown:PT1M}") Duration cooldown) {
+            @Value("${operations.webex.cooldown:PT1M}") Duration cooldown,
+            @Value("${operations.webex.oauth-invalid-token-cooldown:PT1H}") Duration oauthInvalidTokenCooldown) {
         this(objectMapper,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build(),
-                botToken, roomId, environment, cooldown, Clock.systemUTC());
+                botToken, roomId, environment, cooldown, oauthInvalidTokenCooldown, Clock.systemUTC());
     }
 
     WebexOperationalAlertNotifier(ObjectMapper objectMapper, HttpClient httpClient, String botToken,
-                                  String roomId, String environment, Duration cooldown, Clock clock) {
+                                  String roomId, String environment, Duration cooldown,
+                                  Duration oauthInvalidTokenCooldown, Clock clock) {
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.botToken = botToken == null ? "" : botToken.strip();
         this.roomId = roomId == null ? "" : roomId.strip();
         this.environment = sanitize(environment, 30).toUpperCase(Locale.ROOT);
         this.cooldown = cooldown.isNegative() ? Duration.ZERO : cooldown;
+        this.oauthInvalidTokenCooldown = oauthInvalidTokenCooldown.isNegative()
+                ? Duration.ZERO
+                : oauthInvalidTokenCooldown;
         this.clock = clock;
     }
 
@@ -67,29 +73,46 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
         }
 
         String level = errorCode.status() >= 500 ? "ERROR" : "WARN";
-        send(level, endpoint, errorCode.code(), errorCode.message());
+        send(level, endpoint, errorCode.code(), errorCode.message(),
+                deduplicationGroupFor(errorCode), cooldownFor(errorCode));
     }
 
     @Override
     public void notifyUnexpected(String endpoint, Throwable cause) {
         String causeName = cause == null ? "Unknown" : cause.getClass().getSimpleName();
-        send("ERROR", endpoint, "INTERNAL_ERROR", causeName);
+        send("ERROR", endpoint, "INTERNAL_ERROR", causeName,
+                "INTERNAL_ERROR|" + causeName, cooldown);
     }
 
     boolean shouldNotify(ErrorCode errorCode) {
         return errorCode.status() >= 500 || errorCode.code().startsWith("AUTH_OAUTH_");
     }
 
-    private void send(String level, String endpoint, String code, String message) {
+    Duration cooldownFor(ErrorCode errorCode) {
+        return isOAuthInvalidToken(errorCode) ? oauthInvalidTokenCooldown : cooldown;
+    }
+
+    String deduplicationGroupFor(ErrorCode errorCode) {
+        return isOAuthInvalidToken(errorCode) ? "AUTH_OAUTH_TOKEN_INVALID" : errorCode.code();
+    }
+
+    private boolean isOAuthInvalidToken(ErrorCode errorCode) {
+        return errorCode.status() == 401
+                && errorCode.code().startsWith("AUTH_OAUTH_")
+                && errorCode.code().endsWith("_TOKEN_INVALID");
+    }
+
+    private void send(String level, String endpoint, String code, String message,
+                      String deduplicationGroup, Duration notificationCooldown) {
         if (botToken.isBlank() || roomId.isBlank()) {
             return;
         }
 
-        // 같은 종류의 오류가 반복돼도 Webex API rate limit을 소진하지 않게 중복을 억제함.
-        // 예기치 않은 오류는 message에 넣은 exception class까지 구분한다.
-        String deduplicationKey = level + '|' + code + '|' + message;
+        // 공개 OAuth endpoint의 잘못된 토큰은 공급자 전체를 하나로 묶고, 5xx와는 별도 그룹으로
+        // 중복을 억제해 외부 입력이 서버 오류 알림을 방해하지 못하게 함.
+        String deduplicationKey = level + '|' + deduplicationGroup;
         Instant now = clock.instant();
-        if (!acquireCooldown(deduplicationKey, now)) {
+        if (!acquireCooldown(deduplicationKey, now, notificationCooldown)) {
             return;
         }
 
@@ -120,13 +143,13 @@ public class WebexOperationalAlertNotifier implements OperationalAlertNotifier {
         }
     }
 
-    private boolean acquireCooldown(String key, Instant now) {
+    private boolean acquireCooldown(String key, Instant now, Duration notificationCooldown) {
         while (true) {
             Instant previous = lastSentAt.putIfAbsent(key, now);
             if (previous == null) {
                 return true;
             }
-            if (previous.plus(cooldown).isAfter(now)) {
+            if (previous.plus(notificationCooldown).isAfter(now)) {
                 return false;
             }
             if (lastSentAt.replace(key, previous, now)) {
