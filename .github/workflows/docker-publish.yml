@@ -115,8 +115,8 @@ jobs:
           set -euo pipefail
 
           if [ -z "$WEBEX_BOT_TOKEN" ] || [[ "$WEBEX_BOT_TOKEN" =~ [[:space:]] ]]; then
-            echo "WEBEX_BOT_TOKEN is missing or invalid" >&2
-            exit 1
+            echo "::warning::WEBEX_BOT_TOKEN is missing or invalid; keeping the existing SSM value"
+            exit 0
           fi
 
           aws ssm put-parameter \
@@ -174,8 +174,8 @@ jobs:
           set -euo pipefail
 
           if [ -z "$WEBEX_ROOM_ID" ] || [[ "$WEBEX_ROOM_ID" =~ [[:space:]] ]]; then
-            echo "WEBEX_ROOM_ID is missing or invalid" >&2
-            exit 1
+            echo "::warning::WEBEX_ROOM_ID is missing or invalid; keeping the existing runtime value"
+            WEBEX_ROOM_ID=""
           fi
 
           account_id="$(aws sts get-caller-identity --query Account --output text)"
