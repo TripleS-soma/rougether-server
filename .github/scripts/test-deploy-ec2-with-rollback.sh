@@ -65,6 +65,7 @@ reset_scenario() {
   AWS_MOCK_MODE="fail"
   AWS_MOCK_PAYLOAD=""
   WEBEX_ROOM_ID="test-room-id"
+  ENVIRONMENT="dev"
 
   mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"

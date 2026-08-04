@@ -19,6 +19,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::478572912668:role/rougether-dev-github-actions-deploy
   ECR_REPOSITORY_PREFIX: rougether-dev
   IMAGE_TAG: dev
+  DEPLOYMENT_ENVIRONMENT: dev
   FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
 
@@ -195,6 +196,7 @@ jobs:
               -e "s|__FIREBASE_PARAMETER_NAME__|${FIREBASE_CREDENTIALS_PARAMETER}|g" \
               -e "s|__WEBEX_BOT_TOKEN_PARAMETER_NAME__|${WEBEX_BOT_TOKEN_PARAMETER}|g" \
               -e "s|__WEBEX_ROOM_ID__|${WEBEX_ROOM_ID}|g" \
+              -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
           script="$(printf "bash -se <<'ROUGETHER_DEPLOY_SCRIPT'\n%s\nROUGETHER_DEPLOY_SCRIPT\n" "$deploy_script")"

@@ -10,6 +10,7 @@ DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
 WEBEX_BOT_TOKEN_PARAMETER_NAME="__WEBEX_BOT_TOKEN_PARAMETER_NAME__"
 WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
+ENVIRONMENT="__ENVIRONMENT__"
 
 ENV_DIR="/etc/rougether"
 SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -194,7 +195,7 @@ refresh_webex_alert_env() {
   if [ "$replace_room" = true ]; then
     printf 'OPERATIONS_WEBEX_ROOM_ID=%s\n' "$WEBEX_ROOM_ID" >> "$temporary_env"
   fi
-  printf 'ROUGETHER_ENVIRONMENT=dev\n' >> "$temporary_env"
+  printf 'ROUGETHER_ENVIRONMENT=%s\n' "$ENVIRONMENT" >> "$temporary_env"
 
   chmod 600 "$temporary_env"
   mv -f "$temporary_env" "$USER_RUNTIME_ENV"
