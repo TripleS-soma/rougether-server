@@ -227,6 +227,8 @@ user-api는 다음 오류만 기존 `Rougether Git Bot`을 통해 Webex 스페�
 공개 endpoint에서 발생하는 OAuth 토큰 무효 오류는 공급자 전체를 묶어 기본 1시간에 한 번만 보냅니다.
 메시지에는 요청 본문이나 토큰을 넣지 않으며 mention도 무력화합니다. Webex bot token은 Terraform state나
 저장소에 넣지 않고 `/${project_name}-${environment}/alerts/webex-bot-token` SecureString으로 관리합니다.
+room ID도 실제 값을 저장소에 넣지 않고 `/${project_name}-${environment}/alerts/webex-room-id` String으로
+동기화해 인스턴스 교체 시 user-data가 함께 복원합니다.
 
 GitHub 저장소에는 기존 API 변경 알림과 동일하게 다음 값을 설정합니다.
 
@@ -235,7 +237,7 @@ GitHub 저장소에는 기존 API 변경 알림과 동일하게 다음 값을 �
 
 봇은 해당 Webex 스페이스의 멤버여야 합니다. Terraform이 GitHub Actions role의 정확한 parameter ARN
 쓰기 권한과 EC2 role의 조회 권한을 관리하므로 권한 변경을 먼저 적용합니다. 이후 main 배포가 기존
-GitHub secret을 SecureString으로 동기화하고 `/etc/rougether/user-api.env`에 원자적으로 반영합니다.
+GitHub secret과 variable을 SSM으로 동기화하고 `/etc/rougether/user-api.env`에 원자적으로 반영합니다.
 SSM 조회 또는 토큰 검증이 실패하면 기존 정상 토큰을 유지하며, 등록된 토큰이 전혀 없으면 알림만
 비활성화되고 API는 정상 기동합니다.
 

@@ -13,8 +13,10 @@ locals {
   firebase_credentials_param = "/${local.name}/firebase/credentials-json"
   # 값은 GitHub Actions secret 동기화가 관리해 Terraform state 유입을 막는다.
   webex_bot_token_param = "/${local.name}/alerts/webex-bot-token"
-  ecr_registry_server   = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url       = "https://token.actions.githubusercontent.com"
+  # room ID는 비밀은 아니지만 실제 값을 저장소에 넣지 않고 GitHub Actions가 String으로 동기화한다.
+  webex_room_id_param = "/${local.name}/alerts/webex-room-id"
+  ecr_registry_server = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url     = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -507,9 +509,12 @@ resource "aws_iam_role_policy" "webex_alert_runtime" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["ssm:GetParameter"]
-      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}"
+      Effect = "Allow"
+      Action = ["ssm:GetParameter"]
+      Resource = [
+        "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}",
+        "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_room_id_param, "/")}"
+      ]
     }]
   })
 }
@@ -648,9 +653,12 @@ resource "aws_iam_role_policy" "webex_alert_secret_sync" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["ssm:PutParameter"]
-      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}"
+      Effect = "Allow"
+      Action = ["ssm:PutParameter"]
+      Resource = [
+        "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}",
+        "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_room_id_param, "/")}"
+      ]
     }]
   })
 }
@@ -699,6 +707,7 @@ resource "aws_instance" "app" {
     admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
     firebase_credentials_param = local.firebase_credentials_param
     webex_bot_token_param      = local.webex_bot_token_param
+    webex_room_id_param        = local.webex_room_id_param
     environment                = var.environment
     asset_bucket_name          = var.asset_bucket_name
     asset_region               = var.asset_region
