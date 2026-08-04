@@ -215,6 +215,40 @@ ENVIRONMENT_TAG=staging \
   deploy/scripts/put-firebase-credentials.sh /path/to/firebase-adminsdk.json
 ```
 
+## Webex 운영 오류 알림
+
+user-api는 다음 오류만 기존 `Rougether Git Bot`을 통해 Webex 스페이스로 비동기 전송합니다.
+
+- `AUTH_OAUTH_*` 소셜 로그인 토큰·인증 서버 오류
+- 모든 5xx `BusinessException`
+- 예기치 않은 500 오류
+
+일반 4xx는 알림 폭주를 막기 위해 제외하고, 같은 오류 코드는 기본 1분 동안 한 번만 보냅니다.
+메시지에는 요청 본문이나 토큰을 넣지 않으며 mention도 무력화합니다. Webex bot token은 Terraform state나
+저장소에 넣지 않고 `/${project_name}-${environment}/alerts/webex-bot-token` SecureString으로 관리합니다.
+
+GitHub 저장소에는 기존 API 변경 알림과 동일하게 다음 값을 설정합니다.
+
+- secret `WEBEX_BOT_TOKEN`
+- variable `WEBEX_ROOM_ID`
+
+봇은 해당 Webex 스페이스의 멤버여야 합니다. Terraform이 GitHub Actions role의 정확한 parameter ARN
+쓰기 권한과 EC2 role의 조회 권한을 관리하므로 권한 변경을 먼저 적용합니다. 이후 main 배포가 기존
+GitHub secret을 SecureString으로 동기화하고 `/etc/rougether/user-api.env`에 원자적으로 반영합니다.
+SSM 조회 또는 토큰 검증이 실패하면 기존 정상 토큰을 유지하며, 등록된 토큰이 전혀 없으면 알림만
+비활성화되고 API는 정상 기동합니다.
+
+```bash
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+파라미터 이름이나 Webex 스페이스를 바꾼 환경에서는 deploy workflow 값과 Terraform 변수를 함께 맞춥니다.
+
+```hcl
+webex_room_id = "target-webex-room-id"
+```
+
 ## HTTPS (CloudFront)
 
 iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하기 때문에, 앱스토어 제출용으로 user-api 앞에 CloudFront 를 둡니다(`cloudfront.tf`). 도메인 구매 없이 `xxxx.cloudfront.net` 기본 도메인과 기본 인증서(TLS 1.2+)로 ATS 요건을 충족합니다.

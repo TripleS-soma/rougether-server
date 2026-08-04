@@ -32,6 +32,17 @@ export AWS_REGION='${aws_region}'
 DB_PASSWORD="$(aws ssm get-parameter --name '${db_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 JWT_SECRET="$(aws ssm get-parameter --name '${jwt_secret_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
 ADMIN_SEED_PASSWORD="$(aws ssm get-parameter --name '${admin_seed_password_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}')"
+WEBEX_BOT_TOKEN="$(aws ssm get-parameter --name '${webex_bot_token_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
+
+webex_bot_token_valid() {
+  python3 -c '
+import sys
+
+value = sys.stdin.read().strip()
+valid = bool(value) and len(value) <= 2048 and not any(character.isspace() for character in value)
+raise SystemExit(0 if valid else 1)
+'
+}
 
 firebase_credentials_valid() {
   local credentials_file="$1"
@@ -100,6 +111,14 @@ EOF
 
 if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
   printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/user-api.env"
+fi
+
+printf '\nROUGETHER_ENVIRONMENT=${environment}\n' >> "$ENV_DIR/user-api.env"
+printf 'OPERATIONS_WEBEX_ROOM_ID=${webex_room_id}\n' >> "$ENV_DIR/user-api.env"
+if printf '%s' "$WEBEX_BOT_TOKEN" | webex_bot_token_valid; then
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=%s\n' "$WEBEX_BOT_TOKEN" >> "$ENV_DIR/user-api.env"
+else
+  echo "Webex bot token unavailable or invalid; operational alerts are disabled" >&2
 fi
 
 cat > "$ENV_DIR/admin-api.env" <<EOF

@@ -8,6 +8,8 @@ NEW_ADMIN_IMAGE="__ADMIN_IMAGE__"
 NEW_BATCH_IMAGE="__BATCH_IMAGE__"
 DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
+WEBEX_BOT_TOKEN_PARAMETER_NAME="__WEBEX_BOT_TOKEN_PARAMETER_NAME__"
+WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 
 ENV_DIR="/etc/rougether"
 SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -132,6 +134,71 @@ ensure_user_runtime_env() {
 
   chmod 600 "$temporary_env" || return 1
   mv -f "$temporary_env" "$USER_RUNTIME_ENV" || return 1
+}
+
+webex_bot_token_valid() {
+  local token_file="$1"
+
+  python3 - "$token_file" <<'PY'
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as token_file:
+    value = token_file.read().strip()
+
+valid = bool(value) and len(value) <= 2048 and not any(character.isspace() for character in value)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+webex_room_id_valid() {
+  [ -n "$WEBEX_ROOM_ID" ] \
+    && [ "${#WEBEX_ROOM_ID}" -le 1024 ] \
+    && [[ "$WEBEX_ROOM_ID" != *[[:space:]]* ]]
+}
+
+refresh_webex_alert_env() {
+  local token_file temporary_env replace_token=false replace_room=false
+
+  if [ ! -f "$USER_RUNTIME_ENV" ]; then
+    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+
+  token_file="$(mktemp "$ENV_DIR/.webex-bot-token.XXXXXX")"
+  if aws ssm get-parameter --name "$WEBEX_BOT_TOKEN_PARAMETER_NAME" --with-decryption \
+      --query 'Parameter.Value' --output text --region "$AWS_REGION" > "$token_file" \
+      && webex_bot_token_valid "$token_file"; then
+    replace_token=true
+  else
+    echo "Webex bot token unavailable or invalid; keeping the current token" >&2
+  fi
+
+  if webex_room_id_valid; then
+    replace_room=true
+  else
+    echo "Webex room ID unavailable or invalid; keeping the current room ID" >&2
+  fi
+
+  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
+  awk -v replace_token="$replace_token" -v replace_room="$replace_room" '
+    /^OPERATIONS_DISCORD_WEBHOOK_URL=/ { next }
+    /^ROUGETHER_ENVIRONMENT=/ { next }
+    replace_token == "true" && /^OPERATIONS_WEBEX_BOT_TOKEN=/ { next }
+    replace_room == "true" && /^OPERATIONS_WEBEX_ROOM_ID=/ { next }
+    { print }
+  ' "$USER_RUNTIME_ENV" > "$temporary_env"
+
+  if [ "$replace_token" = true ]; then
+    printf '\nOPERATIONS_WEBEX_BOT_TOKEN=%s\n' "$(tr -d '\r\n' < "$token_file")" >> "$temporary_env"
+  fi
+  if [ "$replace_room" = true ]; then
+    printf 'OPERATIONS_WEBEX_ROOM_ID=%s\n' "$WEBEX_ROOM_ID" >> "$temporary_env"
+  fi
+  printf 'ROUGETHER_ENVIRONMENT=dev\n' >> "$temporary_env"
+
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$USER_RUNTIME_ENV"
+  rm -f "$token_file"
 }
 
 bootstrap_batch_runtime_env() {
@@ -538,6 +605,7 @@ if ! ensure_user_runtime_env; then
   cleanup_firebase_credentials_backup
   exit 1
 fi
+refresh_webex_alert_env
 
 trap rollback ERR
 

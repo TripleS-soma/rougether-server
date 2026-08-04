@@ -11,8 +11,10 @@ locals {
   jwt_secret_param          = "/${local.name}/jwt/secret"
   # 값은 deploy/scripts/put-firebase-credentials.sh가 관리해 Terraform state 유입을 막는다.
   firebase_credentials_param = "/${local.name}/firebase/credentials-json"
-  ecr_registry_server        = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url            = "https://token.actions.githubusercontent.com"
+  # 값은 GitHub Actions secret 동기화가 관리해 Terraform state 유입을 막는다.
+  webex_bot_token_param = "/${local.name}/alerts/webex-bot-token"
+  ecr_registry_server   = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url       = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_caller_identity" "current" {}
@@ -496,6 +498,27 @@ resource "aws_iam_role_policy" "app" {
   })
 }
 
+# Webex bot token은 별도 SecureString으로 관리한다. 기존 app policy의 다른 미적용 변경과 분리해
+# 이 권한만 안전하게 선적용할 수 있도록 독립 inline policy로 둔다.
+resource "aws_iam_role_policy" "webex_alert_runtime" {
+  name = "${local.name}-webex-alert-runtime-policy"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter"]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}"
+    }]
+  })
+}
+
+moved {
+  from = aws_iam_role_policy.discord_alert
+  to   = aws_iam_role_policy.webex_alert_runtime
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${local.name}-ec2-profile"
   role = aws_iam_role.ec2.name
@@ -616,6 +639,21 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
   })
 }
 
+# 기존 Webex bot token secret을 배포 때 SecureString으로 동기화하는 최소 권한.
+resource "aws_iam_role_policy" "webex_alert_secret_sync" {
+  name = "${local.name}-webex-alert-secret-sync-policy"
+  role = aws_iam_role.github_actions_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:PutParameter"]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.webex_bot_token_param, "/")}"
+    }]
+  })
+}
+
 resource "aws_instance" "app" {
   ami                         = local.instance_ami_id
   instance_type               = var.instance_type
@@ -659,6 +697,9 @@ resource "aws_instance" "app" {
     admin_seed_username        = var.admin_seed_username
     admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
     firebase_credentials_param = local.firebase_credentials_param
+    webex_bot_token_param      = local.webex_bot_token_param
+    webex_room_id              = var.webex_room_id
+    environment                = var.environment
     asset_bucket_name          = var.asset_bucket_name
     asset_region               = var.asset_region
     asset_public_base_url      = var.asset_public_base_url
@@ -672,6 +713,7 @@ resource "aws_instance" "app" {
   depends_on = [
     aws_db_instance.mysql,
     aws_iam_role_policy.app,
+    aws_iam_role_policy.webex_alert_runtime,
     aws_iam_role_policy_attachment.ssm_managed_instance
   ]
 

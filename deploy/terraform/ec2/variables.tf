@@ -16,6 +16,12 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "webex_room_id" {
+  description = "Webex room ID used for operational alerts. The bot token remains in GitHub secrets and SSM."
+  type        = string
+  default     = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNzQ0MmE3MjAtM2JlOS0xMWYxLTk1YzEtMjNhNmNjZTI4Yjcx"
+}
+
 variable "repository_url" {
   description = "Deprecated. Kept for compatibility with the old EC2 build flow."
   type        = string
