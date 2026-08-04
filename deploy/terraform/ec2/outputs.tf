@@ -82,3 +82,8 @@ output "webex_bot_token_parameter" {
   description = "SSM SecureString parameter name containing the Webex operational-alert bot token."
   value       = local.webex_bot_token_param
 }
+
+output "webex_room_id_parameter" {
+  description = "SSM String parameter name containing the Webex operational-alert room ID."
+  value       = local.webex_room_id_param
+}

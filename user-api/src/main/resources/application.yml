@@ -65,6 +65,7 @@ operations:
     room-id: ${OPERATIONS_WEBEX_ROOM_ID:}
     environment: ${ROUGETHER_ENVIRONMENT:dev}
     cooldown: ${OPERATIONS_WEBEX_COOLDOWN:PT1M}
+    oauth-invalid-token-cooldown: ${OPERATIONS_WEBEX_OAUTH_INVALID_TOKEN_COOLDOWN:PT1H}
 
 asset:
   s3:

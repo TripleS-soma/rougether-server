@@ -22,6 +22,7 @@ env:
   DEPLOYMENT_ENVIRONMENT: dev
   FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
+  WEBEX_ROOM_ID_PARAMETER: /rougether-dev/alerts/webex-room-id
 
 jobs:
   test:
@@ -108,25 +109,37 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Sync Webex bot token to SSM
+      - name: Sync Webex alert configuration to SSM
         shell: bash
         env:
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
+          WEBEX_ROOM_ID: ${{ vars.WEBEX_ROOM_ID }}
         run: |
           set -euo pipefail
 
           if [ -z "$WEBEX_BOT_TOKEN" ] || [[ "$WEBEX_BOT_TOKEN" =~ [[:space:]] ]]; then
             echo "::warning::WEBEX_BOT_TOKEN is missing or invalid; keeping the existing SSM value"
-            exit 0
+          else
+            aws ssm put-parameter \
+              --name "$WEBEX_BOT_TOKEN_PARAMETER" \
+              --type SecureString \
+              --value "$WEBEX_BOT_TOKEN" \
+              --description "Rougether Webex operational-alert bot token" \
+              --overwrite \
+              --no-cli-pager >/dev/null
           fi
 
-          aws ssm put-parameter \
-            --name "$WEBEX_BOT_TOKEN_PARAMETER" \
-            --type SecureString \
-            --value "$WEBEX_BOT_TOKEN" \
-            --description "Rougether Webex operational-alert bot token" \
-            --overwrite \
-            --no-cli-pager >/dev/null
+          if [ -z "$WEBEX_ROOM_ID" ] || [[ "$WEBEX_ROOM_ID" =~ [[:space:]] ]]; then
+            echo "::warning::WEBEX_ROOM_ID is missing or invalid; keeping the existing SSM value"
+          else
+            aws ssm put-parameter \
+              --name "$WEBEX_ROOM_ID_PARAMETER" \
+              --type String \
+              --value "$WEBEX_ROOM_ID" \
+              --description "Rougether Webex operational-alert room ID" \
+              --overwrite \
+              --no-cli-pager >/dev/null
+          fi
 
       - name: Login to ECR
         id: ecr
