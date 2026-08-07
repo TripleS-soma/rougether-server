@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.domain.bugreport.entity.BugReportStatus;
@@ -16,6 +17,7 @@ import com.triples.rougether.userapi.bugreport.service.BugReportService;
 import com.triples.rougether.userapi.bugreport.web.BugReportController;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
+import com.triples.rougether.userapi.global.storage.StoredAsset;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -97,5 +99,21 @@ class BugReportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].bugReportId").value(2))
                 .andExpect(jsonPath("$.items[0].status").value("IN_PROGRESS"));
+    }
+
+    @Test
+    void 내_스크린샷은_인증된_소유권_조회로_반환한다() throws Exception {
+        authAsUser7();
+        when(bugReportService.getMyScreenshot(7L, "bug-reports/a.png"))
+                .thenReturn(new StoredAsset(new byte[] {1, 2, 3}, "image/png"));
+
+        mockMvc.perform(get("/api/v1/me/bug-reports/screenshots")
+                        .param("key", "bug-reports/a.png"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .content().contentType("image/png"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .content().bytes(new byte[] {1, 2, 3}));
     }
 }

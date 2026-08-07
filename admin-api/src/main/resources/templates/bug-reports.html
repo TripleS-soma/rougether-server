@@ -70,7 +70,6 @@
     </main>
 
     <script th:inline="javascript">
-        const s3BaseUrl = /*[[${s3BaseUrl}]]*/ '';
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
         const STATUSES = [['RECEIVED', '접수'], ['IN_PROGRESS', '확인 중'], ['RESOLVED', '완료']];
@@ -122,15 +121,16 @@
 
             const shotCell = document.createElement('td');
             (item.screenshotKeys ?? []).forEach((key) => {
+                const screenshotUrl = '/admin/bug-reports/screenshots?key=' + encodeURIComponent(key);
                 const link = document.createElement('a');
-                link.href = s3BaseUrl + '/' + key;
+                link.href = screenshotUrl;
                 link.target = '_blank';
                 link.rel = 'noopener';
                 const img = document.createElement('img');
                 img.className = 'slot-thumb';
                 img.loading = 'lazy';
                 img.alt = '스크린샷';
-                img.src = s3BaseUrl + '/' + key;
+                img.src = screenshotUrl;
                 link.appendChild(img);
                 shotCell.appendChild(link);
             });

@@ -6,6 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("asset")
 public record AssetProperties(S3 s3) {
 
-    public record S3(String bucket, String region) {
+    public record S3(String bucket, String region, boolean purgeVersionsOnDelete) {
     }
 }

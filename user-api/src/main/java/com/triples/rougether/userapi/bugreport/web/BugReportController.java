@@ -5,13 +5,16 @@ import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.service.BugReportService;
+import com.triples.rougether.userapi.global.storage.StoredAsset;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -55,5 +58,21 @@ public class BugReportController {
     @GetMapping("/me/bug-reports")
     public BugReportListResponse getMyReports(@CurrentUser AuthUser user) {
         return bugReportService.getMyReports(user.id());
+    }
+
+    @Operation(summary = "내 버그 제보 스크린샷 조회",
+            description = "내가 제출한 버그 제보의 비공개 스크린샷만 조회합니다.")
+    @GetMapping("/me/bug-reports/screenshots")
+    public ResponseEntity<byte[]> getMyScreenshot(@CurrentUser AuthUser user,
+                                                  @RequestParam("key") String key) {
+        StoredAsset screenshot = bugReportService.getMyScreenshot(user.id(), key);
+        MediaType contentType = screenshot.contentType() == null
+                ? MediaType.APPLICATION_OCTET_STREAM
+                : MediaType.parseMediaType(screenshot.contentType());
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore().mustRevalidate())
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(contentType)
+                .body(screenshot.content());
     }
 }

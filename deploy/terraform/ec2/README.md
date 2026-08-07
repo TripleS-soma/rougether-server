@@ -3,11 +3,12 @@
 This stack is a small team/dev deployment:
 
 - EC2 Amazon Linux 2023 instance
-- RDS MySQL in the default VPC
+- RDS MySQL in the default VPC, or in a Terraform-managed VPC for accounts without one
 - `user-api` on port `8080`, fronted by CloudFront for HTTPS (`*.cloudfront.net`)
 - `admin-api` on port `8081`
 - `batch` (루틴 리마인드 발송) — 외부 접근 없이 `127.0.0.1:8082` 헬스체크만 노출
-- EC2 instance role for S3 uploads to the existing asset bucket
+- EC2 instance role for scoped S3 access
+- Optional private, encrypted S3 asset bucket exposed only through CloudFront OAC
 - SSM SecureString parameters for runtime secrets
 - SSM Session Manager access by default, with optional SSH
 - Private ECR repositories for Docker images
@@ -27,14 +28,30 @@ cp terraform.tfvars.example terraform.tfvars
 
 Edit `terraform.tfvars`:
 
-- Set `allowed_admin_api_cidrs` to team/VPN public IP CIDRs.
+- Keep `allowed_admin_api_cidrs = []`. The admin API is bound to EC2 localhost and is reachable
+  only through the encrypted SSM port-forwarding command exposed by Terraform.
 - Keep `allowed_ssh_cidrs = []` unless you need SSH.
+- Set `create_network = true` when the account has no default VPC. Terraform creates two
+  public subnets in separate AZs; RDS itself remains non-public and accepts MySQL only from EC2.
+- Set `create_asset_bucket = true`. By default, Terraform generates
+  `<project>-<environment>-<AWS account ID>-assets`; override `asset_bucket_name` only when the
+  target bucket name is already known and globally unique. When adopting an existing bucket,
+  import it into this stack before applying. Reads go through the generated CloudFront URL while
+  direct public S3 access stays blocked. `bug-reports/*` is intentionally excluded from the
+  public CDN and is read only through authenticated user/admin APIs. Profile reads use a no-cache
+  behavior so withdrawal deletion is not retained at the edge.
+- External asset buckets are rejected by this module because their existing public policy cannot
+  guarantee that `bug-reports/*` is private. Migrate objects into the managed bucket before cutover.
 - Set `admin_seed_password` or let Terraform generate one.
 - Leave `user_api_image`, `admin_api_image`, and `container_registry_server` as `null` to use the Terraform-managed private ECR repositories.
 - Override image and registry variables only when deploying from another registry.
 
 Do not commit `terraform.tfvars` or Terraform state.
 Firebase 서비스 계정 JSON도 `terraform.tfvars`에 넣지 않습니다. 실제 값은 아래 전용 스크립트로 SSM에 직접 등록합니다.
+Kakao Admin key와 Apple team/key/private/encryption key도 `social_auth_parameter_names` output의
+SSM SecureString에 저장해야 합니다. EC2 role은 이 정확한 parameter들만 읽으며 user-data가
+`user-api.env`에 주입합니다. 값이 없으면 서버는 기동하지만 Kakao unlink와 Apple 로그인/revoke는
+fail-closed로 실패합니다.
 
 ## Build Images
 
@@ -164,8 +181,24 @@ After apply:
 ```bash
 terraform output user_api_health_url
 terraform output admin_url
+terraform output admin_tunnel_command
 terraform output ssm_session_command
+terraform output asset_public_base_url
 ```
+
+AWS IAM Identity Center를 쓰는 계정은 로그인한 profile을 Terraform과 보조 스크립트에 동일하게
+전달합니다.
+
+```bash
+aws sso login --profile rougether-isb
+AWS_PROFILE=rougether-isb terraform plan -out=tfplan
+AWS_PROFILE=rougether-isb terraform apply tfplan
+AWS_PROFILE=rougether-isb ../../scripts/db-tunnel.sh
+```
+
+GitHub Actions 배포 계정을 옮길 때는 저장소 variable `AWS_DEPLOY_ROLE_ARN`에 새 stack의
+`github_actions_deploy_role_arn` output을 설정합니다. variable을 설정하기 전에는 workflow가 기존
+계정 role을 fallback으로 사용하므로, 새 환경 검증과 애플리케이션 endpoint 전환을 끝낸 뒤 변경합니다.
 
 If Terraform generated the admin password, read it from SSM:
 
@@ -260,7 +293,7 @@ terraform output -raw user_api_https_base_url
 ```
 
 - 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
-- admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를 태우지 않고 기존 직접 접속을 유지합니다. CloudFront 를 거치면 요청 소스가 CloudFront 엣지 IP 가 되어 IP 제한이 무력화되기 때문입니다.
+- admin-api(:8081)는 EC2 localhost에만 bind하며 CloudFront/public ingress를 두지 않습니다. 브라우저 접근은 SSM 포트 포워딩(TLS 보호)을 먼저 열고 `http://127.0.0.1:8081`을 사용합니다.
 - CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
 - origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
@@ -284,13 +317,17 @@ terraform apply \
 
 ```bash
 curl "$(terraform output -raw user_api_health_url)"
-curl "$(terraform output -raw admin_health_url)"
 curl "$(terraform output -raw user_api_https_health_url)"
 ```
 
-Open:
+Admin은 별도 터미널에서 SSM 터널을 유지한 뒤 로컬 주소로 확인합니다.
 
 ```bash
+$(terraform output -raw admin_tunnel_command)
+```
+
+```bash
+curl "$(terraform output -raw admin_health_url)"
 open "$(terraform output -raw admin_url)"
 ```
 

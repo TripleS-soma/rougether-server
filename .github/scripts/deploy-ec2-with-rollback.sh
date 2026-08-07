@@ -9,6 +9,11 @@ NEW_BATCH_IMAGE="__BATCH_IMAGE__"
 DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
 WEBEX_BOT_TOKEN_PARAMETER_NAME="__WEBEX_BOT_TOKEN_PARAMETER_NAME__"
+KAKAO_ADMIN_KEY_PARAMETER_NAME="__KAKAO_ADMIN_KEY_PARAMETER_NAME__"
+APPLE_TEAM_ID_PARAMETER_NAME="__APPLE_TEAM_ID_PARAMETER_NAME__"
+APPLE_KEY_ID_PARAMETER_NAME="__APPLE_KEY_ID_PARAMETER_NAME__"
+APPLE_PRIVATE_KEY_PARAMETER_NAME="__APPLE_PRIVATE_KEY_PARAMETER_NAME__"
+APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="__APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME__"
 WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 ENVIRONMENT="__ENVIRONMENT__"
 
@@ -135,6 +140,134 @@ ensure_user_runtime_env() {
 
   chmod 600 "$temporary_env" || return 1
   mv -f "$temporary_env" "$USER_RUNTIME_ENV" || return 1
+}
+
+escape_multiline_env_value() {
+  python3 -c '
+import sys
+
+value = sys.stdin.read()
+value = value.replace("\r\n", "\n").replace("\r", "\n")
+sys.stdout.write(value.replace("\n", r"\n"))
+'
+}
+
+single_line_secret_valid() {
+  local value_file="$1"
+  local maximum_length="$2"
+
+  python3 - "$value_file" "$maximum_length" <<'PY'
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as value_file:
+    value = value_file.read().strip()
+valid = bool(value) and len(value) <= int(sys.argv[2]) and not any(character.isspace() for character in value)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+multiline_secret_valid() {
+  local value_file="$1"
+  python3 - "$value_file" <<'PY'
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as value_file:
+    value = value_file.read()
+valid = bool(value.strip()) and len(value) <= 16384 and "\0" not in value
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+fetch_secret_parameter() {
+  local parameter_name="$1"
+  local destination="$2"
+  aws ssm get-parameter --name "$parameter_name" --with-decryption \
+    --query 'Parameter.Value' --output text --region "$AWS_REGION" > "$destination"
+}
+
+refresh_social_auth_env() {
+  local kakao_file apple_team_file apple_key_file apple_private_file apple_enc_file temporary_env
+  local replace_kakao=false replace_apple_team=false replace_apple_key=false
+  local replace_apple_private=false replace_apple_enc=false
+
+  if [ ! -f "$USER_RUNTIME_ENV" ]; then
+    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+
+  kakao_file="$(mktemp "$ENV_DIR/.kakao-admin-key.XXXXXX")"
+  apple_team_file="$(mktemp "$ENV_DIR/.apple-team-id.XXXXXX")"
+  apple_key_file="$(mktemp "$ENV_DIR/.apple-key-id.XXXXXX")"
+  apple_private_file="$(mktemp "$ENV_DIR/.apple-private-key.XXXXXX")"
+  apple_enc_file="$(mktemp "$ENV_DIR/.apple-refresh-token-key.XXXXXX")"
+
+  if fetch_secret_parameter "$KAKAO_ADMIN_KEY_PARAMETER_NAME" "$kakao_file" \
+      && single_line_secret_valid "$kakao_file" 2048; then
+    replace_kakao=true
+  else
+    echo "Kakao admin key unavailable or invalid; keeping the current runtime value" >&2
+  fi
+  if fetch_secret_parameter "$APPLE_TEAM_ID_PARAMETER_NAME" "$apple_team_file" \
+      && single_line_secret_valid "$apple_team_file" 128; then
+    replace_apple_team=true
+  else
+    echo "Apple team ID unavailable or invalid; keeping the current runtime value" >&2
+  fi
+  if fetch_secret_parameter "$APPLE_KEY_ID_PARAMETER_NAME" "$apple_key_file" \
+      && single_line_secret_valid "$apple_key_file" 128; then
+    replace_apple_key=true
+  else
+    echo "Apple key ID unavailable or invalid; keeping the current runtime value" >&2
+  fi
+  if fetch_secret_parameter "$APPLE_PRIVATE_KEY_PARAMETER_NAME" "$apple_private_file" \
+      && multiline_secret_valid "$apple_private_file"; then
+    replace_apple_private=true
+  else
+    echo "Apple private key unavailable or invalid; keeping the current runtime value" >&2
+  fi
+  if fetch_secret_parameter "$APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME" "$apple_enc_file" \
+      && single_line_secret_valid "$apple_enc_file" 4096; then
+    replace_apple_enc=true
+  else
+    echo "Apple refresh-token key unavailable or invalid; keeping the current runtime value" >&2
+  fi
+
+  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
+  awk \
+    -v replace_kakao="$replace_kakao" \
+    -v replace_apple_team="$replace_apple_team" \
+    -v replace_apple_key="$replace_apple_key" \
+    -v replace_apple_private="$replace_apple_private" \
+    -v replace_apple_enc="$replace_apple_enc" '
+      /^ASSET_S3_PURGE_VERSIONS=/ { next }
+      replace_kakao == "true" && /^KAKAO_ADMIN_KEY=/ { next }
+      replace_apple_team == "true" && /^APPLE_TEAM_ID=/ { next }
+      replace_apple_key == "true" && /^APPLE_KEY_ID=/ { next }
+      replace_apple_private == "true" && /^APPLE_PRIVATE_KEY=/ { next }
+      replace_apple_enc == "true" && /^APPLE_REFRESH_TOKEN_ENC_KEY=/ { next }
+      { print }
+  ' "$USER_RUNTIME_ENV" > "$temporary_env"
+
+  printf '\nASSET_S3_PURGE_VERSIONS=true\n' >> "$temporary_env"
+  if [ "$replace_kakao" = true ]; then
+    printf 'KAKAO_ADMIN_KEY=%s\n' "$(tr -d '\r\n' < "$kakao_file")" >> "$temporary_env"
+  fi
+  if [ "$replace_apple_team" = true ]; then
+    printf 'APPLE_TEAM_ID=%s\n' "$(tr -d '\r\n' < "$apple_team_file")" >> "$temporary_env"
+  fi
+  if [ "$replace_apple_key" = true ]; then
+    printf 'APPLE_KEY_ID=%s\n' "$(tr -d '\r\n' < "$apple_key_file")" >> "$temporary_env"
+  fi
+  if [ "$replace_apple_private" = true ]; then
+    printf 'APPLE_PRIVATE_KEY=%s\n' "$(escape_multiline_env_value < "$apple_private_file")" >> "$temporary_env"
+  fi
+  if [ "$replace_apple_enc" = true ]; then
+    printf 'APPLE_REFRESH_TOKEN_ENC_KEY=%s\n' "$(tr -d '\r\n' < "$apple_enc_file")" >> "$temporary_env"
+  fi
+
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$USER_RUNTIME_ENV"
+  rm -f "$kakao_file" "$apple_team_file" "$apple_key_file" "$apple_private_file" "$apple_enc_file"
 }
 
 webex_bot_token_valid() {
@@ -267,11 +400,10 @@ wait_health() {
   local name="$1"
   local url="$2"
 
-  # wall-clock 데드라인 — 횟수 기반은 실패당 최대 8초(curl 5초 + sleep 3초)씩 늘어나
-  # 워크플로의 SSM 감시 한도(120×10초=1,200초)를 넘길 수 있다. 총 대기를 시계 기준으로 못박아
-  # 최악(배포 2회 + 롤백 2회 대기)에도 4×240=960초로 감시 한도 안에 들어오게 한다.
-  # 240초는 실측 부팅(~30초)의 8배 여유. 테스트에서 단축할 수 있게 env 로만 조절 가능.
-  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-240}"
+  # wall-clock 데드라인 — 횟수 기반은 실패당 최대 8초(curl 5초 + sleep 3초)씩 늘어난다.
+  # t3.micro에서 user/admin JVM cold start가 10분 가까이 걸린 실측을 반영해 12분을 허용한다.
+  # workflow의 SSM 감시 한도는 40분이며, 테스트에서는 env로 짧게 덮어쓴다.
+  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-720}"
   local deadline=$(( SECONDS + timeout_seconds ))
   local attempt=0
 
@@ -440,7 +572,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/admin-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
-ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_ADMIN_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --env-file /etc/rougether/admin-api.env -p 127.0.0.1:8081:8081 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_ADMIN_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-admin-api
 
 [Install]
@@ -606,6 +738,7 @@ if ! ensure_user_runtime_env; then
   cleanup_firebase_credentials_backup
   exit 1
 fi
+refresh_social_auth_env
 refresh_webex_alert_env
 
 trap rollback ERR

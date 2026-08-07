@@ -1,5 +1,6 @@
 package com.triples.rougether.adminapi.bugreport.web;
 
+import com.triples.rougether.adminapi.asset.service.StoredAsset;
 import com.triples.rougether.adminapi.bugreport.dto.AdminBugReportResponse;
 import com.triples.rougether.adminapi.bugreport.error.BugReportAdminException;
 import com.triples.rougether.adminapi.bugreport.service.BugReportAdminService;
@@ -7,6 +8,8 @@ import com.triples.rougether.common.error.ErrorResponse;
 import com.triples.rougether.domain.bugreport.entity.BugReportStatus;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +37,19 @@ public class BugReportAdminController {
         // enum 바인딩 실패는 공통 에러 형식을 우회하므로 문자열로 받아 직접 파싱한다
         BugReportStatus parsed = (status == null || status.isBlank()) ? null : parseStatus(status);
         return Map.of("items", bugReportAdminService.getReports(parsed));
+    }
+
+    @GetMapping("/screenshots")
+    public ResponseEntity<byte[]> getScreenshot(@RequestParam("key") String key) {
+        StoredAsset screenshot = bugReportAdminService.getScreenshot(key);
+        MediaType contentType = screenshot.contentType() == null
+                ? MediaType.APPLICATION_OCTET_STREAM
+                : MediaType.parseMediaType(screenshot.contentType());
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore().mustRevalidate())
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(contentType)
+                .body(screenshot.content());
     }
 
     @PatchMapping("/{id}/status")

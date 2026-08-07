@@ -16,6 +16,29 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "create_network" {
+  description = "Create a dedicated VPC and two public subnets. Enable for sandbox accounts without a default VPC."
+  type        = bool
+  default     = false
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the Terraform-managed VPC."
+  type        = string
+  default     = "10.39.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for the Terraform-managed public subnets. At least two AZs are required by RDS."
+  type        = list(string)
+  default     = ["10.39.10.0/24", "10.39.20.0/24"]
+
+  validation {
+    condition     = length(var.public_subnet_cidrs) >= 2
+    error_message = "public_subnet_cidrs must contain at least two CIDRs for the RDS subnet group."
+  }
+}
+
 variable "repository_url" {
   description = "Deprecated. Kept for compatibility with the old EC2 build flow."
   type        = string
@@ -83,9 +106,14 @@ variable "allowed_user_api_cidrs" {
 }
 
 variable "allowed_admin_api_cidrs" {
-  description = "CIDR blocks allowed to access admin-api on port 8081. Prefer team/VPN IPs."
+  description = "Deprecated. Admin API is localhost-bound and must be accessed through an encrypted SSM tunnel."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = length(var.allowed_admin_api_cidrs) == 0
+    error_message = "allowed_admin_api_cidrs must remain empty; use an SSM port-forwarding tunnel for admin-api."
+  }
 }
 
 variable "allowed_ssh_cidrs" {
@@ -143,27 +171,64 @@ variable "db_skip_final_snapshot" {
 }
 
 variable "asset_bucket_name" {
-  description = "Existing public asset bucket name. Terraform does not create this bucket."
+  description = "Optional asset bucket name. When null, Terraform generates an account-scoped globally unique name."
   type        = string
-  default     = "rougether-assets"
+  default     = null
+
+  validation {
+    condition     = var.asset_bucket_name == null || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.asset_bucket_name))
+    error_message = "asset_bucket_name must be null or a valid lowercase S3 bucket name between 3 and 63 characters."
+  }
+}
+
+variable "create_asset_bucket" {
+  description = "Create the required private, versioned asset bucket and expose approved prefixes through CloudFront OAC. External public buckets are not supported."
+  type        = bool
+  default     = true
+
+  validation {
+    condition     = var.create_asset_bucket
+    error_message = "create_asset_bucket must be true; external asset buckets cannot guarantee private bug-report storage."
+  }
 }
 
 variable "asset_region" {
-  description = "S3 asset bucket region used by the Spring configuration."
+  description = "Optional S3 client region override. Managed buckets default to aws_region."
   type        = string
-  default     = "ap-northeast-2"
+  default     = null
 }
 
 variable "asset_public_base_url" {
-  description = "Public base URL used by admin preview links."
+  description = "Deprecated compatibility value. Managed asset buckets always use the generated CloudFront URL."
   type        = string
   default     = "https://rougether-assets.s3.ap-northeast-2.amazonaws.com"
+}
+
+variable "asset_public_read_prefixes" {
+  description = "S3 key prefixes readable through the public asset CloudFront distribution. Keep private user content out."
+  type        = list(string)
+  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*"]
+
+  validation {
+    condition = alltrue([
+      for prefix in var.asset_public_read_prefixes :
+      contains([
+        "items/*",
+        "characters/*",
+        "categories/*",
+        "themes/*",
+        "house/*",
+        "profile/*"
+      ], prefix)
+    ])
+    error_message = "asset_public_read_prefixes may contain only approved public asset prefixes; bug-reports and broad wildcards are private."
+  }
 }
 
 variable "asset_allowed_prefixes" {
   description = "S3 key prefixes the EC2 instance role may write to."
   type        = list(string)
-  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*"]
+  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*", "bug-reports/*"]
 }
 
 variable "admin_seed_enabled" {

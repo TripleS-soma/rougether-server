@@ -13,6 +13,7 @@ import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.error.BugReportErrorCode;
 import com.triples.rougether.userapi.bugreport.service.BugReportService;
 import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.userapi.global.storage.StoredAsset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,11 @@ class BugReportServiceTest {
                 @Override
                 public String upload(byte[] content, String contentType, String kind) {
                     return kind + "/stub-" + UPLOAD_COUNT.incrementAndGet() + ".png";
+                }
+
+                @Override
+                public StoredAsset read(String key) {
+                    return new StoredAsset(new byte[] {1, 2, 3}, "image/png");
                 }
 
                 @Override
@@ -125,5 +131,20 @@ class BugReportServiceTest {
         assertThat(mine.items().getFirst().title()).isEqualTo("둘째 제보");
         assertThat(mine.items().getFirst().screenshotKeys()).hasSize(1);
         assertThat(mine.items()).noneSatisfy(item -> assertThat(item.title()).isEqualTo("남의 제보"));
+    }
+
+    @Test
+    void 스크린샷은_제보한_본인만_조회한다() {
+        BugReportResponse submitted = bugReportService.submit(
+                user.getId(), "내 제보", "내용", null, null, List.of(image("mine.png")));
+        String key = submitted.screenshotKeys().getFirst();
+
+        StoredAsset screenshot = bugReportService.getMyScreenshot(user.getId(), key);
+        assertThat(screenshot.content()).containsExactly(1, 2, 3);
+        assertThat(screenshot.contentType()).isEqualTo("image/png");
+
+        assertThatThrownBy(() -> bugReportService.getMyScreenshot(other.getId(), key))
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND));
     }
 }

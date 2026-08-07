@@ -24,6 +24,26 @@ aws() {
     return 1
   fi
 
+  if [ "$AWS_MOCK_MODE" = "social" ]; then
+    local parameter_name=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--name" ]; then
+        parameter_name="$2"
+        break
+      fi
+      shift
+    done
+    case "$parameter_name" in
+      /test/kakao) printf '%s\n' 'new-kakao-key' ;;
+      /test/apple-team) printf '%s\n' 'NEWTEAM' ;;
+      /test/apple-key) printf '%s\n' 'NEWKEY' ;;
+      /test/apple-private) printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'ABC123' '-----END PRIVATE KEY-----' ;;
+      /test/apple-enc) printf '%s\n' 'new-encryption-key' ;;
+      *) return 1 ;;
+    esac
+    return 0
+  fi
+
   printf '%s\n' "$AWS_MOCK_PAYLOAD"
 }
 
@@ -66,6 +86,11 @@ reset_scenario() {
   AWS_MOCK_PAYLOAD=""
   WEBEX_ROOM_ID="test-room-id"
   ENVIRONMENT="dev"
+  KAKAO_ADMIN_KEY_PARAMETER_NAME="/test/kakao"
+  APPLE_TEAM_ID_PARAMETER_NAME="/test/apple-team"
+  APPLE_KEY_ID_PARAMETER_NAME="/test/apple-key"
+  APPLE_PRIVATE_KEY_PARAMETER_NAME="/test/apple-private"
+  APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="/test/apple-enc"
 
   mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"
@@ -247,6 +272,60 @@ test_webex_alert_refresh_replaces_only_with_valid_values() {
   echo "ok - Webex alert refresh accepts only valid token and room values"
 }
 
+test_social_auth_refresh_updates_existing_runtime_env() {
+  reset_scenario "social-auth-refresh"
+  cat >> "$USER_RUNTIME_ENV" <<'EOF'
+ASSET_S3_PURGE_VERSIONS=false
+KAKAO_ADMIN_KEY=old-kakao-key
+APPLE_TEAM_ID=OLDTEAM
+APPLE_KEY_ID=OLDKEY
+APPLE_PRIVATE_KEY=old-private-key
+APPLE_REFRESH_TOKEN_ENC_KEY=old-encryption-key
+EOF
+  AWS_MOCK_MODE="social"
+
+  refresh_social_auth_env
+
+  assert_contains '^ASSET_S3_PURGE_VERSIONS=true$' "$USER_RUNTIME_ENV" \
+    "managed versioned buckets must enable permanent profile deletion on every deploy"
+  assert_contains '^KAKAO_ADMIN_KEY=new-kakao-key$' "$USER_RUNTIME_ENV" \
+    "Kakao key must refresh from SSM"
+  assert_contains '^APPLE_TEAM_ID=NEWTEAM$' "$USER_RUNTIME_ENV" \
+    "Apple team ID must refresh from SSM"
+  assert_contains '^APPLE_KEY_ID=NEWKEY$' "$USER_RUNTIME_ENV" \
+    "Apple key ID must refresh from SSM"
+  assert_contains '^APPLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nABC123\\n-----END PRIVATE KEY-----\\n$' \
+    "$USER_RUNTIME_ENV" "multiline Apple key must be escaped for Docker env files"
+  assert_contains '^APPLE_REFRESH_TOKEN_ENC_KEY=new-encryption-key$' "$USER_RUNTIME_ENV" \
+    "Apple refresh-token encryption key must refresh from SSM"
+  if [ "$(grep -c '^APPLE_PRIVATE_KEY=' "$USER_RUNTIME_ENV")" -ne 1 ]; then
+    echo "not ok - social auth runtime keys must not be duplicated" >&2
+    return 1
+  fi
+  echo "ok - social auth and purge runtime settings refresh on existing instances"
+}
+
+test_social_auth_ssm_failure_keeps_existing_values() {
+  reset_scenario "social-auth-ssm-failure"
+  cat >> "$USER_RUNTIME_ENV" <<'EOF'
+KAKAO_ADMIN_KEY=old-kakao-key
+APPLE_TEAM_ID=OLDTEAM
+APPLE_KEY_ID=OLDKEY
+APPLE_PRIVATE_KEY=old-private-key
+APPLE_REFRESH_TOKEN_ENC_KEY=old-encryption-key
+EOF
+
+  refresh_social_auth_env
+
+  assert_contains '^ASSET_S3_PURGE_VERSIONS=true$' "$USER_RUNTIME_ENV" \
+    "purge setting must be added even when optional SSM secrets are unavailable"
+  assert_contains '^KAKAO_ADMIN_KEY=old-kakao-key$' "$USER_RUNTIME_ENV" \
+    "SSM failure must preserve the existing Kakao key"
+  assert_contains '^APPLE_PRIVATE_KEY=old-private-key$' "$USER_RUNTIME_ENV" \
+    "SSM failure must preserve the existing Apple private key"
+  echo "ok - social auth SSM failure preserves existing runtime values"
+}
+
 test_webex_alert_ssm_failure_keeps_existing_token() {
   reset_scenario "webex-alert-ssm-failure"
   printf 'OPERATIONS_WEBEX_BOT_TOKEN=existing-token\nOPERATIONS_WEBEX_ROOM_ID=existing-room-id\n' >> "$USER_RUNTIME_ENV"
@@ -272,6 +351,7 @@ test_first_deploy_without_credentials_uses_stub() {
 
   assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "missing credentials must remove runtime path"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
+  assert_contains '127.0.0.1:8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must bind to localhost for SSM tunneling"
   assert_contains '127.0.0.1:8082:8082' "$SYSTEMD_DIR/rougether-batch.service" "batch must bind health port to localhost only"
   assert_not_contains 'rougether-user-api.service' "$SYSTEMD_DIR/rougether-batch.service" "batch must not depend on user-api"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-batch.service" "missing credentials must omit batch bind mount"
@@ -586,6 +666,8 @@ test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low
 test_invalid_ssm_json_keeps_existing_credentials
 test_webex_alert_refresh_replaces_only_with_valid_values
+test_social_auth_refresh_updates_existing_runtime_env
+test_social_auth_ssm_failure_keeps_existing_values
 test_webex_alert_ssm_failure_keeps_existing_token
 test_first_deploy_without_credentials_uses_stub
 test_new_credentials_are_restored_with_runtime_wiring

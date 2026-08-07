@@ -12,6 +12,9 @@ public interface AssetStorageService {
 
     boolean exists(String key);
 
+    // 공개 CDN에 노출하지 않는 운영용 이미지를 인증된 API에서 읽는다.
+    StoredAsset read(String key);
+
     // 원본을 archive/admin-deleted 아래로 복사한 뒤 기존 key를 제거한다.
     AssetDeleteResult archiveAndDelete(String key);
 }

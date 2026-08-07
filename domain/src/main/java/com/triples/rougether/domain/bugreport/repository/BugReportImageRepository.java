@@ -9,4 +9,8 @@ public interface BugReportImageRepository extends JpaRepository<BugReportImage, 
 
     // 목록 화면용 일괄 조회 (N+1 회피). 정렬은 제보별 sort_order.
     List<BugReportImage> findByBugReportIdInOrderByBugReportIdDescSortOrderAsc(Collection<Long> bugReportIds);
+
+    boolean existsByStorageKey(String storageKey);
+
+    boolean existsByStorageKeyAndBugReport_UserId(String storageKey, Long userId);
 }

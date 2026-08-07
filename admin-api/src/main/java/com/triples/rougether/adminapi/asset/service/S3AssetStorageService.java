@@ -12,6 +12,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -84,6 +85,15 @@ public class S3AssetStorageService implements AssetStorageService {
             }
             throw exception;
         }
+    }
+
+    @Override
+    public StoredAsset read(String key) {
+        var response = s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                .bucket(properties.s3().bucket())
+                .key(key)
+                .build());
+        return new StoredAsset(response.asByteArray(), response.response().contentType());
     }
 
     @Override
