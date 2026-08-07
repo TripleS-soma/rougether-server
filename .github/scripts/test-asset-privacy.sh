@@ -56,5 +56,7 @@ assert_contains "$DEPLOY_SCRIPT" 'refresh_social_auth_env' \
   "routine deploys must refresh social-auth and purge settings on existing instances"
 assert_contains "$DEPLOY_WORKFLOW" '__APPLE_PRIVATE_KEY_PARAMETER_NAME__' \
   "the deploy workflow must inject the Apple private-key SSM parameter name"
+assert_not_contains "$DEPLOY_WORKFLOW" 'http://${public_ip}:8081/admin/health' \
+  "the workflow must not call the localhost-only admin API through the public IP"
 
 echo "asset privacy tests passed"

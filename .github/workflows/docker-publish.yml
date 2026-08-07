@@ -251,7 +251,9 @@ jobs:
 
           public_ip="${{ steps.ec2.outputs.public_ip }}"
           curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8080/api/v1/health"
-          curl --retry 18 --retry-all-errors --retry-delay 10 -fsS "http://${public_ip}:8081/admin/health"
+
+          # admin-api는 EC2 localhost에만 bind한다. 바로 앞 SSM 배포 스크립트가
+          # 127.0.0.1:8081/admin/health를 확인했으므로 public endpoint 검증은 하지 않는다.
 
           # 앱이 실제로 쓰는 경로는 CloudFront(HTTPS)이므로 origin 도달 여부까지 검증한다.
           # comment 는 terraform(cloudfront.tf)의 "${local.name} user-api HTTPS entrypoint" 와 일치해야 한다.
