@@ -189,6 +189,26 @@ variable "asset_public_base_url" {
   default     = "https://rougether-assets.s3.ap-northeast-2.amazonaws.com"
 }
 
+variable "asset_public_read_prefixes" {
+  description = "S3 key prefixes readable through the public asset CloudFront distribution. Keep private user content out."
+  type        = list(string)
+  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*"]
+
+  validation {
+    condition = alltrue([
+      for prefix in var.asset_public_read_prefixes :
+      prefix != "*" && !startswith(prefix, "bug-reports")
+    ])
+    error_message = "asset_public_read_prefixes must not expose '*' or the private bug-reports prefix."
+  }
+}
+
+variable "asset_purge_versions_on_delete" {
+  description = "Permanently delete all profile object versions. Set true when an externally managed asset bucket has versioning enabled."
+  type        = bool
+  default     = false
+}
+
 variable "asset_allowed_prefixes" {
   description = "S3 key prefixes the EC2 instance role may write to."
   type        = list(string)

@@ -87,6 +87,17 @@ resource "aws_cloudfront_distribution" "assets" {
     compress               = true
   }
 
+  # 프로필은 회원 탈퇴 시 즉시 원본 파기되어야 하므로 edge cache에 보존하지 않는다.
+  ordered_cache_behavior {
+    path_pattern           = "profile/*"
+    target_origin_id       = "${local.name}-asset-s3"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+    compress               = true
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -111,7 +122,10 @@ resource "aws_s3_bucket_policy" "assets_cloudfront_read" {
       Effect    = "Allow"
       Principal = { Service = "cloudfront.amazonaws.com" }
       Action    = "s3:GetObject"
-      Resource  = "${aws_s3_bucket.assets[0].arn}/*"
+      Resource = [
+        for prefix in var.asset_public_read_prefixes :
+        "${aws_s3_bucket.assets[0].arn}/${prefix}"
+      ]
       Condition = {
         StringEquals = {
           "AWS:SourceArn" = aws_cloudfront_distribution.assets[0].arn

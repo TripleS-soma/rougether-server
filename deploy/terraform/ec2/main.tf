@@ -502,6 +502,12 @@ resource "aws_iam_role_policy" "app" {
         ]
       },
       {
+        # 공개 CDN에서 제외한 버그 제보 스크린샷을 인증된 어드민 API가 읽는 데만 사용한다.
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::${local.asset_bucket_name_value}/bug-reports/*"]
+      },
+      {
         # characters 원본 삭제 전에 남기는 복구용 사본.
         Effect = "Allow"
         Action = [
@@ -778,7 +784,7 @@ resource "aws_instance" "app" {
     asset_bucket_name                 = local.asset_bucket_name_value
     asset_region                      = var.asset_region
     asset_public_base_url             = local.asset_public_base_url_value
-    asset_purge_versions              = tostring(var.create_asset_bucket)
+    asset_purge_versions              = tostring(var.create_asset_bucket || var.asset_purge_versions_on_delete)
     runtime_env_helpers               = file("${path.module}/templates/runtime-env-helpers.sh")
     use_baked_ami                     = var.use_baked_ami
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다

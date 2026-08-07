@@ -1,5 +1,7 @@
 package com.triples.rougether.adminapi.bugreport.service;
 
+import com.triples.rougether.adminapi.asset.service.AssetStorageService;
+import com.triples.rougether.adminapi.asset.service.StoredAsset;
 import com.triples.rougether.adminapi.bugreport.dto.AdminBugReportResponse;
 import com.triples.rougether.adminapi.bugreport.error.BugReportAdminException;
 import com.triples.rougether.domain.bugreport.entity.BugReport;
@@ -20,11 +22,14 @@ public class BugReportAdminService {
 
     private final BugReportRepository bugReportRepository;
     private final BugReportImageRepository bugReportImageRepository;
+    private final AssetStorageService assetStorageService;
 
     public BugReportAdminService(BugReportRepository bugReportRepository,
-                                 BugReportImageRepository bugReportImageRepository) {
+                                 BugReportImageRepository bugReportImageRepository,
+                                 AssetStorageService assetStorageService) {
         this.bugReportRepository = bugReportRepository;
         this.bugReportImageRepository = bugReportImageRepository;
+        this.assetStorageService = assetStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +51,17 @@ public class BugReportAdminService {
         report.changeStatus(status);
         return AdminBugReportResponse.of(report, screenshotKeysByReportId(List.of(report))
                 .getOrDefault(report.getId(), List.of()));
+    }
+
+    @Transactional(readOnly = true)
+    public StoredAsset getScreenshot(String key) {
+        if (key == null
+                || !key.startsWith("bug-reports/")
+                || !bugReportImageRepository.existsByStorageKey(key)) {
+            throw new BugReportAdminException(
+                    "BUG_REPORT_SCREENSHOT_NOT_FOUND", "존재하지 않는 버그 제보 스크린샷입니다.", 404);
+        }
+        return assetStorageService.read(key);
     }
 
     private Map<Long, List<String>> screenshotKeysByReportId(List<BugReport> reports) {

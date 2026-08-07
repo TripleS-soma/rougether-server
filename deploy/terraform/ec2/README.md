@@ -34,7 +34,11 @@ Edit `terraform.tfvars`:
   public subnets in separate AZs; RDS itself remains non-public and accepts MySQL only from EC2.
 - Set `create_asset_bucket = true` and choose a globally unique `asset_bucket_name` when the
   account must own a new asset bucket. Reads then go through the generated CloudFront URL while
-  direct public S3 access stays blocked.
+  direct public S3 access stays blocked. `bug-reports/*` is intentionally excluded from the
+  public CDN and is read only through the authenticated admin API. Profile reads use a no-cache
+  behavior so withdrawal deletion is not retained at the edge.
+- When reusing an externally managed versioned asset bucket, set
+  `asset_purge_versions_on_delete = true` so withdrawal removes every profile object version.
 - Set `admin_seed_password` or let Terraform generate one.
 - Leave `user_api_image`, `admin_api_image`, and `container_registry_server` as `null` to use the Terraform-managed private ECR repositories.
 - Override image and registry variables only when deploying from another registry.

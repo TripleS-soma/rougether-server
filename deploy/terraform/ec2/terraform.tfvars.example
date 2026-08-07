@@ -7,6 +7,8 @@ create_network = false
 # 기존 외부 bucket을 그대로 쓰면 false. 신규 계정에 private S3 + CloudFront를 만들면 true.
 create_asset_bucket = false
 # asset_bucket_name = "globally-unique-bucket-name"
+# 외부 bucket에 versioning이 켜져 있으면 탈퇴 회원 profile 원본 파기를 위해 true.
+# asset_purge_versions_on_delete = true
 
 # Leave null to use Terraform-managed private ECR repositories.
 # Override only when deploying from another registry.
