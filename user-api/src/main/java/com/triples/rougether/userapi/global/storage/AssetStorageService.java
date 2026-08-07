@@ -5,6 +5,9 @@ public interface AssetStorageService {
 
     String upload(byte[] content, String contentType, String kind);
 
+    // 공개 CDN에서 제외한 사용자 소유 이미지를 인증된 API에서 읽는다.
+    StoredAsset read(String key);
+
     // 회원탈퇴 등 원본 파기용 삭제. null/blank key 는 no-op.
     void delete(String key);
 }

@@ -11,6 +11,7 @@ import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.error.BugReportErrorCode;
 import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.userapi.global.storage.StoredAsset;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,6 +78,16 @@ public class BugReportService {
                         keysByReportId.getOrDefault(report.getId(), List.of())))
                 .toList();
         return new BugReportListResponse(items);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredAsset getMyScreenshot(Long userId, String key) {
+        if (key == null
+                || !key.startsWith("bug-reports/")
+                || !bugReportImageRepository.existsByStorageKeyAndBugReport_UserId(key, userId)) {
+            throw new BusinessException(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND);
+        }
+        return assetStorageService.read(key);
     }
 
     private void validateImages(List<MultipartFile> images) {

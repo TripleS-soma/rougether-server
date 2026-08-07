@@ -5,7 +5,9 @@ import com.triples.rougether.common.error.ErrorCode;
 public enum BugReportErrorCode implements ErrorCode {
 
     BUG_REPORT_IMAGE_INVALID(
-            "BUG_REPORT_IMAGE_INVALID", "스크린샷은 png·jpeg·webp 형식, 각 10MB 이하, 최대 3장까지 허용됩니다.", 400);
+            "BUG_REPORT_IMAGE_INVALID", "스크린샷은 png·jpeg·webp 형식, 각 10MB 이하, 최대 3장까지 허용됩니다.", 400),
+    BUG_REPORT_SCREENSHOT_NOT_FOUND(
+            "BUG_REPORT_SCREENSHOT_NOT_FOUND", "존재하지 않는 버그 제보 스크린샷입니다.", 404);
 
     private final String code;
     private final String message;

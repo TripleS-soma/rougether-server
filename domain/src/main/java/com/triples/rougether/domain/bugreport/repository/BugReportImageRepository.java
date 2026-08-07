@@ -11,4 +11,6 @@ public interface BugReportImageRepository extends JpaRepository<BugReportImage, 
     List<BugReportImage> findByBugReportIdInOrderByBugReportIdDescSortOrderAsc(Collection<Long> bugReportIds);
 
     boolean existsByStorageKey(String storageKey);
+
+    boolean existsByStorageKeyAndBugReport_UserId(String storageKey, Long userId);
 }
