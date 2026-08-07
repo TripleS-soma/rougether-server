@@ -71,6 +71,7 @@ asset:
   s3:
     bucket: rougether-assets
     region: ap-northeast-2
+    purge-versions-on-delete: false
 
 # 사용자에게 노출할 게시 승인 집 커버 manifest. S3 house/ 전체 목록과 분리함.
 house:

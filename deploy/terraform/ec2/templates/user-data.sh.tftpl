@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+${runtime_env_helpers}
+
 exec > >(tee -a /var/log/rougether-user-data.log) 2>&1
 
 ENV_DIR="/etc/rougether"
@@ -39,6 +41,7 @@ APPLE_TEAM_ID="$(aws ssm get-parameter --name '${apple_team_id_param}' --with-de
 APPLE_KEY_ID="$(aws ssm get-parameter --name '${apple_key_id_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
 APPLE_PRIVATE_KEY="$(aws ssm get-parameter --name '${apple_private_key_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
 APPLE_REFRESH_TOKEN_ENC_KEY="$(aws ssm get-parameter --name '${apple_refresh_token_enc_key_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
+APPLE_PRIVATE_KEY="$(printf '%s' "$APPLE_PRIVATE_KEY" | escape_multiline_env_value)"
 
 webex_bot_token_valid() {
   python3 -c '
@@ -123,6 +126,7 @@ DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
 ASSET_S3_BUCKET=${asset_bucket_name}
 ASSET_S3_REGION=${asset_region}
+ASSET_S3_PURGE_VERSIONS=${asset_purge_versions}
 KAKAO_ADMIN_KEY=$KAKAO_ADMIN_KEY
 APPLE_TEAM_ID=$APPLE_TEAM_ID
 APPLE_KEY_ID=$APPLE_KEY_ID

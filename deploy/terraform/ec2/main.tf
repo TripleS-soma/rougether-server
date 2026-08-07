@@ -515,7 +515,8 @@ resource "aws_iam_role_policy" "app" {
         # 회원 탈퇴 후 프로필 원본 파기용. user-api 구현의 profile/ 경계와 맞춤.
         Effect = "Allow"
         Action = [
-          "s3:DeleteObject"
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion"
         ]
         Resource = [
           "arn:aws:s3:::${local.asset_bucket_name_value}/profile/*"
@@ -525,7 +526,8 @@ resource "aws_iam_role_policy" "app" {
         # 어드민 에셋 조회(/admin/assets)의 ListObjectsV2 용. 허용 prefix 아래만 나열 가능.
         Effect = "Allow"
         Action = [
-          "s3:ListBucket"
+          "s3:ListBucket",
+          "s3:ListBucketVersions"
         ]
         Resource = ["arn:aws:s3:::${local.asset_bucket_name_value}"]
         Condition = {
@@ -695,7 +697,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       {
         Effect = "Allow"
         Action = [
-          "ssm:GetCommandInvocation"
+          "ssm:GetCommandInvocation",
+          "ssm:CancelCommand"
         ]
         Resource = "*"
       }
@@ -775,6 +778,8 @@ resource "aws_instance" "app" {
     asset_bucket_name                 = local.asset_bucket_name_value
     asset_region                      = var.asset_region
     asset_public_base_url             = local.asset_public_base_url_value
+    asset_purge_versions              = tostring(var.create_asset_bucket)
+    runtime_env_helpers               = file("${path.module}/templates/runtime-env-helpers.sh")
     use_baked_ami                     = var.use_baked_ami
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
     user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))

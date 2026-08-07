@@ -47,6 +47,8 @@ jobs:
         run: |
           bash .github/scripts/test-deploy-ec2-with-rollback.sh
           bash .github/scripts/test-promote-ecr-dev-tags.sh
+          bash .github/scripts/test-runtime-env-helpers.sh
+          bash .github/scripts/test-wait-for-ssm-command.sh
 
       - name: Run tests
         run: ./gradlew test
