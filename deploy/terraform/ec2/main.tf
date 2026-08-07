@@ -784,7 +784,7 @@ resource "aws_instance" "app" {
     asset_bucket_name                 = local.asset_bucket_name_value
     asset_region                      = var.asset_region
     asset_public_base_url             = local.asset_public_base_url_value
-    asset_purge_versions              = tostring(var.create_asset_bucket || var.asset_purge_versions_on_delete)
+    asset_purge_versions              = tostring(var.create_asset_bucket)
     runtime_env_helpers               = file("${path.module}/templates/runtime-env-helpers.sh")
     use_baked_ami                     = var.use_baked_ami
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다

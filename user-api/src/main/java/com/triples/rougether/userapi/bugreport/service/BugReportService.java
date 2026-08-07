@@ -21,6 +21,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 // 버그 제보 (#213) - 제출(스크린샷 최대 3장, S3 업로드) + 내 제보 목록.
 // 금칙어 검사는 하지 않음 - 운영자만 보는 텍스트라 차단으로 정보를 잃을 이유가 없음(plan 결정).
@@ -87,7 +88,11 @@ public class BugReportService {
                 || !bugReportImageRepository.existsByStorageKeyAndBugReport_UserId(key, userId)) {
             throw new BusinessException(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND);
         }
-        return assetStorageService.read(key);
+        try {
+            return assetStorageService.read(key);
+        } catch (NoSuchKeyException exception) {
+            throw new BusinessException(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND);
+        }
     }
 
     private void validateImages(List<MultipartFile> images) {

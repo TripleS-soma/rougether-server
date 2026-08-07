@@ -172,9 +172,14 @@ variable "asset_bucket_name" {
 }
 
 variable "create_asset_bucket" {
-  description = "Create a private, versioned asset bucket and expose reads through CloudFront OAC."
+  description = "Create the required private, versioned asset bucket and expose approved prefixes through CloudFront OAC. External public buckets are not supported."
   type        = bool
-  default     = false
+  default     = true
+
+  validation {
+    condition     = var.create_asset_bucket
+    error_message = "create_asset_bucket must be true; external asset buckets cannot guarantee private bug-report storage."
+  }
 }
 
 variable "asset_region" {
@@ -184,7 +189,7 @@ variable "asset_region" {
 }
 
 variable "asset_public_base_url" {
-  description = "Public base URL used by admin preview links when create_asset_bucket=false."
+  description = "Deprecated compatibility value. Managed asset buckets always use the generated CloudFront URL."
   type        = string
   default     = "https://rougether-assets.s3.ap-northeast-2.amazonaws.com"
 }
@@ -208,12 +213,6 @@ variable "asset_public_read_prefixes" {
     ])
     error_message = "asset_public_read_prefixes may contain only approved public asset prefixes; bug-reports and broad wildcards are private."
   }
-}
-
-variable "asset_purge_versions_on_delete" {
-  description = "Permanently delete all profile object versions. Set true when an externally managed asset bucket has versioning enabled."
-  type        = bool
-  default     = false
 }
 
 variable "asset_allowed_prefixes" {

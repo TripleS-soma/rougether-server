@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 @ExtendWith(MockitoExtension.class)
 class BugReportScreenshotServiceTest {
@@ -56,5 +57,18 @@ class BugReportScreenshotServiceTest {
 
         verify(assetStorageService, never()).read(SCREENSHOT_KEY);
         verify(assetStorageService, never()).read("profile/public.png");
+    }
+
+    @Test
+    void DB_row만_남고_S3_원본이_없어도_404로_숨긴다() {
+        when(bugReportImageRepository.existsByStorageKeyAndBugReport_UserId(SCREENSHOT_KEY, USER_ID))
+                .thenReturn(true);
+        when(assetStorageService.read(SCREENSHOT_KEY))
+                .thenThrow(NoSuchKeyException.builder().message("missing").build());
+
+        assertThatThrownBy(() -> bugReportService.getMyScreenshot(USER_ID, SCREENSHOT_KEY))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND));
     }
 }

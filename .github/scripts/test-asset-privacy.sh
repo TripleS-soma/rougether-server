@@ -6,6 +6,8 @@ ASSETS_TF="$REPO_ROOT/deploy/terraform/ec2/assets.tf"
 MAIN_TF="$REPO_ROOT/deploy/terraform/ec2/main.tf"
 VARIABLES_TF="$REPO_ROOT/deploy/terraform/ec2/variables.tf"
 BUG_REPORT_TEMPLATE="$REPO_ROOT/admin-api/src/main/resources/templates/bug-reports.html"
+DEPLOY_SCRIPT="$REPO_ROOT/.github/scripts/deploy-ec2-with-rollback.sh"
+DEPLOY_WORKFLOW="$REPO_ROOT/.github/workflows/docker-publish.yml"
 
 assert_contains() {
   local file="$1"
@@ -29,6 +31,8 @@ assert_not_contains() {
 
 assert_contains "$VARIABLES_TF" 'variable "asset_public_read_prefixes"' \
   "public CDN prefixes must be configured separately from writable prefixes"
+assert_contains "$VARIABLES_TF" 'condition     = var.create_asset_bucket' \
+  "external buckets must be rejected until private access can be guaranteed"
 assert_contains "$VARIABLES_TF" 'contains([' \
   "Terraform validation must restrict CDN reads to approved public prefixes"
 PUBLIC_PREFIX_BLOCK="$(sed -n '/variable "asset_public_read_prefixes"/,/^}/p' "$VARIABLES_TF")"
@@ -42,11 +46,15 @@ assert_contains "$ASSETS_TF" 'path_pattern           = "profile/*"' \
   "profile images must have a dedicated cache behavior"
 assert_contains "$ASSETS_TF" 'cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id' \
   "profile images must not remain in CloudFront cache after deletion"
-assert_contains "$MAIN_TF" 'var.create_asset_bucket || var.asset_purge_versions_on_delete' \
-  "external versioned buckets must be able to enable permanent version deletion"
+assert_contains "$MAIN_TF" 'asset_purge_versions              = tostring(var.create_asset_bucket)' \
+  "the required managed versioned bucket must enable permanent profile deletion"
 assert_contains "$BUG_REPORT_TEMPLATE" '/admin/bug-reports/screenshots?key=' \
   "admin screenshot previews must use the authenticated application endpoint"
 assert_not_contains "$BUG_REPORT_TEMPLATE" "s3BaseUrl + '/' + key" \
   "bug report screenshots must not use the public CDN base URL"
+assert_contains "$DEPLOY_SCRIPT" 'refresh_social_auth_env' \
+  "routine deploys must refresh social-auth and purge settings on existing instances"
+assert_contains "$DEPLOY_WORKFLOW" '__APPLE_PRIVATE_KEY_PARAMETER_NAME__' \
+  "the deploy workflow must inject the Apple private-key SSM parameter name"
 
 echo "asset privacy tests passed"

@@ -37,8 +37,8 @@ Edit `terraform.tfvars`:
   direct public S3 access stays blocked. `bug-reports/*` is intentionally excluded from the
   public CDN and is read only through the authenticated admin API. Profile reads use a no-cache
   behavior so withdrawal deletion is not retained at the edge.
-- When reusing an externally managed versioned asset bucket, set
-  `asset_purge_versions_on_delete = true` so withdrawal removes every profile object version.
+- External asset buckets are rejected by this module because their existing public policy cannot
+  guarantee that `bug-reports/*` is private. Migrate objects into the managed bucket before cutover.
 - Set `admin_seed_password` or let Terraform generate one.
 - Leave `user_api_image`, `admin_api_image`, and `container_registry_server` as `null` to use the Terraform-managed private ECR repositories.
 - Override image and registry variables only when deploying from another registry.

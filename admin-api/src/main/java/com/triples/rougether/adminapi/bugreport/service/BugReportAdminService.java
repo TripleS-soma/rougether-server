@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 // 어드민 버그 제보 열람·처리 상태 관리 (#213).
 @Service
@@ -61,7 +62,12 @@ public class BugReportAdminService {
             throw new BugReportAdminException(
                     "BUG_REPORT_SCREENSHOT_NOT_FOUND", "존재하지 않는 버그 제보 스크린샷입니다.", 404);
         }
-        return assetStorageService.read(key);
+        try {
+            return assetStorageService.read(key);
+        } catch (NoSuchKeyException exception) {
+            throw new BugReportAdminException(
+                    "BUG_REPORT_SCREENSHOT_NOT_FOUND", "존재하지 않는 버그 제보 스크린샷입니다.", 404);
+        }
     }
 
     private Map<Long, List<String>> screenshotKeysByReportId(List<BugReport> reports) {

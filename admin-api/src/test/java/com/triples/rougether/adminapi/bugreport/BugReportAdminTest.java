@@ -32,6 +32,7 @@ import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 // 어드민 버그 제보 (#213) - 목록·상태 필터·상태 변경.
 @SpringBootTest
@@ -134,6 +135,18 @@ class BugReportAdminTest {
                 .andExpect(jsonPath("$.code").value("BUG_REPORT_SCREENSHOT_NOT_FOUND"));
 
         verify(s3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void DB_row만_남고_S3_원본이_없으면_404다() throws Exception {
+        when(s3Client.getObjectAsBytes(any(GetObjectRequest.class)))
+                .thenThrow(NoSuchKeyException.builder().message("missing").build());
+
+        mockMvc.perform(get("/admin/bug-reports/screenshots")
+                        .param("key", screenshot.getStorageKey()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("BUG_REPORT_SCREENSHOT_NOT_FOUND"));
     }
 
     @Test
