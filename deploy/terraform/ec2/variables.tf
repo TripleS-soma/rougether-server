@@ -166,9 +166,14 @@ variable "db_skip_final_snapshot" {
 }
 
 variable "asset_bucket_name" {
-  description = "Asset bucket name. It must be globally unique when create_asset_bucket=true."
+  description = "Optional asset bucket name. When null, Terraform generates an account-scoped globally unique name."
   type        = string
-  default     = "rougether-assets"
+  default     = null
+
+  validation {
+    condition     = var.asset_bucket_name == null || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.asset_bucket_name))
+    error_message = "asset_bucket_name must be null or a valid lowercase S3 bucket name between 3 and 63 characters."
+  }
 }
 
 variable "create_asset_bucket" {

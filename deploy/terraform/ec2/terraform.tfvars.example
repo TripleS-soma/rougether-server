@@ -6,6 +6,8 @@ create_network = false
 
 # 개인정보성 bug-reports prefix를 비공개로 보장하기 위해 관리형 private S3 + CloudFront가 필수.
 create_asset_bucket = true
+# 생략하면 <project>-<environment>-<AWS account ID>-assets 형식의 고유 이름을 사용합니다.
+# 기존 버킷을 이 스택으로 이전할 때만 이름을 명시하고 먼저 terraform import를 수행하세요.
 # asset_bucket_name = "globally-unique-bucket-name"
 
 # Leave null to use Terraform-managed private ECR repositories.

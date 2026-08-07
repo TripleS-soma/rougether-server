@@ -1,9 +1,9 @@
 resource "aws_s3_bucket" "assets" {
   count = var.create_asset_bucket ? 1 : 0
 
-  bucket        = var.asset_bucket_name
+  bucket        = local.asset_bucket_name_value
   force_destroy = false
-  tags          = merge(local.tags, { Name = var.asset_bucket_name })
+  tags          = merge(local.tags, { Name = local.asset_bucket_name_value })
 }
 
 resource "aws_s3_bucket_ownership_controls" "assets" {
@@ -136,7 +136,10 @@ resource "aws_s3_bucket_policy" "assets_cloudfront_read" {
 }
 
 locals {
-  asset_bucket_name_value = var.asset_bucket_name
+  asset_bucket_name_value = coalesce(
+    var.asset_bucket_name,
+    "${local.name}-${data.aws_caller_identity.current.account_id}-assets"
+  )
   asset_public_base_url_value = var.create_asset_bucket ? (
     "https://${aws_cloudfront_distribution.assets[0].domain_name}"
   ) : var.asset_public_base_url

@@ -32,10 +32,12 @@ Edit `terraform.tfvars`:
 - Keep `allowed_ssh_cidrs = []` unless you need SSH.
 - Set `create_network = true` when the account has no default VPC. Terraform creates two
   public subnets in separate AZs; RDS itself remains non-public and accepts MySQL only from EC2.
-- Set `create_asset_bucket = true` and choose a globally unique `asset_bucket_name` when the
-  account must own a new asset bucket. Reads then go through the generated CloudFront URL while
+- Set `create_asset_bucket = true`. By default, Terraform generates
+  `<project>-<environment>-<AWS account ID>-assets`; override `asset_bucket_name` only when the
+  target bucket name is already known and globally unique. When adopting an existing bucket,
+  import it into this stack before applying. Reads go through the generated CloudFront URL while
   direct public S3 access stays blocked. `bug-reports/*` is intentionally excluded from the
-  public CDN and is read only through the authenticated admin API. Profile reads use a no-cache
+  public CDN and is read only through authenticated user/admin APIs. Profile reads use a no-cache
   behavior so withdrawal deletion is not retained at the edge.
 - External asset buckets are rejected by this module because their existing public policy cannot
   guarantee that `bug-reports/*` is private. Migrate objects into the managed bucket before cutover.
