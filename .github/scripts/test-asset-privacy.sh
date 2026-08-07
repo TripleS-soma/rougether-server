@@ -29,8 +29,8 @@ assert_not_contains() {
 
 assert_contains "$VARIABLES_TF" 'variable "asset_public_read_prefixes"' \
   "public CDN prefixes must be configured separately from writable prefixes"
-assert_contains "$VARIABLES_TF" '!startswith(prefix, "bug-reports")' \
-  "Terraform validation must reject the private bug report prefix"
+assert_contains "$VARIABLES_TF" 'contains([' \
+  "Terraform validation must restrict CDN reads to approved public prefixes"
 PUBLIC_PREFIX_BLOCK="$(sed -n '/variable "asset_public_read_prefixes"/,/^}/p' "$VARIABLES_TF")"
 if grep -Fq 'bug-reports/*' <<< "$PUBLIC_PREFIX_BLOCK"; then
   echo "not ok - bug report screenshots must not be in the default public CDN prefixes" >&2

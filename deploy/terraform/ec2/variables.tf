@@ -197,9 +197,16 @@ variable "asset_public_read_prefixes" {
   validation {
     condition = alltrue([
       for prefix in var.asset_public_read_prefixes :
-      prefix != "*" && !startswith(prefix, "bug-reports")
+      contains([
+        "items/*",
+        "characters/*",
+        "categories/*",
+        "themes/*",
+        "house/*",
+        "profile/*"
+      ], prefix)
     ])
-    error_message = "asset_public_read_prefixes must not expose '*' or the private bug-reports prefix."
+    error_message = "asset_public_read_prefixes may contain only approved public asset prefixes; bug-reports and broad wildcards are private."
   }
 }
 
