@@ -19,13 +19,18 @@ output "user_api_https_health_url" {
 }
 
 output "admin_url" {
-  description = "Admin login/upload URL."
-  value       = "http://${aws_eip.app.public_ip}:8081/"
+  description = "Admin login/upload URL after opening admin_tunnel_command in another terminal."
+  value       = "http://127.0.0.1:8081/"
 }
 
 output "admin_health_url" {
-  description = "Admin API health check URL."
-  value       = "http://${aws_eip.app.public_ip}:8081/admin/health"
+  description = "Admin API health check URL after opening the SSM tunnel."
+  value       = "http://127.0.0.1:8081/admin/health"
+}
+
+output "admin_tunnel_command" {
+  description = "Encrypted SSM port-forwarding command for the localhost-bound admin API."
+  value       = "aws ssm start-session --target ${aws_instance.app.id} --document-name AWS-StartPortForwardingSession --parameters '{\"portNumber\":[\"8081\"],\"localPortNumber\":[\"8081\"]}' --region ${var.aws_region}"
 }
 
 output "ecr_registry_server" {

@@ -5,8 +5,8 @@
 # 기본 도메인(*.cloudfront.net)과 기본 인증서를 사용한다. 도메인을 확보하면 aliases + ACM(us-east-1)
 # 인증서를 추가하는 것으로 전환한다.
 #
-# 범위는 user-api(:8080)만이다. admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를
-# 거치면 오히려 IP 제한이 무력화되므로 기존 직접 접속을 유지한다.
+# 범위는 user-api(:8080)만이다. admin-api(:8081)는 localhost에만 bind하고 암호화된 SSM
+# 포트 포워딩을 통해 접근하므로 CloudFront와 public ingress를 두지 않는다.
 #
 # CloudFront → EC2 origin 구간은 HTTP 다(origin 에 인증서가 없어 https 불가). dev 스택에서 수용한
 # 트레이드오프이며, 외부(앱↔CloudFront) 구간은 TLS 로 보호된다. 기존 :8080 직접 접속도 배포

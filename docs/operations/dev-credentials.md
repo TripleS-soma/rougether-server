@@ -19,9 +19,15 @@ aws sts get-caller-identity
 
 ## Admin
 
-- Admin URL: `terraform -chdir=deploy/terraform/ec2 output -raw admin_url`
+- Admin URL: SSM 터널을 연 뒤 `terraform -chdir=deploy/terraform/ec2 output -raw admin_url`
 - Username: `admin`
 - Password SSM parameter: `/rougether-dev/admin/seed-password`
+
+admin-api는 EC2 localhost에만 bind합니다. 별도 터미널에서 암호화된 SSM 포트 포워딩을 유지합니다.
+
+```bash
+$(terraform -chdir=deploy/terraform/ec2 output -raw admin_tunnel_command)
+```
 
 ```bash
 aws ssm get-parameter \
@@ -75,4 +81,4 @@ IntelliJ/DataGrip 설정:
 - `localhost:3308`은 SSM 터널이 살아있는 동안만 동작합니다.
 - 터널이 끊기면 `./deploy/scripts/db-tunnel.sh 3308`을 다시 실행합니다.
 - EC2 instance id는 재생성되면 바뀔 수 있습니다. 바뀌면 Terraform output 또는 AWS Console에서 `rougether-dev-app` 인스턴스를 확인합니다.
-- `allowed_admin_api_cidrs = []`이면 admin-api는 외부에서 차단됩니다. 접근이 필요할 때만 팀/VPN CIDR을 로컬 `terraform.tfvars`에 넣고 saved plan을 검토해 적용합니다.
+- `allowed_admin_api_cidrs`는 항상 빈 목록이어야 합니다. admin-api public ingress를 열지 말고 SSM 터널을 사용합니다.

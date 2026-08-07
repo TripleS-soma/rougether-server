@@ -22,10 +22,10 @@ container_registry_server                 = null
 container_registry_username               = null
 container_registry_password_ssm_parameter = null
 
-# Keep admin restricted to team/VPN IPs whenever possible.
+# admin-api는 localhost + 암호화된 SSM 터널로만 접근합니다.
 allowed_user_api_cidrs  = ["0.0.0.0/0"]
-allowed_admin_api_cidrs = ["YOUR_PUBLIC_IP/32"]
-allowed_ssh_cidrs      = []
+allowed_admin_api_cidrs = []
+allowed_ssh_cidrs       = []
 
 # Optional. Leave null and use SSM Session Manager instead of SSH.
 key_name = null

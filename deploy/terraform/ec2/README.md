@@ -28,7 +28,8 @@ cp terraform.tfvars.example terraform.tfvars
 
 Edit `terraform.tfvars`:
 
-- Set `allowed_admin_api_cidrs` to team/VPN public IP CIDRs.
+- Keep `allowed_admin_api_cidrs = []`. The admin API is bound to EC2 localhost and is reachable
+  only through the encrypted SSM port-forwarding command exposed by Terraform.
 - Keep `allowed_ssh_cidrs = []` unless you need SSH.
 - Set `create_network = true` when the account has no default VPC. Terraform creates two
   public subnets in separate AZs; RDS itself remains non-public and accepts MySQL only from EC2.
@@ -180,6 +181,7 @@ After apply:
 ```bash
 terraform output user_api_health_url
 terraform output admin_url
+terraform output admin_tunnel_command
 terraform output ssm_session_command
 terraform output asset_public_base_url
 ```
@@ -291,7 +293,7 @@ terraform output -raw user_api_https_base_url
 ```
 
 - 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
-- admin-api(:8081)는 팀 IP 제한이 걸린 브라우저용이라 CloudFront 를 태우지 않고 기존 직접 접속을 유지합니다. CloudFront 를 거치면 요청 소스가 CloudFront 엣지 IP 가 되어 IP 제한이 무력화되기 때문입니다.
+- admin-api(:8081)는 EC2 localhost에만 bind하며 CloudFront/public ingress를 두지 않습니다. 브라우저 접근은 SSM 포트 포워딩(TLS 보호)을 먼저 열고 `http://127.0.0.1:8081`을 사용합니다.
 - CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
 - origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
@@ -315,13 +317,17 @@ terraform apply \
 
 ```bash
 curl "$(terraform output -raw user_api_health_url)"
-curl "$(terraform output -raw admin_health_url)"
 curl "$(terraform output -raw user_api_https_health_url)"
 ```
 
-Open:
+Admin은 별도 터미널에서 SSM 터널을 유지한 뒤 로컬 주소로 확인합니다.
 
 ```bash
+$(terraform output -raw admin_tunnel_command)
+```
+
+```bash
+curl "$(terraform output -raw admin_health_url)"
 open "$(terraform output -raw admin_url)"
 ```
 

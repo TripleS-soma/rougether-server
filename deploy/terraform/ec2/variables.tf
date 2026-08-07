@@ -106,9 +106,14 @@ variable "allowed_user_api_cidrs" {
 }
 
 variable "allowed_admin_api_cidrs" {
-  description = "CIDR blocks allowed to access admin-api on port 8081. Prefer team/VPN IPs."
+  description = "Deprecated. Admin API is localhost-bound and must be accessed through an encrypted SSM tunnel."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = length(var.allowed_admin_api_cidrs) == 0
+    error_message = "allowed_admin_api_cidrs must remain empty; use an SSM port-forwarding tunnel for admin-api."
+  }
 }
 
 variable "allowed_ssh_cidrs" {

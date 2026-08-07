@@ -21,10 +21,11 @@ Terraform state에는 생성된 DB/JWT/admin 값이 들어갈 수 있으므로 �
 - ECR: user-api, admin-api, batch의 검증된 동일 `linux/amd64` 이미지를 새 registry에 복사
 - S3: 전체 key와 size를 비교하고 새 private bucket으로 동기화
 - SSM: JWT, Firebase, Webex, Kakao, Apple 값을 출력하지 않고 새 계정의 같은 parameter 이름으로 복사
-- RDS: `mysqldump --single-transaction --quick`으로 기준 dump를 만들고 새 RDS에 복원
+- RDS: 새 인스턴스에서 `sudo systemctl stop rougether-batch && sudo systemctl disable rougether-batch`를
+  먼저 실행하고 `inactive`를 확인한 뒤, `mysqldump --single-transaction --quick`으로 만든 기준 dump를 새 RDS에 복원
 
-새 DB의 핵심 table row count와 `flyway_schema_history`를 원본과 비교합니다. 새 batch는 기동과 health만
-확인한 뒤 다시 정지합니다. 기존 batch와 동시에 실행하면 알림이 중복 발송될 수 있습니다.
+새 DB의 핵심 table row count와 `flyway_schema_history`를 원본과 비교합니다. 이 단계에서는 새 batch를
+다시 기동하지 않습니다. 기존 batch와 동시에 실행하면 알림이 중복 발송될 수 있습니다.
 
 ## 3. 전환 전 검증
 
@@ -41,14 +42,15 @@ Terraform state에는 생성된 DB/JWT/admin 값이 들어갈 수 있으므로 �
 
 이 단계부터는 짧은 write freeze가 필요합니다.
 
-1. 기존 user-api, admin-api, batch를 정지해 쓰기와 알림 발송을 멈춥니다.
-2. 최종 DB dump를 만들고 새 RDS를 그 dump로 교체합니다.
-3. S3를 마지막으로 한 번 더 동기화하고 key/size 차이가 0인지 확인합니다.
-4. 핵심 table row count와 Flyway version을 다시 비교합니다.
-5. GitHub Actions variable `AWS_DEPLOY_ROLE_ARN`을 새 Terraform output으로 변경합니다.
-6. 모바일의 API/asset 기본 URL을 새 CloudFront 주소로 배포합니다.
-7. 새 user-api, admin-api를 검증한 뒤 batch를 마지막에 시작합니다.
-8. direct/CloudFront health, OpenAPI, asset sample, 실제 로그인 smoke를 확인합니다.
+1. 새 인스턴스의 batch가 `disabled`·`inactive`인지 다시 확인합니다. 실행 중이면 먼저 중지·비활성화합니다.
+2. 기존 user-api, admin-api, batch를 정지해 쓰기와 알림 발송을 멈춥니다.
+3. 최종 DB dump를 만들고 새 RDS를 그 dump로 교체합니다.
+4. S3를 마지막으로 한 번 더 동기화하고 key/size 차이가 0인지 확인합니다.
+5. 핵심 table row count와 Flyway version을 다시 비교합니다.
+6. GitHub Actions variable `AWS_DEPLOY_ROLE_ARN`을 새 Terraform output으로 변경합니다.
+7. 모바일의 API/asset 기본 URL을 새 CloudFront 주소로 배포합니다.
+8. 새 user-api, admin-api를 검증한 뒤 `sudo systemctl enable --now rougether-batch`로 batch를 마지막에 시작합니다.
+9. direct/CloudFront health, OpenAPI, asset sample, 실제 로그인 smoke를 확인합니다.
 
 ## 5. 롤백과 정리
 
