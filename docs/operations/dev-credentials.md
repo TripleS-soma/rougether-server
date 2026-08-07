@@ -6,13 +6,20 @@
 ## AWS
 
 - Region: `ap-northeast-2`
-- AWS account: `478572912668`
+- Active account/profile: 배포 전 `aws sts get-caller-identity`와 `terraform output`으로 확인
 
 팀원이 아래 값을 조회하려면 AWS IAM 권한이 필요합니다.
+AWS IAM Identity Center 환경에서는 먼저 로그인하고 같은 profile을 모든 명령에 전달합니다.
+
+```bash
+export AWS_PROFILE=rougether-isb
+aws sso login --profile "$AWS_PROFILE"
+aws sts get-caller-identity
+```
 
 ## Admin
 
-- Admin URL: `http://3.35.167.122:8081/`
+- Admin URL: `terraform -chdir=deploy/terraform/ec2 output -raw admin_url`
 - Username: `admin`
 - Password SSM parameter: `/rougether-dev/admin/seed-password`
 
@@ -34,8 +41,8 @@ aws ssm get-parameter \
 - Database: `rougether`
 - Username: `rougether`
 - Password SSM parameter: `/rougether-dev/db/password`
-- RDS endpoint: `rougether-dev-mysql.cvkuqa4iyrq2.ap-northeast-2.rds.amazonaws.com:3306`
-- Current EC2 instance id: `i-0708a9ee0aba5d8ec`
+- RDS endpoint: `terraform -chdir=deploy/terraform/ec2 output -raw rds_endpoint`
+- Current EC2 instance id: `terraform -chdir=deploy/terraform/ec2 output -raw ec2_instance_id`
 
 DB password 조회:
 
@@ -51,11 +58,7 @@ aws ssm get-parameter \
 로컬 포트 포워딩:
 
 ```bash
-aws ssm start-session \
-  --target i-0708a9ee0aba5d8ec \
-  --region ap-northeast-2 \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["rougether-dev-mysql.cvkuqa4iyrq2.ap-northeast-2.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3308"]}'
+./deploy/scripts/db-tunnel.sh 3308
 ```
 
 IntelliJ/DataGrip 설정:
@@ -70,5 +73,6 @@ IntelliJ/DataGrip 설정:
 ## Notes
 
 - `localhost:3308`은 SSM 터널이 살아있는 동안만 동작합니다.
-- 터널이 끊기면 다시 `aws ssm start-session ...` 명령을 실행합니다.
+- 터널이 끊기면 `./deploy/scripts/db-tunnel.sh 3308`을 다시 실행합니다.
 - EC2 instance id는 재생성되면 바뀔 수 있습니다. 바뀌면 Terraform output 또는 AWS Console에서 `rougether-dev-app` 인스턴스를 확인합니다.
+- `allowed_admin_api_cidrs = []`이면 admin-api는 외부에서 차단됩니다. 접근이 필요할 때만 팀/VPN CIDR을 로컬 `terraform.tfvars`에 넣고 saved plan을 검토해 적용합니다.

@@ -267,11 +267,10 @@ wait_health() {
   local name="$1"
   local url="$2"
 
-  # wall-clock 데드라인 — 횟수 기반은 실패당 최대 8초(curl 5초 + sleep 3초)씩 늘어나
-  # 워크플로의 SSM 감시 한도(120×10초=1,200초)를 넘길 수 있다. 총 대기를 시계 기준으로 못박아
-  # 최악(배포 2회 + 롤백 2회 대기)에도 4×240=960초로 감시 한도 안에 들어오게 한다.
-  # 240초는 실측 부팅(~30초)의 8배 여유. 테스트에서 단축할 수 있게 env 로만 조절 가능.
-  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-240}"
+  # wall-clock 데드라인 — 횟수 기반은 실패당 최대 8초(curl 5초 + sleep 3초)씩 늘어난다.
+  # t3.micro에서 user/admin JVM cold start가 10분 가까이 걸린 실측을 반영해 12분을 허용한다.
+  # workflow의 SSM 감시 한도는 40분이며, 테스트에서는 env로 짧게 덮어쓴다.
+  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-720}"
   local deadline=$(( SECONDS + timeout_seconds ))
   local attempt=0
 

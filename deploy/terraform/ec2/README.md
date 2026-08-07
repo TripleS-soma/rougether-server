@@ -3,11 +3,12 @@
 This stack is a small team/dev deployment:
 
 - EC2 Amazon Linux 2023 instance
-- RDS MySQL in the default VPC
+- RDS MySQL in the default VPC, or in a Terraform-managed VPC for accounts without one
 - `user-api` on port `8080`, fronted by CloudFront for HTTPS (`*.cloudfront.net`)
 - `admin-api` on port `8081`
 - `batch` (루틴 리마인드 발송) — 외부 접근 없이 `127.0.0.1:8082` 헬스체크만 노출
-- EC2 instance role for S3 uploads to the existing asset bucket
+- EC2 instance role for scoped S3 access
+- Optional private, encrypted S3 asset bucket exposed only through CloudFront OAC
 - SSM SecureString parameters for runtime secrets
 - SSM Session Manager access by default, with optional SSH
 - Private ECR repositories for Docker images
@@ -29,12 +30,21 @@ Edit `terraform.tfvars`:
 
 - Set `allowed_admin_api_cidrs` to team/VPN public IP CIDRs.
 - Keep `allowed_ssh_cidrs = []` unless you need SSH.
+- Set `create_network = true` when the account has no default VPC. Terraform creates two
+  public subnets in separate AZs; RDS itself remains non-public and accepts MySQL only from EC2.
+- Set `create_asset_bucket = true` and choose a globally unique `asset_bucket_name` when the
+  account must own a new asset bucket. Reads then go through the generated CloudFront URL while
+  direct public S3 access stays blocked.
 - Set `admin_seed_password` or let Terraform generate one.
 - Leave `user_api_image`, `admin_api_image`, and `container_registry_server` as `null` to use the Terraform-managed private ECR repositories.
 - Override image and registry variables only when deploying from another registry.
 
 Do not commit `terraform.tfvars` or Terraform state.
 Firebase 서비스 계정 JSON도 `terraform.tfvars`에 넣지 않습니다. 실제 값은 아래 전용 스크립트로 SSM에 직접 등록합니다.
+Kakao Admin key와 Apple team/key/private/encryption key도 `social_auth_parameter_names` output의
+SSM SecureString에 저장해야 합니다. EC2 role은 이 정확한 parameter들만 읽으며 user-data가
+`user-api.env`에 주입합니다. 값이 없으면 서버는 기동하지만 Kakao unlink와 Apple 로그인/revoke는
+fail-closed로 실패합니다.
 
 ## Build Images
 
@@ -165,7 +175,22 @@ After apply:
 terraform output user_api_health_url
 terraform output admin_url
 terraform output ssm_session_command
+terraform output asset_public_base_url
 ```
+
+AWS IAM Identity Center를 쓰는 계정은 로그인한 profile을 Terraform과 보조 스크립트에 동일하게
+전달합니다.
+
+```bash
+aws sso login --profile rougether-isb
+AWS_PROFILE=rougether-isb terraform plan -out=tfplan
+AWS_PROFILE=rougether-isb terraform apply tfplan
+AWS_PROFILE=rougether-isb ../../scripts/db-tunnel.sh
+```
+
+GitHub Actions 배포 계정을 옮길 때는 저장소 variable `AWS_DEPLOY_ROLE_ARN`에 새 stack의
+`github_actions_deploy_role_arn` output을 설정합니다. variable을 설정하기 전에는 workflow가 기존
+계정 role을 fallback으로 사용하므로, 새 환경 검증과 애플리케이션 endpoint 전환을 끝낸 뒤 변경합니다.
 
 If Terraform generated the admin password, read it from SSM:
 

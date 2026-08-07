@@ -1,6 +1,13 @@
 aws_region  = "ap-northeast-2"
 environment = "dev"
 
+# 기본 VPC가 없는 신규/샌드박스 계정에서만 true.
+create_network = false
+
+# 기존 외부 bucket을 그대로 쓰면 false. 신규 계정에 private S3 + CloudFront를 만들면 true.
+create_asset_bucket = false
+# asset_bucket_name = "globally-unique-bucket-name"
+
 # Leave null to use Terraform-managed private ECR repositories.
 # Override only when deploying from another registry.
 user_api_image  = null

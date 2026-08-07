@@ -63,6 +63,11 @@ output "ssm_session_command" {
   value       = "aws ssm start-session --target ${aws_instance.app.id} --region ${var.aws_region}"
 }
 
+output "ec2_instance_id" {
+  description = "EC2 instance ID used by SSM and deployment automation."
+  value       = aws_instance.app.id
+}
+
 output "admin_seed_username" {
   description = "Initial admin username."
   value       = var.admin_seed_username
@@ -78,6 +83,16 @@ output "firebase_credentials_parameter" {
   value       = local.firebase_credentials_param
 }
 
+output "asset_bucket_name" {
+  description = "S3 bucket used for Rougether assets."
+  value       = local.asset_bucket_name_value
+}
+
+output "asset_public_base_url" {
+  description = "Public asset base URL. Terraform-managed buckets use the private S3 CloudFront distribution."
+  value       = local.asset_public_base_url_value
+}
+
 output "webex_bot_token_parameter" {
   description = "SSM SecureString parameter name containing the Webex operational-alert bot token."
   value       = local.webex_bot_token_param
@@ -86,4 +101,15 @@ output "webex_bot_token_parameter" {
 output "webex_room_id_parameter" {
   description = "SSM String parameter name containing the Webex operational-alert room ID."
   value       = local.webex_room_id_param
+}
+
+output "social_auth_parameter_names" {
+  description = "SSM parameter names for Kakao unlink and Apple token exchange/revoke credentials."
+  value = {
+    kakao_admin_key             = local.kakao_admin_key_param
+    apple_team_id               = local.apple_team_id_param
+    apple_key_id                = local.apple_key_id_param
+    apple_private_key           = local.apple_private_key_param
+    apple_refresh_token_enc_key = local.apple_refresh_token_enc_key_param
+  }
 }

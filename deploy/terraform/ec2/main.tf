@@ -15,20 +15,49 @@ locals {
   webex_bot_token_param = "/${local.name}/alerts/webex-bot-token"
   # room ID는 비밀은 아니지만 실제 값을 저장소에 넣지 않고 GitHub Actions가 String으로 동기화한다.
   webex_room_id_param = "/${local.name}/alerts/webex-room-id"
-  ecr_registry_server = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url     = "https://token.actions.githubusercontent.com"
+  # 소셜 로그인/회원탈퇴 시크릿은 Terraform state 밖의 SSM SecureString으로 관리한다.
+  kakao_admin_key_param             = "/${local.name}/kakao/admin-key"
+  apple_team_id_param               = "/${local.name}/apple/team-id"
+  apple_key_id_param                = "/${local.name}/apple/key-id"
+  apple_private_key_param           = "/${local.name}/apple/private-key"
+  apple_refresh_token_enc_key_param = "/${local.name}/apple/refresh-token-enc-key"
+  ecr_registry_server               = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url                   = "https://token.actions.githubusercontent.com"
+
+  runtime_ssm_parameter_names = concat([
+    local.db_password_param,
+    local.admin_seed_password_param,
+    local.jwt_secret_param,
+    local.firebase_credentials_param,
+    local.webex_bot_token_param,
+    local.webex_room_id_param,
+    local.kakao_admin_key_param,
+    local.apple_team_id_param,
+    local.apple_key_id_param,
+    local.apple_private_key_param,
+    local.apple_refresh_token_enc_key_param
+    ], var.container_registry_password_ssm_parameter == null ? [] : [
+    var.container_registry_password_ssm_parameter
+  ])
+  runtime_ssm_parameter_arns = [
+    for parameter_name in local.runtime_ssm_parameter_names :
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(parameter_name, "/")}"
+  ]
 }
 
 data "aws_caller_identity" "current" {}
 
 data "aws_vpc" "default" {
+  count   = var.create_network ? 0 : 1
   default = true
 }
 
 data "aws_subnets" "default" {
+  count = var.create_network ? 0 : 1
+
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+    values = [data.aws_vpc.default[0].id]
   }
 }
 
@@ -280,7 +309,7 @@ locals {
 resource "aws_security_group" "ec2" {
   name        = "${local.name}-ec2"
   description = "Rougether EC2 application access"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
   tags        = merge(local.tags, { Name = "${local.name}-ec2" })
 }
 
@@ -324,7 +353,7 @@ resource "aws_vpc_security_group_egress_rule" "ec2_all" {
 resource "aws_security_group" "rds" {
   name        = "${local.name}-rds"
   description = "Rougether RDS access from EC2"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
   tags        = merge(local.tags, { Name = "${local.name}-rds" })
 }
 
@@ -358,7 +387,7 @@ resource "aws_vpc_security_group_egress_rule" "rds_all" {
 
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name}-db-subnet"
-  subnet_ids = data.aws_subnets.default.ids
+  subnet_ids = local.subnet_ids
   tags       = merge(local.tags, { Name = "${local.name}-db-subnet" })
 }
 
@@ -424,12 +453,31 @@ resource "aws_iam_role_policy" "app" {
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
             aws_ssm_parameter.jwt_secret.arn,
-            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}"
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.kakao_admin_key_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_team_id_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_key_id_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_private_key_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_refresh_token_enc_key_param, "/")}"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
           ]
         )
+      },
+      {
+        # AmazonSSMManagedInstanceCore의 광범위한 GetParameter 허용을 runtime allowlist로 제한한다.
+        Effect = "Deny"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        NotResource = local.runtime_ssm_parameter_arns
+      },
+      {
+        Effect   = "Deny"
+        Action   = ["ssm:GetParametersByPath"]
+        Resource = "*"
       },
       {
         Effect = "Allow"
@@ -438,7 +486,7 @@ resource "aws_iam_role_policy" "app" {
         ]
         Resource = [
           for prefix in var.asset_allowed_prefixes :
-          "arn:aws:s3:::${var.asset_bucket_name}/${prefix}"
+          "arn:aws:s3:::${local.asset_bucket_name_value}/${prefix}"
         ]
       },
       {
@@ -450,7 +498,7 @@ resource "aws_iam_role_policy" "app" {
           "s3:DeleteObject"
         ]
         Resource = [
-          "arn:aws:s3:::${var.asset_bucket_name}/characters/*"
+          "arn:aws:s3:::${local.asset_bucket_name_value}/characters/*"
         ]
       },
       {
@@ -460,7 +508,17 @@ resource "aws_iam_role_policy" "app" {
           "s3:PutObject"
         ]
         Resource = [
-          "arn:aws:s3:::${var.asset_bucket_name}/archive/admin-deleted/*"
+          "arn:aws:s3:::${local.asset_bucket_name_value}/archive/admin-deleted/*"
+        ]
+      },
+      {
+        # 회원 탈퇴 후 프로필 원본 파기용. user-api 구현의 profile/ 경계와 맞춤.
+        Effect = "Allow"
+        Action = [
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.asset_bucket_name_value}/profile/*"
         ]
       },
       {
@@ -469,7 +527,7 @@ resource "aws_iam_role_policy" "app" {
         Action = [
           "s3:ListBucket"
         ]
-        Resource = ["arn:aws:s3:::${var.asset_bucket_name}"]
+        Resource = ["arn:aws:s3:::${local.asset_bucket_name_value}"]
         Condition = {
           StringLike = {
             "s3:prefix" = var.asset_allowed_prefixes
@@ -666,7 +724,7 @@ resource "aws_iam_role_policy" "webex_alert_secret_sync" {
 resource "aws_instance" "app" {
   ami                         = local.instance_ami_id
   instance_type               = var.instance_type
-  subnet_id                   = data.aws_subnets.default.ids[0]
+  subnet_id                   = local.subnet_ids[0]
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
   key_name                    = var.key_name
@@ -691,28 +749,33 @@ resource "aws_instance" "app" {
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    aws_region                 = var.aws_region
-    user_api_image             = local.user_api_image_value
-    admin_api_image            = local.admin_api_image_value
-    batch_image                = local.batch_image_value
-    registry_server            = local.container_registry_server_value
-    registry_username          = var.container_registry_username == null ? "" : var.container_registry_username
-    registry_password_param    = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
-    db_url                     = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
-    db_username                = var.db_username
-    db_password_param          = aws_ssm_parameter.db_password.name
-    jwt_secret_param           = aws_ssm_parameter.jwt_secret.name
-    admin_seed_enabled         = tostring(var.admin_seed_enabled)
-    admin_seed_username        = var.admin_seed_username
-    admin_seed_password_param  = aws_ssm_parameter.admin_seed_password.name
-    firebase_credentials_param = local.firebase_credentials_param
-    webex_bot_token_param      = local.webex_bot_token_param
-    webex_room_id_param        = local.webex_room_id_param
-    environment                = var.environment
-    asset_bucket_name          = var.asset_bucket_name
-    asset_region               = var.asset_region
-    asset_public_base_url      = var.asset_public_base_url
-    use_baked_ami              = var.use_baked_ami
+    aws_region                        = var.aws_region
+    user_api_image                    = local.user_api_image_value
+    admin_api_image                   = local.admin_api_image_value
+    batch_image                       = local.batch_image_value
+    registry_server                   = local.container_registry_server_value
+    registry_username                 = var.container_registry_username == null ? "" : var.container_registry_username
+    registry_password_param           = var.container_registry_password_ssm_parameter == null ? "" : var.container_registry_password_ssm_parameter
+    db_url                            = "jdbc:mysql://${aws_db_instance.mysql.address}:3306/${var.db_name}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+    db_username                       = var.db_username
+    db_password_param                 = aws_ssm_parameter.db_password.name
+    jwt_secret_param                  = aws_ssm_parameter.jwt_secret.name
+    admin_seed_enabled                = tostring(var.admin_seed_enabled)
+    admin_seed_username               = var.admin_seed_username
+    admin_seed_password_param         = aws_ssm_parameter.admin_seed_password.name
+    firebase_credentials_param        = local.firebase_credentials_param
+    webex_bot_token_param             = local.webex_bot_token_param
+    webex_room_id_param               = local.webex_room_id_param
+    kakao_admin_key_param             = local.kakao_admin_key_param
+    apple_team_id_param               = local.apple_team_id_param
+    apple_key_id_param                = local.apple_key_id_param
+    apple_private_key_param           = local.apple_private_key_param
+    apple_refresh_token_enc_key_param = local.apple_refresh_token_enc_key_param
+    environment                       = var.environment
+    asset_bucket_name                 = local.asset_bucket_name_value
+    asset_region                      = var.asset_region
+    asset_public_base_url             = local.asset_public_base_url_value
+    use_baked_ami                     = var.use_baked_ami
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
     user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))
     admin_api_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api.service"))
