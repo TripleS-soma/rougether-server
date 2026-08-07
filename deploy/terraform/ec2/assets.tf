@@ -140,6 +140,7 @@ locals {
     var.asset_bucket_name,
     "${local.name}-${data.aws_caller_identity.current.account_id}-assets"
   )
+  asset_region_value = coalesce(var.asset_region, var.aws_region)
   asset_public_base_url_value = var.create_asset_bucket ? (
     "https://${aws_cloudfront_distribution.assets[0].domain_name}"
   ) : var.asset_public_base_url

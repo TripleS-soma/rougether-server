@@ -188,9 +188,9 @@ variable "create_asset_bucket" {
 }
 
 variable "asset_region" {
-  description = "S3 asset bucket region used by the Spring configuration."
+  description = "Optional S3 client region override. Managed buckets default to aws_region."
   type        = string
-  default     = "ap-northeast-2"
+  default     = null
 }
 
 variable "asset_public_base_url" {

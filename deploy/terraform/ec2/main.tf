@@ -782,7 +782,7 @@ resource "aws_instance" "app" {
     apple_refresh_token_enc_key_param = local.apple_refresh_token_enc_key_param
     environment                       = var.environment
     asset_bucket_name                 = local.asset_bucket_name_value
-    asset_region                      = var.asset_region
+    asset_region                      = local.asset_region_value
     asset_public_base_url             = local.asset_public_base_url_value
     asset_purge_versions              = tostring(var.create_asset_bucket)
     runtime_env_helpers               = file("${path.module}/templates/runtime-env-helpers.sh")
