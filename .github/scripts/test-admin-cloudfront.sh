@@ -10,6 +10,8 @@ PACKER_UNIT="$REPO_ROOT/deploy/packer/files/rougether-admin-api.service"
 DEPLOY_SCRIPT="$REPO_ROOT/.github/scripts/deploy-ec2-with-rollback.sh"
 DEPLOY_WORKFLOW="$REPO_ROOT/.github/workflows/docker-publish.yml"
 APPLICATION_YML="$REPO_ROOT/admin-api/src/main/resources/application.yml"
+ORIGIN_FILTER="$REPO_ROOT/admin-api/src/main/java/com/triples/rougether/adminapi/global/config/AdminOriginVerificationFilter.java"
+LOGIN_RATE_FILTER="$REPO_ROOT/admin-api/src/main/java/com/triples/rougether/adminapi/global/config/AdminLoginRateLimitFilter.java"
 
 assert_contains() {
   local file="$1"
@@ -35,6 +37,10 @@ assert_contains "$CLOUDFRONT_TF" 'viewer_protocol_policy = "redirect-to-https"' 
   "admin viewers must be redirected to HTTPS"
 assert_contains "$CLOUDFRONT_TF" 'name = "com.amazonaws.global.cloudfront.origin-facing"' \
   "CloudFront origin-facing managed prefix list must be resolved"
+assert_contains "$CLOUDFRONT_TF" 'name  = "X-Rougether-Admin-Origin"' \
+  "admin distribution must inject its origin verification header"
+assert_contains "$CLOUDFRONT_TF" 'value = random_password.admin_origin.result' \
+  "origin verification header must use the Terraform-managed secret"
 
 assert_contains "$MAIN_TF" 'resource "aws_vpc_security_group_ingress_rule" "admin_api_cloudfront"' \
   "admin origin must have an explicit CloudFront-only ingress rule"
@@ -56,6 +62,18 @@ assert_contains "$APPLICATION_YML" 'same-site: strict' \
   "production admin session cookies must use SameSite Strict"
 assert_contains "$APPLICATION_YML" 'secure: true' \
   "production admin session cookies must be HTTPS-only"
+assert_contains "$APPLICATION_YML" 'use-relative-redirects: true' \
+  "admin login redirects must stay on the CloudFront host"
+assert_contains "$ORIGIN_FILTER" 'MessageDigest.isEqual' \
+  "admin origin secret must use constant-time comparison"
+assert_contains "$ORIGIN_FILTER" 'isLoopback(request.getRemoteAddr())' \
+  "SSM emergency access must remain available through loopback"
+assert_contains "$LOGIN_RATE_FILTER" 'DEFAULT_MAX_ATTEMPTS = 10' \
+  "public admin login must have an attempt limit"
+assert_contains "$LOGIN_RATE_FILTER" 'response.setStatus(429)' \
+  "excessive admin login attempts must be rejected"
+assert_contains "$DEPLOY_SCRIPT" 'refresh_admin_origin_secret_env' \
+  "routine deployments must refresh the origin secret from SSM"
 assert_contains "$DEPLOY_WORKFLOW" "Comment=='rougether-dev admin-api HTTPS entrypoint'" \
   "deploy workflow must discover the admin distribution"
 assert_contains "$DEPLOY_WORKFLOW" 'https://${admin_cf_domain}/admin/health' \

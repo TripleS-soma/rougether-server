@@ -8,6 +8,7 @@ NEW_ADMIN_IMAGE="__ADMIN_IMAGE__"
 NEW_BATCH_IMAGE="__BATCH_IMAGE__"
 DEPLOYED_SHA="__DEPLOYED_SHA__"
 FIREBASE_PARAMETER_NAME="__FIREBASE_PARAMETER_NAME__"
+ADMIN_ORIGIN_SECRET_PARAMETER_NAME="__ADMIN_ORIGIN_SECRET_PARAMETER_NAME__"
 WEBEX_BOT_TOKEN_PARAMETER_NAME="__WEBEX_BOT_TOKEN_PARAMETER_NAME__"
 KAKAO_ADMIN_KEY_PARAMETER_NAME="__KAKAO_ADMIN_KEY_PARAMETER_NAME__"
 APPLE_TEAM_ID_PARAMETER_NAME="__APPLE_TEAM_ID_PARAMETER_NAME__"
@@ -176,6 +177,31 @@ with open(sys.argv[1], encoding="utf-8") as value_file:
 valid = bool(value.strip()) and len(value) <= 16384 and "\0" not in value
 raise SystemExit(0 if valid else 1)
 PY
+}
+
+refresh_admin_origin_secret_env() {
+  local secret_file temporary_env
+
+  if [ ! -f "$ADMIN_RUNTIME_ENV" ]; then
+    echo "missing admin-api runtime env: $ADMIN_RUNTIME_ENV" >&2
+    return 1
+  fi
+
+  secret_file="$(mktemp "$ENV_DIR/.admin-origin-secret.XXXXXX")"
+  if ! aws ssm get-parameter --name "$ADMIN_ORIGIN_SECRET_PARAMETER_NAME" --with-decryption \
+      --query 'Parameter.Value' --output text --region "$AWS_REGION" > "$secret_file" \
+      || ! single_line_secret_valid "$secret_file" 256; then
+    rm -f "$secret_file"
+    echo "Admin origin secret is unavailable or invalid" >&2
+    return 1
+  fi
+
+  temporary_env="$(mktemp "$ENV_DIR/.admin-api.env.XXXXXX")"
+  awk '!/^ADMIN_ORIGIN_SECRET=/' "$ADMIN_RUNTIME_ENV" > "$temporary_env"
+  printf '\nADMIN_ORIGIN_SECRET=%s\n' "$(tr -d '\r\n' < "$secret_file")" >> "$temporary_env"
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$ADMIN_RUNTIME_ENV"
+  rm -f "$secret_file"
 }
 
 fetch_secret_parameter() {
@@ -740,6 +766,7 @@ if ! ensure_user_runtime_env; then
 fi
 refresh_social_auth_env
 refresh_webex_alert_env
+refresh_admin_origin_secret_env
 
 trap rollback ERR
 

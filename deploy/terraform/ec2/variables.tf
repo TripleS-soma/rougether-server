@@ -106,13 +106,13 @@ variable "allowed_user_api_cidrs" {
 }
 
 variable "allowed_admin_api_cidrs" {
-  description = "Deprecated. Admin API is localhost-bound and must be accessed through an encrypted SSM tunnel."
+  description = "Deprecated. Direct admin CIDR ingress is forbidden; use Admin CloudFront or the encrypted SSM emergency tunnel."
   type        = list(string)
   default     = []
 
   validation {
     condition     = length(var.allowed_admin_api_cidrs) == 0
-    error_message = "allowed_admin_api_cidrs must remain empty; use an SSM port-forwarding tunnel for admin-api."
+    error_message = "allowed_admin_api_cidrs must remain empty; use Admin CloudFront or an SSM emergency tunnel."
   }
 }
 

@@ -1,11 +1,13 @@
 package com.triples.rougether.adminapi.global.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 // 어드민 인증: admin_users 기반(AdminUserDetailsService) + BCrypt + Thymeleaf form login.
 // 유저(소셜 로그인)와 완전히 분리. 로그인 후 메인(/) 은 에셋 업로드 화면.
@@ -13,7 +15,11 @@ import org.springframework.security.web.SecurityFilterChain;
 public class AdminSecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            AdminOriginVerificationFilter adminOriginVerificationFilter,
+            AdminLoginRateLimitFilter adminLoginRateLimitFilter
+    ) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -43,7 +49,9 @@ public class AdminSecurityConfig {
                 .logout(logout -> logout
                         .logoutSuccessUrl("/login?logout")
                         .permitAll()
-                );
+                )
+                .addFilterBefore(adminOriginVerificationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(adminLoginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -51,5 +59,17 @@ public class AdminSecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    AdminOriginVerificationFilter adminOriginVerificationFilter(
+            @Value("${admin.origin-secret:}") String originSecret
+    ) {
+        return new AdminOriginVerificationFilter(originSecret);
+    }
+
+    @Bean
+    AdminLoginRateLimitFilter adminLoginRateLimitFilter() {
+        return new AdminLoginRateLimitFilter();
     }
 }

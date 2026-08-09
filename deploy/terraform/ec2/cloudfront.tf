@@ -89,6 +89,13 @@ resource "aws_cloudfront_distribution" "admin_api" {
     domain_name = aws_eip.app.public_dns
     origin_id   = "${local.name}-admin-api-ec2"
 
+    # CloudFront 전체 IP 대역 허용만으로는 다른 계정의 배포를 구분할 수 없으므로, 이 배포만 아는
+    # 공유 비밀값을 origin 요청에 덮어쓰고 admin-api가 상수 시간 비교로 검증한다.
+    custom_header {
+      name  = "X-Rougether-Admin-Origin"
+      value = random_password.admin_origin.result
+    }
+
     custom_origin_config {
       http_port                = 8081
       https_port               = 443

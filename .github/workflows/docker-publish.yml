@@ -21,6 +21,7 @@ env:
   IMAGE_TAG: dev
   DEPLOYMENT_ENVIRONMENT: dev
   FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
+  ADMIN_ORIGIN_SECRET_PARAMETER: /rougether-dev/admin/origin-secret
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
   WEBEX_ROOM_ID_PARAMETER: /rougether-dev/alerts/webex-room-id
   KAKAO_ADMIN_KEY_PARAMETER: /rougether-dev/kakao/admin-key
@@ -212,6 +213,7 @@ jobs:
               -e "s|__BATCH_IMAGE__|${batch_image}|g" \
               -e "s|__DEPLOYED_SHA__|${GITHUB_SHA}|g" \
               -e "s|__FIREBASE_PARAMETER_NAME__|${FIREBASE_CREDENTIALS_PARAMETER}|g" \
+              -e "s|__ADMIN_ORIGIN_SECRET_PARAMETER_NAME__|${ADMIN_ORIGIN_SECRET_PARAMETER}|g" \
               -e "s|__WEBEX_BOT_TOKEN_PARAMETER_NAME__|${WEBEX_BOT_TOKEN_PARAMETER}|g" \
               -e "s|__KAKAO_ADMIN_KEY_PARAMETER_NAME__|${KAKAO_ADMIN_KEY_PARAMETER}|g" \
               -e "s|__APPLE_TEAM_ID_PARAMETER_NAME__|${APPLE_TEAM_ID_PARAMETER}|g" \

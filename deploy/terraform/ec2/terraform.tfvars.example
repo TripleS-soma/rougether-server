@@ -22,7 +22,7 @@ container_registry_server                 = null
 container_registry_username               = null
 container_registry_password_ssm_parameter = null
 
-# admin-api는 localhost + 암호화된 SSM 터널로만 접근합니다.
+# admin-api는 별도 CloudFront HTTPS로 접근하며 직접 CIDR 공개는 금지합니다. SSM은 비상 경로입니다.
 allowed_user_api_cidrs  = ["0.0.0.0/0"]
 allowed_admin_api_cidrs = []
 allowed_ssh_cidrs       = []
