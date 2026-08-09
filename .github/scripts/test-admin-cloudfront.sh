@@ -45,6 +45,10 @@ assert_contains "$CLOUDFRONT_TF" 'value = random_password.admin_origin.result' \
 
 assert_contains "$NETWORK_TF" 'resource "aws_subnet" "admin_origin"' \
   "admin origin must use a dedicated private subnet"
+assert_contains "$NETWORK_TF" 'vpc_id                  = local.vpc_id' \
+  "admin origin subnet must support managed and default VPC modes"
+assert_contains "$NETWORK_TF" 'cidrsubnet(data.aws_vpc.default[0].cidr_block, 8, 255)' \
+  "default VPC mode must derive an in-range private subnet CIDR"
 assert_contains "$CLOUDFRONT_TF" 'resource "aws_lb" "admin_origin"' \
   "admin origin must use an internal network load balancer"
 assert_contains "$CLOUDFRONT_TF" 'internal           = true' \

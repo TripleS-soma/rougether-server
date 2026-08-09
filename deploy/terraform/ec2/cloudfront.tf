@@ -70,7 +70,7 @@ resource "aws_lb" "admin_origin" {
   internal           = true
   load_balancer_type = "network"
   security_groups    = [aws_security_group.admin_origin_nlb.id]
-  subnets            = [aws_subnet.admin_origin[0].id]
+  subnets            = [aws_subnet.admin_origin.id]
 
   tags = merge(local.tags, { Name = "${local.name}-admin-origin" })
 }

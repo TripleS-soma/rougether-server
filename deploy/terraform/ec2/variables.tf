@@ -40,9 +40,9 @@ variable "public_subnet_cidrs" {
 }
 
 variable "admin_origin_private_subnet_cidr" {
-  description = "Private subnet CIDR used by the internal Admin NLB and CloudFront VPC origin."
+  description = "Optional private subnet CIDR used by the internal Admin NLB. Managed VPCs default to 10.39.30.0/24; default VPCs derive the final /24 from the VPC CIDR."
   type        = string
-  default     = "10.39.30.0/24"
+  default     = null
 }
 
 variable "repository_url" {
