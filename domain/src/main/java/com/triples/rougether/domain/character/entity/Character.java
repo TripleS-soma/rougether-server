@@ -50,4 +50,13 @@ public class Character {
         this.sortOrder = sortOrder;
         this.active = active;
     }
+
+    // admin 카탈로그 화면의 사용/미사용 토글. 목록·뽑기 노출은 조회 쿼리가 is_active 로 거른다.
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

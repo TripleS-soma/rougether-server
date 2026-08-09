@@ -11,15 +11,19 @@ import org.springframework.data.repository.query.Param;
 
 public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, Long> {
 
+    // 비활성 아이템/테마·비활성 캐릭터는 추첨 대상에서 제외 — admin 사용/미사용 토글이 뽑기에도 즉시 반영된다.
     @Query("""
             select entry
             from GachaPoolEntry entry
-            left join fetch entry.item
+            left join fetch entry.item item
+            left join item.theme theme
             left join fetch entry.character character
             where entry.gacha.id = :gachaId
               and entry.active = true
               and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.CHARACTER
                    or character.active = true)
+              and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.ITEM
+                   or (item.active = true and theme.active = true))
             """)
     List<GachaPoolEntry> findByGachaIdAndActiveIsTrue(@Param("gachaId") Long gachaId);
 
@@ -27,12 +31,15 @@ public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, 
     @Query("""
             select entry
             from GachaPoolEntry entry
-            left join fetch entry.item
+            left join fetch entry.item item
+            left join item.theme theme
             left join fetch entry.character character
             where entry.gacha.id = :gachaId
               and entry.active = true
               and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.CHARACTER
                    or character.active = true)
+              and (entry.rewardType <> com.triples.rougether.domain.gacha.entity.RewardType.ITEM
+                   or (item.active = true and theme.active = true))
             order by entry.id asc
             """)
     List<GachaPoolEntry> findActiveRewardsByGachaId(@Param("gachaId") Long gachaId);

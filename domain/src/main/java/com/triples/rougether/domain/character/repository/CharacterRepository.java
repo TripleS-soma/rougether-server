@@ -11,5 +11,8 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
 
     List<Character> findByActiveTrueOrderBySortOrderAsc();
 
+    // admin 카탈로그 화면용: 비활성 포함 전체.
+    List<Character> findAllByOrderBySortOrderAscIdAsc();
+
     boolean existsByBaseAssetKey(String baseAssetKey);
 }
