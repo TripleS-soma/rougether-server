@@ -333,6 +333,16 @@ resource "aws_vpc_security_group_ingress_rule" "admin_api" {
   description       = "admin-api"
 }
 
+# admin-api는 공인 IP CIDR에 직접 개방하지 않고 CloudFront origin 연결만 허용한다.
+resource "aws_vpc_security_group_ingress_rule" "admin_api_cloudfront" {
+  security_group_id = aws_security_group.ec2.id
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin.id
+  from_port         = 8081
+  ip_protocol       = "tcp"
+  to_port           = 8081
+  description       = "admin-api from CloudFront origins"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
   for_each          = toset(var.allowed_ssh_cidrs)
   security_group_id = aws_security_group.ec2.id

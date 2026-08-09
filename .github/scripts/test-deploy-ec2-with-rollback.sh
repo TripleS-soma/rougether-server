@@ -351,7 +351,7 @@ test_first_deploy_without_credentials_uses_stub() {
 
   assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "missing credentials must remove runtime path"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
-  assert_contains '127.0.0.1:8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must bind to localhost for SSM tunneling"
+  assert_contains '-p 8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must listen on the CloudFront-protected origin port"
   assert_contains '127.0.0.1:8082:8082' "$SYSTEMD_DIR/rougether-batch.service" "batch must bind health port to localhost only"
   assert_not_contains 'rougether-user-api.service' "$SYSTEMD_DIR/rougether-batch.service" "batch must not depend on user-api"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-batch.service" "missing credentials must omit batch bind mount"

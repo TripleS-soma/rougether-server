@@ -50,6 +50,7 @@ jobs:
           bash .github/scripts/test-runtime-env-helpers.sh
           bash .github/scripts/test-wait-for-ssm-command.sh
           bash .github/scripts/test-asset-privacy.sh
+          bash .github/scripts/test-admin-cloudfront.sh
 
       - name: Run tests
         run: ./gradlew test

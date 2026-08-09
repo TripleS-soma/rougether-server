@@ -293,7 +293,7 @@ terraform output -raw user_api_https_base_url
 ```
 
 - 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
-- admin-api(:8081)는 EC2 localhost에만 bind하며 CloudFront/public ingress를 두지 않습니다. 브라우저 접근은 SSM 포트 포워딩(TLS 보호)을 먼저 열고 `http://127.0.0.1:8081`을 사용합니다.
+- admin-api(:8081)는 별도 CloudFront HTTPS 배포로 접근합니다. EC2 보안그룹은 AWS 관리형 CloudFront origin-facing prefix list만 허용하므로 public IP `:8081` 직접 접속은 차단됩니다. SSM 포트 포워딩은 비상 접근 경로로 유지합니다.
 - CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
 - origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.

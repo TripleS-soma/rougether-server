@@ -59,6 +59,15 @@ spring:
   flyway:
     enabled: false
 
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: strict
+        secure: true
+      timeout: 30m
+
 # 운영에서는 시드 비활성 — 어드민 계정은 별도로 안전하게 생성.
 admin:
   seed:
