@@ -130,7 +130,7 @@
                     return;
                 }
                 items = (await itemsRes.json()).items;
-                characters = (await charactersRes.json()).characters;
+                characters = (await charactersRes.json()).items;
                 render();
             } catch (err) {
                 showError('목록 조회 중 오류: ' + err.message);

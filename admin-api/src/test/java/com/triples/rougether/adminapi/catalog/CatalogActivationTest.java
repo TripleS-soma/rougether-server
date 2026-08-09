@@ -152,7 +152,7 @@ class CatalogActivationTest {
 
         mockMvc.perform(get("/admin/catalog/characters"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.characters[?(@.id == %d)].code".formatted(character.getId()))
+                .andExpect(jsonPath("$.items[?(@.id == %d)].code".formatted(character.getId()))
                         .value("activation_list_cat"));
     }
 
