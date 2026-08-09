@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -153,6 +154,37 @@ class CatalogActivationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.characters[?(@.id == %d)].code".formatted(character.getId()))
                         .value("activation_list_cat"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 토글은_CSRF_토큰_없이_거부된다() throws Exception {
+        Item item = saveInactiveItem("activation_csrf_theme", "items/activation/csrf.png");
+        given(storage.exists(anyString())).willReturn(true);
+
+        mockMvc.perform(put("/admin/catalog/items/{itemId}/active", item.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": true}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(itemRepository.findById(item.getId()).orElseThrow().isActive()).isFalse();
+    }
+
+    // 적재(import) 경로는 seed 스크립트·admin-asset-mcp 가 세션 쿠키만으로 curl 호출하므로
+    // CSRF 예외가 유지되어야 한다. 403 이 아니라 컨트롤러/서비스 검증까지 도달하는지로 계약을 고정한다.
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 적재_경로는_CSRF_토큰_없이_컨트롤러까지_도달한다() throws Exception {
+        mockMvc.perform(post("/admin/catalog/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"themes\": [], \"characters\": [], \"items\": []}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/admin/catalog/character-accessories/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHARACTER_ACCESSORY_CATALOG_IMPORT_INVALID"));
     }
 
     @Test
