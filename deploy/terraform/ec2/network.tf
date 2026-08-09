@@ -57,6 +57,36 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public[0].id
 }
 
+# Admin 인증 정보가 공용 인터넷 구간을 다시 통과하지 않도록 CloudFront VPC origin 전용
+# private subnet을 둔다. NAT/인터넷 기본 경로는 필요하지 않다.
+resource "aws_subnet" "admin_origin" {
+  count = var.create_network ? 1 : 0
+
+  vpc_id                  = aws_vpc.main[0].id
+  cidr_block              = var.admin_origin_private_subnet_cidr
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = false
+
+  tags = merge(local.tags, {
+    Name = "${local.name}-admin-origin-private"
+    Tier = "private"
+  })
+}
+
+resource "aws_route_table" "admin_origin_private" {
+  count = var.create_network ? 1 : 0
+
+  vpc_id = aws_vpc.main[0].id
+  tags   = merge(local.tags, { Name = "${local.name}-admin-origin-private" })
+}
+
+resource "aws_route_table_association" "admin_origin_private" {
+  count = var.create_network ? 1 : 0
+
+  subnet_id      = aws_subnet.admin_origin[0].id
+  route_table_id = aws_route_table.admin_origin_private[0].id
+}
+
 locals {
   vpc_id = var.create_network ? aws_vpc.main[0].id : data.aws_vpc.default[0].id
   subnet_ids = var.create_network ? aws_subnet.public[*].id : tolist(

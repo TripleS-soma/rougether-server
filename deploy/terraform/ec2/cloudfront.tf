@@ -31,6 +31,101 @@ data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
+resource "aws_security_group" "admin_origin_nlb" {
+  name        = "${local.name}-admin-origin-nlb"
+  description = "CloudFront VPC origin access to the internal Admin NLB"
+  vpc_id      = local.vpc_id
+  tags        = merge(local.tags, { Name = "${local.name}-admin-origin-nlb" })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "admin_origin_nlb_cloudfront" {
+  security_group_id = aws_security_group.admin_origin_nlb.id
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin.id
+  from_port         = 8081
+  ip_protocol       = "tcp"
+  to_port           = 8081
+  description       = "Admin NLB from CloudFront VPC origins"
+}
+
+resource "aws_vpc_security_group_egress_rule" "admin_origin_nlb_to_ec2" {
+  security_group_id            = aws_security_group.admin_origin_nlb.id
+  referenced_security_group_id = aws_security_group.ec2.id
+  from_port                    = 8081
+  ip_protocol                  = "tcp"
+  to_port                      = 8081
+  description                  = "Admin NLB to EC2"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "admin_api_from_nlb" {
+  security_group_id            = aws_security_group.ec2.id
+  referenced_security_group_id = aws_security_group.admin_origin_nlb.id
+  from_port                    = 8081
+  ip_protocol                  = "tcp"
+  to_port                      = 8081
+  description                  = "admin-api from internal NLB"
+}
+
+resource "aws_lb" "admin_origin" {
+  name               = "${local.name}-admin-origin"
+  internal           = true
+  load_balancer_type = "network"
+  security_groups    = [aws_security_group.admin_origin_nlb.id]
+  subnets            = [aws_subnet.admin_origin[0].id]
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-origin" })
+}
+
+resource "aws_lb_target_group" "admin_api" {
+  name        = "${local.name}-admin-api"
+  port        = 8081
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = local.vpc_id
+
+  health_check {
+    enabled  = true
+    protocol = "TCP"
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-api" })
+}
+
+resource "aws_lb_target_group_attachment" "admin_api" {
+  target_group_arn = aws_lb_target_group.admin_api.arn
+  target_id        = aws_instance.app.id
+  port             = 8081
+}
+
+resource "aws_lb_listener" "admin_api" {
+  load_balancer_arn = aws_lb.admin_origin.arn
+  port              = 8081
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.admin_api.arn
+  }
+}
+
+resource "aws_cloudfront_vpc_origin" "admin_api" {
+  vpc_origin_endpoint_config {
+    arn                    = aws_lb.admin_origin.arn
+    http_port              = 8081
+    https_port             = 443
+    name                   = "${local.name}-admin-api-vpc-origin"
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      items    = ["TLSv1.2"]
+      quantity = 1
+    }
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-api-vpc-origin" })
+
+  depends_on = [aws_lb_listener.admin_api]
+}
+
 resource "aws_cloudfront_function" "admin_viewer_ip" {
   name    = "${local.name}-admin-viewer-ip"
   comment = "Overwrite the trusted Admin viewer IP header"
@@ -99,7 +194,7 @@ resource "aws_cloudfront_distribution" "admin_api" {
   price_class     = "PriceClass_200"
 
   origin {
-    domain_name = aws_eip.app.public_dns
+    domain_name = aws_lb.admin_origin.dns_name
     origin_id   = "${local.name}-admin-api-ec2"
 
     # CloudFront 전체 IP 대역 허용만으로는 다른 계정의 배포를 구분할 수 없으므로, 이 배포만 아는
@@ -109,13 +204,10 @@ resource "aws_cloudfront_distribution" "admin_api" {
       value = random_password.admin_origin.result
     }
 
-    custom_origin_config {
-      http_port                = 8081
-      https_port               = 443
+    vpc_origin_config {
+      vpc_origin_id           = aws_cloudfront_vpc_origin.admin_api.id
       origin_keepalive_timeout = 5
-      origin_protocol_policy   = "http-only"
       origin_read_timeout      = 60
-      origin_ssl_protocols     = ["TLSv1.2"]
     }
   }
 

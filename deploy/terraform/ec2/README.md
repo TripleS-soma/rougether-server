@@ -293,8 +293,8 @@ terraform output -raw user_api_https_base_url
 ```
 
 - 캐시는 전부 비활성화(Managed-CachingDisabled)이고, Authorization 헤더·쿼리스트링·쿠키를 모두 origin 으로 전달합니다(Managed-AllViewerExceptHostHeader).
-- admin-api(:8081)는 별도 CloudFront HTTPS 배포로 접근합니다. EC2 보안그룹은 AWS 관리형 CloudFront origin-facing prefix list만 허용하고, 애플리케이션은 해당 배포가 주입하는 SSM 관리 origin 비밀값까지 검증합니다. public IP `:8081` 직접 접속과 다른 CloudFront 배포를 통한 우회는 차단되며 SSM 포트 포워딩은 비상 접근 경로로 유지합니다.
-- CloudFront → EC2 구간은 HTTP 입니다(origin 에 인증서 없음). dev 스택에서 수용한 트레이드오프이며, 외부 구간(앱↔CloudFront)은 TLS 로 보호됩니다.
+- admin-api(:8081)는 별도 CloudFront HTTPS 배포로 접근합니다. CloudFront는 private subnet의 내부 NLB를 VPC origin으로 사용하고, EC2는 해당 NLB 보안그룹의 `:8081` 연결만 허용합니다. 따라서 관리자 인증 정보는 CloudFront 뒤의 공용 인터넷 구간을 통과하지 않습니다.
+- 애플리케이션은 해당 배포가 주입하는 SSM 관리 origin 비밀값까지 검증합니다. public IP `:8081` 직접 접속과 다른 CloudFront 배포를 통한 우회는 차단되며 SSM 포트 포워딩은 비상 접근 경로로 유지합니다. 내부 NLB는 별도 AWS 시간당/LCU 비용이 발생합니다.
 - `:8080` 직접 HTTP 접속은 배포 workflow 의 public health check 가 사용하므로 계속 열려 있습니다.
 - origin 은 EIP(`aws_eip.app`)의 public DNS 라 EC2 stop/start·재생성에도 유지됩니다. 재생성 시에는 같은 apply 에서 EIP 연결(`aws_eip_association`)이 새 인스턴스로 옮겨집니다. EIP 는 2024-02 이후 모든 public IPv4 와 동일 과금이라 추가 비용이 없습니다.
 - 배포 workflow 는 direct HTTP 와 함께 CloudFront 경유 health check 도 수행합니다(배포가 origin 까지 실제로 도달하는지 검증). CloudFront 배포가 아직 없으면(조회는 성공했지만 결과가 빈 경우) 그 단계만 경고 후 건너뛰고, 조회 자체가 실패하면(권한 부족·API 오류) 배포를 실패시킵니다.

@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLOUDFRONT_TF="$REPO_ROOT/deploy/terraform/ec2/cloudfront.tf"
 MAIN_TF="$REPO_ROOT/deploy/terraform/ec2/main.tf"
+NETWORK_TF="$REPO_ROOT/deploy/terraform/ec2/network.tf"
 OUTPUTS_TF="$REPO_ROOT/deploy/terraform/ec2/outputs.tf"
 VARIABLES_TF="$REPO_ROOT/deploy/terraform/ec2/variables.tf"
 PACKER_UNIT="$REPO_ROOT/deploy/packer/files/rougether-admin-api.service"
@@ -42,10 +43,18 @@ assert_contains "$CLOUDFRONT_TF" 'name  = "X-Rougether-Admin-Origin"' \
 assert_contains "$CLOUDFRONT_TF" 'value = random_password.admin_origin.result' \
   "origin verification header must use the Terraform-managed secret"
 
-assert_contains "$MAIN_TF" 'resource "aws_vpc_security_group_ingress_rule" "admin_api_cloudfront"' \
-  "admin origin must have an explicit CloudFront-only ingress rule"
-assert_contains "$MAIN_TF" 'prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin.id' \
-  "admin ingress must use the CloudFront managed prefix list"
+assert_contains "$NETWORK_TF" 'resource "aws_subnet" "admin_origin"' \
+  "admin origin must use a dedicated private subnet"
+assert_contains "$CLOUDFRONT_TF" 'resource "aws_lb" "admin_origin"' \
+  "admin origin must use an internal network load balancer"
+assert_contains "$CLOUDFRONT_TF" 'internal           = true' \
+  "admin origin load balancer must not be internet-facing"
+assert_contains "$CLOUDFRONT_TF" 'resource "aws_cloudfront_vpc_origin" "admin_api"' \
+  "admin traffic must use a CloudFront VPC origin"
+assert_contains "$CLOUDFRONT_TF" 'vpc_origin_id           = aws_cloudfront_vpc_origin.admin_api.id' \
+  "admin distribution must target the private VPC origin"
+assert_contains "$CLOUDFRONT_TF" 'resource "aws_vpc_security_group_ingress_rule" "admin_api_from_nlb"' \
+  "EC2 admin ingress must be limited to the internal NLB"
 assert_contains "$VARIABLES_TF" 'condition     = length(var.allowed_admin_api_cidrs) == 0' \
   "direct admin CIDR ingress must remain forbidden"
 

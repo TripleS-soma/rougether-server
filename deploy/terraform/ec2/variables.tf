@@ -39,6 +39,12 @@ variable "public_subnet_cidrs" {
   }
 }
 
+variable "admin_origin_private_subnet_cidr" {
+  description = "Private subnet CIDR used by the internal Admin NLB and CloudFront VPC origin."
+  type        = string
+  default     = "10.39.30.0/24"
+}
+
 variable "repository_url" {
   description = "Deprecated. Kept for compatibility with the old EC2 build flow."
   type        = string
