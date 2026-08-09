@@ -189,6 +189,27 @@ class CatalogActivationTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void active_누락_요청은_공통_validation_계약으로_응답한다() throws Exception {
+        Item item = saveInactiveItem("activation_valid_theme", "items/activation/valid.png");
+
+        mockMvc.perform(put("/admin/catalog/items/{itemId}/active", item.getId())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("active"));
+
+        mockMvc.perform(put("/admin/catalog/items/{itemId}/active", item.getId())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{broken"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 없는_아이템은_404를_반환한다() throws Exception {
         mockMvc.perform(put("/admin/catalog/items/{itemId}/active", 999_999_999L)
                         .with(csrf())
