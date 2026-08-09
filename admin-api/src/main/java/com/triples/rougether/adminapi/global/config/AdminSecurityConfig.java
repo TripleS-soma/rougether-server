@@ -51,7 +51,7 @@ public class AdminSecurityConfig {
                         .permitAll()
                 )
                 .addFilterBefore(adminOriginVerificationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(adminLoginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterAfter(adminLoginRateLimitFilter, AdminOriginVerificationFilter.class);
 
         return http.build();
     }

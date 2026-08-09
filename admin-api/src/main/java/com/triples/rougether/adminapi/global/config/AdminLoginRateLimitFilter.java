@@ -14,10 +14,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-// 공개 관리자 로그인에 대한 IP별 고정 윈도우 제한. CloudFront는 실제 viewer IP를 X-Forwarded-For
-// 마지막 값으로 추가하므로 기존에 주입된 앞쪽 값이 아니라 마지막 값을 사용함.
+// 공개 관리자 로그인에 대한 IP별 고정 윈도우 제한. CloudFront Function이 viewer-request 단계에서
+// X-Rougether-Viewer-Ip를 실제 접속 IP로 덮어쓰므로 임의 X-Forwarded-For는 신뢰하지 않음.
 final class AdminLoginRateLimitFilter extends OncePerRequestFilter {
 
+    static final String VIEWER_IP_HEADER = "X-Rougether-Viewer-Ip";
     private static final int DEFAULT_MAX_ATTEMPTS = 10;
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(15);
     private static final int CLEANUP_THRESHOLD = 10_000;
@@ -69,13 +70,8 @@ final class AdminLoginRateLimitFilter extends OncePerRequestFilter {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor == null || forwardedFor.isBlank()) {
-            return request.getRemoteAddr();
-        }
-
-        String[] addresses = forwardedFor.split(",");
-        return addresses[addresses.length - 1].trim();
+        String viewerIp = request.getHeader(VIEWER_IP_HEADER);
+        return viewerIp == null || viewerIp.isBlank() ? request.getRemoteAddr() : viewerIp.trim();
     }
 
     private void cleanupExpiredWindows(Instant now) {

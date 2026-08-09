@@ -49,10 +49,10 @@ assert_contains "$MAIN_TF" 'prefix_list_id    = data.aws_ec2_managed_prefix_list
 assert_contains "$VARIABLES_TF" 'condition     = length(var.allowed_admin_api_cidrs) == 0' \
   "direct admin CIDR ingress must remain forbidden"
 
-assert_contains "$PACKER_UNIT" '-p 8081:8081' \
-  "baked admin unit must listen on the CloudFront-protected origin port"
-assert_contains "$DEPLOY_SCRIPT" '-p 8081:8081' \
-  "routine deployments must preserve the CloudFront origin binding"
+assert_contains "$PACKER_UNIT" '--network host' \
+  "baked admin unit must preserve loopback identity for emergency SSM access"
+assert_contains "$DEPLOY_SCRIPT" '--network host' \
+  "routine deployments must preserve loopback identity for local health checks"
 assert_contains "$OUTPUTS_TF" 'value       = "https://${aws_cloudfront_distribution.admin_api.domain_name}/login"' \
   "admin_url must expose the permanent HTTPS login URL"
 assert_contains "$OUTPUTS_TF" 'value       = "https://${aws_cloudfront_distribution.admin_api.domain_name}/admin/health"' \
@@ -72,6 +72,12 @@ assert_contains "$LOGIN_RATE_FILTER" 'DEFAULT_MAX_ATTEMPTS = 10' \
   "public admin login must have an attempt limit"
 assert_contains "$LOGIN_RATE_FILTER" 'response.setStatus(429)' \
   "excessive admin login attempts must be rejected"
+assert_contains "$CLOUDFRONT_TF" "event.request.headers['x-rougether-viewer-ip']" \
+  "CloudFront Function must overwrite the trusted viewer IP header"
+assert_contains "$CLOUDFRONT_TF" 'function_arn = aws_cloudfront_function.admin_viewer_ip.arn' \
+  "admin distribution must attach the viewer IP function"
+assert_contains "$LOGIN_RATE_FILTER" 'VIEWER_IP_HEADER = "X-Rougether-Viewer-Ip"' \
+  "login rate limiting must use only the CloudFront-managed viewer IP header"
 assert_contains "$DEPLOY_SCRIPT" 'refresh_admin_origin_secret_env' \
   "routine deployments must refresh the origin secret from SSM"
 assert_contains "$DEPLOY_WORKFLOW" "Comment=='rougether-dev admin-api HTTPS entrypoint'" \

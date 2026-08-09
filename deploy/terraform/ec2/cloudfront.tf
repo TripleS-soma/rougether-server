@@ -31,6 +31,19 @@ data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
+resource "aws_cloudfront_function" "admin_viewer_ip" {
+  name    = "${local.name}-admin-viewer-ip"
+  comment = "Overwrite the trusted Admin viewer IP header"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-JAVASCRIPT
+    function handler(event) {
+      event.request.headers['x-rougether-viewer-ip'] = { value: event.viewer.ip };
+      return event.request;
+    }
+  JAVASCRIPT
+}
+
 resource "aws_cloudfront_distribution" "user_api" {
   enabled         = true
   comment         = "${local.name} user-api HTTPS entrypoint"
@@ -117,6 +130,11 @@ resource "aws_cloudfront_distribution" "admin_api" {
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security_headers.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.admin_viewer_ip.arn
+    }
   }
 
   restrictions {

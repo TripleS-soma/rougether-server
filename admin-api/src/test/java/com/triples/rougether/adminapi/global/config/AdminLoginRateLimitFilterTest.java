@@ -21,10 +21,10 @@ class AdminLoginRateLimitFilterTest {
                 Duration.ofMinutes(15)
         );
 
-        assertThat(login(filter, "198.51.100.1, 203.0.113.7").getStatus()).isEqualTo(200);
-        assertThat(login(filter, "198.51.100.1, 203.0.113.7").getStatus()).isEqualTo(200);
+        assertThat(login(filter, "203.0.113.7").getStatus()).isEqualTo(200);
+        assertThat(login(filter, "203.0.113.7").getStatus()).isEqualTo(200);
 
-        MockHttpServletResponse blocked = login(filter, "198.51.100.1, 203.0.113.7");
+        MockHttpServletResponse blocked = login(filter, "203.0.113.7");
         assertThat(blocked.getStatus()).isEqualTo(429);
         assertThat(blocked.getHeader("Retry-After")).isEqualTo("900");
     }
@@ -41,9 +41,9 @@ class AdminLoginRateLimitFilterTest {
         assertThat(login(filter, "203.0.113.8").getStatus()).isEqualTo(200);
     }
 
-    private MockHttpServletResponse login(AdminLoginRateLimitFilter filter, String forwardedFor) throws Exception {
+    private MockHttpServletResponse login(AdminLoginRateLimitFilter filter, String viewerIp) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/login");
-        request.addHeader("X-Forwarded-For", forwardedFor);
+        request.addHeader(AdminLoginRateLimitFilter.VIEWER_IP_HEADER, viewerIp);
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, new MockFilterChain());
         return response;

@@ -302,12 +302,9 @@ terraform output -raw user_api_https_base_url
 - 선적용 없이 머지된 경우: 첫 배포가 HTTPS health check 단계에서 AccessDenied 로 실패합니다. 이 시점에 컨테이너 배포와 로컬 health check 는 이미 성공했고 `:dev` 승격만 건너뛴 상태이므로, `terraform apply` 후 실패한 workflow run 을 re-run 하면 복구됩니다(서비스 중단 없음).
 
 ```bash
-# 머지 전 최소 선적용 (이 브랜치 checkout 상태에서. 전체 apply 를 해도 무방)
-terraform apply \
-  -target=aws_iam_role_policy.github_actions_deploy \
-  -target=aws_eip.app \
-  -target=aws_eip_association.app \
-  -target=aws_cloudfront_distribution.user_api
+# 머지 전 필수 선적용 (이 브랜치 checkout 상태에서 전체 plan을 검토한 뒤 적용)
+terraform plan -out=tfplan
+terraform apply tfplan
 ```
 - 정식 도메인을 확보하면 `aliases` + ACM(us-east-1) 인증서를 붙이는 것으로 전환합니다.
 
