@@ -106,6 +106,39 @@ class GachaPoolEntryRepositoryTest {
     }
 
     @Test
+    void 보상_미리보기와_추첨_풀은_비활성_아이템만_제외하고_같은_풀의_캐릭터_엔트리는_유지한다() {
+        Theme theme = themeRepository.save(new Theme("reward_inactive", "비활성 아이템 테마", null, true));
+        Theme retiredTheme = themeRepository.save(new Theme("reward_retired_theme", "내려간 테마", null, false));
+        Gacha gacha = gachaRepository.save(
+                new Gacha("reward_inactive", "비활성 아이템 뽑기", CurrencyType.COIN, 25, 1, theme, true));
+        Item activeItem = itemRepository.save(item(theme, "판매 중", "items/reward-inactive/active.png"));
+        Item inactiveItem = itemRepository.save(new Item(theme, "furniture", "positioned", null, null,
+                "내려간 아이템", null, null, "items/reward-inactive/inactive.png", false, false));
+        Item retiredThemeItem = itemRepository.save(
+                item(retiredTheme, "테마째 내려간 아이템", "items/reward-inactive/retired-theme.png"));
+        Character character = characterRepository.save(new Character(
+                "reward_mixed_cat", "혼합 풀 고양이", "characters/reward-mixed/cat.png", 3, true));
+
+        GachaPoolEntry activeEntry = poolRepository.save(
+                GachaPoolEntry.itemEntry(gacha, activeItem, GachaRarity.NORMAL));
+        poolRepository.save(GachaPoolEntry.itemEntry(gacha, inactiveItem, GachaRarity.NORMAL));
+        poolRepository.save(GachaPoolEntry.itemEntry(gacha, retiredThemeItem, GachaRarity.NORMAL));
+        GachaPoolEntry characterEntry = poolRepository.save(
+                GachaPoolEntry.itemEntry(gacha, activeItem, GachaRarity.NORMAL));
+        poolRepository.flush();
+        // 아이템 활성 필터가 item 이 null 인 CHARACTER 엔트리를 떨어뜨리지 않는지 혼합 풀로 검증
+        changeToCharacterEntry(characterEntry.getId(), character.getId());
+        entityManager.clear();
+
+        assertThat(poolRepository.findActiveRewardsByGachaId(gacha.getId()))
+                .extracting(GachaPoolEntry::getId)
+                .containsExactly(activeEntry.getId(), characterEntry.getId());
+        assertThat(poolRepository.findByGachaIdAndActiveIsTrue(gacha.getId()))
+                .extracting(GachaPoolEntry::getId)
+                .containsExactlyInAnyOrder(activeEntry.getId(), characterEntry.getId());
+    }
+
+    @Test
     void 보유_여부용_projection은_삭제되지_않은_보상_ID만_조회한다() {
         User user = userRepository.save(User.signUp("gacha-reward-owner@rougether.dev"));
         Theme theme = themeRepository.save(new Theme("reward_owned", "보유 보상", null, true));

@@ -36,9 +36,11 @@ public class AdminSecurityConfig {
                         .anyRequest().authenticated()
                 )
                 // 일괄 적재(catalog/슬롯/악세사리 렌더 프로필)·재화 지급은 curl/스크립트로 호출
-                // → CSRF 제외 (MVP, 인증은 유지).
+                // → CSRF 제외 (MVP, 인증은 유지). 카탈로그 토글 등 화면용 API 는 CSRF 를 유지해야
+                // 하므로 import 경로만 정확히 지정한다.
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
-                        "/admin/catalog/**", "/admin/items/slots/import", "/admin/users/*/wallets/grant",
+                        "/admin/catalog/import", "/admin/catalog/character-accessories/import",
+                        "/admin/items/slots/import", "/admin/users/*/wallets/grant",
                         "/admin/users/*/characters/grant", "/admin/banned-words/import",
                         "/admin/character-accessory-render-profiles/import"))
                 .formLogin(form -> form

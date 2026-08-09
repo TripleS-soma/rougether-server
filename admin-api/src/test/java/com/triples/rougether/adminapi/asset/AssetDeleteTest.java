@@ -69,6 +69,31 @@ class AssetDeleteTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 등록된_캐릭터의_파생_애니메이션_에셋은_삭제하지_않는다() throws Exception {
+        characterRepository.save(new Character(
+                "anim_guard_cat", "애니메이션 가드", "characters/anim-guard-base.webp", 996, true));
+
+        mockMvc.perform(delete("/admin/assets")
+                        .param("key", "characters/anim_guard_cat/animations/idle.webp")
+                        .with(csrf()))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 미등록_캐릭터_code의_애니메이션_key는_삭제할_수_있다() throws Exception {
+        String key = "characters/no_such_cat/animations/idle.webp";
+        String archiveKey = "archive/admin-deleted/20260809T000000000Z/" + key;
+        given(storage.exists(key)).willReturn(true);
+        given(storage.archiveAndDelete(key)).willReturn(new AssetDeleteResult(key, archiveKey));
+
+        mockMvc.perform(delete("/admin/assets").param("key", key).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.key").value(key));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void characters_밖의_key는_삭제하지_않는다() throws Exception {
         mockMvc.perform(delete("/admin/assets")
                         .param("key", "items/chair.png")

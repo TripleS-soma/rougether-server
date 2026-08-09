@@ -19,6 +19,10 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query("select i from Item i join fetch i.theme where i.placementType = :placementType order by i.theme.id asc, i.id asc")
     List<Item> findByPlacementTypeWithTheme(@Param("placementType") String placementType);
 
+    // admin 카탈로그 화면용: 비활성 포함 전체 + theme fetch join (테마·id 순 정렬).
+    @Query("select i from Item i join fetch i.theme order by i.theme.id asc, i.id asc")
+    List<Item> findAllWithTheme();
+
     // 상점 노출용: 활성 테마의 활성 아이템만 + theme fetch join(N+1 회피).
     // spec(domains/shop/features.md) — 테마를 내리면(themes.is_active=false) 그 테마 아이템도 상점에서 숨긴다.
     @Query("select i from Item i join fetch i.theme where i.active = true and i.theme.active = true")
