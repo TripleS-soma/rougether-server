@@ -8,6 +8,7 @@ locals {
 
   db_password_param         = "/${local.name}/db/password"
   admin_seed_password_param = "/${local.name}/admin/seed-password"
+  admin_origin_secret_param = "/${local.name}/admin/origin-secret"
   jwt_secret_param          = "/${local.name}/jwt/secret"
   # 값은 deploy/scripts/put-firebase-credentials.sh가 관리해 Terraform state 유입을 막는다.
   firebase_credentials_param = "/${local.name}/firebase/credentials-json"
@@ -27,6 +28,7 @@ locals {
   runtime_ssm_parameter_names = concat([
     local.db_password_param,
     local.admin_seed_password_param,
+    local.admin_origin_secret_param,
     local.jwt_secret_param,
     local.firebase_credentials_param,
     local.webex_bot_token_param,
@@ -110,6 +112,11 @@ resource "random_password" "admin_seed" {
   special = false
 }
 
+resource "random_password" "admin_origin" {
+  length  = 64
+  special = false
+}
+
 resource "random_password" "jwt" {
   count   = var.jwt_secret == null ? 1 : 0
   length  = 64
@@ -145,6 +152,14 @@ resource "aws_ssm_parameter" "admin_seed_password" {
   lifecycle {
     ignore_changes = [value]
   }
+}
+
+resource "aws_ssm_parameter" "admin_origin_secret" {
+  name        = local.admin_origin_secret_param
+  description = "Rougether admin CloudFront origin verification secret"
+  type        = "SecureString"
+  value       = random_password.admin_origin.result
+  tags        = local.tags
 }
 
 resource "aws_ssm_parameter" "jwt_secret" {
@@ -452,6 +467,7 @@ resource "aws_iam_role_policy" "app" {
           [
             aws_ssm_parameter.db_password.arn,
             aws_ssm_parameter.admin_seed_password.arn,
+            aws_ssm_parameter.admin_origin_secret.arn,
             aws_ssm_parameter.jwt_secret.arn,
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.firebase_credentials_param, "/")}",
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.kakao_admin_key_param, "/")}",
@@ -772,6 +788,7 @@ resource "aws_instance" "app" {
     admin_seed_enabled                = tostring(var.admin_seed_enabled)
     admin_seed_username               = var.admin_seed_username
     admin_seed_password_param         = aws_ssm_parameter.admin_seed_password.name
+    admin_origin_secret_param         = aws_ssm_parameter.admin_origin_secret.name
     firebase_credentials_param        = local.firebase_credentials_param
     webex_bot_token_param             = local.webex_bot_token_param
     webex_room_id_param               = local.webex_room_id_param

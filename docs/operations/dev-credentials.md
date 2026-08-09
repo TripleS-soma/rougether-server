@@ -19,11 +19,12 @@ aws sts get-caller-identity
 
 ## Admin
 
-- Admin URL: SSM 터널을 연 뒤 `terraform -chdir=deploy/terraform/ec2 output -raw admin_url`
+- Admin URL: `terraform -chdir=deploy/terraform/ec2 output -raw admin_url`
 - Username: `admin`
 - Password SSM parameter: `/rougether-dev/admin/seed-password`
 
-admin-api는 EC2 localhost에만 bind합니다. 별도 터미널에서 암호화된 SSM 포트 포워딩을 유지합니다.
+Admin URL은 별도 CloudFront HTTPS 배포를 사용하며 EC2 `:8081` 직접 접속은 차단됩니다.
+CloudFront 장애 시에는 별도 터미널에서 암호화된 SSM 포트 포워딩을 비상 접근 경로로 사용합니다.
 
 ```bash
 $(terraform -chdir=deploy/terraform/ec2 output -raw admin_tunnel_command)

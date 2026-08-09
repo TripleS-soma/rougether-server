@@ -39,6 +39,12 @@ variable "public_subnet_cidrs" {
   }
 }
 
+variable "admin_origin_private_subnet_cidr" {
+  description = "Optional private subnet CIDR used by the internal Admin NLB. Managed VPCs default to 10.39.30.0/24; default VPCs derive the final /24 from the VPC CIDR."
+  type        = string
+  default     = null
+}
+
 variable "repository_url" {
   description = "Deprecated. Kept for compatibility with the old EC2 build flow."
   type        = string
@@ -106,13 +112,13 @@ variable "allowed_user_api_cidrs" {
 }
 
 variable "allowed_admin_api_cidrs" {
-  description = "Deprecated. Admin API is localhost-bound and must be accessed through an encrypted SSM tunnel."
+  description = "Deprecated. Direct admin CIDR ingress is forbidden; use Admin CloudFront or the encrypted SSM emergency tunnel."
   type        = list(string)
   default     = []
 
   validation {
     condition     = length(var.allowed_admin_api_cidrs) == 0
-    error_message = "allowed_admin_api_cidrs must remain empty; use an SSM port-forwarding tunnel for admin-api."
+    error_message = "allowed_admin_api_cidrs must remain empty; use Admin CloudFront or an SSM emergency tunnel."
   }
 }
 

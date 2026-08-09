@@ -5,8 +5,9 @@
 # 기본 도메인(*.cloudfront.net)과 기본 인증서를 사용한다. 도메인을 확보하면 aliases + ACM(us-east-1)
 # 인증서를 추가하는 것으로 전환한다.
 #
-# 범위는 user-api(:8080)만이다. admin-api(:8081)는 localhost에만 bind하고 암호화된 SSM
-# 포트 포워딩을 통해 접근하므로 CloudFront와 public ingress를 두지 않는다.
+# user-api(:8080)와 admin-api(:8081)는 서로 다른 CloudFront 배포를 사용한다. admin-api origin은
+# CloudFront origin-facing 관리형 prefix list에서만 접근할 수 있어 EC2 public IP:8081 직접 접속은
+# 차단된다. SSM 포트 포워딩은 CloudFront 장애 시 비상 접근 경로로 유지한다.
 #
 # CloudFront → EC2 origin 구간은 HTTP 다(origin 에 인증서가 없어 https 불가). dev 스택에서 수용한
 # 트레이드오프이며, 외부(앱↔CloudFront) 구간은 TLS 로 보호된다. 기존 :8080 직접 접속도 배포
@@ -20,6 +21,122 @@ data "aws_cloudfront_cache_policy" "caching_disabled" {
 # Host 는 제외해야 한다 — viewer 의 Host(xxx.cloudfront.net)가 그대로 가면 custom origin 라우팅이 깨진다.
 data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
+}
+
+data "aws_cloudfront_response_headers_policy" "security_headers" {
+  name = "Managed-SecurityHeadersPolicy"
+}
+
+data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+resource "aws_security_group" "admin_origin_nlb" {
+  name        = "${local.name}-admin-origin-nlb"
+  description = "CloudFront VPC origin access to the internal Admin NLB"
+  vpc_id      = local.vpc_id
+  tags        = merge(local.tags, { Name = "${local.name}-admin-origin-nlb" })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "admin_origin_nlb_cloudfront" {
+  security_group_id = aws_security_group.admin_origin_nlb.id
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin.id
+  from_port         = 8081
+  ip_protocol       = "tcp"
+  to_port           = 8081
+  description       = "Admin NLB from CloudFront VPC origins"
+}
+
+resource "aws_vpc_security_group_egress_rule" "admin_origin_nlb_to_ec2" {
+  security_group_id            = aws_security_group.admin_origin_nlb.id
+  referenced_security_group_id = aws_security_group.ec2.id
+  from_port                    = 8081
+  ip_protocol                  = "tcp"
+  to_port                      = 8081
+  description                  = "Admin NLB to EC2"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "admin_api_from_nlb" {
+  security_group_id            = aws_security_group.ec2.id
+  referenced_security_group_id = aws_security_group.admin_origin_nlb.id
+  from_port                    = 8081
+  ip_protocol                  = "tcp"
+  to_port                      = 8081
+  description                  = "admin-api from internal NLB"
+}
+
+resource "aws_lb" "admin_origin" {
+  name               = "${local.name}-admin-origin"
+  internal           = true
+  load_balancer_type = "network"
+  security_groups    = [aws_security_group.admin_origin_nlb.id]
+  subnets            = [aws_subnet.admin_origin.id]
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-origin" })
+}
+
+resource "aws_lb_target_group" "admin_api" {
+  name        = "${local.name}-admin-api"
+  port        = 8081
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = local.vpc_id
+
+  health_check {
+    enabled  = true
+    protocol = "TCP"
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-api" })
+}
+
+resource "aws_lb_target_group_attachment" "admin_api" {
+  target_group_arn = aws_lb_target_group.admin_api.arn
+  target_id        = aws_instance.app.id
+  port             = 8081
+}
+
+resource "aws_lb_listener" "admin_api" {
+  load_balancer_arn = aws_lb.admin_origin.arn
+  port              = 8081
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.admin_api.arn
+  }
+}
+
+resource "aws_cloudfront_vpc_origin" "admin_api" {
+  vpc_origin_endpoint_config {
+    arn                    = aws_lb.admin_origin.arn
+    http_port              = 8081
+    https_port             = 443
+    name                   = "${local.name}-admin-api-vpc-origin"
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      items    = ["TLSv1.2"]
+      quantity = 1
+    }
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-api-vpc-origin" })
+
+  depends_on = [aws_lb_listener.admin_api]
+}
+
+resource "aws_cloudfront_function" "admin_viewer_ip" {
+  name    = "${local.name}-admin-viewer-ip"
+  comment = "Overwrite the trusted Admin viewer IP header"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-JAVASCRIPT
+    function handler(event) {
+      event.request.headers['x-rougether-viewer-ip'] = { value: event.viewer.ip };
+      return event.request;
+    }
+  JAVASCRIPT
 }
 
 resource "aws_cloudfront_distribution" "user_api" {
@@ -67,4 +184,60 @@ resource "aws_cloudfront_distribution" "user_api" {
   }
 
   tags = merge(local.tags, { Name = "${local.name}-user-api-cdn" })
+}
+
+resource "aws_cloudfront_distribution" "admin_api" {
+  enabled         = true
+  comment         = "${local.name} admin-api HTTPS entrypoint"
+  http_version    = "http2and3"
+  is_ipv6_enabled = true
+  price_class     = "PriceClass_200"
+
+  origin {
+    domain_name = aws_lb.admin_origin.dns_name
+    origin_id   = "${local.name}-admin-api-ec2"
+
+    # CloudFront 전체 IP 대역 허용만으로는 다른 계정의 배포를 구분할 수 없으므로, 이 배포만 아는
+    # 공유 비밀값을 origin 요청에 덮어쓰고 admin-api가 상수 시간 비교로 검증한다.
+    custom_header {
+      name  = "X-Rougether-Admin-Origin"
+      value = random_password.admin_origin.result
+    }
+
+    vpc_origin_config {
+      vpc_origin_id           = aws_cloudfront_vpc_origin.admin_api.id
+      origin_keepalive_timeout = 5
+      origin_read_timeout      = 60
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "${local.name}-admin-api-ec2"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    # 로그인 세션 쿠키, CSRF 토큰, multipart 요청을 원본에 그대로 전달하고 응답은 캐시하지 않는다.
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security_headers.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.admin_viewer_ip.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-admin-api-cdn" })
 }

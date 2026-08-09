@@ -19,17 +19,17 @@ output "user_api_https_health_url" {
 }
 
 output "admin_url" {
-  description = "Admin login/upload URL after opening admin_tunnel_command in another terminal."
-  value       = "http://127.0.0.1:8081/"
+  description = "Permanent Admin HTTPS login URL via CloudFront."
+  value       = "https://${aws_cloudfront_distribution.admin_api.domain_name}/login"
 }
 
 output "admin_health_url" {
-  description = "Admin API health check URL after opening the SSM tunnel."
-  value       = "http://127.0.0.1:8081/admin/health"
+  description = "Admin API health check URL via CloudFront."
+  value       = "https://${aws_cloudfront_distribution.admin_api.domain_name}/admin/health"
 }
 
 output "admin_tunnel_command" {
-  description = "Encrypted SSM port-forwarding command for the localhost-bound admin API."
+  description = "Encrypted emergency SSM port-forwarding command for admin API access."
   value       = "aws ssm start-session --target ${aws_instance.app.id} --document-name AWS-StartPortForwardingSession --parameters '{\"portNumber\":[\"8081\"],\"localPortNumber\":[\"8081\"]}' --region ${var.aws_region}"
 }
 
@@ -81,6 +81,11 @@ output "admin_seed_username" {
 output "admin_seed_password_parameter" {
   description = "SSM parameter name containing the initial admin password."
   value       = aws_ssm_parameter.admin_seed_password.name
+}
+
+output "admin_origin_secret_parameter" {
+  description = "SSM SecureString parameter used to verify the Admin CloudFront origin."
+  value       = aws_ssm_parameter.admin_origin_secret.name
 }
 
 output "firebase_credentials_parameter" {

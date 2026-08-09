@@ -91,10 +91,13 @@ reset_scenario() {
   APPLE_KEY_ID_PARAMETER_NAME="/test/apple-key"
   APPLE_PRIVATE_KEY_PARAMETER_NAME="/test/apple-private"
   APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="/test/apple-enc"
+  ADMIN_ORIGIN_SECRET_PARAMETER_NAME="/test/admin-origin"
 
   mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"
+  printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$ADMIN_RUNTIME_ENV"
   chmod 600 "$USER_RUNTIME_ENV"
+  chmod 600 "$ADMIN_RUNTIME_ENV"
 }
 
 assert_file_equal() {
@@ -351,7 +354,8 @@ test_first_deploy_without_credentials_uses_stub() {
 
   assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "missing credentials must remove runtime path"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
-  assert_contains '127.0.0.1:8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must bind to localhost for SSM tunneling"
+  assert_contains '--network host' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must preserve loopback identity for SSM and local health checks"
+  assert_not_contains '-p 8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api host networking must not keep a bridge port mapping"
   assert_contains '127.0.0.1:8082:8082' "$SYSTEMD_DIR/rougether-batch.service" "batch must bind health port to localhost only"
   assert_not_contains 'rougether-user-api.service' "$SYSTEMD_DIR/rougether-batch.service" "batch must not depend on user-api"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-batch.service" "missing credentials must omit batch bind mount"
@@ -661,6 +665,25 @@ test_batch_env_bootstrap_is_idempotent() {
   echo "ok - batch.env bootstrap leaves existing file untouched"
 }
 
+test_admin_origin_secret_refresh_is_fail_closed() {
+  reset_scenario "admin-origin-secret"
+  AWS_MOCK_MODE="payload"
+  AWS_MOCK_PAYLOAD="new-origin-secret"
+
+  refresh_admin_origin_secret_env
+  assert_contains '^ADMIN_ORIGIN_SECRET=new-origin-secret$' "$ADMIN_RUNTIME_ENV" \
+    "valid admin origin secret must be installed in the runtime env"
+
+  AWS_MOCK_MODE="fail"
+  if refresh_admin_origin_secret_env; then
+    echo "not ok - missing admin origin secret must fail the deployment" >&2
+    return 1
+  fi
+  assert_contains '^ADMIN_ORIGIN_SECRET=new-origin-secret$' "$ADMIN_RUNTIME_ENV" \
+    "failed refresh must preserve the last valid admin origin secret"
+  echo "ok - admin origin secret refresh is fail-closed"
+}
+
 test_ssm_failure_keeps_existing_credentials
 test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low
@@ -678,6 +701,7 @@ test_capture_rollback_images_preserves_new_deploy_sha
 test_batch_env_is_bootstrapped_from_user_runtime_env
 test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
+test_admin_origin_secret_refresh_is_fail_closed
 test_first_batch_deploy_failure_stops_new_batch
 test_rollback_stops_batch_when_no_user_admin_images
 test_rollback_batch_restores_previous_image_deploy_env
