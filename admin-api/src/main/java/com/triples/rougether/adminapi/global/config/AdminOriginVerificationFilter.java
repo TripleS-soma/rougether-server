@@ -29,7 +29,7 @@ final class AdminOriginVerificationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        if (expectedSecret == null || isLoopback(request.getRemoteAddr()) || hasValidOriginSecret(request)) {
+        if (isLoopback(request.getRemoteAddr()) || expectedSecret != null && hasValidOriginSecret(request)) {
             filterChain.doFilter(request, response);
             return;
         }

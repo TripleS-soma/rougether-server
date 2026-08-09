@@ -43,6 +43,16 @@ class AdminOriginVerificationFilterTest {
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
+    @Test
+    void origin_비밀값_설정이_비어_있으면_외부_요청을_차단한다() throws Exception {
+        AdminOriginVerificationFilter emptySecretFilter = new AdminOriginVerificationFilter(" ");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        emptySecretFilter.doFilter(externalRequest(), response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(403);
+    }
+
     private MockHttpServletRequest externalRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login");
         request.setRemoteAddr("198.51.100.10");

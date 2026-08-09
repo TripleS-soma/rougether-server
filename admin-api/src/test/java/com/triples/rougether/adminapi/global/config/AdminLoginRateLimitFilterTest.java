@@ -41,6 +41,23 @@ class AdminLoginRateLimitFilterTest {
         assertThat(login(filter, "203.0.113.8").getStatus()).isEqualTo(200);
     }
 
+    @Test
+    void 추적_IP_용량이_차면_새_IP를_429로_차단한다() throws Exception {
+        AdminLoginRateLimitFilter filter = new AdminLoginRateLimitFilter(
+                Clock.fixed(Instant.parse("2026-08-09T00:00:00Z"), ZoneOffset.UTC),
+                10,
+                Duration.ofMinutes(15),
+                2
+        );
+
+        assertThat(login(filter, "203.0.113.7").getStatus()).isEqualTo(200);
+        assertThat(login(filter, "203.0.113.8").getStatus()).isEqualTo(200);
+
+        MockHttpServletResponse blocked = login(filter, "203.0.113.9");
+        assertThat(blocked.getStatus()).isEqualTo(429);
+        assertThat(blocked.getHeader("Retry-After")).isEqualTo("900");
+    }
+
     private MockHttpServletResponse login(AdminLoginRateLimitFilter filter, String viewerIp) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/login");
         request.addHeader(AdminLoginRateLimitFilter.VIEWER_IP_HEADER, viewerIp);

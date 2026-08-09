@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.PriorityQueue;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,21 +23,28 @@ final class AdminLoginRateLimitFilter extends OncePerRequestFilter {
     static final String VIEWER_IP_HEADER = "X-Rougether-Viewer-Ip";
     private static final int DEFAULT_MAX_ATTEMPTS = 10;
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(15);
-    private static final int CLEANUP_THRESHOLD = 10_000;
+    private static final int DEFAULT_MAX_TRACKED_IPS = 10_000;
 
     private final Clock clock;
     private final int maxAttempts;
     private final Duration windowDuration;
-    private final Map<String, AttemptWindow> attempts = new ConcurrentHashMap<>();
+    private final int maxTrackedIps;
+    private final Map<String, AttemptWindow> attempts = new HashMap<>();
+    private final PriorityQueue<Expiry> expirations = new PriorityQueue<>(Comparator.comparing(Expiry::expiresAt));
 
     AdminLoginRateLimitFilter() {
-        this(Clock.systemUTC(), DEFAULT_MAX_ATTEMPTS, DEFAULT_WINDOW);
+        this(Clock.systemUTC(), DEFAULT_MAX_ATTEMPTS, DEFAULT_WINDOW, DEFAULT_MAX_TRACKED_IPS);
     }
 
     AdminLoginRateLimitFilter(Clock clock, int maxAttempts, Duration windowDuration) {
+        this(clock, maxAttempts, windowDuration, DEFAULT_MAX_TRACKED_IPS);
+    }
+
+    AdminLoginRateLimitFilter(Clock clock, int maxAttempts, Duration windowDuration, int maxTrackedIps) {
         this.clock = clock;
         this.maxAttempts = maxAttempts;
         this.windowDuration = windowDuration;
+        this.maxTrackedIps = maxTrackedIps;
     }
 
     @Override
@@ -50,17 +59,11 @@ final class AdminLoginRateLimitFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         Instant now = clock.instant();
-        cleanupExpiredWindows(now);
+        AttemptWindow attemptWindow = recordAttempt(clientIp(request), now);
 
-        AttemptWindow attemptWindow = attempts.compute(clientIp(request), (ignored, current) -> {
-            if (current == null || current.startedAt().plus(windowDuration).isBefore(now)) {
-                return new AttemptWindow(now, 1);
-            }
-            return new AttemptWindow(current.startedAt(), current.count() + 1);
-        });
-
-        if (attemptWindow.count() > maxAttempts) {
-            long retryAfter = Math.max(1, Duration.between(now, attemptWindow.startedAt().plus(windowDuration)).toSeconds());
+        if (attemptWindow == null || attemptWindow.count() > maxAttempts) {
+            Instant retryAt = attemptWindow == null ? earliestExpiry() : attemptWindow.expiresAt();
+            long retryAfter = Math.max(1, Duration.between(now, retryAt).toSeconds());
             response.setStatus(429);
             response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfter));
             return;
@@ -74,13 +77,44 @@ final class AdminLoginRateLimitFilter extends OncePerRequestFilter {
         return viewerIp == null || viewerIp.isBlank() ? request.getRemoteAddr() : viewerIp.trim();
     }
 
-    private void cleanupExpiredWindows(Instant now) {
-        if (attempts.size() < CLEANUP_THRESHOLD) {
-            return;
+    private synchronized AttemptWindow recordAttempt(String clientIp, Instant now) {
+        removeExpired(now);
+
+        AttemptWindow current = attempts.get(clientIp);
+        if (current != null) {
+            AttemptWindow updated = new AttemptWindow(current.expiresAt(), current.count() + 1);
+            attempts.put(clientIp, updated);
+            return updated;
         }
-        attempts.entrySet().removeIf(entry -> entry.getValue().startedAt().plus(windowDuration).isBefore(now));
+
+        if (attempts.size() >= maxTrackedIps) {
+            return null;
+        }
+
+        AttemptWindow created = new AttemptWindow(now.plus(windowDuration), 1);
+        attempts.put(clientIp, created);
+        expirations.add(new Expiry(clientIp, created.expiresAt()));
+        return created;
     }
 
-    private record AttemptWindow(Instant startedAt, int count) {
+    private synchronized Instant earliestExpiry() {
+        Expiry expiry = expirations.peek();
+        return expiry == null ? clock.instant().plus(windowDuration) : expiry.expiresAt();
+    }
+
+    private void removeExpired(Instant now) {
+        while (!expirations.isEmpty() && !expirations.peek().expiresAt().isAfter(now)) {
+            Expiry expiry = expirations.poll();
+            AttemptWindow current = attempts.get(expiry.clientIp());
+            if (current != null && current.expiresAt().equals(expiry.expiresAt())) {
+                attempts.remove(expiry.clientIp());
+            }
+        }
+    }
+
+    private record AttemptWindow(Instant expiresAt, int count) {
+    }
+
+    private record Expiry(String clientIp, Instant expiresAt) {
     }
 }
