@@ -18,6 +18,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -46,6 +47,7 @@ class RoomLayoutServiceTest {
     @Mock private PersonalRoomRepository personalRoomRepository;
     @Mock private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     @Mock private RoomItemPlacementRepository roomItemPlacementRepository;
+    @Mock private RoomCobwebRepository roomCobwebRepository;
     @Mock private UserItemRepository userItemRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;

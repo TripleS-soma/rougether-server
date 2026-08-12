@@ -3,15 +3,18 @@ package com.triples.rougether.userapi.room.web;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
+import com.triples.rougether.userapi.room.dto.RoomCobwebCleanResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
+import com.triples.rougether.userapi.room.service.RoomCobwebService;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,10 +27,13 @@ public class RoomController {
 
     private final RoomQueryService roomQueryService;
     private final RoomCommandService roomCommandService;
+    private final RoomCobwebService roomCobwebService;
 
-    public RoomController(RoomQueryService roomQueryService, RoomCommandService roomCommandService) {
+    public RoomController(RoomQueryService roomQueryService, RoomCommandService roomCommandService,
+                          RoomCobwebService roomCobwebService) {
         this.roomQueryService = roomQueryService;
         this.roomCommandService = roomCommandService;
+        this.roomCobwebService = roomCobwebService;
     }
 
     @Operation(summary = "내 방 조회",
@@ -38,6 +44,13 @@ public class RoomController {
     @GetMapping("/me")
     public RoomResponse getMyRoom(@CurrentUser AuthUser user) {
         return roomQueryService.getMyRoom(user.id());
+    }
+
+    @Operation(summary = "내 방 거미줄 청소",
+            description = "활성 거미줄을 터치해 청소하고 코인 보상을 받습니다. 같은 거미줄은 최초 요청 한 번만 성공합니다.")
+    @PostMapping("/me/cobweb/clean")
+    public RoomCobwebCleanResponse cleanMyCobweb(@CurrentUser AuthUser user) {
+        return roomCobwebService.cleanMyRoom(user.id());
     }
 
     // 슬롯 배치 저장(surface 3 + positioned 8). userItemId null 이면 해당 슬롯 비우기.

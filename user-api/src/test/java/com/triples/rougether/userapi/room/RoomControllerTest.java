@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,9 @@ import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
+import com.triples.rougether.userapi.room.dto.RoomCobwebCleanResponse;
+import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.room.service.RoomCobwebService;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
 import com.triples.rougether.userapi.room.web.RoomController;
@@ -41,6 +45,9 @@ class RoomControllerTest {
     private RoomCommandService roomCommandService;
 
     @MockitoBean
+    private RoomCobwebService roomCobwebService;
+
+    @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
 
     // security 컨텍스트의 JwtAuthenticationFilter 가 의존 — slice 테스트에서 mock 필요.
@@ -65,6 +72,7 @@ class RoomControllerTest {
                 List.of(new RoomResponse.RoomSlotResponse("wallpaper", 10L, "items/wp.png", Instant.EPOCH)),
                 List.of(),
                 new RoomResponse.RoomStreakResponse(3, 7),
+                null,
                 Instant.EPOCH);
         when(roomQueryService.getMyRoom(1L)).thenReturn(response);
 
@@ -83,6 +91,20 @@ class RoomControllerTest {
     }
 
     @Test
+    void 내_방_거미줄_청소_응답_계약() throws Exception {
+        authAsUser1();
+        when(roomCobwebService.cleanMyRoom(1L)).thenReturn(
+                new RoomCobwebCleanResponse(1L, Instant.EPOCH, CurrencyType.COIN, 3, 13));
+
+        mockMvc.perform(post("/api/v1/rooms/me/cobweb/clean"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roomUserId").value(1))
+                .andExpect(jsonPath("$.rewardCurrencyType").value("COIN"))
+                .andExpect(jsonPath("$.rewardAmount").value(3))
+                .andExpect(jsonPath("$.balance").value(13));
+    }
+
+    @Test
     void 슬롯_배치_저장_응답_계약() throws Exception {
         authAsUser1();
         RoomResponse response = new RoomResponse(
@@ -94,6 +116,7 @@ class RoomControllerTest {
                 List.of(new RoomResponse.RoomSlotResponse("topLeft", 10L, "items/bed.png", Instant.EPOCH)),
                 List.of(),
                 new RoomResponse.RoomStreakResponse(0, 0),
+                null,
                 Instant.EPOCH);
         when(roomCommandService.updateSlots(eq(1L), any())).thenReturn(response);
 
@@ -128,6 +151,7 @@ class RoomControllerTest {
                         new BigDecimal("0.32"), new BigDecimal("0.68"), 3,
                         new BigDecimal("1.1"), 15, false, Instant.EPOCH)),
                 new RoomResponse.RoomStreakResponse(0, 0),
+                null,
                 Instant.EPOCH);
         when(roomCommandService.updateLayout(eq(1L), any())).thenReturn(response);
 

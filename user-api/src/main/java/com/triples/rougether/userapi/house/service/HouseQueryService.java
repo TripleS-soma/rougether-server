@@ -95,7 +95,8 @@ public class HouseQueryService {
         List<HouseMember> activeMembers = houseMemberRepository
                 .findByHouseIdAndStatusWithUser(houseId, HouseMemberStatus.ACTIVE);
         Map<Long, RoomRenderResponse> renders = roomQueryService.findRendersOf(
-                activeMembers.stream().map(member -> member.getUser().getId()).toList());
+                activeMembers.stream().map(member -> member.getUser().getId()).toList(),
+                isMember);
         List<MemberRoomSummary> memberRooms = activeMembers.stream()
                 .map(member -> MemberRoomSummary.of(member, renders.get(member.getUser().getId())))
                 .toList();

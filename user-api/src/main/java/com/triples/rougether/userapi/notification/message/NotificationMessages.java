@@ -48,4 +48,11 @@ public final class NotificationMessages {
                 "입주 신청 승인",
                 "'" + houseName + "' 입주 신청이 승인됐어요.");
     }
+
+    public static NotificationContent roomCobwebCleaned(String cleanerNickname) {
+        return new NotificationContent(
+                NotificationType.ROOM_COBWEB_CLEANED,
+                "방을 청소해줬어요",
+                cleanerNickname + "님이 방의 거미줄을 치워줬어요. 루게더에 다시 놀러 오세요!");
+    }
 }
