@@ -42,6 +42,16 @@ class GachaGiftBoxCatalogTest {
                 .isEqualTo("items/0c213078-69ce-4a77-a729-9144905dfc22.png");
     }
 
+    @Test
+    void 아직_매핑되지_않은_테마도_기본_선물상자를_내려준다() {
+        Theme theme = new Theme("new-theme", "새 테마", null, true);
+        Gacha gacha = new Gacha("new-theme", "새 테마 뽑기",
+                CurrencyType.COIN, 25, 1, theme, true);
+
+        assertThat(GachaGiftBoxCatalog.assetKeyFor(gacha))
+                .isEqualTo("items/0c213078-69ce-4a77-a729-9144905dfc22.png");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "forest-sage",

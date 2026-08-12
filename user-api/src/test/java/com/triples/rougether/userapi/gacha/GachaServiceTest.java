@@ -89,7 +89,7 @@ class GachaServiceTest {
         Gacha notStarted = gacha("not_started", true, now.plusSeconds(60), null);
         Gacha expired = gacha("expired", true, null, now.minusSeconds(60));
         Gacha inactive = gacha("inactive", false, null, null);
-        when(gachaRepository.findAll()).thenReturn(List.of(available, notStarted, expired, inactive));
+        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(available, notStarted, expired, inactive));
 
         assertThat(gachaService.getGachaList().items())
                 .extracting(response -> response.name())

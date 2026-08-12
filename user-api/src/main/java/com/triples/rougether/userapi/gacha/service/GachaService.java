@@ -86,7 +86,7 @@ public class GachaService {
     @Transactional(readOnly = true)
     public GachaListResponse getGachaList() {
         Instant now = Instant.now();
-        List<GachaResponse> items = gachaRepository.findAll().stream()
+        List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.isAvailableAt(now))
                 .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
                 .toList();

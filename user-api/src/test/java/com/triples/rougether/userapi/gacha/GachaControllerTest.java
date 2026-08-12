@@ -61,6 +61,20 @@ class GachaControllerTest {
     }
 
     @Test
+    void 뽑기_머신_상세도_선물상자_key를_내려준다() throws Exception {
+        when(gachaService.getGacha(1L)).thenReturn(
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,
+                        "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+                        CurrencyType.COIN, 25, 1, true));
+
+        mockMvc.perform(get("/api/v1/gacha/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gachaId").value(1))
+                .andExpect(jsonPath("$.giftBoxAssetKey")
+                        .value("items/643162b1-276e-4c93-98cb-9a5c706f677f.png"));
+    }
+
+    @Test
     void 뽑기_보상_목록은_확률없이_꾸미기_메타데이터와_보유여부를_내려준다() throws Exception {
         when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
         when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
