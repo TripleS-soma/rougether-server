@@ -9,6 +9,8 @@ import com.triples.rougether.userapi.house.dto.HouseMemberRoutineCompletionListR
 import com.triples.rougether.userapi.house.service.HouseCheerService;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
+import com.triples.rougether.userapi.room.dto.RoomCobwebCleanResponse;
+import com.triples.rougether.userapi.room.service.RoomCobwebService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,11 +36,14 @@ public class HouseMemberActivityController {
 
     private final HouseMemberActivityService houseMemberActivityService;
     private final HouseCheerService houseCheerService;
+    private final RoomCobwebService roomCobwebService;
 
     public HouseMemberActivityController(HouseMemberActivityService houseMemberActivityService,
-                                         HouseCheerService houseCheerService) {
+                                         HouseCheerService houseCheerService,
+                                         RoomCobwebService roomCobwebService) {
         this.houseMemberActivityService = houseMemberActivityService;
         this.houseCheerService = houseCheerService;
+        this.roomCobwebService = roomCobwebService;
     }
 
     @Operation(summary = "집 멤버 방 조회",
@@ -54,6 +59,16 @@ public class HouseMemberActivityController {
             @Parameter(description = "조회 대상 구성원의 membership ID. GET /api/v1/houses/{houseId}/members (구성원 목록) 응답의 membershipId 값")
             @PathVariable Long membershipId) {
         return houseMemberActivityService.getMemberRoom(user.id(), houseId, membershipId);
+    }
+
+    @Operation(summary = "집 멤버 방 거미줄 청소",
+            description = "같은 집의 활성 구성원 방에 표시된 거미줄을 청소합니다. 최초 청소자만 코인 보상을 받고 방 주인에게 복귀 알림이 발송됩니다.")
+    @PostMapping("/room/cobweb/clean")
+    public RoomCobwebCleanResponse cleanMemberRoomCobweb(
+            @CurrentUser AuthUser user,
+            @PathVariable Long houseId,
+            @PathVariable Long membershipId) {
+        return roomCobwebService.cleanHouseMemberRoom(user.id(), houseId, membershipId);
     }
 
     @Operation(summary = "집 멤버 그날 현황 조회 (루틴 + 투두, 완료 여부 포함)",

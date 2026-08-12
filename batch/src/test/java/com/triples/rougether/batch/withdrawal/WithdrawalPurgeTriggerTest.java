@@ -76,6 +76,7 @@ class WithdrawalPurgeTriggerTest {
             jdbcTemplate.update("DELETE FROM streaks WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM room_item_placements WHERE room_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM room_surface_slots WHERE room_user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM room_cobwebs WHERE room_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM personal_rooms WHERE user_id = ?", userId);
             jdbcTemplate.update("""
                     DELETE uca FROM user_character_accessories uca
@@ -187,6 +188,10 @@ class WithdrawalPurgeTriggerTest {
         jdbcTemplate.update("INSERT INTO personal_rooms (user_id, growth_level, updated_at) VALUES (?, 0, ?)",
                 userId, now());
         jdbcTemplate.update("""
+                INSERT INTO room_cobwebs (room_user_id, appeared_at, cleaned_at, cleaned_by_user_id, updated_at)
+                VALUES (?, ?, NULL, NULL, ?)
+                """, userId, now(), now());
+        jdbcTemplate.update("""
                 INSERT INTO room_item_placements (room_user_id, user_item_id, position_x, position_y,
                                                   z_index, scale, rotation_deg, flipped, updated_at)
                 VALUES (?, ?, 0.5, 0.5, 0, 1.0, 0, false, ?)
@@ -281,6 +286,7 @@ class WithdrawalPurgeTriggerTest {
                 {"categories", "user_id"}, {"routines", "user_id"}, {"todos", "user_id"},
                 {"streaks", "user_id"}, {"personal_rooms", "user_id"},
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
+                {"room_cobwebs", "room_user_id"},
                 {"user_characters", "user_id"}, {"user_items", "user_id"}, {"user_wallets", "user_id"},
                 {"notification", "user_id"}, {"notification_setting", "user_id"},
                 {"user_device_token", "user_id"}, {"user_goals", "user_id"},

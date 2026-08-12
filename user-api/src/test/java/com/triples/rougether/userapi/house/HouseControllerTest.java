@@ -24,6 +24,7 @@ import com.triples.rougether.domain.house.entity.HouseMissionStatus;
 import com.triples.rougether.domain.house.entity.HouseMissionType;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
+import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
@@ -625,7 +626,10 @@ class HouseControllerTest {
                                                 "wallpaper", "items/preview/wall.png")),
                                         List.of(new RoomRenderResponse.RenderPlacement(
                                                 "items/preview/chair.png", new BigDecimal("0.32"),
-                                                new BigDecimal("0.68"), 3, new BigDecimal("1.1"), 15, false)))),
+                                                new BigDecimal("0.68"), 3, new BigDecimal("1.1"), 15, false)),
+                                        new RoomResponse.RoomCobwebResponse(
+                                                "items/common/decor/room-corner-cobweb.png",
+                                                Instant.parse("2026-08-10T03:30:00Z"), true))),
                         new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null))));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))
@@ -652,6 +656,9 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].room.layoutFormat").value("FREE_V1"))
                 .andExpect(jsonPath("$.memberRooms[0].room.slots[0].assetKey").value("items/preview/wall.png"))
                 .andExpect(jsonPath("$.memberRooms[0].room.placements[0].assetKey").value("items/preview/chair.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.cobweb.assetKey")
+                        .value("items/common/decor/room-corner-cobweb.png"))
+                .andExpect(jsonPath("$.memberRooms[0].room.cobweb.cleanable").value(true))
                 .andExpect(jsonPath("$.memberRooms[0].room.character.accessories[0].assetKey")
                         .value("items/preview/glasses.png"))
                 .andExpect(jsonPath(

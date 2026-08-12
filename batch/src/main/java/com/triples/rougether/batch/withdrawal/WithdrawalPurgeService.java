@@ -53,9 +53,10 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM routines WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM categories WHERE user_id = ?", userId);
 
-        // 방 계열: 배치·표면슬롯 → 개인 방 (user_items 참조가 풀린 뒤에 아이템 삭제 가능)
+        // 방 계열: 배치·표면슬롯·거미줄 → 개인 방 (user_items 참조가 풀린 뒤에 아이템 삭제 가능)
         jdbcTemplate.update("DELETE FROM room_item_placements WHERE room_user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM room_surface_slots WHERE room_user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM room_cobwebs WHERE room_user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM personal_rooms WHERE user_id = ?", userId);
 
         // 캐릭터·아이템·지갑: 악세사리(캐릭터·아이템 참조) → 캐릭터 → 아이템 → 지갑

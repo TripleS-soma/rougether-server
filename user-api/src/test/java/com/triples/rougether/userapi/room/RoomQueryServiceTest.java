@@ -14,12 +14,15 @@ import com.triples.rougether.domain.character.repository.UserCharacterAccessoryR
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
+import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
 import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
+import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
+import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
 import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.time.Instant;
@@ -37,6 +40,7 @@ class RoomQueryServiceTest {
     @Mock private PersonalRoomRepository personalRoomRepository;
     @Mock private RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     @Mock private RoomItemPlacementRepository roomItemPlacementRepository;
+    @Mock private RoomCobwebRepository roomCobwebRepository;
     @Mock private StreakRepository streakRepository;
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
@@ -122,5 +126,46 @@ class RoomQueryServiceTest {
         assertThat(response.character().characterId()).isEqualTo(5L);
         assertThat(response.character().code()).isEqualTo("bear");
         assertThat(response.character().assetKey()).isEqualTo("characters/bear.png");
+    }
+
+    @Test
+    void 집_구성원_타일_렌더에_활성_거미줄을_포함한다() {
+        Long userId = 4L;
+        Instant appearedAt = Instant.parse("2026-08-10T03:30:00Z");
+        PersonalRoom room = mock(PersonalRoom.class);
+        when(room.getUserId()).thenReturn(userId);
+        RoomCobweb cobweb = mock(RoomCobweb.class);
+        when(cobweb.getRoomUserId()).thenReturn(userId);
+        when(cobweb.getAppearedAt()).thenReturn(appearedAt);
+        when(personalRoomRepository.findAllById(List.of(userId))).thenReturn(List.of(room));
+        when(roomSurfaceSlotRepository.findByRoomUserIdInWithItem(List.of(userId))).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdInWithItem(List.of(userId))).thenReturn(List.of());
+        when(roomCobwebRepository.findVisibleActiveByRoomUserIdIn(List.of(userId)))
+                .thenReturn(List.of(cobweb));
+        when(userCharacterRepository.findSelectedByUserIdIn(List.of(userId))).thenReturn(List.of());
+
+        RoomRenderResponse response = roomQueryService.findRendersOf(List.of(userId), true).get(userId);
+
+        assertThat(response.cobweb()).isNotNull();
+        assertThat(response.cobweb().assetKey())
+                .isEqualTo("items/common/decor/room-corner-cobweb.png");
+        assertThat(response.cobweb().appearedAt()).isEqualTo(appearedAt);
+        assertThat(response.cobweb().cleanable()).isTrue();
+    }
+
+    @Test
+    void 비구성원_집_미리보기에는_거미줄을_노출하지_않는다() {
+        Long userId = 5L;
+        PersonalRoom room = mock(PersonalRoom.class);
+        when(room.getUserId()).thenReturn(userId);
+        when(personalRoomRepository.findAllById(List.of(userId))).thenReturn(List.of(room));
+        when(roomSurfaceSlotRepository.findByRoomUserIdInWithItem(List.of(userId))).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdInWithItem(List.of(userId))).thenReturn(List.of());
+        when(userCharacterRepository.findSelectedByUserIdIn(List.of(userId))).thenReturn(List.of());
+
+        RoomRenderResponse response = roomQueryService.findRendersOf(List.of(userId), false).get(userId);
+
+        assertThat(response.cobweb()).isNull();
+        verify(roomCobwebRepository, never()).findVisibleActiveByRoomUserIdIn(any());
     }
 }

@@ -13,6 +13,10 @@ import com.triples.rougether.userapi.house.dto.HouseCheerResponse;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
 import com.triples.rougether.userapi.house.service.HouseMemberActivityService;
 import com.triples.rougether.userapi.house.web.HouseMemberActivityController;
+import com.triples.rougether.userapi.room.dto.RoomCobwebCleanResponse;
+import com.triples.rougether.userapi.room.service.RoomCobwebService;
+import com.triples.rougether.domain.shared.CurrencyType;
+import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +38,9 @@ class HouseMemberActivityControllerTest {
 
     @MockitoBean
     private HouseCheerService houseCheerService;
+
+    @MockitoBean
+    private RoomCobwebService roomCobwebService;
 
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
@@ -64,6 +71,19 @@ class HouseMemberActivityControllerTest {
                 .andExpect(jsonPath("$.targetUserId").value(8))
                 .andExpect(jsonPath("$.type").value("support"))
                 .andExpect(jsonPath("$.cheerDate").value("2026-07-20"));
+    }
+
+    @Test
+    void 집_멤버_방_거미줄_청소_응답_계약() throws Exception {
+        authAsUser7();
+        when(roomCobwebService.cleanHouseMemberRoom(7L, 1L, 12L)).thenReturn(
+                new RoomCobwebCleanResponse(8L, Instant.EPOCH, CurrencyType.COIN, 3, 13));
+
+        mockMvc.perform(post("/api/v1/houses/1/members/12/room/cobweb/clean"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roomUserId").value(8))
+                .andExpect(jsonPath("$.rewardAmount").value(3))
+                .andExpect(jsonPath("$.balance").value(13));
     }
 
     @Test

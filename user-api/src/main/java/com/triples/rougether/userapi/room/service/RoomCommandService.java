@@ -12,6 +12,7 @@ import com.triples.rougether.domain.room.entity.RoomSlotType;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
 import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
+import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -53,6 +54,7 @@ public class RoomCommandService {
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final RoomItemPlacementRepository roomItemPlacementRepository;
+    private final RoomCobwebRepository roomCobwebRepository;
     private final UserItemRepository userItemRepository;
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
@@ -63,6 +65,7 @@ public class RoomCommandService {
     public RoomCommandService(PersonalRoomRepository personalRoomRepository,
                               RoomSurfaceSlotRepository roomSurfaceSlotRepository,
                               RoomItemPlacementRepository roomItemPlacementRepository,
+                              RoomCobwebRepository roomCobwebRepository,
                               UserItemRepository userItemRepository,
                               UserCharacterRepository userCharacterRepository,
                               UserCharacterAccessoryRepository userCharacterAccessoryRepository,
@@ -72,6 +75,7 @@ public class RoomCommandService {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
+        this.roomCobwebRepository = roomCobwebRepository;
         this.userItemRepository = userItemRepository;
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
@@ -276,6 +280,7 @@ public class RoomCommandService {
                 streak,
                 selectedCharacter,
                 accessories,
-                renderProfileQueryService.findFor(accessories));
+                renderProfileQueryService.findFor(accessories),
+                roomCobwebRepository.findVisibleActive(userId).orElse(null));
     }
 }

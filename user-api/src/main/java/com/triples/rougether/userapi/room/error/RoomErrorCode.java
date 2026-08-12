@@ -14,7 +14,9 @@ public enum RoomErrorCode implements ErrorCode {
     DUPLICATE_PLACEMENT_ITEM("ROOM_DUPLICATE_PLACEMENT_ITEM", "같은 보유 아이템을 한 요청에 중복 배치할 수 없습니다.", 400),
     LAYOUT_REVISION_CONFLICT("ROOM_LAYOUT_REVISION_CONFLICT", "다른 기기에서 방이 먼저 저장되었습니다. 최신 상태를 다시 불러와 주세요.", 409),
     // FREE_V1 전환 방에 구버전 슬롯 저장(positioned 포함)이 들어온 경우 — 자유배치 데이터 보존을 위해 거부
-    LAYOUT_FORMAT_CONFLICT("ROOM_LAYOUT_FORMAT_CONFLICT", "자유배치로 전환된 방은 슬롯 방식으로 가구를 저장할 수 없습니다.", 409);
+    LAYOUT_FORMAT_CONFLICT("ROOM_LAYOUT_FORMAT_CONFLICT", "자유배치로 전환된 방은 슬롯 방식으로 가구를 저장할 수 없습니다.", 409),
+    COBWEB_NOT_ACTIVE("ROOM_COBWEB_NOT_ACTIVE", "청소할 수 있는 거미줄이 없습니다.", 409),
+    COBWEB_REWARD_WALLET_NOT_FOUND("ROOM_COBWEB_REWARD_WALLET_NOT_FOUND", "청소 보상을 받을 코인 지갑이 없습니다.", 404);
 
     private final String code;
     private final String message;

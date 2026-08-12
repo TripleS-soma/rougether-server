@@ -6,6 +6,7 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
+import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.entity.RoomLayoutFormat;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.routine.entity.Streak;
@@ -39,6 +40,8 @@ public record RoomResponse(
         List<RoomPlacementResponse> placements,
         @Schema(description = "루틴 스트릭 (표시용)")
         RoomStreakResponse streak,
+        @Schema(description = "활성 거미줄 오버레이. 아직 발생하지 않았거나 청소했으면 null")
+        RoomCobwebResponse cobweb,
         @Schema(description = "방 최근 변경 시각")
         Instant updatedAt) {
 
@@ -47,7 +50,8 @@ public record RoomResponse(
                                   UserCharacter selectedCharacter,
                                   List<UserCharacterAccessory> accessories,
                                   Map<Long, Map<Long,
-                                          List<CharacterAccessoryRenderProfile>>> renderProfiles) {
+                                          List<CharacterAccessoryRenderProfile>>> renderProfiles,
+                                  RoomCobweb cobweb) {
         List<RoomSlotResponse> slotResponses = slots.stream()
                 .map(RoomSlotResponse::of)
                 .toList();
@@ -63,7 +67,23 @@ public record RoomResponse(
                 slotResponses,
                 placementResponses,
                 RoomStreakResponse.of(streak),
+                RoomCobwebResponse.of(cobweb),
                 room.getUpdatedAt());
+    }
+
+    public record RoomCobwebResponse(
+            @Schema(description = "거미줄 이미지 asset key", example = "items/common/decor/room-corner-cobweb.png")
+            String assetKey,
+            @Schema(description = "이번 거미줄 발생 시각")
+            Instant appearedAt,
+            @Schema(description = "모바일에서 터치 청소 가능 여부", example = "true")
+            boolean cleanable) {
+
+        private static final String ASSET_KEY = "items/common/decor/room-corner-cobweb.png";
+
+        public static RoomCobwebResponse of(RoomCobweb cobweb) {
+            return cobweb == null ? null : new RoomCobwebResponse(ASSET_KEY, cobweb.getAppearedAt(), true);
+        }
     }
 
     // 착용(is_selected) 캐릭터. 없으면 null. 이미지는 assetKey(base_asset_key).
