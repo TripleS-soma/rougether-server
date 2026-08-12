@@ -15,6 +15,9 @@ public record GachaResponse(
         @Schema(description = "가구 뽑기의 대상 테마 ID (캐릭터 뽑기는 null). "
                 + "GET /api/v1/items 응답의 theme.id 와 동일하며 themeId 필터에 사용 가능", example = "3")
         Long themeId,
+        @Schema(description = "뽑기 머신에 표시할 투명 선물상자 이미지 asset key. CDN base URL과 조합해 사용",
+                example = "items/643162b1-276e-4c93-98cb-9a5c706f677f.png")
+        String giftBoxAssetKey,
         @Schema(description = "뽑기 비용 재화. 허용값: COIN(코인 — 루틴 보상·뽑기), DIAMOND(다이아 — 상점 구매). "
                 + "표시용이며 실제 뽑기 차감은 항상 COIN", example = "COIN")
         CurrencyType costCurrencyType,
@@ -26,12 +29,13 @@ public record GachaResponse(
                 example = "true")
         boolean active) {
 
-    public static GachaResponse of(Gacha gacha) {
+    public static GachaResponse of(Gacha gacha, String giftBoxAssetKey) {
         return new GachaResponse(
                 gacha.getId(),
                 gacha.getCode(),
                 gacha.getName(),
                 gacha.getTheme() != null ? gacha.getTheme().getId() : null,
+                giftBoxAssetKey,
                 gacha.getCostCurrencyType(),
                 gacha.getCostAmount(),
                 gacha.getDrawCount(),

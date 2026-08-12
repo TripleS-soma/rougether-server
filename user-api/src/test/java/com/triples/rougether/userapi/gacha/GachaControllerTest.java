@@ -47,13 +47,31 @@ class GachaControllerTest {
     @Test
     void 뽑기_머신_목록_응답_계약() throws Exception {
         when(gachaService.getGachaList()).thenReturn(new GachaListResponse(List.of(
-                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L, CurrencyType.COIN, 25, 1, true))));
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,
+                        "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+                        CurrencyType.COIN, 25, 1, true))));
 
         mockMvc.perform(get("/api/v1/gacha"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].gachaId").value(1))
                 .andExpect(jsonPath("$.items[0].code").value("calm_hanok"))
+                .andExpect(jsonPath("$.items[0].giftBoxAssetKey")
+                        .value("items/643162b1-276e-4c93-98cb-9a5c706f677f.png"))
                 .andExpect(jsonPath("$.items[0].costAmount").value(25));
+    }
+
+    @Test
+    void 뽑기_머신_상세도_선물상자_key를_내려준다() throws Exception {
+        when(gachaService.getGacha(1L)).thenReturn(
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,
+                        "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+                        CurrencyType.COIN, 25, 1, true));
+
+        mockMvc.perform(get("/api/v1/gacha/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gachaId").value(1))
+                .andExpect(jsonPath("$.giftBoxAssetKey")
+                        .value("items/643162b1-276e-4c93-98cb-9a5c706f677f.png"));
     }
 
     @Test

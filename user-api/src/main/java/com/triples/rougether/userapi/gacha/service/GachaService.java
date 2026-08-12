@@ -86,9 +86,9 @@ public class GachaService {
     @Transactional(readOnly = true)
     public GachaListResponse getGachaList() {
         Instant now = Instant.now();
-        List<GachaResponse> items = gachaRepository.findAll().stream()
+        List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.isAvailableAt(now))
-                .map(GachaResponse::of)
+                .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
                 .toList();
         return new GachaListResponse(items);
     }
@@ -97,7 +97,7 @@ public class GachaService {
     public GachaResponse getGacha(Long gachaId) {
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        return GachaResponse.of(gacha);
+        return GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha));
     }
 
     @Transactional(readOnly = true)
