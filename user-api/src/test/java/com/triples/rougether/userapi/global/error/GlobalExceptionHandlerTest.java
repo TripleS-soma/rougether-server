@@ -8,11 +8,13 @@ import com.triples.rougether.common.error.ErrorResponse;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.alert.OperationalAlertNotifier;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 // multipart 한도 초과는 MockMvc가 컨테이너 한도를 강제하지 않아 HTTP 경유로 재현이 안 됨 → 핸들러를 직접 검증함
 class GlobalExceptionHandlerTest {
@@ -27,6 +29,20 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().code()).isEqualTo("FILE_TOO_LARGE");
+    }
+
+    @Test
+    void 존재하지_않는_API는_500_알림_없이_404_RESOURCE_NOT_FOUND로_매핑된다() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/gachas");
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/**");
+
+        ResponseEntity<ErrorResponse> response = handler.handleNoResource(
+                new NoResourceFoundException(HttpMethod.GET, "api/v1/gachas", "/api/v1/gachas"),
+                request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().code()).isEqualTo("RESOURCE_NOT_FOUND");
+        assertThat(notifier.unexpectedCause).isNull();
     }
 
     @Test
@@ -83,6 +99,7 @@ class GlobalExceptionHandlerTest {
 
         private String endpoint;
         private ErrorCode errorCode;
+        private Throwable unexpectedCause;
 
         @Override
         public void notifyBusiness(String endpoint, ErrorCode errorCode) {
@@ -92,6 +109,8 @@ class GlobalExceptionHandlerTest {
 
         @Override
         public void notifyUnexpected(String endpoint, Throwable cause) {
+            this.endpoint = endpoint;
+            this.unexpectedCause = cause;
         }
     }
 }

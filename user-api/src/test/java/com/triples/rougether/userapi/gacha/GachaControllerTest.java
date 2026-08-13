@@ -61,6 +61,13 @@ class GachaControllerTest {
     }
 
     @Test
+    void 존재하지_않는_복수형_뽑기_API는_500이_아니라_404를_응답한다() throws Exception {
+        mockMvc.perform(get("/api/v1/gachas"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
     void 뽑기_머신_상세도_선물상자_key를_내려준다() throws Exception {
         when(gachaService.getGacha(1L)).thenReturn(
                 new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,

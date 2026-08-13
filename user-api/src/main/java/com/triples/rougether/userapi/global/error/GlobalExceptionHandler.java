@@ -22,6 +22,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -106,6 +107,14 @@ public class GlobalExceptionHandler {
         // 본문 자체가 파싱 안 되는 건 클라이언트 잘못 → 400(예: 필드 타입 불일치, 깨진 JSON)
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("MALFORMED_REQUEST", "요청 본문을 해석할 수 없습니다."));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException exception,
+                                                          HttpServletRequest request) {
+        log.warn("resource not found: {} path={}", endpoint(request), exception.getResourcePath());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("RESOURCE_NOT_FOUND", "요청한 API를 찾을 수 없습니다."));
     }
 
     @ExceptionHandler(Exception.class)
