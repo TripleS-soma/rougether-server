@@ -73,7 +73,7 @@
     <script th:inline="javascript">
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
-        const STATUSES = [['RECEIVED', '접수'], ['IN_PROGRESS', '확인 중'], ['RESOLVED', '완료']];
+        const STATUSES = [ ['RECEIVED', '접수'], ['IN_PROGRESS', '확인 중'], ['RESOLVED', '완료'] ];
         const tbody = document.getElementById('rows');
         const countEl = document.getElementById('count');
         const errorBox = document.getElementById('error');
