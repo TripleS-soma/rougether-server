@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -56,6 +57,14 @@ class BugReportAdminTest {
                 user, "테스트 제보", "내용입니다", "1.0.0", "Android 14"));
         screenshot = bugReportImageRepository.save(
                 BugReportImage.of(report, "bug-reports/private.png", 0));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 버그_제보_페이지가_렌더링된다() throws Exception {
+        mockMvc.perform(get("/bug-reports"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Rougether Admin · 버그 제보")));
     }
 
     @Test
