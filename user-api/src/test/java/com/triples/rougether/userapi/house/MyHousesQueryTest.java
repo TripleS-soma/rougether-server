@@ -1,7 +1,9 @@
 package com.triples.rougether.userapi.house;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
@@ -10,9 +12,12 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseOrderService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 class MyHousesQueryTest {
 
     @Autowired private HouseQueryService houseQueryService;
+    @Autowired private HouseOrderService houseOrderService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private UserRepository userRepository;
@@ -94,5 +100,48 @@ class MyHousesQueryTest {
         User nobody = userRepository.save(User.signUp("my-houses-nobody@rougether.dev"));
 
         assertThat(houseQueryService.getMyHouses(nobody.getId()).items()).isEmpty();
+    }
+
+    @Test
+    void 저장한_순서대로_내_집_목록을_내려준다() {
+        houseOrderService.reorder(me.getId(), List.of(joinedHouse.getId(), ownedHouse.getId()));
+
+        assertThat(houseQueryService.getMyHouses(me.getId()).items())
+                .extracting(MyHouseListResponse.MyHouseSummary::houseId)
+                .containsExactly(joinedHouse.getId(), ownedHouse.getId());
+    }
+
+    @Test
+    void 순서_저장_후_새로_가입한_집은_마지막에_붙는다() {
+        houseOrderService.reorder(me.getId(), List.of(joinedHouse.getId(), ownedHouse.getId()));
+        User other = userRepository.save(User.signUp("my-houses-new-owner@rougether.dev"));
+        House newHouse = houseRepository.save(House.create(
+                other, "새로 가입한 집", null, null, 4, "MYHOUSE6",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(newHouse, me, HouseMemberRole.MEMBER));
+
+        assertThat(houseQueryService.getMyHouses(me.getId()).items())
+                .extracting(MyHouseListResponse.MyHouseSummary::houseId)
+                .containsExactly(joinedHouse.getId(), ownedHouse.getId(), newHouse.getId());
+    }
+
+    @Test
+    void 현재_활성_집과_정확히_일치하지_않는_순서는_거부한다() {
+        assertThatThrownBy(() -> houseOrderService.reorder(me.getId(), List.of(ownedHouse.getId())))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_ORDER_INVALID));
+
+        assertThatThrownBy(() -> houseOrderService.reorder(
+                me.getId(), List.of(ownedHouse.getId(), ownedHouse.getId())))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_ORDER_INVALID));
+
+        assertThatThrownBy(() -> houseOrderService.reorder(
+                me.getId(), List.of(ownedHouse.getId(), 999_999L)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_ORDER_INVALID));
     }
 }

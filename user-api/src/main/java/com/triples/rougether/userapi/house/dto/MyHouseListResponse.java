@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 
-// GET /api/v1/me/houses 응답. 내가 속한(ACTIVE) 집들 - 먼저 가입한 집 먼저.
+// GET /api/v1/me/houses 응답. 내가 속한(ACTIVE) 집들 - 사용자 지정 노출 순서.
 public record MyHouseListResponse(List<MyHouseSummary> items) {
 
     public record MyHouseSummary(
@@ -24,7 +24,7 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             Integer maxMembers,
             @Schema(description = "이 집에서 내 역할. OWNER(소유자 — 설정 수정·초대코드 재발급·강퇴·소유권 양도 가능), MEMBER(일반 구성원)", example = "OWNER")
             HouseMemberRole myRole,
-            @Schema(description = "내 가입 시각. 목록은 이 값 오름차순(먼저 가입한 집 먼저) 정렬")
+            @Schema(description = "내 가입 시각. 직접 순서를 정하지 않은 집끼리의 정렬 기준")
             Instant joinedAt) {
 
         public static MyHouseSummary of(HouseMember member) {

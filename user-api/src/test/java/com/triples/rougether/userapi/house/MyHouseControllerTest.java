@@ -1,8 +1,10 @@
 package com.triples.rougether.userapi.house;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,6 +13,7 @@ import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import com.triples.rougether.userapi.house.dto.MyHouseListResponse;
+import com.triples.rougether.userapi.house.service.HouseOrderService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
 import com.triples.rougether.userapi.house.web.MyHouseController;
 import java.time.Instant;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,6 +35,9 @@ class MyHouseControllerTest {
 
     @MockitoBean
     private HouseQueryService houseQueryService;
+
+    @MockitoBean
+    private HouseOrderService houseOrderService;
 
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
@@ -55,5 +62,35 @@ class MyHouseControllerTest {
                 .andExpect(jsonPath("$.items[0].myRole").value("OWNER"))
                 .andExpect(jsonPath("$.items[0].currentMemberCount").value(3))
                 .andExpect(jsonPath("$.items[0].level").value(0));
+    }
+
+    @Test
+    void 내_집_순서_변경_요청_계약() throws Exception {
+        when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
+        when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
+                .thenReturn(new AuthUser(7L, null));
+
+        mockMvc.perform(put("/api/v1/me/houses/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"houseIds":[12,5,31]}
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(houseOrderService).reorder(7L, List.of(12L, 5L, 31L));
+    }
+
+    @Test
+    void 내_집_순서가_비어있으면_거부한다() throws Exception {
+        when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
+        when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
+                .thenReturn(new AuthUser(7L, null));
+
+        mockMvc.perform(put("/api/v1/me/houses/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"houseIds":[]}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 }
