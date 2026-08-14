@@ -12,6 +12,8 @@ import com.triples.rougether.adminapi.asset.service.S3AssetStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -65,10 +67,11 @@ class S3AssetStorageServiceTest {
         assertThat(key).matches("characters/[0-9a-f-]{36}\\.webp");
     }
 
-    @Test
-    void S3가_동일_key의_조건부_업로드를_거부하면_중복_예외를_던진다() {
+    @ParameterizedTest
+    @ValueSource(ints = {409, 412})
+    void S3가_동일_key의_조건부_업로드를_거부하면_중복_예외를_던진다(int statusCode) {
         given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .willThrow(S3Exception.builder().statusCode(412).message("Precondition Failed").build());
+                .willThrow(S3Exception.builder().statusCode(statusCode).message("Conditional write failed").build());
 
         assertThatThrownBy(() -> storage.upload(
                 new byte[]{1}, "image/png", "items", "items/existing.png"))

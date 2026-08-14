@@ -56,6 +56,7 @@ public class S3AssetStorageService implements AssetStorageService {
                             .bucket(properties.s3().bucket())
                             .key(key)
                             .contentType(contentType)
+                            // Terraform-managed AWS S3만 지원하므로 조건부 쓰기로 동일 key 덮어쓰기를 원자적으로 막는다.
                             .ifNoneMatch("*")
                             .build(),
                     RequestBody.fromBytes(content));
