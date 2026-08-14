@@ -4,8 +4,8 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
 등록할 수 있게 하는 stdio MCP 서버다. 노출 툴:
 
 - upload_asset:        로컬 이미지 파일을 S3 에 사람이 읽는 커스텀 key 로 업로드
-                       (admin-api 의 POST /admin/assets 는 uuid key 를 발급하므로,
-                        기존 큐레이션 key 관행은 S3 직접 업로드로 유지한다)
+                       (admin-api 화면/API도 커스텀 key를 지원하며, MCP는 자동화와
+                        명시적 overwrite가 필요한 운영 작업에 사용한다)
 - asset_exists:        S3 에 해당 key 가 이미 있는지 확인
 - import_catalog:      테마/캐릭터/아이템 카탈로그 멱등 적재 (POST /admin/catalog/import)
 - import_character_accessory_catalog:

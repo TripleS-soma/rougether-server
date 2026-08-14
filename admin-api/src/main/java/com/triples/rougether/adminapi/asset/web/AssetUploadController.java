@@ -1,10 +1,15 @@
 package com.triples.rougether.adminapi.asset.web;
 
 import com.triples.rougether.adminapi.asset.AssetKinds;
+import com.triples.rougether.adminapi.asset.AssetKeyValidator;
+import com.triples.rougether.adminapi.asset.service.AssetAlreadyExistsException;
 import com.triples.rougether.adminapi.asset.service.AssetStorageService;
+import com.triples.rougether.common.error.ErrorResponse;
 import java.io.IOException;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,10 +36,23 @@ public class AssetUploadController {
     @PostMapping
     public AssetUploadResponse upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("kind") String kind) throws IOException {
+            @RequestParam("kind") String kind,
+            @RequestParam(value = "key", required = false) String requestedKey) throws IOException {
         validate(file, kind);
-        String key = storage.upload(file.getBytes(), file.getContentType(), kind);
+        String normalizedKey;
+        try {
+            normalizedKey = AssetKeyValidator.normalize(requestedKey, kind, file.getContentType());
+        } catch (IllegalArgumentException exception) {
+            throw badRequest(exception.getMessage());
+        }
+        String key = storage.upload(file.getBytes(), file.getContentType(), kind, normalizedKey);
         return new AssetUploadResponse(key, file.getContentType(), file.getSize());
+    }
+
+    @ExceptionHandler(AssetAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAlreadyExists(AssetAlreadyExistsException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("ASSET_KEY_ALREADY_EXISTS", exception.getMessage()));
     }
 
     private void validate(MultipartFile file, String kind) {

@@ -54,6 +54,16 @@
                     </select>
                 </label>
 
+                <label class="field">
+                    <span class="field-label">Asset key (직접 지정)</span>
+                    <input type="text" name="key" id="asset-key" maxlength="255"
+                           autocomplete="off" spellcheck="false"
+                           placeholder="items/테마/종류/파일명.png">
+                    <span class="field-hint">
+                        전체 key를 입력하세요. 선택한 kind/로 시작해야 하며, 비우면 기존처럼 UUID로 자동 발급합니다.
+                    </span>
+                </label>
+
                 <label class="dropzone" id="dropzone">
                     <input type="file" name="file" id="file"
                            accept="image/png,image/jpeg,image/webp" hidden>
@@ -90,12 +100,20 @@
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
 
         const form = document.getElementById('upload-form');
+        const kindInput = document.getElementById('kind');
+        const assetKeyInput = document.getElementById('asset-key');
         const fileInput = document.getElementById('file');
         const dropzone = document.getElementById('dropzone');
         const dropzoneText = document.getElementById('dropzone-text');
         const result = document.getElementById('result');
         const errorBox = document.getElementById('error');
         const submitBtn = document.getElementById('submit-btn');
+
+        function updateKeyPlaceholder() {
+            assetKeyInput.placeholder = kindInput.value + '/경로/파일명.png';
+        }
+        kindInput.addEventListener('change', updateKeyPlaceholder);
+        updateKeyPlaceholder();
 
         fileInput.addEventListener('change', () => {
             dropzoneText.textContent = fileInput.files[0]
@@ -132,14 +150,18 @@
             try {
                 const fd = new FormData();
                 fd.append('file', fileInput.files[0]);
-                fd.append('kind', document.getElementById('kind').value);
+                fd.append('kind', kindInput.value);
+                if (assetKeyInput.value.trim()) {
+                    fd.append('key', assetKeyInput.value.trim());
+                }
                 const res = await fetch('/admin/assets', {
                     method: 'POST',
                     body: fd,
                     headers: { [csrfHeader]: csrfToken }
                 });
                 if (!res.ok) {
-                    showError('업로드 실패 (HTTP ' + res.status + ')');
+                    const body = await res.json().catch(() => ({}));
+                    showError(body.message || body.detail || '업로드 실패 (HTTP ' + res.status + ')');
                     return;
                 }
                 const data = await res.json();
