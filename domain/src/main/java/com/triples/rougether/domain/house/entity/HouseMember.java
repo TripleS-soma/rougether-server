@@ -46,6 +46,10 @@ public class HouseMember {
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt;
 
+    // 사용자별 집 탭 노출 순서. 아직 직접 정렬하지 않은 집은 최후순위로 두고 가입순으로 정렬한다.
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder = Integer.MAX_VALUE;
+
     @Column(name = "left_at")
     private Instant leftAt;
 
@@ -72,6 +76,7 @@ public class HouseMember {
         this.status = HouseMemberStatus.ACTIVE;
         this.joinedAt = Instant.now();
         this.leftAt = null;
+        this.displayOrder = Integer.MAX_VALUE;
     }
 
     public boolean isActive() {
@@ -83,6 +88,7 @@ public class HouseMember {
     public void kick() {
         this.status = HouseMemberStatus.KICKED;
         this.leftAt = Instant.now();
+        this.displayOrder = Integer.MAX_VALUE;
         clearInviteCode();
     }
 
@@ -96,7 +102,12 @@ public class HouseMember {
     public void leave() {
         this.status = HouseMemberStatus.LEFT;
         this.leftAt = Instant.now();
+        this.displayOrder = Integer.MAX_VALUE;
         clearInviteCode();
+    }
+
+    public void changeDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
     }
 
     // 소유권 양도 - 반드시 기존 소유자 demote 와 한 트랜잭션으로 묶는다(소유자 2명 방지).

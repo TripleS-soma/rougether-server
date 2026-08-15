@@ -21,12 +21,20 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
     List<HouseMember> findByHouseIdAndStatusWithUser(@Param("houseId") Long houseId,
                                                      @Param("status") HouseMemberStatus status);
 
-    // 내 집 목록: ACTIVE membership + 삭제 안 된 집, 먼저 가입한 순. house fetch join(N+1 회피).
+    // 내 집 목록: ACTIVE membership + 삭제 안 된 집, 사용자 지정 순서. 미정렬 집은 가입순. house fetch join(N+1 회피).
     @Query("select hm from HouseMember hm join fetch hm.house h "
             + "where hm.user.id = :userId and hm.status = :status and h.deletedAt is null "
-            + "order by hm.joinedAt asc, hm.id asc")
+            + "order by hm.displayOrder asc, hm.joinedAt asc, hm.id asc")
     List<HouseMember> findByUserIdAndStatusWithHouse(@Param("userId") Long userId,
                                                      @Param("status") HouseMemberStatus status);
+
+    // 내 집 순서 변경 전용. 같은 사용자의 동시 재정렬을 직렬화하고 ACTIVE·미삭제 집만 잠근다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select hm from HouseMember hm join fetch hm.house h "
+            + "where hm.user.id = :userId and hm.status = :status and h.deletedAt is null "
+            + "order by hm.displayOrder asc, hm.joinedAt asc, hm.id asc")
+    List<HouseMember> findAllWithLockByUserIdAndStatusWithHouse(@Param("userId") Long userId,
+                                                                @Param("status") HouseMemberStatus status);
 
     List<HouseMember> findByHouseIdAndStatus(Long houseId, String status);
 

@@ -131,7 +131,7 @@ public class HouseQueryService {
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
 
-    // 내가 속한(ACTIVE) 집 목록 - 먼저 가입한 집 먼저. 삭제된 집 제외.
+    // 내가 속한(ACTIVE) 집 목록 - 사용자 지정 순서, 미정렬 집은 가입순. 삭제된 집 제외.
     @Transactional(readOnly = true)
     public MyHouseListResponse getMyHouses(Long userId) {
         List<MyHouseSummary> items = houseMemberRepository
