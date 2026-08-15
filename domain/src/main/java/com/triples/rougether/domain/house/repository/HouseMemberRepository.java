@@ -2,7 +2,9 @@ package com.triples.rougether.domain.house.repository;
 
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.domain.support.UserMetricCount;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -82,4 +84,10 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
             + "order by hm.joinedAt asc, hm.id asc")
     List<HouseMember> findAllWithLockByHouseIdAndStatus(@Param("houseId") Long houseId,
                                                         @Param("status") HouseMemberStatus status);
+
+    @Query("select hm.user.id as userId, count(hm.id) as metricCount from HouseMember hm "
+            + "join hm.house h where hm.user.id in :userIds and hm.status = :status "
+            + "and h.deletedAt is null group by hm.user.id")
+    List<UserMetricCount> countActiveByUserIds(@Param("userIds") Collection<Long> userIds,
+                                               @Param("status") HouseMemberStatus status);
 }

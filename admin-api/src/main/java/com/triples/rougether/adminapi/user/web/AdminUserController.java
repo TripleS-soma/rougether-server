@@ -1,6 +1,10 @@
 package com.triples.rougether.adminapi.user.web;
 
+import com.triples.rougether.adminapi.user.dto.AdminUserAccountStatus;
+import com.triples.rougether.adminapi.user.dto.AdminUserActivityFilter;
 import com.triples.rougether.adminapi.user.dto.AdminUserListResponse;
+import com.triples.rougether.adminapi.user.dto.AdminUserOnboardingFilter;
+import com.triples.rougether.adminapi.user.dto.AdminUserSummaryResponse;
 import com.triples.rougether.adminapi.user.service.AdminUserQueryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,9 +26,21 @@ public class AdminUserController {
 
     @GetMapping
     public AdminUserListResponse getUsers(@RequestParam(required = false) String query,
+                                          @RequestParam(defaultValue = "ACTIVE")
+                                          AdminUserAccountStatus accountStatus,
+                                          @RequestParam(defaultValue = "ALL")
+                                          AdminUserActivityFilter activity,
+                                          @RequestParam(defaultValue = "ALL")
+                                          AdminUserOnboardingFilter onboarding,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
         int boundedSize = Math.min(Math.max(size, 1), MAX_SIZE);
-        return adminUserQueryService.getUsers(query, Math.max(page, 0), boundedSize);
+        return adminUserQueryService.getUsers(
+                query, accountStatus, activity, onboarding, Math.max(page, 0), boundedSize);
+    }
+
+    @GetMapping("/summary")
+    public AdminUserSummaryResponse getSummary() {
+        return adminUserQueryService.getSummary();
     }
 }

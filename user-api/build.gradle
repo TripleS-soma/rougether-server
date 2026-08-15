@@ -41,4 +41,6 @@ dependencies {
 // (env var가 relaxed binding으로 firebase.credentials-path에 매칭돼 실제 sender가 뜨는 것 차단)
 tasks.named('test') {
 	environment 'FIREBASE_CREDENTIALS_PATH', ''
+	// CI의 대규모 Spring 컨텍스트 테스트가 기본 512MiB heap에서 OOM/GC 정체되지 않도록 제한을 명시함.
+	maxHeapSize = '1g'
 }

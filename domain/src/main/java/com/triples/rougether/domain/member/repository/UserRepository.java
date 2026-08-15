@@ -3,6 +3,8 @@ package com.triples.rougether.domain.member.repository;
 import com.triples.rougether.domain.member.entity.User;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,9 +31,49 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
-    // 어드민 유저 검색(읽기 전용) - email/nickname 부분 일치(대소문자 무시), 검색어 없으면 전체.
-    @Query("select u from User u where :query is null "
-            + "or lower(u.email) like lower(concat('%', :query, '%')) "
-            + "or lower(u.nickname) like lower(concat('%', :query, '%'))")
-    Page<User> searchForAdmin(@Param("query") String query, Pageable pageable);
+    long countByDeletedAtIsNull();
+
+    long countByDeletedAtIsNullAndCreatedAtGreaterThanEqual(Instant createdAt);
+
+    long countByDeletedAtIsNullAndLastAccessedAtGreaterThanEqual(Instant lastAccessedAt);
+
+    // 온보딩 완료 계약: 목표 1개 이상 + 삭제되지 않은 대표 캐릭터 존재.
+    // 전체 유저마다 두 EXISTS를 평가하지 않고 대표 캐릭터 보유 유저에서 시작해 요약 조회 비용을 줄임.
+    @Query("select count(distinct uc.user.id) from UserCharacter uc "
+            + "where uc.user.deletedAt is null "
+            + "and uc.selected = true and uc.deletedAt is null "
+            + "and exists (select ug.id from UserGoal ug where ug.user = uc.user)")
+    long countOnboardingCompletedUsers();
+
+    @Query("select u.id from User u where u.id in :userIds "
+            + "and exists (select ug.id from UserGoal ug where ug.user = u) "
+            + "and exists (select uc.id from UserCharacter uc "
+            + "  where uc.user = u and uc.selected = true and uc.deletedAt is null)")
+    List<Long> findOnboardingCompletedUserIds(@Param("userIds") Collection<Long> userIds);
+
+    // 어드민 유저 관측 검색. 활동 시각은 로그인·refresh 기반이라 실시간 접속 상태가 아님.
+    @Query("select u from User u where "
+            + "(:query is null "
+            + "  or lower(u.email) like lower(concat('%', :query, '%')) "
+            + "  or lower(u.nickname) like lower(concat('%', :query, '%'))) "
+            + "and (:accountStatus = 'ALL' "
+            + "  or (:accountStatus = 'ACTIVE' and u.deletedAt is null) "
+            + "  or (:accountStatus = 'WITHDRAWN' and u.deletedAt is not null)) "
+            + "and (:neverAccessed = false or u.lastAccessedAt is null) "
+            + "and (:accessedAfter is null or u.lastAccessedAt >= :accessedAfter) "
+            + "and (:onboardingStatus = 'ALL' "
+            + "  or (:onboardingStatus = 'COMPLETED' "
+            + "    and exists (select ug.id from UserGoal ug where ug.user = u) "
+            + "    and exists (select uc.id from UserCharacter uc "
+            + "      where uc.user = u and uc.selected = true and uc.deletedAt is null)) "
+            + "  or (:onboardingStatus = 'INCOMPLETE' "
+            + "    and (not exists (select ug.id from UserGoal ug where ug.user = u) "
+            + "      or not exists (select uc.id from UserCharacter uc "
+            + "        where uc.user = u and uc.selected = true and uc.deletedAt is null))))")
+    Page<User> searchForAdmin(@Param("query") String query,
+                              @Param("accountStatus") String accountStatus,
+                              @Param("neverAccessed") boolean neverAccessed,
+                              @Param("accessedAfter") Instant accessedAfter,
+                              @Param("onboardingStatus") String onboardingStatus,
+                              Pageable pageable);
 }

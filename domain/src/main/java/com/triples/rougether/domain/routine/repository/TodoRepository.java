@@ -4,9 +4,11 @@ import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -108,4 +110,12 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             @Param("kstDayStart") Instant kstDayStart,
             @Param("kstDayEnd") Instant kstDayEnd,
             @Param("status") TodoStatus status);
+
+    @Query("select t.user.id as userId, count(t.id) as metricCount from Todo t "
+            + "where t.user.id in :userIds and t.status = :status and t.completedAt >= :completedAfter "
+            + "group by t.user.id")
+    List<UserMetricCount> countCompletedByUserIdsSince(
+            @Param("userIds") Collection<Long> userIds,
+            @Param("status") TodoStatus status,
+            @Param("completedAfter") Instant completedAfter);
 }

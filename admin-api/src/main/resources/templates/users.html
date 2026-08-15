@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rougether Admin · 유저 관리</title>
+    <title>Rougether Admin · 유저 운영 관측</title>
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -35,72 +35,187 @@
         </div>
     </header>
 
-    <main class="app-main app-main--wide">
-        <div class="upload-card">
-            <div class="upload-head">
-                <h2>유저 관리</h2>
-                <p>이메일·닉네임으로 검색하고 재화(코인·다이아)를 지급합니다. 지급은 개발/QA용입니다.</p>
+    <main class="app-main app-main--wide observation-main">
+        <section class="upload-card">
+            <div class="upload-head observation-head">
+                <div>
+                    <span class="observation-eyebrow">OPERATIONS</span>
+                    <h2>유저 운영 관측</h2>
+                    <p>가입 이후 온보딩·핵심 행동·집 참여까지의 활성화 상태를 확인합니다.</p>
+                </div>
+                <button type="button" class="btn-ghost" id="refresh">새로고침</button>
             </div>
 
-            <div class="slot-toolbar">
-                <input type="search" id="query" class="slot-search" placeholder="이메일·닉네임 검색 후 Enter">
+            <div class="observation-grid" aria-label="최근 7일 유저 요약">
+                <article class="observation-metric">
+                    <span>활성 회원</span>
+                    <strong id="activeUsers">—</strong>
+                    <small>탈퇴 회원 제외</small>
+                </article>
+                <article class="observation-metric">
+                    <span>최근 7일 가입</span>
+                    <strong id="newUsersLast7Days">—</strong>
+                    <small>현재 활성 회원 기준</small>
+                </article>
+                <article class="observation-metric">
+                    <span>최근 7일 인증 접속</span>
+                    <strong id="recentlyAccessedLast7Days">—</strong>
+                    <small>로그인·refresh 기반</small>
+                </article>
+                <article class="observation-metric observation-metric--accent">
+                    <span>온보딩 완료율</span>
+                    <strong id="onboardingCompletionRate">—</strong>
+                    <small id="onboardingCompletedUsers">목표 + 대표 캐릭터</small>
+                </article>
+            </div>
+
+            <div class="observation-note">
+                <strong>지표 기준</strong>
+                <span>최근 인증 접속은 실시간 온라인 상태가 아니라 로그인·토큰 재발급 시각입니다. 루틴·투두 내용은 노출하지 않고 건수만 집계합니다.</span>
+            </div>
+
+            <div class="observation-filters">
+                <label class="observation-filter observation-filter--search">
+                    <span>사용자 검색</span>
+                    <input type="search" id="query" class="slot-search" placeholder="이메일·닉네임">
+                </label>
+                <label class="observation-filter">
+                    <span>계정 상태</span>
+                    <select id="accountStatus" class="observation-select">
+                        <option value="ACTIVE">활성</option>
+                        <option value="WITHDRAWN">탈퇴</option>
+                        <option value="ALL">전체</option>
+                    </select>
+                </label>
+                <label class="observation-filter">
+                    <span>최근 인증 접속</span>
+                    <select id="activity" class="observation-select">
+                        <option value="ALL">전체</option>
+                        <option value="WITHIN_1_DAY">24시간 이내</option>
+                        <option value="WITHIN_7_DAYS">7일 이내</option>
+                        <option value="WITHIN_30_DAYS">30일 이내</option>
+                        <option value="NEVER">접속 기록 없음</option>
+                    </select>
+                </label>
+                <label class="observation-filter">
+                    <span>온보딩 상태</span>
+                    <select id="onboarding" class="observation-select">
+                        <option value="ALL">전체</option>
+                        <option value="COMPLETED">완료</option>
+                        <option value="INCOMPLETE">미완료</option>
+                    </select>
+                </label>
+                <button type="button" class="btn-primary observation-search-button" id="search">조회</button>
+            </div>
+
+            <div class="observation-result-head">
                 <span class="slot-count" id="count"></span>
+                <span class="slot-count">최근 완료는 KST 오늘 포함 7일간 루틴 + 투두 완료 건수</span>
             </div>
 
             <div class="alert alert-error" id="error" hidden></div>
             <div class="alert alert-ok" id="notice" hidden></div>
 
-            <table class="slot-table">
-                <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>이메일</th>
-                    <th>닉네임</th>
-                    <th>가입일</th>
-                    <th>코인</th>
-                    <th>다이아</th>
-                    <th>재화 지급</th>
-                    <th>캐릭터 지급</th>
-                </tr>
-                </thead>
-                <tbody id="rows"></tbody>
-            </table>
+            <div class="slot-table-wrap">
+                <table class="slot-table observation-table">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>사용자</th>
+                        <th>상태</th>
+                        <th>가입일</th>
+                        <th>최근 인증 접속</th>
+                        <th>온보딩</th>
+                        <th>활성 루틴</th>
+                        <th>참여 집</th>
+                        <th>7일 완료</th>
+                        <th>재화</th>
+                        <th>운영 액션</th>
+                    </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
 
-            <div class="slot-toolbar" style="justify-content: flex-end; gap: 8px;">
+            <div class="observation-pagination">
                 <button type="button" class="btn-ghost" id="prev">이전</button>
                 <span class="slot-count" id="pageInfo"></span>
                 <button type="button" class="btn-ghost" id="next">다음</button>
             </div>
-        </div>
+        </section>
     </main>
 
     <script>
         const PAGE_SIZE = 20;
+        const KST_DATE_TIME = new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+        const KST_DATE = new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+
         const tbody = document.getElementById('rows');
         const queryInput = document.getElementById('query');
+        const accountStatusInput = document.getElementById('accountStatus');
+        const activityInput = document.getElementById('activity');
+        const onboardingInput = document.getElementById('onboarding');
         const countEl = document.getElementById('count');
         const pageInfoEl = document.getElementById('pageInfo');
         const errorBox = document.getElementById('error');
         const noticeBox = document.getElementById('notice');
         let page = 0;
         let total = 0;
+        let characterOptions = [];
 
-        loadCharacters().then(load);
+        Promise.all([loadSummary(), loadCharacters()]).then(load);
+
+        async function loadSummary() {
+            try {
+                const res = await fetch('/admin/users/summary');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const summary = await res.json();
+                document.getElementById('activeUsers').textContent = summary.activeUsers.toLocaleString();
+                document.getElementById('newUsersLast7Days').textContent = summary.newUsersLast7Days.toLocaleString();
+                document.getElementById('recentlyAccessedLast7Days').textContent =
+                    summary.recentlyAccessedLast7Days.toLocaleString();
+                document.getElementById('onboardingCompletionRate').textContent =
+                    summary.onboardingCompletionRate.toFixed(1) + '%';
+                document.getElementById('onboardingCompletedUsers').textContent =
+                    summary.onboardingCompletedUsers.toLocaleString() + '명 완료';
+            } catch (err) {
+                showError('요약 조회 중 오류: ' + err.message);
+            }
+        }
 
         async function load() {
             try {
-                const params = new URLSearchParams({ page, size: PAGE_SIZE });
+                const params = new URLSearchParams({
+                    page,
+                    size: PAGE_SIZE,
+                    accountStatus: accountStatusInput.value,
+                    activity: activityInput.value,
+                    onboarding: onboardingInput.value
+                });
                 const query = queryInput.value.trim();
                 if (query) params.set('query', query);
                 const res = await fetch('/admin/users?' + params);
-                if (!res.ok) {
-                    showError('목록 조회 실패 (HTTP ' + res.status + ')');
-                    return;
-                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+
                 const data = await res.json();
                 total = data.total;
-                tbody.replaceChildren(...data.items.map(buildRow));
-                countEl.textContent = '총 ' + total + '명';
+                if (data.items.length === 0) {
+                    const emptyRow = document.createElement('tr');
+                    const emptyCell = document.createElement('td');
+                    emptyCell.colSpan = 11;
+                    emptyCell.className = 'observation-empty';
+                    emptyCell.textContent = '조건에 맞는 유저가 없습니다.';
+                    emptyRow.append(emptyCell);
+                    tbody.replaceChildren(emptyRow);
+                } else {
+                    tbody.replaceChildren(...data.items.map(buildRow));
+                }
+                countEl.textContent = '검색 결과 ' + total.toLocaleString() + '명';
                 const lastPage = Math.max(Math.ceil(total / PAGE_SIZE) - 1, 0);
                 pageInfoEl.textContent = (page + 1) + ' / ' + (lastPage + 1);
                 document.getElementById('prev').disabled = page <= 0;
@@ -113,141 +228,222 @@
         function buildRow(user) {
             const tr = document.createElement('tr');
 
-            const idCell = document.createElement('td');
-            idCell.textContent = user.userId;
+            tr.append(textCell(user.userId));
 
-            const emailCell = document.createElement('td');
-            emailCell.textContent = user.email ?? '—';
+            const identityCell = document.createElement('td');
+            identityCell.className = 'observation-identity';
+            const nickname = document.createElement('strong');
+            nickname.textContent = user.nickname ?? '(온보딩 전)';
+            const email = document.createElement('span');
+            email.textContent = user.email ?? '개인정보 파기됨';
+            identityCell.append(nickname, email);
+            tr.append(identityCell);
 
-            const nickCell = document.createElement('td');
-            nickCell.textContent = user.nickname ?? '(온보딩 전)';
+            const statusCell = document.createElement('td');
+            const status = document.createElement('span');
+            status.className = 'observation-status observation-status--' + user.accountStatus.toLowerCase();
+            status.textContent = user.accountStatus === 'ACTIVE' ? '활성' : '탈퇴';
+            statusCell.append(status);
+            tr.append(statusCell);
 
-            const joinedCell = document.createElement('td');
-            joinedCell.textContent = user.createdAt ? user.createdAt.substring(0, 10) : '—';
+            tr.append(textCell(user.createdAt ? KST_DATE.format(new Date(user.createdAt)) : '—'));
 
-            const coinCell = document.createElement('td');
-            coinCell.textContent = user.coinBalance.toLocaleString();
-            coinCell.dataset.currency = 'COIN';
+            const accessCell = document.createElement('td');
+            accessCell.className = 'observation-access';
+            accessCell.textContent = relativeAccess(user.lastAccessedAt);
+            if (user.lastAccessedAt) accessCell.title = KST_DATE_TIME.format(new Date(user.lastAccessedAt));
+            tr.append(accessCell);
 
-            const diaCell = document.createElement('td');
-            diaCell.textContent = user.diamondBalance.toLocaleString();
-            diaCell.dataset.currency = 'DIAMOND';
+            const onboardingCell = document.createElement('td');
+            const onboarding = document.createElement('span');
+            onboarding.className = 'observation-status observation-status--' +
+                (user.onboardingCompleted ? 'complete' : 'incomplete');
+            onboarding.textContent = user.onboardingCompleted ? '완료' : '미완료';
+            onboardingCell.append(onboarding);
+            tr.append(onboardingCell);
 
-            const grantCell = document.createElement('td');
-            const select = document.createElement('select');
-            select.className = 'slot-select';
-            select.add(new Option('코인', 'COIN'));
-            select.add(new Option('다이아', 'DIAMOND'));
+            tr.append(metricCell(user.activeRoutineCount));
+            tr.append(metricCell(user.activeHouseCount));
+            tr.append(metricCell(user.recentCompletionCount, true));
+
+            const walletCell = document.createElement('td');
+            walletCell.className = 'observation-wallet';
+            const coin = document.createElement('span');
+            coin.textContent = '코인 ' + user.coinBalance.toLocaleString();
+            coin.dataset.currency = 'COIN';
+            const diamond = document.createElement('span');
+            diamond.textContent = '다이아 ' + user.diamondBalance.toLocaleString();
+            diamond.dataset.currency = 'DIAMOND';
+            walletCell.append(coin, diamond);
+            tr.append(walletCell);
+
+            tr.append(actionCell(user, { COIN: coin, DIAMOND: diamond }));
+            return tr;
+        }
+
+        function actionCell(user, balanceCells) {
+            const cell = document.createElement('td');
+            cell.className = 'observation-actions';
+            const withdrawn = user.accountStatus === 'WITHDRAWN';
+
+            const walletRow = document.createElement('div');
+            walletRow.className = 'observation-action-row';
+            const currency = document.createElement('select');
+            currency.className = 'observation-select observation-select--compact';
+            currency.add(new Option('코인', 'COIN'));
+            currency.add(new Option('다이아', 'DIAMOND'));
             const amount = document.createElement('input');
             amount.type = 'number';
             amount.min = '1';
             amount.value = '500';
-            amount.className = 'slot-search';
-            amount.style.width = '90px';
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn-ghost';
-            btn.textContent = '지급';
-            btn.addEventListener('click', () =>
-                grant(user, select.value, Number(amount.value), btn, { COIN: coinCell, DIAMOND: diaCell }));
-            grantCell.append(select, amount, btn);
-            grantCell.style.display = 'flex';
-            grantCell.style.gap = '6px';
+            amount.className = 'observation-number';
+            const walletButton = document.createElement('button');
+            walletButton.type = 'button';
+            walletButton.className = 'btn-ghost';
+            walletButton.textContent = '재화 지급';
+            walletButton.addEventListener('click', () =>
+                grant(user, currency.value, Number(amount.value), walletButton, balanceCells));
+            walletRow.append(currency, amount, walletButton);
 
-            const charCell = document.createElement('td');
-            const charSelect = document.createElement('select');
-            charSelect.className = 'slot-select';
-            characterOptions.forEach(c => charSelect.add(new Option(c.name + ' (' + c.code + ')', c.code)));
-            const charBtn = document.createElement('button');
-            charBtn.type = 'button';
-            charBtn.className = 'btn-ghost';
-            charBtn.textContent = '지급';
-            charBtn.addEventListener('click', () => grantCharacter(user, charSelect.value, charBtn));
-            charCell.append(charSelect, charBtn);
-            charCell.style.display = 'flex';
-            charCell.style.gap = '6px';
+            const characterRow = document.createElement('div');
+            characterRow.className = 'observation-action-row';
+            const character = document.createElement('select');
+            character.className = 'observation-select observation-select--character';
+            characterOptions.forEach(option =>
+                character.add(new Option(option.name + ' (' + option.code + ')', option.code)));
+            const characterButton = document.createElement('button');
+            characterButton.type = 'button';
+            characterButton.className = 'btn-ghost';
+            characterButton.textContent = '캐릭터 지급';
+            characterButton.addEventListener('click', () =>
+                grantCharacter(user, character.value, characterButton));
+            characterRow.append(character, characterButton);
 
-            tr.append(idCell, emailCell, nickCell, joinedCell, coinCell, diaCell, grantCell, charCell);
-            return tr;
+            if (withdrawn) {
+                [currency, amount, walletButton, character, characterButton].forEach(element => {
+                    element.disabled = true;
+                    element.title = '탈퇴 회원에게는 지급할 수 없습니다.';
+                });
+            }
+            cell.append(walletRow, characterRow);
+            return cell;
         }
 
-        let characterOptions = [];
+        function textCell(value) {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            return cell;
+        }
+
+        function metricCell(value, accent = false) {
+            const cell = document.createElement('td');
+            cell.className = 'observation-number-cell' + (accent ? ' observation-number-cell--accent' : '');
+            cell.textContent = value.toLocaleString();
+            return cell;
+        }
+
+        function relativeAccess(value) {
+            if (!value) return '기록 없음';
+            const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+            if (elapsedMinutes < 1) return '방금 전';
+            if (elapsedMinutes < 60) return elapsedMinutes + '분 전';
+            const hours = Math.floor(elapsedMinutes / 60);
+            if (hours < 24) return hours + '시간 전';
+            const days = Math.floor(hours / 24);
+            if (days < 30) return days + '일 전';
+            return KST_DATE.format(new Date(value));
+        }
+
         async function loadCharacters() {
             try {
                 const res = await fetch('/admin/characters');
-                if (res.ok) { characterOptions = await res.json(); }
-            } catch (err) { /* select 가 비면 지급 버튼만 무의미 — 목록 화면은 계속 동작 */ }
+                if (res.ok) characterOptions = await res.json();
+            } catch (err) {
+                characterOptions = [];
+            }
         }
 
-        async function grantCharacter(user, characterCode, btn) {
+        async function grantCharacter(user, characterCode, button) {
             if (!characterCode) { showError('지급할 캐릭터를 선택하세요.'); return; }
-            btn.disabled = true;
+            button.disabled = true;
             try {
-                // grant API 는 curl 겸용이라 CSRF 제외 경로 (인증 세션은 필요)
                 const res = await fetch('/admin/users/' + user.userId + '/characters/grant', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ characterCode })
                 });
                 const result = await res.json();
-                if (!res.ok) { throw new Error(result.message || ('HTTP ' + res.status)); }
-                if (result.alreadyOwned) {
-                    showNotice('#' + user.userId + ' 이미 보유 중: ' + characterCode);
-                } else {
-                    showNotice('#' + user.userId + ' ' + characterCode + ' 지급 완료'
-                        + (result.selected ? ' (첫 캐릭터라 착용까지 완료)' : ''));
-                }
+                if (!res.ok) throw new Error(result.message || ('HTTP ' + res.status));
+                showNotice(result.alreadyOwned
+                    ? '#' + user.userId + ' 이미 보유 중: ' + characterCode
+                    : '#' + user.userId + ' ' + characterCode + ' 지급 완료' +
+                        (result.selected ? ' (첫 캐릭터라 착용까지 완료)' : ''));
             } catch (err) {
                 showError('#' + user.userId + ' 캐릭터 지급 실패: ' + err.message);
             } finally {
-                btn.disabled = false;
+                button.disabled = false;
             }
         }
 
-        async function grant(user, currencyType, amount, btn, balanceCells) {
+        async function grant(user, currencyType, amount, button, balanceCells) {
             if (!Number.isInteger(amount) || amount < 1) {
                 showError('지급 수량은 1 이상의 정수여야 합니다.');
                 return;
             }
-            btn.disabled = true;
+            button.disabled = true;
             try {
-                // grant API 는 curl 겸용이라 CSRF 제외 경로 (인증 세션은 필요)
                 const res = await fetch('/admin/users/' + user.userId + '/wallets/grant', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ currencyType, amount })
                 });
-                if (!res.ok) {
-                    throw new Error('HTTP ' + res.status);
-                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const result = await res.json();
-                balanceCells[currencyType].textContent = result.balance.toLocaleString();
-                showNotice('#' + user.userId + ' ' + (currencyType === 'COIN' ? '코인' : '다이아')
-                    + ' ' + amount.toLocaleString() + ' 지급 완료 (잔액 ' + result.balance.toLocaleString() + ')');
+                const label = currencyType === 'COIN' ? '코인' : '다이아';
+                balanceCells[currencyType].textContent = label + ' ' + result.balance.toLocaleString();
+                showNotice('#' + user.userId + ' ' + label + ' ' + amount.toLocaleString() + ' 지급 완료');
             } catch (err) {
                 showError('#' + user.userId + ' 지급 실패: ' + err.message);
             } finally {
-                btn.disabled = false;
+                button.disabled = false;
             }
         }
 
-        function showError(msg) {
-            errorBox.textContent = msg;
+        function showError(message) {
+            errorBox.textContent = message;
             errorBox.hidden = false;
-            setTimeout(() => { errorBox.hidden = true; }, 4000);
+            setTimeout(() => { errorBox.hidden = true; }, 5000);
         }
 
-        function showNotice(msg) {
-            noticeBox.textContent = msg;
+        function showNotice(message) {
+            noticeBox.textContent = message;
             noticeBox.hidden = false;
             setTimeout(() => { noticeBox.hidden = true; }, 3000);
         }
 
-        queryInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') { page = 0; load(); }
+        function reloadFromFirstPage() {
+            page = 0;
+            load();
+        }
+
+        queryInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') reloadFromFirstPage();
         });
-        document.getElementById('prev').addEventListener('click', () => { page = Math.max(page - 1, 0); load(); });
-        document.getElementById('next').addEventListener('click', () => { page += 1; load(); });
+        document.getElementById('search').addEventListener('click', reloadFromFirstPage);
+        [accountStatusInput, activityInput, onboardingInput].forEach(select =>
+            select.addEventListener('change', reloadFromFirstPage));
+        document.getElementById('refresh').addEventListener('click', () => {
+            loadSummary();
+            load();
+        });
+        document.getElementById('prev').addEventListener('click', () => {
+            page = Math.max(page - 1, 0);
+            load();
+        });
+        document.getElementById('next').addEventListener('click', () => {
+            page += 1;
+            load();
+        });
     </script>
 </body>
 </html>

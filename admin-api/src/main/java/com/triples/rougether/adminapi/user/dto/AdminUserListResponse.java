@@ -11,6 +11,13 @@ public record AdminUserListResponse(List<AdminUserRow> items, int page, int size
             String email,
             String nickname,
             Instant createdAt,
+            Instant lastAccessedAt,
+            Instant deletedAt,
+            AdminUserAccountStatus accountStatus,
+            boolean onboardingCompleted,
+            long activeRoutineCount,
+            long activeHouseCount,
+            long recentCompletionCount,
             long coinBalance,
             long diamondBalance) {
     }

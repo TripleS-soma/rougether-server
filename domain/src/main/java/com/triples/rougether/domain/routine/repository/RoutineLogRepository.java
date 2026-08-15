@@ -3,7 +3,9 @@ package com.triples.rougether.domain.routine.repository;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
+import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -77,4 +79,12 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("userId") Long userId,
             @Param("routineDate") LocalDate routineDate,
             @Param("status") RoutineLogStatus status);
+
+    @Query("select l.routine.user.id as userId, count(l.id) as metricCount from RoutineLog l "
+            + "where l.routine.user.id in :userIds and l.status = :status and l.routineDate >= :fromDate "
+            + "group by l.routine.user.id")
+    List<UserMetricCount> countCompletedByUserIdsSince(
+            @Param("userIds") Collection<Long> userIds,
+            @Param("status") RoutineLogStatus status,
+            @Param("fromDate") LocalDate fromDate);
 }
