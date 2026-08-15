@@ -89,6 +89,13 @@ class AdminUserObservationTest {
         User completed = userRepository.save(User.signUp("observation-summary-completed@rougether.dev"));
         completed.recordAccess(Instant.now());
         completeOnboarding(completed);
+        Character duplicateSelectedCharacter = characterRepository.save(new Character(
+                "observation_character_duplicate_" + completed.getId(),
+                "중복 대표 캐릭터",
+                "characters/observation-duplicate.webp",
+                9500 + completed.getId().intValue(),
+                true));
+        userCharacterRepository.save(UserCharacter.createSelected(completed, duplicateSelectedCharacter));
         userRepository.save(User.signUp("observation-summary-incomplete@rougether.dev"));
 
         mockMvc.perform(get("/admin/users/summary"))

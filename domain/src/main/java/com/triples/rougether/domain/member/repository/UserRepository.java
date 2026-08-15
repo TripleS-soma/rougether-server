@@ -38,10 +38,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByDeletedAtIsNullAndLastAccessedAtGreaterThanEqual(Instant lastAccessedAt);
 
     // 온보딩 완료 계약: 목표 1개 이상 + 삭제되지 않은 대표 캐릭터 존재.
-    @Query("select count(u) from User u where u.deletedAt is null "
-            + "and exists (select ug.id from UserGoal ug where ug.user = u) "
-            + "and exists (select uc.id from UserCharacter uc "
-            + "  where uc.user = u and uc.selected = true and uc.deletedAt is null)")
+    // 전체 유저마다 두 EXISTS를 평가하지 않고 대표 캐릭터 보유 유저에서 시작해 요약 조회 비용을 줄임.
+    @Query("select count(distinct uc.user.id) from UserCharacter uc "
+            + "where uc.user.deletedAt is null "
+            + "and uc.selected = true and uc.deletedAt is null "
+            + "and exists (select ug.id from UserGoal ug where ug.user = uc.user)")
     long countOnboardingCompletedUsers();
 
     @Query("select u.id from User u where u.id in :userIds "
