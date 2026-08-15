@@ -5,10 +5,12 @@ import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -128,4 +130,10 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     List<Routine> findVisibleByUserIdAndStatus(@Param("userId") Long userId,
                                                @Param("status") RoutineStatus status,
                                                @Param("visibilities") List<PrivacyScope> visibilities);
+
+    @Query("select r.user.id as userId, count(r.id) as metricCount from Routine r "
+            + "where r.user.id in :userIds and r.status = :status and r.deletedAt is null "
+            + "group by r.user.id")
+    List<UserMetricCount> countActiveByUserIds(@Param("userIds") Collection<Long> userIds,
+                                               @Param("status") RoutineStatus status);
 }
