@@ -8,6 +8,7 @@ public enum WalletHistoryReason {
     GACHA_DUPLICATE_CONVERT, // 뽑기 중복 전환 적립(캐릭터 중복→코인, 아이템 중복→다이아)
     INVITE_REWARD,           // 친구 초대 보상 적립
     COBWEB_CLEAN,            // 장기 미접속 방 거미줄 청소 보상 적립
+    ATTENDANCE_REWARD,       // 연속 출석 이벤트 코인 적립
     GACHA_DRAW,              // 뽑기 실행 차감
     SHOP_PURCHASE            // 상점 아이템 구매 차감
 }

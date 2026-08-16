@@ -42,7 +42,8 @@ public class AdminSecurityConfig {
                         "/admin/catalog/import", "/admin/catalog/character-accessories/import",
                         "/admin/items/slots/import", "/admin/users/*/wallets/grant",
                         "/admin/users/*/characters/grant", "/admin/banned-words/import",
-                        "/admin/character-accessory-render-profiles/import"))
+                        "/admin/character-accessory-render-profiles/import",
+                        "/admin/attendance-events"))
                 .formLogin(form -> form
                         .loginPage("/login")
                         .defaultSuccessUrl("/", true)

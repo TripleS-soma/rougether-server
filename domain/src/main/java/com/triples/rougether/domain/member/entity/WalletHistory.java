@@ -33,6 +33,7 @@ public class WalletHistory extends BaseCreatedEntity {
     public static final String SOURCE_GACHA = "GACHA";
     public static final String SOURCE_ITEM = "ITEM";
     public static final String SOURCE_ROOM_COBWEB = "ROOM_COBWEB";
+    public static final String SOURCE_ATTENDANCE_CHECK_IN = "ATTENDANCE_CHECK_IN";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -26,6 +26,8 @@ public interface UserItemRepository extends JpaRepository<UserItem, Long> {
 
     boolean existsByUserIdAndItemIdAndDeletedAtIsNull(Long userId, Long itemId);
 
+    Optional<UserItem> findByUserIdAndItemIdAndDeletedAtIsNull(Long userId, Long itemId);
+
     @Query("""
             select userItem from UserItem userItem
             join fetch userItem.item item
