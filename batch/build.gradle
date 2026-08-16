@@ -6,6 +6,7 @@ dependencies {
 	implementation project(':common')
 	implementation project(':domain')
 	implementation project(':infra:fcm')
+	implementation project(':infra:llm')
 
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'

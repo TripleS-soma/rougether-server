@@ -19,7 +19,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 2 # day-end catch-up이 오래 돌아도 reminder 정각 발화가 막히지 않게 트리거별 스레드 확보
+        size: 6 # @Scheduled 트리거 수(day-end·house-mission·reminder·weekly-report·withdrawal-purge·cobweb)만큼 확보 — 오래 도는 트리거(day-end catch-up, 주간 회고 LLM 순차 호출)가 겹쳐도 reminder 5분 발화가 큐잉(=그 분 영구 누락)되지 않게
 
 server:
   port: 8082
@@ -32,6 +32,15 @@ management:
 
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+
+# 주간 회고 LLM(OpenAI 호환 chat/completions, 기본 OpenAI). api-key 가 비면 StubLlmClient 로 대체되고 회고 배치는 보류된다.
+llm:
+  base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  model: ${LLM_MODEL:gpt-5.6-luna}
+  api-key: ${LLM_API_KEY:}
+  timeout: ${LLM_TIMEOUT:30s}
+  reasoning-effort: ${LLM_REASONING_EFFORT:low}
+  json-mode: ${LLM_JSON_MODE:true}
 
 ---
 spring:
