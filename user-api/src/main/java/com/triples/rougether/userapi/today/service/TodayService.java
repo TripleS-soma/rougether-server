@@ -63,7 +63,8 @@ public class TodayService {
 
         List<TodayCategoryGroup> categories = agendaAssembler.groupByCategory(routines, completedRoutineIds, todos);
         TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todos);
-        TodayStreak streak = TodayStreak.from(streakRepository.findByUserId(userId).orElse(null));
+        TodayStreak streak = TodayStreak.from(
+                streakRepository.findByUserId(userId).orElse(null), targetDate);
         return new TodayResponse(targetDate, categories, summary, streak);
     }
 }

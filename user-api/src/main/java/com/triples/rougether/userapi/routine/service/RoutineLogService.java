@@ -88,7 +88,7 @@ public class RoutineLogService {
             failedLog.completeFromFailed(Instant.now(), REWARD_CURRENCY);
             Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
             return RoutineLogResponse.from(failedLog, currentStreak,
-                    contributeLinkedMission(userId, routine, isToday));
+                    contributeLinkedMission(userId, routine, isToday), today);
         }
 
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
@@ -113,7 +113,8 @@ public class RoutineLogService {
         Streak streak = isToday
                 ? updateStreakOnComplete(routine, today, firstToday)
                 : streakRepository.findByUserId(userId).orElse(null);
-        return RoutineLogResponse.from(log, streak, contributeLinkedMission(userId, routine, isToday));
+        return RoutineLogResponse.from(
+                log, streak, contributeLinkedMission(userId, routine, isToday), today);
     }
 
     // 연동 단체미션 자동 기여(#272 프론트 이름 매칭 → 서버 이관) - 완료와 같은 트랜잭션에서 반영한다.
@@ -166,7 +167,7 @@ public class RoutineLogService {
                 ? rollbackStreakOnCancel(userId, today)
                 : streakRepository.findByUserId(userId).orElse(null);
         return streak != null
-                ? StreakSummaryResponse.from(streak)
+                ? StreakSummaryResponse.from(streak, today)
                 : new StreakSummaryResponse(0, 0, null);
     }
 

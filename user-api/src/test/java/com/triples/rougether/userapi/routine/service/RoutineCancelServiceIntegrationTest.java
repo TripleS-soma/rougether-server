@@ -147,6 +147,19 @@ class RoutineCancelServiceIntegrationTest {
     }
 
     @Test
+    void 과거_완료_취소_응답에서도_이미_끊긴_스트릭은_0으로_보이고_저장값은_유지한다() {
+        persistStreak(userId, 4, TODAY.minusDays(2));
+        LocalDate pastDate = TODAY.minusDays(3);
+        service.complete(userId, routineId, new RoutineLogCreateRequest(pastDate));
+
+        StreakSummaryResponse streak = service.cancel(userId, routineId, pastDate);
+
+        assertThat(streak.currentCount()).isZero();
+        assertThat(streak.longestCount()).isEqualTo(4);
+        assertThat(streakRepository.findByUserId(userId).orElseThrow().getCurrentCount()).isEqualTo(4);
+    }
+
+    @Test
     void 과거_수행_대상_완료를_취소하면_FAILED로_복원되고_코인과_스트릭이_불변이다() {
         persistStreak(userId, 3, TODAY.minusDays(1));
         LocalDate pastDate = TODAY.minusDays(2);

@@ -20,6 +20,8 @@ import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 // 내 방 현황 조회. personal_rooms 가 없으면 첫 방문으로 보고 lazy 생성한다.
 @Service
 public class RoomQueryService {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
@@ -150,6 +154,7 @@ public class RoomQueryService {
                 slots,
                 placements,
                 streak,
+                LocalDate.now(KST),
                 selectedCharacter,
                 accessories,
                 renderProfileQueryService.findFor(accessories),

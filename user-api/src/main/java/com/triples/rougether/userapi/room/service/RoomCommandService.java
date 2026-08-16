@@ -27,6 +27,8 @@ import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 // 방이 없으면 조회와 동일하게 첫 방문으로 보고 lazy 생성한다.
 @Service
 public class RoomCommandService {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     // 자유배치 값 허용 범위 (팀 확정 #162). 겹침·충돌 검증은 하지 않는다.
     private static final BigDecimal POSITION_MIN = BigDecimal.ZERO;
@@ -278,6 +282,7 @@ public class RoomCommandService {
                 slots,
                 placements,
                 streak,
+                LocalDate.now(KST),
                 selectedCharacter,
                 accessories,
                 renderProfileQueryService.findFor(accessories),

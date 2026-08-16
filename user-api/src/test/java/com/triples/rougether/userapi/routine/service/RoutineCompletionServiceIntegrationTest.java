@@ -140,6 +140,18 @@ class RoutineCompletionServiceIntegrationTest {
     }
 
     @Test
+    void 과거_완료_응답에서도_이미_끊긴_스트릭은_0으로_보이고_저장값은_유지한다() {
+        persistStreak(userId, 4, TODAY.minusDays(2));
+
+        RoutineLogResponse response = service.complete(userId, routineId,
+                new RoutineLogCreateRequest(TODAY.minusDays(3)));
+
+        assertThat(response.streak().currentCount()).isZero();
+        assertThat(response.streak().longestCount()).isEqualTo(4);
+        assertThat(streakRepository.findByUserId(userId).orElseThrow().getCurrentCount()).isEqualTo(4);
+    }
+
+    @Test
     void 스트릭이_없을때_과거_완료는_빈_스트릭을_반환한다() {
         RoutineLogResponse response = service.complete(userId, routineId,
                 new RoutineLogCreateRequest(TODAY.minusDays(1)));

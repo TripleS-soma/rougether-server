@@ -69,6 +69,14 @@ public class Streak {
         return new Streak(user, today);
     }
 
+    // 조회일 기준 어제까지 성공한 스트릭만 현재값으로 표시함. 저장값은 다음 성공 계산을 위해 유지함.
+    public int currentCountOn(LocalDate referenceDate) {
+        if (lastSuccessDate == null || lastSuccessDate.isBefore(referenceDate.minusDays(1))) {
+            return 0;
+        }
+        return currentCount;
+    }
+
     // 오늘 첫 완료 시 호출. 어제 성공이면 +1, 아니면 1로 리셋. 이미 오늘 반영됐으면 변화 없음(방어).
     public void applySuccess(LocalDate today) {
         if (today.equals(lastSuccessDate)) {
