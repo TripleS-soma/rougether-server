@@ -74,6 +74,7 @@ class WithdrawalPurgeTriggerTest {
             jdbcTemplate.update("DELETE FROM todos WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM categories WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM streaks WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM weekly_reports WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM room_item_placements WHERE room_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM room_surface_slots WHERE room_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM room_cobwebs WHERE room_user_id = ?", userId);
@@ -181,6 +182,11 @@ class WithdrawalPurgeTriggerTest {
                 INSERT INTO streaks (user_id, current_count, longest_count, status, updated_at)
                 VALUES (?, 1, 1, 'ACTIVE', ?)
                 """, userId, now());
+        jdbcTemplate.update("""
+                INSERT INTO weekly_reports (user_id, week_start_date, week_end_date, status, stats_json, summary,
+                                            sections_json, generated_at, created_at)
+                VALUES (?, '2026-08-09', '2026-08-15', 'FALLBACK', '{}', '회고', '{}', ?, ?)
+                """, userId, now(), now());
 
         jdbcTemplate.update("INSERT INTO user_items (user_id, item_id, acquired_at) VALUES (?, ?, ?)",
                 userId, itemId, now());
@@ -284,7 +290,7 @@ class WithdrawalPurgeTriggerTest {
 
         for (String[] tableAndColumn : new String[][] {
                 {"categories", "user_id"}, {"routines", "user_id"}, {"todos", "user_id"},
-                {"streaks", "user_id"}, {"personal_rooms", "user_id"},
+                {"streaks", "user_id"}, {"weekly_reports", "user_id"}, {"personal_rooms", "user_id"},
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
                 {"room_cobwebs", "room_user_id"},
                 {"user_characters", "user_id"}, {"user_items", "user_id"}, {"user_wallets", "user_id"},
