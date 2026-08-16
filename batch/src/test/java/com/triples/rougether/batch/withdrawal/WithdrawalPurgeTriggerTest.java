@@ -36,6 +36,7 @@ class WithdrawalPurgeTriggerTest {
     private Long goalId;
     private Long themeId;
     private Long itemId;
+    private Long attendanceEventId;
     private Long characterId;
     private Long houseId;
 
@@ -83,6 +84,7 @@ class WithdrawalPurgeTriggerTest {
                     JOIN user_characters uc ON uc.id = uca.user_character_id WHERE uc.user_id = ?
                     """, userId);
             jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", userId);
@@ -102,6 +104,7 @@ class WithdrawalPurgeTriggerTest {
         jdbcTemplate.update("DELETE FROM house WHERE id = ?", houseId);
         jdbcTemplate.update("DELETE FROM user_goals WHERE goal_id = ?", goalId);
         jdbcTemplate.update("DELETE FROM goals WHERE id = ?", goalId);
+        jdbcTemplate.update("DELETE FROM attendance_events WHERE id = ?", attendanceEventId);
         jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId);
         jdbcTemplate.update("DELETE FROM themes WHERE id = ?", themeId);
         jdbcTemplate.update("DELETE FROM characters WHERE id = ?", characterId);
@@ -139,6 +142,14 @@ class WithdrawalPurgeTriggerTest {
                 VALUES (?, 'FURNITURE', 'FLOOR', 'FLOOR', 'HAT', '아이템', 'item/purge.png', false, false)
                 """, themeId);
         itemId = lastId("items");
+        jdbcTemplate.update("""
+                INSERT INTO attendance_events
+                    (code, title, starts_on, ends_on, target_days, daily_coin_amount,
+                     bonus_day, bonus_coin_amount, reward_item_id, is_active, created_at)
+                VALUES (?, '파기 테스트 출석', ?, ?, 10, 30, 5, 50, ?, true, ?)
+                """, "purge-attendance-" + System.nanoTime(), java.sql.Date.valueOf(LocalDate.now().minusDays(9)),
+                java.sql.Date.valueOf(LocalDate.now().plusDays(20)), itemId, now());
+        attendanceEventId = lastId("attendance_events");
         jdbcTemplate.update("""
                 INSERT INTO characters (code, name, base_asset_key, sort_order, is_active)
                 VALUES (?, '캐릭터', 'character/purge.png', 0, false)
@@ -185,6 +196,13 @@ class WithdrawalPurgeTriggerTest {
         jdbcTemplate.update("INSERT INTO user_items (user_id, item_id, acquired_at) VALUES (?, ?, ?)",
                 userId, itemId, now());
         Long userItemId = lastId("user_items");
+        jdbcTemplate.update("""
+                INSERT INTO attendance_check_ins
+                    (event_id, user_id, attendance_date, streak_day, coin_reward_amount,
+                     reward_user_item_id, reward_newly_granted, reward_processed_at, created_at)
+                VALUES (?, ?, ?, 10, 30, ?, true, ?, ?)
+                """, attendanceEventId, userId, java.sql.Date.valueOf(LocalDate.now()),
+                userItemId, now(), now());
         jdbcTemplate.update("INSERT INTO personal_rooms (user_id, growth_level, updated_at) VALUES (?, 0, ?)",
                 userId, now());
         jdbcTemplate.update("""
@@ -287,7 +305,8 @@ class WithdrawalPurgeTriggerTest {
                 {"streaks", "user_id"}, {"personal_rooms", "user_id"},
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
                 {"room_cobwebs", "room_user_id"},
-                {"user_characters", "user_id"}, {"user_items", "user_id"}, {"user_wallets", "user_id"},
+                {"user_characters", "user_id"}, {"attendance_check_ins", "user_id"},
+                {"user_items", "user_id"}, {"user_wallets", "user_id"},
                 {"notification", "user_id"}, {"notification_setting", "user_id"},
                 {"user_device_token", "user_id"}, {"user_goals", "user_id"},
                 {"refresh_tokens", "user_id"}, {"bug_reports", "user_id"},

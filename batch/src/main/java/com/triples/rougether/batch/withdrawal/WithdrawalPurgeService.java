@@ -59,13 +59,14 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM room_cobwebs WHERE room_user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM personal_rooms WHERE user_id = ?", userId);
 
-        // 캐릭터·아이템·지갑: 악세사리(캐릭터·아이템 참조) → 캐릭터 → 아이템 → 지갑
+        // 캐릭터·이벤트·아이템·지갑: 아이템을 참조하는 악세사리·출석 이력을 먼저 삭제함.
         jdbcTemplate.update("""
                 DELETE uca FROM user_character_accessories uca
                 JOIN user_characters uc ON uc.id = uca.user_character_id
                 WHERE uc.user_id = ?
                 """, userId);
         jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
 
