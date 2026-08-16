@@ -4,6 +4,7 @@ import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.support.DailyCount;
 import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -56,6 +57,18 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                     @Param("categoryId") Long categoryId,
                                     @Param("status") TodoStatus status,
                                     @Param("dueDate") LocalDate dueDate);
+
+    // 월 캘린더용: 기간 내 마감일별 살아있는 투두 건수. 소싱 규칙은 findOwnedWithFilters(dueDate)와 동일(마감일 없는 투두 제외)
+    @Query("""
+            select t.dueDate as targetDate, count(t.id) as itemCount from Todo t
+            where t.user.id = :userId
+              and t.deletedAt is null
+              and t.dueDate between :fromDate and :toDate
+            group by t.dueDate
+            """)
+    List<DailyCount> countOwnedByDueDateBetween(@Param("userId") Long userId,
+                                                @Param("fromDate") LocalDate fromDate,
+                                                @Param("toDate") LocalDate toDate);
 
     // 타인(집 멤버) 열람용: 그날 마감 투두 중 카테고리 공개 범위가 허용된 것만.
     // 미분류(category null) 투두는 inner join 으로 자연 제외됨(비공개 취급)
