@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserGoalRepository extends JpaRepository<UserGoal, Long> {
 
+    boolean existsByUserId(Long userId);
+
     List<UserGoal> findByUserId(Long userId);
 
     @Query("select ug from UserGoal ug join fetch ug.goal g where ug.user.id = :userId order by g.sortOrder asc")

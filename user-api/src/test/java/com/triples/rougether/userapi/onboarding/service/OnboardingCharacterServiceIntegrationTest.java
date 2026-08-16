@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.onboarding.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.character.entity.Character;
@@ -13,6 +14,7 @@ import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingCharacterResponse;
 import jakarta.persistence.EntityManager;
@@ -55,7 +57,8 @@ class OnboardingCharacterServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new OnboardingCommandService(
-                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository);
+                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository,
+                mock(HouseCommandService.class));
         userId = userRepository.save(User.signUp()).getId();
         c1 = characterRepository.save(new Character("c1", "고양이", "characters/c1.png", 1, true)).getId();
         c2 = characterRepository.save(new Character("c2", "강아지", "characters/c2.png", 2, true)).getId();
