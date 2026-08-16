@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -79,6 +80,33 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("userId") Long userId,
             @Param("routineDate") LocalDate routineDate,
             @Param("status") RoutineLogStatus status);
+
+    // 주간 회고 대상 사용자(#286): 기간 내 COMPLETED/FAILED log가 있는 사용자. 탈퇴(익명화) 회원과
+    // soft-deleted 루틴의 log는 제외한다(회고 결정값). afterUserId 초과분을 user id 오름차순으로 keyset 순회함.
+    @Query("select distinct r.user.id from RoutineLog l join l.routine r join r.user u "
+            + "where l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses and r.deletedAt is null and u.deletedAt is null "
+            + "and r.user.id > :afterUserId "
+            + "order by r.user.id")
+    List<Long> findUserIdsWithLogsInPeriod(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses,
+            @Param("afterUserId") Long afterUserId,
+            Pageable pageable);
+
+    // 주간 회고 집계(#286): 사용자의 기간 내 COMPLETED/FAILED log를 루틴·카테고리까지 fetch. soft-deleted 루틴 제외.
+    @Query("select l from RoutineLog l "
+            + "join fetch l.routine r "
+            + "left join fetch r.category "
+            + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses and r.deletedAt is null "
+            + "order by l.routineDate asc, l.id asc")
+    List<RoutineLog> findAllWithRoutineInPeriod(
+            @Param("userId") Long userId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses);
 
     @Query("select l.routine.user.id as userId, count(l.id) as metricCount from RoutineLog l "
             + "where l.routine.user.id in :userIds and l.status = :status and l.routineDate >= :fromDate "
