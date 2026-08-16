@@ -42,6 +42,7 @@ APPLE_TEAM_ID="$(aws ssm get-parameter --name '${apple_team_id_param}' --with-de
 APPLE_KEY_ID="$(aws ssm get-parameter --name '${apple_key_id_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
 APPLE_PRIVATE_KEY="$(aws ssm get-parameter --name '${apple_private_key_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
 APPLE_REFRESH_TOKEN_ENC_KEY="$(aws ssm get-parameter --name '${apple_refresh_token_enc_key_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
+LLM_API_KEY="$(aws ssm get-parameter --name '${llm_api_key_param}' --with-decryption --query 'Parameter.Value' --output text --region '${aws_region}' 2>/dev/null || true)"
 APPLE_PRIVATE_KEY="$(printf '%s' "$APPLE_PRIVATE_KEY" | escape_multiline_env_value)"
 
 webex_bot_token_valid() {
@@ -166,8 +167,9 @@ ASSET_S3_REGION=${asset_region}
 ASSET_PUBLIC_BASE_URL=${asset_public_base_url}
 EOF
 
-# batch: 루틴 리마인드 발송 전용. 외부 접근 없이 localhost 헬스체크(8082)만 노출한다.
+# batch: 루틴 리마인드·day-end·주간 회고 등 배치 전용. 외부 접근 없이 localhost 헬스체크(8082)만 노출한다.
 # firebase 자격증명이 있으면 user-api 와 동일하게 마운트해 실제 FCM 을 발송하고, 없으면 stub 으로 동작한다.
+# LLM API 키가 SSM 에 없으면 줄을 쓰지 않는다 — batch 는 키가 비면 LLM stub 으로 뜨고 주간 회고 생성만 보류한다.
 cat > "$ENV_DIR/batch.env" <<EOF
 SPRING_PROFILES_ACTIVE=mysql
 SERVER_PORT=8082
@@ -178,6 +180,10 @@ EOF
 
 if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
   printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/batch.env"
+fi
+
+if [ -n "$LLM_API_KEY" ]; then
+  printf '\nLLM_API_KEY=%s\n' "$LLM_API_KEY" >> "$ENV_DIR/batch.env"
 fi
 
 chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env" "$ENV_DIR/batch.env"

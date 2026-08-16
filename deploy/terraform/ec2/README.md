@@ -282,6 +282,38 @@ terraform apply tfplan
 파라미터 이름이나 Webex 스페이스를 바꾼 환경에서는 deploy workflow의 parameter 이름과
 GitHub variable `WEBEX_ROOM_ID`를 함께 맞춥니다.
 
+## 주간 회고 LLM API 키
+
+batch의 AI 주간 회고(`weeklyReportJob`)는 OpenAI 호환 chat/completions API를 호출합니다. API 키는 Terraform state나
+저장소에 넣지 않고 `/${project_name}-${environment}/llm/api-key` SecureString으로만 관리합니다.
+EC2 role은 이 parameter만 읽고, user-data가 최초 부트스트랩 때 `/etc/rougether/batch.env`의 `LLM_API_KEY`로 쓰며,
+이후 GitHub Actions 배포가 매번 SecureString을 다시 읽어 같은 파일에 원자적으로 반영합니다(`refresh_llm_env`).
+키가 없거나 형식이 이상하면 기존 값을 유지하고, 끝내 비어 있으면 batch는 LLM stub으로 기동해 **주간 회고 생성만
+보류**합니다(다른 배치는 영향 없음, 가짜 회고는 저장되지 않음).
+
+키 등록은 운영자가 직접 합니다(값을 CI나 저장소에 두지 않습니다).
+
+```bash
+aws ssm put-parameter \
+  --name /rougether-dev/llm/api-key \
+  --description "Rougether weekly report LLM API key" \
+  --type SecureString --tier Standard \
+  --value 'sk-...' \
+  --tags Key=Project,Value=rougether Key=Environment,Value=dev \
+  --region ap-northeast-2
+```
+
+이미 있으면 `--overwrite`로 교체합니다(키를 교체(rotate)한 뒤 다음 main 배포 또는 `systemctl restart rougether-batch`
+전에 배포 스크립트가 재조회). 권한(EC2 role의 parameter ARN allowlist)은 Terraform이 관리하므로 먼저 적용합니다.
+
+```bash
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+모델·추론 강도는 필요 시 같은 `batch.env`에 `LLM_MODEL`, `LLM_REASONING_EFFORT`로 덮어쓸 수 있고, 없으면
+애플리케이션 기본값(`gpt-5.6-luna`, `low`)을 씁니다.
+
 ## HTTPS (CloudFront)
 
 iOS ATS(App Transport Security)가 앱의 평문 HTTP 호출을 기본 차단하기 때문에, 앱스토어 제출용으로 user-api 앞에 CloudFront 를 둡니다(`cloudfront.tf`). 도메인 구매 없이 `xxxx.cloudfront.net` 기본 도메인과 기본 인증서(TLS 1.2+)로 ATS 요건을 충족합니다.
