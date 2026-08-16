@@ -19,11 +19,13 @@ import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.house.dto.HouseMemberDayResponse;
@@ -60,6 +62,7 @@ class HouseMemberActivityIntegrationTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private RoutineRepository routineRepository;
     @Autowired private RoutineLogRepository routineLogRepository;
+    @Autowired private StreakRepository streakRepository;
     @Autowired private TodoRepository todoRepository;
     @PersistenceContext private EntityManager em;
 
@@ -119,6 +122,26 @@ class HouseMemberActivityIntegrationTest {
         assertThat(response.roomUserId()).isEqualTo(f.target().getId());
         assertThat(response.growthLevel()).isZero();
         assertThat(response.slots()).isEmpty();
+    }
+
+    @Test
+    void 하루를_건너뛰어_끊긴_구성원의_스트릭은_타인_방에서_0으로_보인다() {
+        Fixture f = fixture();
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+        LocalDate lastSuccessDate = LocalDate.now(KST).minusDays(2);
+        Streak streak = Streak.start(f.target(), lastSuccessDate.minusDays(3));
+        streak.applySuccess(lastSuccessDate.minusDays(2));
+        streak.applySuccess(lastSuccessDate.minusDays(1));
+        streak.applySuccess(lastSuccessDate);
+        streakRepository.save(streak);
+
+        RoomResponse response = activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId());
+
+        assertThat(response.streak().currentCount()).isZero();
+        assertThat(response.streak().longestCount()).isEqualTo(4);
+        assertThat(streakRepository.findByUserId(f.target().getId()).orElseThrow().getCurrentCount())
+                .isEqualTo(4);
     }
 
     @Test

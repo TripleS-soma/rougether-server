@@ -241,6 +241,17 @@ class TodayServiceIntegrationTest {
         assertThat(streak.lastSuccessDate()).isEqualTo(MONDAY);
     }
 
+    @Test
+    void 하루를_건너뛰어_끊긴_스트릭은_현재_0이고_최장기록은_유지한다() {
+        persistStreak(4, 9, MONDAY.minusDays(2));
+
+        var streak = service.today(userId, MONDAY).streak();
+
+        assertThat(streak.currentCount()).isZero();
+        assertThat(streak.longestCount()).isEqualTo(9);
+        assertThat(streak.lastSuccessDate()).isEqualTo(MONDAY.minusDays(2));
+    }
+
     private java.util.List<String> routineTitles(TodayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.routines().stream())

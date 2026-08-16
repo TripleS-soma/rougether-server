@@ -25,6 +25,7 @@ class WeeklyStatsAggregatorTest {
 
     // 2026-08-09(일) ~ 2026-08-15(토)
     private static final LocalDate SUN = LocalDate.of(2026, 8, 9);
+    private static final LocalDate REPORT_DATE = SUN.plusDays(7);
     private final WeeklyStatsAggregator aggregator = new WeeklyStatsAggregator();
     private final User user = User.signUp();
 
@@ -34,7 +35,7 @@ class WeeklyStatsAggregatorTest {
         List<RoutineLog> logs = List.of(
                 completed(run, SUN), completed(run, SUN.plusDays(1)), failed(run, SUN.plusDays(2)));
 
-        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty());
+        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty(), REPORT_DATE);
 
         assertThat(stats.scheduledCount()).isEqualTo(3);
         assertThat(stats.completedCount()).isEqualTo(2);
@@ -47,7 +48,7 @@ class WeeklyStatsAggregatorTest {
         Routine run = routine(1L, null, "달리기", null);
         List<RoutineLog> logs = List.of(completed(run, SUN), failed(run, SUN.plusDays(6)));
 
-        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty());
+        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty(), REPORT_DATE);
 
         assertThat(stats.byWeekday()).hasSize(7);
         assertThat(stats.byWeekday()).extracting(WeekdayStat::dayOfWeek).containsExactly(
@@ -66,7 +67,7 @@ class WeeklyStatsAggregatorTest {
         List<RoutineLog> logs = List.of(
                 completed(oldVersion, SUN), failed(oldVersion, SUN.plusDays(1)), completed(newVersion, SUN.plusDays(2)));
 
-        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty());
+        WeeklyReportStats stats = aggregator.aggregate(logs, Optional.empty(), REPORT_DATE);
 
         assertThat(stats.byRoutine()).hasSize(1);
         RoutineStat stat = stats.byRoutine().getFirst();
@@ -83,31 +84,36 @@ class WeeklyStatsAggregatorTest {
         category.softDelete(Instant.now());
         Routine run = routine(1L, null, "달리기", category);
 
-        WeeklyReportStats stats = aggregator.aggregate(List.of(completed(run, SUN)), Optional.empty());
+        WeeklyReportStats stats = aggregator.aggregate(List.of(completed(run, SUN)), Optional.empty(), REPORT_DATE);
 
         assertThat(stats.byRoutine().getFirst().categoryName()).isNull();
     }
 
     @Test
-    void 스트릭_스냅샷은_없으면_0이고_있으면_현재_최장을_담는다() {
+    void 스트릭_스냅샷은_회고_생성일_기준_현재값과_최장값을_담는다() {
         Routine run = routine(1L, null, "달리기", null);
         List<RoutineLog> logs = List.of(completed(run, SUN));
 
-        WeeklyReportStats withoutStreak = aggregator.aggregate(logs, Optional.empty());
+        WeeklyReportStats withoutStreak = aggregator.aggregate(logs, Optional.empty(), REPORT_DATE);
         assertThat(withoutStreak.streak().currentCount()).isZero();
         assertThat(withoutStreak.streak().longestCount()).isZero();
 
-        Streak streak = Streak.start(user, SUN);
-        streak.applySuccess(SUN.plusDays(1));
-        streak.applySuccess(SUN.plusDays(2));
-        WeeklyReportStats withStreak = aggregator.aggregate(logs, Optional.of(streak));
-        assertThat(withStreak.streak().currentCount()).isEqualTo(3);
-        assertThat(withStreak.streak().longestCount()).isEqualTo(3);
+        Streak expiredStreak = Streak.start(user, SUN);
+        expiredStreak.applySuccess(SUN.plusDays(1));
+        expiredStreak.applySuccess(SUN.plusDays(2));
+        WeeklyReportStats expired = aggregator.aggregate(logs, Optional.of(expiredStreak), REPORT_DATE);
+        assertThat(expired.streak().currentCount()).isZero();
+        assertThat(expired.streak().longestCount()).isEqualTo(3);
+
+        Streak activeStreak = Streak.start(user, REPORT_DATE.minusDays(1));
+        WeeklyReportStats active = aggregator.aggregate(logs, Optional.of(activeStreak), REPORT_DATE);
+        assertThat(active.streak().currentCount()).isEqualTo(1);
+        assertThat(active.streak().longestCount()).isEqualTo(1);
     }
 
     @Test
     void 로그가_없으면_모두_0이고_완료율도_0이다() {
-        WeeklyReportStats stats = aggregator.aggregate(List.of(), Optional.empty());
+        WeeklyReportStats stats = aggregator.aggregate(List.of(), Optional.empty(), REPORT_DATE);
 
         assertThat(stats.scheduledCount()).isZero();
         assertThat(stats.completionRate()).isZero();

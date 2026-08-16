@@ -12,6 +12,7 @@ import com.triples.rougether.domain.routine.entity.Streak;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +30,7 @@ public class WeeklyStatsAggregator {
             DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
             DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY);
 
-    public WeeklyReportStats aggregate(List<RoutineLog> logs, Optional<Streak> streak) {
+    public WeeklyReportStats aggregate(List<RoutineLog> logs, Optional<Streak> streak, LocalDate referenceDate) {
         int completed = 0;
         int failed = 0;
         Map<DayOfWeek, int[]> byWeekday = new EnumMap<>(DayOfWeek.class);
@@ -61,7 +62,7 @@ public class WeeklyStatsAggregator {
                 .toList();
         List<RoutineStat> routineStats = byLineage.values().stream().map(RoutineAccumulator::toStat).toList();
         StreakSnapshot streakSnapshot = streak
-                .map(s -> new StreakSnapshot(s.getCurrentCount(), s.getLongestCount()))
+                .map(s -> new StreakSnapshot(s.currentCountOn(referenceDate), s.getLongestCount()))
                 .orElse(new StreakSnapshot(0, 0));
         return new WeeklyReportStats(scheduled, completed, failed, completionRate(completed, scheduled),
                 weekdayStats, routineStats, streakSnapshot);

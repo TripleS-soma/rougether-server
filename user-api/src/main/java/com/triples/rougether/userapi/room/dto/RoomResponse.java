@@ -16,6 +16,7 @@ import com.triples.rougether.userapi.character.dto.EquippedAccessoryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -47,6 +48,7 @@ public record RoomResponse(
 
     public static RoomResponse of(PersonalRoom room, List<RoomSurfaceSlot> slots,
                                   List<RoomItemPlacement> placements, Streak streak,
+                                  LocalDate referenceDate,
                                   UserCharacter selectedCharacter,
                                   List<UserCharacterAccessory> accessories,
                                   Map<Long, Map<Long,
@@ -66,7 +68,7 @@ public record RoomResponse(
                 RoomCharacterResponse.of(selectedCharacter, accessories, renderProfiles),
                 slotResponses,
                 placementResponses,
-                RoomStreakResponse.of(streak),
+                RoomStreakResponse.of(streak, referenceDate),
                 RoomCobwebResponse.of(cobweb),
                 room.getUpdatedAt());
     }
@@ -186,13 +188,14 @@ public record RoomResponse(
 
     // 스트릭은 표시용 읽기(루틴 도메인 소유). 아직 없으면 0/0.
     public record RoomStreakResponse(
-            @Schema(description = "현재 연속 실천 일수 (스트릭 미생성이면 0)", example = "3")
+            @Schema(description = "현재 연속 실천 일수. 마지막 성공일이 어제보다 이전이거나 스트릭 미생성이면 0",
+                    example = "3")
             int currentCount,
             @Schema(description = "최장 연속 실천 일수 (스트릭 미생성이면 0)", example = "14")
             int longestCount) {
-        public static RoomStreakResponse of(Streak streak) {
+        public static RoomStreakResponse of(Streak streak, LocalDate referenceDate) {
             return streak != null
-                    ? new RoomStreakResponse(streak.getCurrentCount(), streak.getLongestCount())
+                    ? new RoomStreakResponse(streak.currentCountOn(referenceDate), streak.getLongestCount())
                     : new RoomStreakResponse(0, 0);
         }
     }

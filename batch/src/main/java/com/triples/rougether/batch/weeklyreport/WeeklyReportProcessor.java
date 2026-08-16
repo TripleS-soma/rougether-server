@@ -63,7 +63,7 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
             return null;
         }
         Optional<Streak> streak = streakRepository.findByUserId(userId);
-        WeeklyReportStats stats = aggregator.aggregate(logs, streak);
+        WeeklyReportStats stats = aggregator.aggregate(logs, streak, LocalDate.now(clock));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("회고 대상 사용자 없음: " + userId));
         List<UserGoal> goals = userGoalRepository.findByUserIdWithGoalOrderBySortOrder(userId);

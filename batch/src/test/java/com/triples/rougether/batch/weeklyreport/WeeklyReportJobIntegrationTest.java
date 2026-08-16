@@ -190,10 +190,14 @@ class WeeklyReportJobIntegrationTest {
         assertThat(stats.path("completionRate").asDouble()).isEqualTo(0.67);
         assertThat(stats.path("byRoutine").get(0).path("title").asString()).isEqualTo("달리기");
         assertThat(stats.path("byWeekday")).hasSize(7);
-        assertThat(stats.path("streak").path("currentCount").asInt()).isEqualTo(2);
+        assertThat(stats.path("streak").path("currentCount").asInt()).isZero();
+        assertThat(stats.path("streak").path("longestCount").asInt()).isEqualTo(2);
         assertThat(report.getGeneratedAt()).isEqualTo(ZonedDateTime.of(TRIGGER_DAY.atTime(0, 30), KST).toInstant());
         assertThat(llmClient.calls).isEqualTo(1);
-        assertThat(llmClient.lastRequest.userPrompt()).contains("닉네임: 「진형」").contains("자기소개: 「매일 조금씩」");
+        assertThat(llmClient.lastRequest.userPrompt())
+                .contains("닉네임: 「진형」")
+                .contains("자기소개: 「매일 조금씩」")
+                .contains("스트릭: 현재 0일, 최장 2일");
     }
 
     @Test

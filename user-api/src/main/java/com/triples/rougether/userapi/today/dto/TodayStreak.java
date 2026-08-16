@@ -5,7 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 
 public record TodayStreak(
-        @Schema(description = "현재 연속일. 하루에 루틴을 1개 이상 완료하면 그날이 성공일로 집계됨. 스트릭이 없으면 0", example = "5")
+        @Schema(description = "현재 연속일. 하루에 루틴을 1개 이상 완료하면 그날이 성공일로 집계되며, "
+                + "마지막 성공일이 어제보다 이전이거나 스트릭이 없으면 0", example = "5")
         int currentCount,
         @Schema(description = "최장 연속일. 완료 취소로 롤백되어도 줄어들지 않음", example = "12")
         int longestCount,
@@ -13,11 +14,11 @@ public record TodayStreak(
         LocalDate lastSuccessDate
 ) {
 
-    public static TodayStreak from(Streak streak) {
+    public static TodayStreak from(Streak streak, LocalDate referenceDate) {
         if (streak == null) {
             return new TodayStreak(0, 0, null);
         }
-        return new TodayStreak(streak.getCurrentCount(), streak.getLongestCount(),
+        return new TodayStreak(streak.currentCountOn(referenceDate), streak.getLongestCount(),
                 streak.getLastSuccessDate());
     }
 }

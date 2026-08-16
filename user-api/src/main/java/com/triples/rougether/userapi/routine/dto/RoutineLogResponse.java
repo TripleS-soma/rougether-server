@@ -23,7 +23,8 @@ public record RoutineLogResponse(
         @Schema(description = "실제 지급된 보상 금액. 오늘 완료는 코인 10이나, 루틴·투두 합산 일일 상한(50코인)의 남은 한도가 "
                 + "10보다 적으면 남은 만큼만 지급되고, 한도를 다 썼거나 과거 날짜 완료면 0 지급", example = "10")
         int rewardAmount,
-        @Schema(description = "스트릭 요약. 오늘 첫 완료면 갱신된 값, 그 외(오늘 추가 완료·과거 날짜 완료)는 기존 값 그대로")
+        @Schema(description = "스트릭 요약. 오늘 첫 완료면 갱신된 값이며, 저장 상태를 변경하지 않는 응답에서도 "
+                + "이미 끊긴 currentCount는 기준일에 맞춰 0으로 표시")
         StreakSummaryResponse streak,
         @Schema(description = "연동 단체미션 자동 기여 결과(수행 체크 API 응답과 동일 형태). "
                 + "이번 완료로 기여가 반영된 경우에만 값이 있고, 미연동 루틴이거나 기여가 건너뛰어진 경우"
@@ -32,12 +33,9 @@ public record RoutineLogResponse(
         HouseMissionContributeResponse houseMissionContribution
 ) {
 
-    public static RoutineLogResponse from(RoutineLog log, Streak streak) {
-        return from(log, streak, null);
-    }
-
     public static RoutineLogResponse from(RoutineLog log, Streak streak,
-                                          HouseMissionContributeResponse houseMissionContribution) {
+                                          HouseMissionContributeResponse houseMissionContribution,
+                                          LocalDate referenceDate) {
         return new RoutineLogResponse(
                 log.getId(),
                 log.getRoutineDate(),
@@ -46,7 +44,9 @@ public record RoutineLogResponse(
                 log.getRewardCurrencyType(),
                 log.getRewardAmount(),
                 // 과거 완료는 스트릭을 건드리지 않으므로 스트릭이 아직 없을 수 있음
-                streak != null ? StreakSummaryResponse.from(streak) : new StreakSummaryResponse(0, 0, null),
+                streak != null
+                        ? StreakSummaryResponse.from(streak, referenceDate)
+                        : new StreakSummaryResponse(0, 0, null),
                 houseMissionContribution
         );
     }

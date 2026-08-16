@@ -85,7 +85,7 @@ class RoomQueryServiceTest {
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         Streak streak = mock(Streak.class);
-        when(streak.getCurrentCount()).thenReturn(3);
+        when(streak.currentCountOn(any())).thenReturn(3);
         when(streak.getLongestCount()).thenReturn(7);
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.of(streak));
         when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId)).thenReturn(Optional.empty());
