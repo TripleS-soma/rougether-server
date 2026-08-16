@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class HouseCommandService {
 
     private static final int DEFAULT_MAX_MEMBERS = 4;
+    private static final String ONBOARDING_STARTER_HOUSE_NAME = "나의 집";
     private static final Duration INVITE_CODE_TTL = Duration.ofDays(7);
 
     private final HouseRepository houseRepository;
@@ -75,14 +76,35 @@ public class HouseCommandService {
 
         User owner = userRepository.getReferenceById(userId);
         int maxMembers = request.maxMembers() == null ? DEFAULT_MAX_MEMBERS : request.maxMembers();
-        House house = houseRepository.save(House.create(
-                owner, request.name(), request.description(), request.coverImageKey(),
-                maxMembers, inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL)));
-
-        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
-        houseGoalRepository.saveAll(goals.stream().map(goal -> HouseGoal.create(house, goal)).toList());
+        House house = saveHouse(owner, request.name(), request.description(), request.coverImageKey(),
+                maxMembers, goals);
 
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
+    }
+
+    // 온보딩 완료 시 선택 목표를 담은 기본 집을 지급함. 게시 manifest 첫 항목을 기본 커버로 사용함.
+    @Transactional
+    public void createOnboardingStarterHouse(User owner, List<Goal> selectedGoals) {
+        List<Goal> starterGoals = selectedGoals.stream().distinct().limit(3).toList();
+        if (starterGoals.isEmpty()) {
+            throw new IllegalArgumentException("온보딩 기본 집에는 목표가 하나 이상 필요합니다.");
+        }
+        String coverImageKey = houseCoverImageCatalog.items().stream()
+                .findFirst()
+                .map(HouseCoverImageCatalog.PublishedCoverImage::coverImageKey)
+                .orElse(null);
+        saveHouse(owner, ONBOARDING_STARTER_HOUSE_NAME, null, coverImageKey,
+                DEFAULT_MAX_MEMBERS, starterGoals);
+    }
+
+    private House saveHouse(User owner, String name, String description, String coverImageKey,
+                            int maxMembers, List<Goal> goals) {
+        House house = houseRepository.save(House.create(
+                owner, name, description, coverImageKey, maxMembers,
+                inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL)));
+        houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
+        houseGoalRepository.saveAll(goals.stream().map(goal -> HouseGoal.create(house, goal)).toList());
+        return house;
     }
 
     // 설정 수정 - 소유자 전용, null 필드는 변경하지 않는 부분 수정.

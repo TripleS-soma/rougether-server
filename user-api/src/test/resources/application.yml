@@ -38,3 +38,10 @@ asset:
   s3:
     bucket: test-bucket
     region: ap-northeast-2
+
+house:
+  cover-images:
+    items:
+      - code: cloud_balloon
+        name: 구름 풍선 집
+        cover-image-key: house/cloud-balloon/house-unified-cloud-balloon-frame.png

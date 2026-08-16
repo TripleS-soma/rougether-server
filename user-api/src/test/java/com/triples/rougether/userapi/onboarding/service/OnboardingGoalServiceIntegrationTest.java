@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.onboarding.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
@@ -13,6 +14,7 @@ import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.global.config.JpaConfig;
+import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsRequest;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse;
@@ -52,7 +54,8 @@ class OnboardingGoalServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new OnboardingCommandService(
-                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository);
+                goalRepository, userGoalRepository, characterRepository, userCharacterRepository, userRepository,
+                mock(HouseCommandService.class));
         userId = userRepository.save(User.signUp()).getId();
         g1 = goalRepository.save(goal("g1", true)).getId();
         g2 = goalRepository.save(goal("g2", true)).getId();

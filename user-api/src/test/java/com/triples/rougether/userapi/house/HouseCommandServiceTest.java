@@ -27,6 +27,7 @@ import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
+import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog.PublishedCoverImage;
 import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.support.InviteCodeGenerator;
 import java.time.Duration;
@@ -140,5 +141,36 @@ class HouseCommandServiceTest {
         ArgumentCaptor<List<HouseGoal>> captor = ArgumentCaptor.forClass(List.class);
         verify(houseGoalRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
+    }
+
+    @Test
+    void 온보딩_기본_집은_고정_초깃값과_게시된_첫_커버를_사용한다() {
+        User owner = mock(User.class);
+        Goal goal1 = goal(1L);
+        Goal goal2 = goal(2L);
+        when(houseCoverImageCatalog.items()).thenReturn(List.of(
+                new PublishedCoverImage("cloud_balloon", "구름 풍선 집", "house/cloud.png"),
+                new PublishedCoverImage("forest", "숲 집", "house/forest.png")));
+        when(inviteCodeGenerator.generate()).thenReturn("START234");
+        when(houseRepository.save(any(House.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        houseCommandService.createOnboardingStarterHouse(owner, List.of(goal1, goal2));
+
+        ArgumentCaptor<House> houseCaptor = ArgumentCaptor.forClass(House.class);
+        verify(houseRepository).save(houseCaptor.capture());
+        House saved = houseCaptor.getValue();
+        assertThat(saved.getName()).isEqualTo("나의 집");
+        assertThat(saved.getDescription()).isNull();
+        assertThat(saved.getCoverImageKey()).isEqualTo("house/cloud.png");
+        assertThat(saved.getMaxMembers()).isEqualTo(4);
+        assertThat(saved.getCurrentMemberCount()).isEqualTo(1);
+
+        ArgumentCaptor<HouseMember> memberCaptor = ArgumentCaptor.forClass(HouseMember.class);
+        verify(houseMemberRepository).save(memberCaptor.capture());
+        assertThat(memberCaptor.getValue().getRole()).isEqualTo(HouseMemberRole.OWNER);
+
+        ArgumentCaptor<List<HouseGoal>> goalsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(houseGoalRepository).saveAll(goalsCaptor.capture());
+        assertThat(goalsCaptor.getValue()).extracting(HouseGoal::getGoal).containsExactly(goal1, goal2);
     }
 }
