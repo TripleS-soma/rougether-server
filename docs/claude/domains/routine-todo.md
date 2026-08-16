@@ -13,6 +13,13 @@
 - 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).
 
+### 월 캘린더 개수 조회
+
+- `GET /api/v1/calendar/month?yearMonth=YYYY-MM`(`CalendarController.month` → `CalendarService.month`)은 그 달 1일~말일 모든 날짜에 대해 `{date, routineCount, todoCount}`만 내려준다(목록·완료 여부 없음, 대상 없는 날도 0 포함). 달력 화면의 날짜별 표시(개수·점) 용도이며 날짜를 눌렀을 때의 상세는 기존 `GET /api/v1/calendar?date=`를 쓴다.
+- 날짜별 소싱 규칙은 일별 캘린더(`day()`)와 동일하게 오늘(KST) 기준 세 구간으로 갈린다 — 그제 이전은 그날 `routine_logs`(COMPLETED+FAILED) 건수, 어제는 그날 유효했던 버전으로 재계산(`recalculateRoutines`, 일별과 공유), 오늘·미래는 현재 ACTIVE 루틴의 반복 대상 판정. 투두는 마감일이 그날인 살아있는 것만 센다. 따라서 월별 개수는 그 날짜의 일별 응답 건수와 항상 일치한다(`CalendarMonthIntegrationTest`가 검증).
+- 날짜마다 조회하지 않고 구간별로 묶어 집계한다: 투두는 `TodoRepository.countOwnedByDueDateBetween`(GROUP BY due_date) 1회, 과거 로그는 `RoutineLogRepository.countByUserIdAndRoutineDateBetween`(GROUP BY routine_date) 1회, 어제는 재계산 2회, 오늘·미래는 ACTIVE 목록 1회를 읽고 날짜마다 `RoutineRecurrence.isTargetOn`으로 인메모리 판정한다(한 달 최대 5쿼리). 날짜별 건수 projection은 `domain.support.DailyCount`(`targetDate`/`itemCount`)를 쓴다.
+- 이 엔드포인트는 프론트 요청 기반 추가(2026-08-16)다. spec 정본(rougether-spec `domains/routine-todo/api.md` 캘린더 절)에 반영이 필요하다.
+
 ### 집 단체미션 연동 표시 (V35)
 
 - 클라이언트가 단체미션↔루틴 연동을 이름 매칭으로 추적하던 것을 서버 저장 식별자로 대체한다(이름이 바뀌면 연동이 끊기는 문제, 프론트 요청 2026-07-29).

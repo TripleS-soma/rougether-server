@@ -3,6 +3,7 @@ package com.triples.rougether.domain.routine.repository;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
+import com.triples.rougether.domain.support.DailyCount;
 import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -54,6 +55,17 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     List<RoutineLog> findAllWithRoutineForDay(
             @Param("userId") Long userId,
             @Param("routineDate") LocalDate routineDate);
+
+    // 월 캘린더(그제 이전)용: 기간 내 날짜별 log 건수(COMPLETED+FAILED). 소싱 규칙은 findAllWithRoutineForDay와 동일
+    // — soft-deleted 루틴의 log도 포함하고, 로그가 없는 날은 행이 없다(0건 처리는 호출자 몫)
+    @Query("select l.routineDate as targetDate, count(l.id) as itemCount from RoutineLog l "
+            + "join l.routine r "
+            + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            + "group by l.routineDate")
+    List<DailyCount> countByUserIdAndRoutineDateBetween(
+            @Param("userId") Long userId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 
     // 타인(집 멤버) 열람용: 기간 내 완료 log 중 카테고리 공개 범위가 허용된 것만.
     // 미분류 루틴의 log 는 inner join 으로 자연 제외됨(비공개 취급).

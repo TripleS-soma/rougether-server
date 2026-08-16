@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.calendar.dto.CalendarDayCount;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
+import com.triples.rougether.userapi.calendar.dto.CalendarMonthResponse;
 import com.triples.rougether.userapi.calendar.service.CalendarService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
@@ -21,6 +23,7 @@ import com.triples.rougether.userapi.today.dto.TodaySummary;
 import com.triples.rougether.userapi.today.dto.TodayTodoItem;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,6 +104,41 @@ class CalendarControllerTest {
     @Test
     void date_형식이_잘못되면_400() throws Exception {
         mockMvc.perform(get("/api/v1/calendar").param("date", "not-a-date"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // --- 월별 개수 ---
+
+    @Test
+    void 월별_응답은_yearMonth와_날짜별_routineCount_todoCount_구조로_반환한다() throws Exception {
+        YearMonth yearMonth = YearMonth.of(2026, 8);
+        CalendarMonthResponse response = new CalendarMonthResponse(yearMonth, List.of(
+                new CalendarDayCount(LocalDate.of(2026, 8, 1), 3, 1),
+                new CalendarDayCount(LocalDate.of(2026, 8, 2), 0, 0)));
+        when(calendarService.month(eq(1L), eq(yearMonth))).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/calendar/month").param("yearMonth", "2026-08"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.yearMonth").value("2026-08"))
+                .andExpect(jsonPath("$.days.length()").value(2))
+                .andExpect(jsonPath("$.days[0].date").value("2026-08-01"))
+                .andExpect(jsonPath("$.days[0].routineCount").value(3))
+                .andExpect(jsonPath("$.days[0].todoCount").value(1))
+                .andExpect(jsonPath("$.days[1].routineCount").value(0))
+                .andExpect(jsonPath("$.days[1].todoCount").value(0));
+    }
+
+    @Test
+    void 월별_yearMonth_파라미터가_없으면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/calendar/month"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 월별_yearMonth_형식이_잘못되면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/calendar/month").param("yearMonth", "2026-8"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/calendar/month").param("yearMonth", "2026-08-01"))
                 .andExpect(status().isBadRequest());
     }
 
