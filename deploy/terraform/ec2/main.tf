@@ -22,8 +22,10 @@ locals {
   apple_key_id_param                = "/${local.name}/apple/key-id"
   apple_private_key_param           = "/${local.name}/apple/private-key"
   apple_refresh_token_enc_key_param = "/${local.name}/apple/refresh-token-enc-key"
-  ecr_registry_server               = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-  github_oidc_url                   = "https://token.actions.githubusercontent.com"
+  # 주간 회고 LLM(OpenAI 호환) API 키. batch 만 읽는다. Terraform state 밖의 SSM SecureString.
+  llm_api_key_param   = "/${local.name}/llm/api-key"
+  ecr_registry_server = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  github_oidc_url     = "https://token.actions.githubusercontent.com"
 
   runtime_ssm_parameter_names = concat([
     local.db_password_param,
@@ -37,7 +39,8 @@ locals {
     local.apple_team_id_param,
     local.apple_key_id_param,
     local.apple_private_key_param,
-    local.apple_refresh_token_enc_key_param
+    local.apple_refresh_token_enc_key_param,
+    local.llm_api_key_param
     ], var.container_registry_password_ssm_parameter == null ? [] : [
     var.container_registry_password_ssm_parameter
   ])
@@ -474,7 +477,8 @@ resource "aws_iam_role_policy" "app" {
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_team_id_param, "/")}",
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_key_id_param, "/")}",
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_private_key_param, "/")}",
-            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_refresh_token_enc_key_param, "/")}"
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_refresh_token_enc_key_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.llm_api_key_param, "/")}"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"
@@ -797,6 +801,7 @@ resource "aws_instance" "app" {
     apple_key_id_param                = local.apple_key_id_param
     apple_private_key_param           = local.apple_private_key_param
     apple_refresh_token_enc_key_param = local.apple_refresh_token_enc_key_param
+    llm_api_key_param                 = local.llm_api_key_param
     environment                       = var.environment
     asset_bucket_name                 = local.asset_bucket_name_value
     asset_region                      = local.asset_region_value

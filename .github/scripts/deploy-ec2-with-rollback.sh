@@ -15,6 +15,7 @@ APPLE_TEAM_ID_PARAMETER_NAME="__APPLE_TEAM_ID_PARAMETER_NAME__"
 APPLE_KEY_ID_PARAMETER_NAME="__APPLE_KEY_ID_PARAMETER_NAME__"
 APPLE_PRIVATE_KEY_PARAMETER_NAME="__APPLE_PRIVATE_KEY_PARAMETER_NAME__"
 APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="__APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME__"
+LLM_API_KEY_PARAMETER_NAME="__LLM_API_KEY_PARAMETER_NAME__"
 WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 ENVIRONMENT="__ENVIRONMENT__"
 
@@ -398,6 +399,32 @@ bootstrap_batch_runtime_env() {
   chmod 600 "$temporary_env"
   mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"
   echo "bootstrapped $BATCH_RUNTIME_ENV from $source_env"
+}
+
+# 주간 회고 LLM API 키를 SSM 에서 매 배포 재조회해 batch.env 에 반영한다(user-api 의 refresh_social_auth_env 와 동일 규칙).
+# SSM 에 없거나 형식이 이상하면 기존 값을 유지한다 — 키가 끝내 비면 batch 는 LLM stub 으로 뜨고 회고 생성만 보류된다.
+refresh_llm_env() {
+  local key_file temporary_env
+
+  if [ ! -f "$BATCH_RUNTIME_ENV" ]; then
+    echo "missing batch runtime env: $BATCH_RUNTIME_ENV" >&2
+    return 1
+  fi
+
+  key_file="$(mktemp "$ENV_DIR/.llm-api-key.XXXXXX")"
+  if ! fetch_secret_parameter "$LLM_API_KEY_PARAMETER_NAME" "$key_file" \
+      || ! single_line_secret_valid "$key_file" 512; then
+    echo "LLM API key unavailable or invalid in SSM; keeping the current runtime value" >&2
+    rm -f "$key_file"
+    return 0
+  fi
+
+  temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"
+  awk '!/^LLM_API_KEY=/' "$BATCH_RUNTIME_ENV" > "$temporary_env"
+  printf '\nLLM_API_KEY=%s\n' "$(tr -d '\r\n' < "$key_file")" >> "$temporary_env"
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"
+  rm -f "$key_file"
 }
 
 ensure_batch_runtime_env() {
@@ -784,6 +811,7 @@ wait_health user-api http://127.0.0.1:8080/api/v1/health
 wait_health admin-api http://127.0.0.1:8081/admin/health
 
 ensure_batch_runtime_env
+refresh_llm_env
 systemctl restart rougether-batch
 wait_health batch http://127.0.0.1:8082/actuator/health
 

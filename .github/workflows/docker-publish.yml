@@ -25,6 +25,7 @@ env:
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
   WEBEX_ROOM_ID_PARAMETER: /rougether-dev/alerts/webex-room-id
   KAKAO_ADMIN_KEY_PARAMETER: /rougether-dev/kakao/admin-key
+  LLM_API_KEY_PARAMETER: /rougether-dev/llm/api-key
   APPLE_TEAM_ID_PARAMETER: /rougether-dev/apple/team-id
   APPLE_KEY_ID_PARAMETER: /rougether-dev/apple/key-id
   APPLE_PRIVATE_KEY_PARAMETER: /rougether-dev/apple/private-key
@@ -220,6 +221,7 @@ jobs:
               -e "s|__APPLE_KEY_ID_PARAMETER_NAME__|${APPLE_KEY_ID_PARAMETER}|g" \
               -e "s|__APPLE_PRIVATE_KEY_PARAMETER_NAME__|${APPLE_PRIVATE_KEY_PARAMETER}|g" \
               -e "s|__APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME__|${APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER}|g" \
+              -e "s|__LLM_API_KEY_PARAMETER_NAME__|${LLM_API_KEY_PARAMETER}|g" \
               -e "s|__WEBEX_ROOM_ID__|${WEBEX_ROOM_ID}|g" \
               -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh

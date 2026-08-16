@@ -113,6 +113,11 @@ output "webex_room_id_parameter" {
   value       = local.webex_room_id_param
 }
 
+output "llm_api_key_parameter" {
+  description = "SSM SecureString parameter name containing the weekly-report LLM (OpenAI-compatible) API key read by batch."
+  value       = local.llm_api_key_param
+}
+
 output "social_auth_parameter_names" {
   description = "SSM parameter names for Kakao unlink and Apple token exchange/revoke credentials."
   value = {
