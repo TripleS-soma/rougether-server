@@ -23,6 +23,9 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     // 소유권 guard 단건: 타인 소유·미존재·삭제됨 모두 empty
     Optional<Todo> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
+    // 기기 캘린더 임포트 중복 판정. soft delete 된 행도 포함 — 지운 임포트 투두는 되살리지 않음(unique 와 같은 범위)
+    boolean existsByUserIdAndExternalSourceAndExternalId(Long userId, String externalSource, String externalId);
+
     // 카테고리 삭제(UNASSIGN) 미분류 전환. 삭제된 투두는 과거 기록이라 그대로 둠
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Todo t set t.category = null where t.category.id = :categoryId and t.deletedAt is null")

@@ -25,13 +25,22 @@ import com.triples.rougether.userapi.todo.error.TodoErrorCode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.hibernate.exception.ConstraintViolationException;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class TodoService {
+
+    private static final Logger log = LoggerFactory.getLogger(TodoService.class);
+    // V48 uk_todos_user_external — 임포트 경로에서 unique 위반을 다른 무결성 오류와 구분하는 기준
+    private static final String EXTERNAL_REF_CONSTRAINT = "uk_todos_user_external";
 
     // KST 고정 — 완료 가능 여부(마감일) 판정 기준
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -61,12 +70,55 @@ public class TodoService {
 
     @Transactional
     public TodoResponse create(Long userId, TodoCreateRequest request) {
+        if (request.hasPartialExternalRef()) {
+            throw new BusinessException(TodoErrorCode.TODO_EXTERNAL_REF_INCOMPLETE);
+        }
         User user = userRepository.getReferenceById(userId);
         Category category = request.categoryId() != null
                 ? findOwnedCategory(userId, request.categoryId()) : null;
-        Todo todo = Todo.create(user, category, request.title(), request.description(),
-                request.dueDate(), request.dueTime());
-        return TodoResponse.from(todoRepository.save(todo));
+        if (!request.hasExternalRef()) {
+            Todo todo = Todo.create(user, category, request.title(), request.description(),
+                    request.dueDate(), request.dueTime());
+            return TodoResponse.from(todoRepository.save(todo));
+        }
+        return createImported(userId, user, category, request);
+    }
+
+    // 기기 캘린더 임포트: (user, externalSource, externalId) 가 이미 있으면 409 — soft delete 된 것도 포함해
+    // 지운 일정을 되살리지 않는다. 사전 조회를 통과해도 동시 요청이 unique 를 깨면 같은 409 로 변환한다.
+    // 단건 트랜잭션 전용 — flush 실패 시 하이버네이트가 트랜잭션을 rollback-only 로 표시하므로, 상위 @Transactional 에서
+    // 여러 건을 돌리며 409 를 잡고 계속 진행하면 커밋 시점에 UnexpectedRollbackException 이 난다(벌크는 건별 REQUIRES_NEW 로)
+    private TodoResponse createImported(Long userId, User user, Category category, TodoCreateRequest request) {
+        // 앞뒤 공백은 같은 참조로 본다(collation 의 PAD 동작 차이에 기대지 않음)
+        String externalSource = request.externalSource().trim();
+        String externalId = request.externalId().trim();
+        if (todoRepository.existsByUserIdAndExternalSourceAndExternalId(userId, externalSource, externalId)) {
+            throw new BusinessException(TodoErrorCode.TODO_EXTERNAL_DUPLICATE);
+        }
+        Todo todo = Todo.createImported(user, category, request.title(), request.description(),
+                request.dueDate(), request.dueTime(), externalSource, externalId);
+        try {
+            // flush 까지 해서 unique 위반을 이 자리에서 잡는다(트랜잭션은 예외로 롤백됨)
+            return TodoResponse.from(todoRepository.saveAndFlush(todo));
+        } catch (DataIntegrityViolationException e) {
+            if (!isExternalRefViolation(e)) {
+                // 중복이 아닌 무결성 오류(길이 초과 등)를 409 로 위장하면 앱이 "이미 가져옴"으로 건너뛰어 조용히 유실된다
+                throw e;
+            }
+            // 원인 메시지에는 externalId 원문이 실리므로 제약 이름만 남긴다
+            log.warn("임포트 투두 중복 저장 시도(unique 위반) userId={} source={} constraint={}",
+                    userId, externalSource, EXTERNAL_REF_CONSTRAINT);
+            throw new BusinessException(TodoErrorCode.TODO_EXTERNAL_DUPLICATE);
+        }
+    }
+
+    // 하이버네이트가 제약 이름을 뽑아준 경우 그것으로, 아니면 드라이버 메시지("for key 'todos.uk_...'")로 판정
+    private static boolean isExternalRefViolation(DataIntegrityViolationException e) {
+        if (e.getCause() instanceof ConstraintViolationException ce && ce.getConstraintName() != null) {
+            return ce.getConstraintName().toLowerCase(Locale.ROOT).contains(EXTERNAL_REF_CONSTRAINT);
+        }
+        String message = e.getMostSpecificCause().getMessage();
+        return message != null && message.toLowerCase(Locale.ROOT).contains(EXTERNAL_REF_CONSTRAINT);
     }
 
     @Transactional

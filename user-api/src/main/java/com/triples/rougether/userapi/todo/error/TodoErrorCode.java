@@ -9,7 +9,11 @@ public enum TodoErrorCode implements ErrorCode {
     TODO_ALREADY_COMPLETED("TODO_ALREADY_COMPLETED", "이미 완료한 투두입니다.", 409),
     TODO_NOT_COMPLETED("TODO_NOT_COMPLETED", "완료하지 않은 투두입니다.", 409),
     TODO_FUTURE_NOT_COMPLETABLE("TODO_FUTURE_NOT_COMPLETABLE", "마감일이 미래인 투두는 완료할 수 없습니다.", 400),
-    WALLET_NOT_FOUND("WALLET_NOT_FOUND", "지갑을 찾을 수 없습니다.", 404);
+    WALLET_NOT_FOUND("WALLET_NOT_FOUND", "지갑을 찾을 수 없습니다.", 404),
+    // 기기 캘린더 임포트: 같은 (externalSource, externalId)를 이미 가져옴 — 앱은 건너뛴다(soft delete 된 것도 포함)
+    TODO_EXTERNAL_DUPLICATE("TODO_EXTERNAL_DUPLICATE", "이미 가져온 일정입니다.", 409),
+    TODO_EXTERNAL_REF_INCOMPLETE("TODO_EXTERNAL_REF_INCOMPLETE",
+            "externalSource와 externalId는 함께 보내야 합니다.", 400);
 
     private final String code;
     private final String message;

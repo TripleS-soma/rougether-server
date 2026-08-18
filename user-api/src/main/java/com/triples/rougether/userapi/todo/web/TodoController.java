@@ -62,7 +62,9 @@ public class TodoController {
 
     @Operation(summary = "투두 등록",
             description = "로그인한 회원의 새 투두를 등록합니다. 상태는 PENDING으로 시작합니다. "
-                    + "categoryId를 지정하지 않으면 미분류로 등록되며, 소유한 카테고리만 지정할 수 있습니다.")
+                    + "categoryId를 지정하지 않으면 미분류로 등록되며, 소유한 카테고리만 지정할 수 있습니다. "
+                    + "기기 캘린더 일정을 가져올 때는 externalSource·externalId를 함께 보내면 외부 참조가 기록되며, "
+                    + "같은 조합은 회원당 한 번만 등록할 수 있습니다(지운 투두 포함). 등록된 임포트 투두는 일반 투두와 동일하게 수정·삭제·완료할 수 있습니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TodoResponse create(@CurrentUser AuthUser authUser,

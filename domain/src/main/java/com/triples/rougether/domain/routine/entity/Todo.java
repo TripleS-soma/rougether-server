@@ -68,8 +68,16 @@ public class Todo extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    // 기기 캘린더 임포트 출처(예 GOOGLE_CALENDAR)와 그 캘린더의 이벤트 id. 일반 투두는 둘 다 null.
+    // (user_id, external_source, external_id) unique 가 중복 임포트의 방어선이며 생성 후 바뀌지 않는다
+    @Column(name = "external_source", length = 30)
+    private String externalSource;
+
+    @Column(name = "external_id", length = 255)
+    private String externalId;
+
     private Todo(User user, Category category, String title, String description, LocalDate dueDate,
-                LocalTime dueTime) {
+                LocalTime dueTime, String externalSource, String externalId) {
         this.user = user;
         this.category = category;
         this.title = title;
@@ -78,11 +86,20 @@ public class Todo extends BaseEntity {
         this.dueTime = dueTime == null ? null : dueTime.withSecond(0).withNano(0);
         this.status = TodoStatus.PENDING;
         this.rewardAmount = 0;
+        this.externalSource = externalSource;
+        this.externalId = externalId;
     }
 
     public static Todo create(User user, Category category, String title, String description,
                               LocalDate dueDate, LocalTime dueTime) {
-        return new Todo(user, category, title, description, dueDate, dueTime);
+        return new Todo(user, category, title, description, dueDate, dueTime, null, null);
+    }
+
+    // 기기 캘린더 임포트: 외부 참조를 함께 기록. 두 값은 호출자가 둘 다 채워서 넘긴다
+    public static Todo createImported(User user, Category category, String title, String description,
+                                      LocalDate dueDate, LocalTime dueTime,
+                                      String externalSource, String externalId) {
+        return new Todo(user, category, title, description, dueDate, dueTime, externalSource, externalId);
     }
 
     // dueTime은 해제(null) 반영을 위해 무조건 대입함 — 루틴 scheduledTime과 동일 정책

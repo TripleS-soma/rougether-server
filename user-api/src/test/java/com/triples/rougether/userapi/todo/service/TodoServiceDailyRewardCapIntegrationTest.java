@@ -77,7 +77,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 6번째 투두는 0 지급
         Long sixthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null)).id();
+                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse sixthResponse = todoService.complete(userId, sixthTodoId);
         assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(50);
@@ -93,7 +93,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 6번째: 0 지급
         todoIds[5] = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null)).id();
+                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse sixthResponse = todoService.complete(userId, todoIds[5]);
         assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
 
@@ -103,7 +103,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 새 투두 완료하면 다시 지급
         Long newTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 new", null, null, TODAY, null)).id();
+                new TodoCreateRequest("투두 new", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse newResponse = todoService.complete(userId, newTodoId);
         assertThat(newResponse.rewardAmount()).isEqualTo(10);
         assertThat(walletBalance()).isEqualTo(50);
@@ -118,7 +118,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 6번째: 0 지급
         Long sixthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null)).id();
+                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse sixthResponse = todoService.complete(userId, sixthTodoId);
         assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
 
@@ -141,7 +141,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 새 투두 완료해도 한도가 복구되지 않아 0 지급
         Long newTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 new", null, null, TODAY, null)).id();
+                new TodoCreateRequest("투두 new", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse newResponse = todoService.complete(userId, newTodoId);
         assertThat(newResponse.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(50);
@@ -158,14 +158,14 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 잔여 5 < 정가 10 → 5만 지급
         Long partialTodoId = todoService.create(userId,
-                new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null)).id();
+                new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse partial = todoService.complete(userId, partialTodoId);
         assertThat(partial.rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(45);
 
         // 상한 소진 → 다음 완료는 0
         Long nextTodoId = todoService.create(userId,
-                new TodoCreateRequest("다음 투두", null, null, TODAY, null)).id();
+                new TodoCreateRequest("다음 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, nextTodoId).rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(45);
     }
@@ -178,7 +178,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
         persistLegacyCompletedTodoRewardedWith(5);
 
         Long partialTodoId = todoService.create(userId,
-                new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null)).id();
+                new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, partialTodoId).rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(45);
 
@@ -188,7 +188,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
         // 복구된 한도도 5뿐이므로 다음 완료 역시 5만 지급
         Long nextTodoId = todoService.create(userId,
-                new TodoCreateRequest("다음 투두", null, null, TODAY, null)).id();
+                new TodoCreateRequest("다음 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, nextTodoId).rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(45);
     }
@@ -196,7 +196,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
     @Test
     void 마감일이_지난_완료는_0_지급이고_상한_집계에도_잡히지_않는다() {
         Long pastTodoId = todoService.create(userId,
-                new TodoCreateRequest("어제 마감", null, null, TODAY.minusDays(1), null)).id();
+                new TodoCreateRequest("어제 마감", null, null, TODAY.minusDays(1), null, null, null)).id();
         assertThat(todoService.complete(userId, pastTodoId).rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(0);
 
@@ -209,7 +209,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
     private Long completeNewTodo(String title) {
         Long todoId = todoService.create(userId,
-                new TodoCreateRequest(title, null, null, TODAY, null)).id();
+                new TodoCreateRequest(title, null, null, TODAY, null, null, null)).id();
         todoService.complete(userId, todoId);
         return todoId;
     }
@@ -218,7 +218,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
     // 지갑에는 더하지 않음 — 이 테스트가 보려는 건 잔여 한도 계산이지 잔액 이력이 아님
     private void persistLegacyCompletedTodoRewardedWith(int rewardAmount) {
         Long todoId = todoService.create(userId,
-                new TodoCreateRequest("이전 정책 투두", null, null, TODAY, null)).id();
+                new TodoCreateRequest("이전 정책 투두", null, null, TODAY, null, null, null)).id();
         Todo todo = todoRepository.findById(todoId).orElseThrow();
         todo.complete(CurrencyType.COIN, rewardAmount, Instant.now());
         todoRepository.saveAndFlush(todo);
