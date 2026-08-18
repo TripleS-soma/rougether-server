@@ -33,6 +33,10 @@ import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.service.RoutineLogService;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.routine.similarity.dto.SimilarItem;
+import com.triples.rougether.userapi.routine.similarity.dto.SimilarityRequest;
+import com.triples.rougether.userapi.routine.similarity.dto.SimilarityResponse;
+import com.triples.rougether.userapi.routine.similarity.service.RoutineSimilarityService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -57,6 +61,8 @@ class RoutineControllerTest {
     private RoutineService routineService;
     @MockitoBean
     private RoutineLogService routineLogService;
+    @MockitoBean
+    private RoutineSimilarityService routineSimilarityService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
     // JwtAuthenticationFilter가 슬라이스에 로드되며 요구함.
@@ -316,5 +322,120 @@ class RoutineControllerTest {
         mockMvc.perform(delete("/api/v1/routines/7/logs").param("date", "2026-06-28"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("LOG_NOT_CANCELABLE"));
+    }
+
+    // --- 유사 루틴·투두 비교 (#303) ---
+
+    @Test
+    void 유사도_비교는_요청_순서대로_후보와_embeddingApplied를_응답한다() throws Exception {
+        when(routineSimilarityService.compare(eq(1L), any(SimilarityRequest.class)))
+                .thenReturn(new SimilarityResponse(true, List.of(
+                        new SimilarityResponse.Item(LocalDate.of(2026, 8, 20), "PT", true, List.of(
+                                new SimilarItem(SimilarItem.Kind.ROUTINE, 12L, "헬스", 0.83, SimilarItem.MatchType.EMBEDDING))),
+                        new SimilarityResponse.Item(LocalDate.of(2026, 8, 21), "치과", false, List.of()))));
+
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"date\":\"2026-08-20\",\"title\":\"PT\"},"
+                                + "{\"date\":\"2026-08-21\",\"title\":\"치과\"}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.embeddingApplied").value(true))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].date").value("2026-08-20"))
+                .andExpect(jsonPath("$.items[0].hasSimilar").value(true))
+                .andExpect(jsonPath("$.items[0].similar[0].kind").value("ROUTINE"))
+                .andExpect(jsonPath("$.items[0].similar[0].id").value(12))
+                .andExpect(jsonPath("$.items[0].similar[0].title").value("헬스"))
+                .andExpect(jsonPath("$.items[0].similar[0].score").value(0.83))
+                .andExpect(jsonPath("$.items[0].similar[0].matchType").value("EMBEDDING"))
+                .andExpect(jsonPath("$.items[1].hasSimilar").value(false))
+                .andExpect(jsonPath("$.items[1].similar.length()").value(0));
+
+        ArgumentCaptor<SimilarityRequest> captor = ArgumentCaptor.forClass(SimilarityRequest.class);
+        verify(routineSimilarityService).compare(eq(1L), captor.capture());
+        assertThat(captor.getValue().items()).hasSize(2);
+        assertThat(captor.getValue().items().get(0).title()).isEqualTo("PT");
+    }
+
+    @Test
+    void 유사도_비교_items가_비면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("items"));
+    }
+
+    @Test
+    void 유사도_비교_items가_201개면_400과_VALIDATION_FAILED() throws Exception {
+        StringBuilder body = new StringBuilder("{\"items\":[");
+        for (int i = 0; i < 201; i++) {
+            if (i > 0) {
+                body.append(',');
+            }
+            body.append("{\"date\":\"2026-08-20\",\"title\":\"t").append(i).append("\"}");
+        }
+        body.append("]}");
+
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("items"));
+    }
+
+    @Test
+    void 유사도_비교_title이_161자면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"date\":\"2026-08-20\",\"title\":\"" + "가".repeat(161) + "\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("items[0].title"));
+    }
+
+    @Test
+    void 유사도_비교_title_길이는_trim_기준이라_공백_포함_162자여도_trim_후_158자면_통과한다() throws Exception {
+        when(routineSimilarityService.compare(eq(1L), any(SimilarityRequest.class)))
+                .thenReturn(new SimilarityResponse(true, List.of()));
+
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"date\":\"2026-08-20\",\"title\":\"  " + "가".repeat(158) + "  \"}]}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<SimilarityRequest> captor = ArgumentCaptor.forClass(SimilarityRequest.class);
+        verify(routineSimilarityService).compare(eq(1L), captor.capture());
+        assertThat(captor.getValue().items().get(0).title()).hasSize(158);
+    }
+
+    @Test
+    void 유사도_비교_title이_공백뿐이면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"date\":\"2026-08-20\",\"title\":\"   \"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("items[0].title"));
+    }
+
+    @Test
+    void 유사도_비교_date_형식이_틀리면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"date\":\"2026-8-20\",\"title\":\"PT\"}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 유사도_비교_date가_없으면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines/similarity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"title\":\"PT\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("items[0].date"));
     }
 }
