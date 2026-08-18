@@ -46,7 +46,8 @@ class OpenAiCompatibleLlmClientTest {
 
     private OpenAiCompatibleLlmClient clientWith(RestClient.Builder builder, boolean jsonMode) {
         LlmProperties properties = new LlmProperties(BASE_URL, "gpt-5.6-luna", "sk-test",
-                Duration.ofSeconds(30), null, 800, jsonMode, "low", 2, Duration.ofSeconds(1));
+                Duration.ofSeconds(30), null, 800, jsonMode, "low", 2, Duration.ofSeconds(1),
+                "text-embedding-3-small", 512);
         return new OpenAiCompatibleLlmClient(builder.baseUrl(BASE_URL).build(), properties, sleeps::add);
     }
 
