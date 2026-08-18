@@ -5,6 +5,7 @@ import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.support.DailyCount;
 import com.triples.rougether.domain.support.UserMetricCount;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -106,6 +107,21 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("statuses") Collection<RoutineLogStatus> statuses,
             @Param("afterUserId") Long afterUserId,
             Pageable pageable);
+
+    // 관리자 AI 회고 관측: 위 findUserIdsWithLogsInPeriod 와 같은 술어를 batch 실행 시점(cutoff) 기준으로 되짚어
+    // 그 주 회고 대상이었던 사용자 수를 센다. cutoff 이후에 만들어진 log, cutoff 이후에 soft-delete 된 루틴·회원은
+    // batch 가 봤던 상태 그대로 취급해야 하므로 각각 제외/포함한다. 생성 건수와 비교해 누락률의 분모로 쓴다.
+    @Query("select count(distinct r.user.id) from RoutineLog l join l.routine r join r.user u "
+            + "where l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses "
+            + "and l.createdAt < :cutoff "
+            + "and (r.deletedAt is null or r.deletedAt >= :cutoff) "
+            + "and (u.deletedAt is null or u.deletedAt >= :cutoff)")
+    long countUsersWithLogsInPeriodAsOf(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses,
+            @Param("cutoff") Instant cutoff);
 
     // 주간 회고 집계(#286): 사용자의 기간 내 COMPLETED/FAILED log를 루틴·카테고리까지 fetch. soft-deleted 루틴 제외.
     @Query("select l from RoutineLog l "
