@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 // 캘린더 임포트 미리보기용 유사 루틴·투두 판정 (#303). 저장 없음 — 힌트라서 임베딩을 못 쓰면 EXACT 만으로 응답한다(fail-open).
 // 중복 방지의 정본은 투두 externalId(#299)이고 이 결과는 "비슷한 게 있어요" 안내에만 쓴다.
@@ -54,7 +53,8 @@ public class RoutineSimilarityService {
         this.threshold = threshold;
     }
 
-    @Transactional(readOnly = true)
+    // 의도적으로 @Transactional 을 두지 않는다 — 외부 임베딩 API 호출(타임아웃·재시도 포함)이 DB 커넥션을 물고 있지 않게.
+    // 후보 조회는 repository 호출 각각의 짧은 읽기 트랜잭션으로 끝나고, 이후엔 id·title·dueDate 같은 단순 컬럼만 쓰므로 lazy 접근이 없다
     public SimilarityResponse compare(Long userId, SimilarityRequest request) {
         List<Query> queries = request.items().stream()
                 .map(item -> new Query(item.date(), item.title().trim()))
