@@ -110,6 +110,7 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
               and t.dueDate = :date
               and t.dueTime = :dueTime
               and t.deletedAt is null
+              and t.user.bot = false
               and t.id > :cursorId
               and not exists (select 1 from Notification n
                 where n.user = t.user and n.type = :notificationType and n.refId = t.id

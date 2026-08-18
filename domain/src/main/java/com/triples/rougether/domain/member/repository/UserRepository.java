@@ -27,25 +27,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
-    // 동거 봇(#307): 시드 멱등 키로 조회 / 활동 대상 봇 전체.
+    // 동거 봇(#307): 시드 멱등 키로 조회 / 활동 대상 봇 전체 / 격리 판정(#308).
     Optional<User> findByBotKey(String botKey);
 
     List<User> findAllByBotTrueAndDeletedAtIsNull();
+
+    boolean existsByIdAndBotTrue(Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
-    long countByDeletedAtIsNull();
+    // 어드민 관측 요약(#308): 동거 봇은 KPI 에서 제외한다.
+    long countByDeletedAtIsNullAndBotFalse();
 
-    long countByDeletedAtIsNullAndCreatedAtGreaterThanEqual(Instant createdAt);
+    long countByDeletedAtIsNullAndBotFalseAndCreatedAtGreaterThanEqual(Instant createdAt);
 
-    long countByDeletedAtIsNullAndLastAccessedAtGreaterThanEqual(Instant lastAccessedAt);
+    long countByDeletedAtIsNullAndBotFalseAndLastAccessedAtGreaterThanEqual(Instant lastAccessedAt);
 
-    // 온보딩 완료 계약: 목표 1개 이상 + 삭제되지 않은 대표 캐릭터 존재.
+    // 온보딩 완료 계약: 목표 1개 이상 + 삭제되지 않은 대표 캐릭터 존재. 동거 봇은 시드가 이 조건을 채우므로 제외한다.
     // 전체 유저마다 두 EXISTS를 평가하지 않고 대표 캐릭터 보유 유저에서 시작해 요약 조회 비용을 줄임.
     @Query("select count(distinct uc.user.id) from UserCharacter uc "
-            + "where uc.user.deletedAt is null "
+            + "where uc.user.deletedAt is null and uc.user.bot = false "
             + "and uc.selected = true and uc.deletedAt is null "
             + "and exists (select ug.id from UserGoal ug where ug.user = uc.user)")
     long countOnboardingCompletedUsers();
@@ -57,13 +60,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<Long> findOnboardingCompletedUserIds(@Param("userIds") Collection<Long> userIds);
 
     // 어드민 유저 관측 검색. 활동 시각은 로그인·refresh 기반이라 실시간 접속 상태가 아님.
+    // 동거 봇(#308)은 ACTIVE·WITHDRAWN·ALL 어디에도 섞이지 않고 BOT 상태로만 조회된다.
     @Query("select u from User u where "
             + "(:query is null "
             + "  or lower(u.email) like lower(concat('%', :query, '%')) "
             + "  or lower(u.nickname) like lower(concat('%', :query, '%'))) "
-            + "and (:accountStatus = 'ALL' "
-            + "  or (:accountStatus = 'ACTIVE' and u.deletedAt is null) "
-            + "  or (:accountStatus = 'WITHDRAWN' and u.deletedAt is not null)) "
+            + "and ((:accountStatus = 'ALL' and u.bot = false) "
+            + "  or (:accountStatus = 'ACTIVE' and u.deletedAt is null and u.bot = false) "
+            + "  or (:accountStatus = 'WITHDRAWN' and u.deletedAt is not null and u.bot = false) "
+            + "  or (:accountStatus = 'BOT' and u.bot = true)) "
             + "and (:neverAccessed = false or u.lastAccessedAt is null) "
             + "and (:accessedAfter is null or u.lastAccessedAt >= :accessedAfter) "
             + "and (:onboardingStatus = 'ALL' "
