@@ -182,8 +182,10 @@ if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
   printf '\nFIREBASE_CREDENTIALS_PATH=/etc/rougether/firebase-adminsdk.json\n' >> "$ENV_DIR/batch.env"
 fi
 
+# LLM API 키: batch(주간 회고)와 user-api(유사 루틴 비교 임베딩, #303) 둘 다 쓴다. 비면 각각 stub 으로 뜬다
 if [ -n "$LLM_API_KEY" ]; then
   printf '\nLLM_API_KEY=%s\n' "$LLM_API_KEY" >> "$ENV_DIR/batch.env"
+  printf '\nLLM_API_KEY=%s\n' "$LLM_API_KEY" >> "$ENV_DIR/user-api.env"
 fi
 
 chmod 600 "$ENV_DIR/user-api.env" "$ENV_DIR/admin-api.env" "$ENV_DIR/batch.env"
