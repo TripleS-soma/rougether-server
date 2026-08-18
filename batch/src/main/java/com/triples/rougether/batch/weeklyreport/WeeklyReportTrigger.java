@@ -1,11 +1,10 @@
 package com.triples.rougether.batch.weeklyreport;
 
 import com.triples.rougether.batch.dayend.DayEndCompletionChecker;
+import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.infra.llm.LlmClient;
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.temporal.TemporalAdjusters;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
@@ -77,7 +76,6 @@ public class WeeklyReportTrigger {
 
     // 오늘 기준 가장 최근에 끝난 일~토 주의 일요일. 일요일 당일이면 7일 전 일요일(오늘은 다음 주 소속).
     static LocalDate latestCompletedWeekStart(LocalDate today) {
-        LocalDate thisWeekSunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        return thisWeekSunday.minusDays(WeeklyReportJobConfig.WEEK_LENGTH_DAYS);
+        return WeeklyReportPolicy.latestCompletedWeekStart(today);
     }
 }

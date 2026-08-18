@@ -2,6 +2,7 @@ package com.triples.rougether.batch.weeklyreport;
 
 import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
@@ -33,7 +34,7 @@ class WeeklyReportJobConfig {
 
     static final String JOB_NAME = "weeklyReportJob";
     static final String WEEK_START_PARAM = "weekStart";
-    static final int WEEK_LENGTH_DAYS = 7;
+    static final int WEEK_LENGTH_DAYS = WeeklyReportPolicy.WEEK_LENGTH_DAYS;
     private static final int CHUNK_SIZE = 1;
     private static final int SKIP_LIMIT = 50;
 
@@ -91,6 +92,6 @@ class WeeklyReportJobConfig {
     }
 
     static LocalDate weekEndOf(LocalDate weekStart) {
-        return weekStart.plusDays(WEEK_LENGTH_DAYS - 1);
+        return WeeklyReportPolicy.weekEndOf(weekStart);
     }
 }
