@@ -104,3 +104,9 @@ house:
       - code: night_observatory
         name: 밤의 천문대 집
         cover-image-key: house/night-observatory/house-unified-night-observatory-frame-v3.png
+
+# 규칙 기반 동거 봇(#307). true 면 기동 시 봇 6명을 카탈로그와 동기화한다.
+# 기본 false — 격리(#308)·활동 스케줄러(#310)가 머지된 뒤 배포 환경에서 ROUGETHER_BOTS_ENABLED=true 로 켠다.
+rougether:
+  bots:
+    enabled: ${ROUGETHER_BOTS_ENABLED:false}

@@ -50,3 +50,8 @@ house:
 routine:
   similarity:
     threshold: 0.50
+
+# 동거 봇 시드(#307)는 테스트 컨텍스트에서 끈다 — BotSeederTest 가 BotSeedService 를 직접 호출해 검증한다.
+rougether:
+  bots:
+    enabled: false
