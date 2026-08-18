@@ -437,6 +437,7 @@ body {
 .observation-status--complete { color: var(--success); background: var(--success-soft); }
 .observation-status--withdrawn { color: var(--danger); background: var(--danger-soft); }
 .observation-status--incomplete { color: #a16207; background: #fefce8; }
+.observation-status--bot { color: #5b21b6; background: #f3e8ff; }
 .observation-access { min-width: 108px; color: var(--text-soft); white-space: nowrap; }
 .observation-number-cell { text-align: right; font-variant-numeric: tabular-nums; }
 .observation-number-cell--accent { color: var(--primary-strong); font-weight: 800; }

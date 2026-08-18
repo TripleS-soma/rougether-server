@@ -68,11 +68,12 @@ public class AdminUserQueryService {
     public AdminUserSummaryResponse getSummary() {
         Instant now = Instant.now();
         Instant sevenDaysAgo = now.minus(Duration.ofDays(RECENT_WINDOW_DAYS));
-        long activeUsers = userRepository.countByDeletedAtIsNull();
+        // 동거 봇(#308)은 요약 KPI 에서 제외 — 봇 목록은 accountStatus=BOT 으로 따로 본다.
+        long activeUsers = userRepository.countByDeletedAtIsNullAndBotFalse();
         return AdminUserSummaryResponse.of(
                 activeUsers,
-                userRepository.countByDeletedAtIsNullAndCreatedAtGreaterThanEqual(sevenDaysAgo),
-                userRepository.countByDeletedAtIsNullAndLastAccessedAtGreaterThanEqual(sevenDaysAgo),
+                userRepository.countByDeletedAtIsNullAndBotFalseAndCreatedAtGreaterThanEqual(sevenDaysAgo),
+                userRepository.countByDeletedAtIsNullAndBotFalseAndLastAccessedAtGreaterThanEqual(sevenDaysAgo),
                 userRepository.countOnboardingCompletedUsers(),
                 now);
     }
@@ -134,9 +135,9 @@ public class AdminUserQueryService {
                                long activeRoutineCount,
                                long activeHouseCount,
                                long recentCompletionCount) {
-        AdminUserAccountStatus accountStatus = user.isDeleted()
-                ? AdminUserAccountStatus.WITHDRAWN
-                : AdminUserAccountStatus.ACTIVE;
+        AdminUserAccountStatus accountStatus = user.isBot()
+                ? AdminUserAccountStatus.BOT
+                : user.isDeleted() ? AdminUserAccountStatus.WITHDRAWN : AdminUserAccountStatus.ACTIVE;
         return new AdminUserRow(
                 user.getId(),
                 user.getEmail(),
