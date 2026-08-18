@@ -73,6 +73,19 @@ asset:
     region: ap-northeast-2
     purge-versions-on-delete: ${ASSET_S3_PURGE_VERSIONS:false}
 
+# 캘린더 임포트 유사 루틴·투두 비교(#303). threshold 이상 코사인만 유사로 채택 — 값은 실측 후 조정(설정만 바꾸면 됨)
+routine:
+  similarity:
+    threshold: ${ROUTINE_SIMILARITY_THRESHOLD:0.75}
+
+# OpenAI 호환 LLM/임베딩(infra:llm). api-key 가 비면 stub 이 떠서 유사도 API 는 정규화 일치만으로 동작(fail-open)
+llm:
+  base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  api-key: ${LLM_API_KEY:}
+  timeout: ${LLM_TIMEOUT:30s}
+  embedding-model: ${LLM_EMBEDDING_MODEL:text-embedding-3-small}
+  embedding-dimensions: ${LLM_EMBEDDING_DIMENSIONS:512}
+
 # 사용자에게 노출할 게시 승인 집 커버 manifest. S3 house/ 전체 목록과 분리함.
 house:
   cover-images:

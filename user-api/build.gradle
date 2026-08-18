@@ -12,6 +12,7 @@ dependencies {
 	implementation project(':common')
 	implementation project(':domain')
 	implementation project(':infra:fcm')
+	implementation project(':infra:llm')
 
 	implementation 'software.amazon.awssdk:s3'
 

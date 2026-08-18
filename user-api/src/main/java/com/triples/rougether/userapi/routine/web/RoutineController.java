@@ -12,6 +12,9 @@ import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.dto.StreakSummaryResponse;
 import com.triples.rougether.userapi.routine.service.RoutineLogService;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.routine.similarity.dto.SimilarityRequest;
+import com.triples.rougether.userapi.routine.similarity.dto.SimilarityResponse;
+import com.triples.rougether.userapi.routine.similarity.service.RoutineSimilarityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,6 +42,7 @@ public class RoutineController {
 
     private final RoutineService routineService;
     private final RoutineLogService routineLogService;
+    private final RoutineSimilarityService routineSimilarityService;
 
     @Operation(summary = "내 루틴 목록 조회",
             description = "로그인한 회원이 소유한 루틴을 반환합니다. categoryId·status로 필터링할 수 있습니다. "
@@ -142,5 +146,18 @@ public class RoutineController {
             @Parameter(description = "취소할 완료의 날짜(YYYY-MM-DD). 화면에서 보고 있는 날짜를 그대로 전달. 오늘(KST 기준) 이전 날짜만 사용")
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return routineLogService.cancel(authUser.id(), id, date);
+    }
+
+    @Operation(summary = "유사 루틴·투두 비교(캘린더 임포트 힌트)",
+            description = "날짜·제목 목록(1~200개)을 받아 각 항목마다 그 날짜에 수행 예정인 내 루틴과 마감인 내 투두 중 제목이 유사한 것을 "
+                    + "score 내림차순 최대 3개까지 돌려줍니다. 기기 캘린더 일정을 가져오기 전에 \"비슷한 게 이미 있어요\" 힌트를 보여주는 "
+                    + "용도이며 아무것도 저장하지 않습니다. 정규화 제목(공백·대소문자·전각 차이 무시)이 같으면 EXACT(score 1.0), "
+                    + "그렇지 않으면 임베딩 코사인 유사도가 임계값 이상일 때 EMBEDDING으로 판정합니다. "
+                    + "임베딩을 쓸 수 없는 환경(키 미설정·외부 API 장애)에서는 embeddingApplied=false와 함께 EXACT 결과만 돌려주므로 "
+                    + "임포트 흐름은 계속 진행할 수 있습니다. 응답 items는 요청 순서를 유지합니다.")
+    @PostMapping("/similarity")
+    public SimilarityResponse similarity(@CurrentUser AuthUser authUser,
+                                         @Valid @RequestBody SimilarityRequest request) {
+        return routineSimilarityService.compare(authUser.id(), request);
     }
 }
