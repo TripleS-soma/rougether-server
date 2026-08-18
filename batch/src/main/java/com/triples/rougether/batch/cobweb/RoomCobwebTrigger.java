@@ -25,6 +25,7 @@ public class RoomCobwebTrigger {
 
     @Transactional
     @Scheduled(cron = "0 30 12 * * *", zone = "Asia/Seoul")
+    // 동거 봇(#308)은 로그인하지 않아 last_accessed_at 이 오르지 않으므로 대상에서 제외한다 — 봇 방엔 거미줄이 안 생긴다.
     public void activateDueCobwebs() {
         Instant now = Instant.now();
         Timestamp cutoff = Timestamp.from(now.minus(INACTIVITY_GRACE));
@@ -34,6 +35,7 @@ public class RoomCobwebTrigger {
                 FROM personal_rooms r
                 JOIN users u ON u.id = r.user_id
                 WHERE u.deleted_at IS NULL
+                  AND u.is_bot = FALSE
                   AND COALESCE(u.last_accessed_at, u.created_at) <= ?
                   AND NOT EXISTS (SELECT 1 FROM room_cobwebs c WHERE c.room_user_id = r.user_id)
                 """, Timestamp.from(now), Timestamp.from(now), cutoff);
@@ -43,6 +45,7 @@ public class RoomCobwebTrigger {
                 JOIN users u ON u.id = c.room_user_id
                 SET c.appeared_at = ?, c.cleaned_at = NULL, c.cleaned_by_user_id = NULL, c.updated_at = ?
                 WHERE u.deleted_at IS NULL
+                  AND u.is_bot = FALSE
                   AND c.cleaned_at IS NOT NULL
                   AND GREATEST(COALESCE(u.last_accessed_at, u.created_at), c.cleaned_at) <= ?
                 """, Timestamp.from(now), Timestamp.from(now), cutoff);

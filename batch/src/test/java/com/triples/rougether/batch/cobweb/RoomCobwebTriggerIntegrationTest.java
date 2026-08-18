@@ -58,12 +58,32 @@ class RoomCobwebTriggerIntegrationTest {
         assertThat(appearedAt(cleanedInactive)).isAfter(now.minusSeconds(5));
     }
 
+    @Test
+    void 동거_봇의_방에는_미접속이어도_거미줄이_생기거나_재발생하지_않는다() {
+        Instant now = Instant.now();
+        Long botNever = insertUserAndRoom(now.minus(Duration.ofDays(30)), true);
+        Long botCleaned = insertUserAndRoom(now.minus(Duration.ofDays(30)), true);
+        Long human = insertUserAndRoom(now.minus(Duration.ofDays(3)), false);
+        insertCobweb(botCleaned, now.minus(Duration.ofDays(10)), now.minus(Duration.ofDays(9)));
+
+        trigger.activateDueCobwebs();
+
+        assertThat(activeCobwebCount(botNever)).isZero();
+        assertThat(activeCobwebCount(botCleaned)).isZero();
+        assertThat(activeCobwebCount(human)).isEqualTo(1);
+    }
+
     private Long insertUserAndRoom(Instant lastAccessedAt) {
+        return insertUserAndRoom(lastAccessedAt, false);
+    }
+
+    private Long insertUserAndRoom(Instant lastAccessedAt, boolean bot) {
         Instant createdAt = lastAccessedAt.minus(Duration.ofDays(1));
         jdbcTemplate.update("""
-                INSERT INTO users (nickname, last_accessed_at, created_at, updated_at)
-                VALUES ('거미줄 테스트', ?, ?, ?)
-                """, timestamp(lastAccessedAt), timestamp(createdAt), timestamp(createdAt));
+                INSERT INTO users (nickname, last_accessed_at, created_at, updated_at, is_bot, bot_key)
+                VALUES ('거미줄 테스트', ?, ?, ?, ?, ?)
+                """, timestamp(lastAccessedAt), timestamp(createdAt), timestamp(createdAt),
+                bot, bot ? "cobweb-test-bot-" + System.nanoTime() : null);
         Long userId = jdbcTemplate.queryForObject("SELECT MAX(id) FROM users", Long.class);
         userIds.add(userId);
         jdbcTemplate.update(
