@@ -286,8 +286,9 @@ GitHub variable `WEBEX_ROOM_ID`를 함께 맞춥니다.
 
 batch의 AI 주간 회고(`weeklyReportJob`)는 OpenAI 호환 chat/completions API를 호출합니다. API 키는 Terraform state나
 저장소에 넣지 않고 `/${project_name}-${environment}/llm/api-key` SecureString으로만 관리합니다.
-EC2 role은 이 parameter만 읽고, user-data가 최초 부트스트랩 때 `/etc/rougether/batch.env`의 `LLM_API_KEY`로 쓰며,
-이후 GitHub Actions 배포가 매번 SecureString을 다시 읽어 같은 파일에 원자적으로 반영합니다(`refresh_llm_env`).
+EC2 role은 이 parameter만 읽고, user-data가 최초 부트스트랩 때 `/etc/rougether/batch.env`와 `/etc/rougether/user-api.env`의
+`LLM_API_KEY`로 쓰며(batch는 주간 회고, user-api는 유사 루틴 비교 임베딩), 이후 GitHub Actions 배포가 매번 SecureString을
+다시 읽어 같은 파일들에 원자적으로 반영합니다(`refresh_llm_env`).
 키가 없거나 형식이 이상하면 기존 값을 유지하고, 끝내 비어 있으면 batch는 LLM stub으로 기동해 **주간 회고 생성만
 보류**합니다(다른 배치는 영향 없음, 가짜 회고는 저장되지 않음).
 

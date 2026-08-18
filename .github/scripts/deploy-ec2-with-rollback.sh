@@ -401,13 +401,15 @@ bootstrap_batch_runtime_env() {
   echo "bootstrapped $BATCH_RUNTIME_ENV from $source_env"
 }
 
-# 주간 회고 LLM API 키를 SSM 에서 매 배포 재조회해 batch.env 에 반영한다(user-api 의 refresh_social_auth_env 와 동일 규칙).
-# SSM 에 없거나 형식이 이상하면 기존 값을 유지한다 — 키가 끝내 비면 batch 는 LLM stub 으로 뜨고 회고 생성만 보류된다.
+# LLM API 키를 SSM 에서 매 배포 재조회해 지정한 runtime env 파일에 반영한다(refresh_social_auth_env 와 동일 규칙).
+# batch(주간 회고)와 user-api(유사 루틴 비교 임베딩, #303)가 같은 키를 쓴다. SSM 에 없거나 형식이 이상하면 기존 값을
+# 유지한다 — 키가 끝내 비면 해당 서비스는 LLM stub 으로 뜨고 회고 생성 보류·유사도는 정규화 일치만으로 동작한다.
 refresh_llm_env() {
+  local target_env="$1"
   local key_file temporary_env
 
-  if [ ! -f "$BATCH_RUNTIME_ENV" ]; then
-    echo "missing batch runtime env: $BATCH_RUNTIME_ENV" >&2
+  if [ ! -f "$target_env" ]; then
+    echo "missing runtime env: $target_env" >&2
     return 1
   fi
 
@@ -419,11 +421,11 @@ refresh_llm_env() {
     return 0
   fi
 
-  temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"
-  awk '!/^LLM_API_KEY=/' "$BATCH_RUNTIME_ENV" > "$temporary_env"
+  temporary_env="$(mktemp "$ENV_DIR/.llm-env.XXXXXX")"
+  awk '!/^LLM_API_KEY=/' "$target_env" > "$temporary_env"
   printf '\nLLM_API_KEY=%s\n' "$(tr -d '\r\n' < "$key_file")" >> "$temporary_env"
   chmod 600 "$temporary_env"
-  mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"
+  mv -f "$temporary_env" "$target_env"
   rm -f "$key_file"
 }
 
@@ -794,6 +796,7 @@ fi
 refresh_social_auth_env
 refresh_webex_alert_env
 refresh_admin_origin_secret_env
+refresh_llm_env "$USER_RUNTIME_ENV"
 
 trap rollback ERR
 
@@ -811,7 +814,7 @@ wait_health user-api http://127.0.0.1:8080/api/v1/health
 wait_health admin-api http://127.0.0.1:8081/admin/health
 
 ensure_batch_runtime_env
-refresh_llm_env
+refresh_llm_env "$BATCH_RUNTIME_ENV"
 systemctl restart rougether-batch
 wait_health batch http://127.0.0.1:8082/actuator/health
 
