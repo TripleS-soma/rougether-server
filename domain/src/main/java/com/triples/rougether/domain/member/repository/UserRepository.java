@@ -27,6 +27,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
+    // 동거 봇(#307): 시드 멱등 키로 조회 / 활동 대상 봇 전체.
+    Optional<User> findByBotKey(String botKey);
+
+    List<User> findAllByBotTrueAndDeletedAtIsNull();
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
