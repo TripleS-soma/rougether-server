@@ -136,9 +136,10 @@ class BotSeederTest {
             assertThat(placements).hasSize(Math.min(items.size(), BotRoomPreset.SLOT_COUNT));
         }
 
-        // 봇도 온보딩 완료 계약(목표 1개 + 대표 캐릭터)을 충족한다 — 관측 카운트 제외는 #308 몫.
-        assertThat(userRepository.countOnboardingCompletedUsers())
-                .isEqualTo(onboardingCompletedBefore + BotProfileCatalog.BOT_COUNT);
+        // 봇도 온보딩 완료 계약(목표 1개 + 대표 캐릭터)을 충족하지만, 관측 카운트(#308)에서는 제외된다.
+        assertThat(userRepository.countOnboardingCompletedUsers()).isEqualTo(onboardingCompletedBefore);
+        assertThat(userRepository.findOnboardingCompletedUserIds(bots.stream().map(User::getId).toList()))
+                .hasSize(BotProfileCatalog.BOT_COUNT);
     }
 
     @Test
