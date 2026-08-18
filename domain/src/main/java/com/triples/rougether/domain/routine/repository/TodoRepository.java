@@ -58,6 +58,18 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                     @Param("status") TodoStatus status,
                                     @Param("dueDate") LocalDate dueDate);
 
+    // 유사도 비교 후보용: 기간 내 마감일이 있는 살아있는 투두 전체(status 무관). 날짜별 그룹핑은 호출자가 한다
+    @Query("""
+            select t from Todo t
+            where t.user.id = :userId
+              and t.deletedAt is null
+              and t.dueDate between :fromDate and :toDate
+            order by t.dueDate asc, t.id asc
+            """)
+    List<Todo> findOwnedByDueDateBetween(@Param("userId") Long userId,
+                                         @Param("fromDate") LocalDate fromDate,
+                                         @Param("toDate") LocalDate toDate);
+
     // 월 캘린더용: 기간 내 마감일별 살아있는 투두 건수. 소싱 규칙은 findOwnedWithFilters(dueDate)와 동일(마감일 없는 투두 제외)
     @Query("""
             select t.dueDate as targetDate, count(t.id) as itemCount from Todo t
