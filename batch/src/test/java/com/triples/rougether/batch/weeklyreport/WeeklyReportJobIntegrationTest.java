@@ -95,7 +95,7 @@ class WeeklyReportJobIntegrationTest {
         @Bean
         LlmProperties llmProperties() {
             return new LlmProperties("http://llm.test/v1", "test-model", "", Duration.ofSeconds(5), null, 800,
-                    true, "low", 0, Duration.ofMillis(1));
+                    true, "low", 0, Duration.ofMillis(1), "text-embedding-3-small", 512);
         }
 
         @Bean
