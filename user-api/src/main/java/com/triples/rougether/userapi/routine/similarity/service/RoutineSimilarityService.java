@@ -41,12 +41,12 @@ public class RoutineSimilarityService {
     private final TodoRepository todoRepository;
     private final DailyAgendaAssembler agendaAssembler;
     private final EmbeddingClient embeddingClient;
-    // 코사인 유사도가 이 값 이상이면 유사로 채택. 실측 후 설정으로 조정
+    // 코사인 유사도가 이 값 이상이면 유사로 채택(기본 0.50 — large/1024 실측값, application.yml 주석 참고)
     private final double threshold;
 
     public RoutineSimilarityService(RoutineRepository routineRepository, TodoRepository todoRepository,
                                     DailyAgendaAssembler agendaAssembler, EmbeddingClient embeddingClient,
-                                    @Value("${routine.similarity.threshold:0.75}") double threshold) {
+                                    @Value("${routine.similarity.threshold:0.50}") double threshold) {
         this.routineRepository = routineRepository;
         this.todoRepository = todoRepository;
         this.agendaAssembler = agendaAssembler;

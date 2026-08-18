@@ -49,4 +49,4 @@ house:
 # 유사 루틴 비교(#303) — 통합테스트는 fake EmbeddingClient 를 직접 주입하므로 llm.api-key 는 비워 두어 stub 이 뜬다
 routine:
   similarity:
-    threshold: 0.75
+    threshold: 0.50
