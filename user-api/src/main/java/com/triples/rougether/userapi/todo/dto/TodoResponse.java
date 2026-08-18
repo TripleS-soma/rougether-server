@@ -24,7 +24,11 @@ public record TodoResponse(
         @Schema(description = "투두 상태. 허용값: PENDING(대기), COMPLETED(완료)", example = "PENDING")
         TodoStatus status,
         @Schema(description = "완료 시각(ISO-8601, 미완료면 null)", example = "2026-06-30T07:00:00Z")
-        Instant completedAt
+        Instant completedAt,
+        @Schema(description = "기기 캘린더 임포트 출처(예 GOOGLE_CALENDAR). 일반 투두는 null", example = "GOOGLE_CALENDAR")
+        String externalSource,
+        @Schema(description = "임포트한 캘린더 이벤트 id. 일반 투두는 null", example = "abc123def456@google.com")
+        String externalId
 ) {
 
     public static TodoResponse from(Todo todo) {
@@ -37,7 +41,9 @@ public record TodoResponse(
                 todo.getDueDate(),
                 todo.getDueTime(),
                 todo.getStatus(),
-                todo.getCompletedAt()
+                todo.getCompletedAt(),
+                todo.getExternalSource(),
+                todo.getExternalId()
         );
     }
 }

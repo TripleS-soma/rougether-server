@@ -127,7 +127,7 @@ class WalletHistoryRecordIntegrationTest {
     @Test
     void 투두_완료는_TODO_COMPLETE_이력을_남기고_취소하면_지운다() {
         Long todoId = todoService.create(userId,
-                new TodoCreateRequest("장보기", null, null, TODAY, null)).id();
+                new TodoCreateRequest("장보기", null, null, TODAY, null, null, null)).id();
 
         todoService.complete(userId, todoId);
 
