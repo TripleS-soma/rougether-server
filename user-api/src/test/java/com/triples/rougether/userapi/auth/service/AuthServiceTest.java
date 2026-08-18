@@ -129,6 +129,21 @@ class AuthServiceTest {
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 
+    @Test
+    void 봇_계정_userId_는_BOT_LOGIN_NOT_ALLOWED_로_거부한다() {
+        User bot = User.bot("bot-dawn", "새벽이", "아침형 봇");
+        ReflectionTestUtils.setField(bot, "id", 8L);
+        when(userRepository.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(bot));
+
+        assertThatThrownBy(() -> authService.devLogin(8L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.BOT_LOGIN_NOT_ALLOWED);
+        assertThat(bot.getLastAccessedAt()).isNull();
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verify(tokenService, never()).issueAccessToken(any(), any());
+    }
+
     private void stubTokenIssue() {
         when(tokenService.issueAccessToken(any(), any())).thenReturn("access-token");
         when(tokenService.generateRefreshToken())
