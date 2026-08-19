@@ -20,6 +20,8 @@ env:
   ECR_REPOSITORY_PREFIX: rougether-dev
   IMAGE_TAG: dev
   DEPLOYMENT_ENVIRONMENT: dev
+  # 동거 봇(#307~#310) 활성 — dev 는 기본 true. 끄려면 repo variable ROUGETHER_BOTS_ENABLED=false
+  ROUGETHER_BOTS_ENABLED: ${{ vars.ROUGETHER_BOTS_ENABLED || 'true' }}
   FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
   ADMIN_ORIGIN_SECRET_PARAMETER: /rougether-dev/admin/origin-secret
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
@@ -224,6 +226,7 @@ jobs:
               -e "s|__LLM_API_KEY_PARAMETER_NAME__|${LLM_API_KEY_PARAMETER}|g" \
               -e "s|__WEBEX_ROOM_ID__|${WEBEX_ROOM_ID}|g" \
               -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
+              -e "s|__BOTS_ENABLED__|${ROUGETHER_BOTS_ENABLED}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
           script="$(printf "bash -se <<'ROUGETHER_DEPLOY_SCRIPT'\n%s\nROUGETHER_DEPLOY_SCRIPT\n" "$deploy_script")"

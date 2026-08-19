@@ -18,6 +18,8 @@ APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="__APPLE_REFRESH_TOKEN_ENC_KEY_PARAME
 LLM_API_KEY_PARAMETER_NAME="__LLM_API_KEY_PARAMETER_NAME__"
 WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 ENVIRONMENT="__ENVIRONMENT__"
+# 동거 봇(#307~#310) 활성 여부 — user-api.env 의 ROUGETHER_BOTS_ENABLED 로 내려간다(워크플로우 vars.ROUGETHER_BOTS_ENABLED, dev 기본 true)
+BOTS_ENABLED="__BOTS_ENABLED__"
 
 ENV_DIR="/etc/rougether"
 SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -360,6 +362,27 @@ refresh_webex_alert_env() {
   chmod 600 "$temporary_env"
   mv -f "$temporary_env" "$USER_RUNTIME_ENV"
   rm -f "$token_file"
+}
+
+# 동거 봇 활성 플래그를 매 배포 user-api.env 에 반영한다(멱등). 값이 true/false 가 아니면 기존 값을 유지한다 —
+# 봇은 기동 시드(BotSeeder)·활동 스케줄러가 이 플래그로 켜지므로 user-api 재기동 전에 써야 한다.
+refresh_bots_env() {
+  local temporary_env
+
+  if [ ! -f "$USER_RUNTIME_ENV" ]; then
+    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+  case "$BOTS_ENABLED" in
+    true|false) ;;
+    *) echo "ROUGETHER_BOTS_ENABLED value '$BOTS_ENABLED' is not true/false; keeping the current runtime value" >&2; return 0 ;;
+  esac
+
+  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
+  awk '!/^ROUGETHER_BOTS_ENABLED=/' "$USER_RUNTIME_ENV" > "$temporary_env"
+  printf '\nROUGETHER_BOTS_ENABLED=%s\n' "$BOTS_ENABLED" >> "$temporary_env"
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$USER_RUNTIME_ENV"
 }
 
 bootstrap_batch_runtime_env() {
@@ -797,6 +820,7 @@ refresh_social_auth_env
 refresh_webex_alert_env
 refresh_admin_origin_secret_env
 refresh_llm_env "$USER_RUNTIME_ENV"
+refresh_bots_env
 
 trap rollback ERR
 

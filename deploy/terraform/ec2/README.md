@@ -292,6 +292,10 @@ EC2 role은 이 parameter만 읽고, user-data가 최초 부트스트랩 때 `/e
 키가 없거나 형식이 이상하면 기존 값을 유지하고, 끝내 비어 있으면 batch는 LLM stub으로 기동해 **주간 회고 생성만
 보류**합니다(다른 배치는 영향 없음, 가짜 회고는 저장되지 않음).
 
+### 동거 봇 활성 (ROUGETHER_BOTS_ENABLED)
+
+동거 봇(#307~#310)은 user-api 의 `ROUGETHER_BOTS_ENABLED` 로 켭니다. GitHub Actions 배포가 매 배포 repo variable `ROUGETHER_BOTS_ENABLED`(미설정 시 dev 기본 `true`)를 `/etc/rougether/user-api.env` 에 반영하고(`refresh_bots_env`), 켜진 채 기동하면 `BotSeeder` 가 카탈로그 봇 6명을 시드하고 활동 스케줄러가 돕니다. 끄려면 variable 을 `false` 로 두고 다시 배포합니다(이미 만들어진 봇 계정은 남고 활동만 멈춤).
+
 키 등록은 운영자가 직접 합니다(값을 CI나 저장소에 두지 않습니다).
 
 ```bash
