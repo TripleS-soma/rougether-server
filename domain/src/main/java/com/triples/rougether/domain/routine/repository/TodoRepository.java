@@ -5,6 +5,7 @@ import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.support.DailyCount;
+import com.triples.rougether.domain.support.UserLatestInstant;
 import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -147,4 +148,13 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             @Param("userIds") Collection<Long> userIds,
             @Param("status") TodoStatus status,
             @Param("completedAfter") Instant completedAfter);
+
+    // 동거 봇 응원(#310): 사용자별 최근 투두 완료 시각(since 이후).
+    @Query("select t.user.id as userId, max(t.completedAt) as latestAt from Todo t "
+            + "where t.user.id in :userIds and t.status = :status and t.completedAt >= :since "
+            + "group by t.user.id")
+    List<UserLatestInstant> findLatestCompletedAtByUserIdsSince(
+            @Param("userIds") Collection<Long> userIds,
+            @Param("status") TodoStatus status,
+            @Param("since") Instant since);
 }
