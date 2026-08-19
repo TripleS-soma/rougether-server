@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
@@ -146,17 +147,15 @@ class HouseCommandServiceTest {
     }
 
     @Test
-    void 온보딩_기본_집은_고정_초깃값과_게시된_첫_커버를_사용한다() {
+    void 가입_기본_집은_고정_초깃값과_게시된_첫_커버를_쓰고_목표는_비워_둔다() {
         User owner = mock(User.class);
-        Goal goal1 = goal(1L);
-        Goal goal2 = goal(2L);
         when(houseCoverImageCatalog.items()).thenReturn(List.of(
                 new PublishedCoverImage("cloud_balloon", "구름 풍선 집", "house/cloud.png"),
                 new PublishedCoverImage("forest", "숲 집", "house/forest.png")));
         when(inviteCodeGenerator.generate()).thenReturn("START234");
         when(houseRepository.save(any(House.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        houseCommandService.createOnboardingStarterHouse(owner, List.of(goal1, goal2));
+        houseCommandService.createStarterHouse(owner);
 
         ArgumentCaptor<House> houseCaptor = ArgumentCaptor.forClass(House.class);
         verify(houseRepository).save(houseCaptor.capture());
@@ -171,8 +170,51 @@ class HouseCommandServiceTest {
         verify(houseMemberRepository).save(memberCaptor.capture());
         assertThat(memberCaptor.getValue().getRole()).isEqualTo(HouseMemberRole.OWNER);
 
+        // 가입 시점엔 목표가 없다 — house_goals 는 비어 있어야 함(PUT /onboarding/goals 가 채움)
         ArgumentCaptor<List<HouseGoal>> goalsCaptor = ArgumentCaptor.forClass(List.class);
         verify(houseGoalRepository).saveAll(goalsCaptor.capture());
-        assertThat(goalsCaptor.getValue()).extracting(HouseGoal::getGoal).containsExactly(goal1, goal2);
+        assertThat(goalsCaptor.getValue()).isEmpty();
+        verify(botResidencyService).joinStarterHouse(saved);
+    }
+
+    @Test
+    void 기본_집_목표_채움은_OWNER이고_목표가_비어_있는_집에만_최대_3개를_넣는다() {
+        Goal g1 = goal(1L);
+        Goal g2 = goal(2L);
+        Goal g3 = goal(3L);
+        Goal g4 = goal(4L);
+        House starter = mock(House.class);
+        when(starter.getId()).thenReturn(10L);
+        House filled = mock(House.class);
+        when(filled.getId()).thenReturn(11L);
+        House joinedOnly = mock(House.class);
+        HouseMember ownerOfStarter = mock(HouseMember.class);
+        when(ownerOfStarter.isOwner()).thenReturn(true);
+        when(ownerOfStarter.getHouse()).thenReturn(starter);
+        HouseMember ownerOfFilled = mock(HouseMember.class);
+        when(ownerOfFilled.isOwner()).thenReturn(true);
+        when(ownerOfFilled.getHouse()).thenReturn(filled);
+        HouseMember memberOnly = mock(HouseMember.class);
+        when(memberOnly.isOwner()).thenReturn(false);
+        when(houseMemberRepository.findByUserIdAndStatusWithHouse(7L, HouseMemberStatus.ACTIVE))
+                .thenReturn(List.of(ownerOfStarter, ownerOfFilled, memberOnly));
+        when(houseGoalRepository.existsByHouseId(10L)).thenReturn(false);
+        when(houseGoalRepository.existsByHouseId(11L)).thenReturn(true);
+
+        houseCommandService.fillStarterHouseGoals(7L, List.of(g1, g2, g2, g3, g4));
+
+        ArgumentCaptor<List<HouseGoal>> goalsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(houseGoalRepository, times(1)).saveAll(goalsCaptor.capture());
+        assertThat(goalsCaptor.getValue()).extracting(HouseGoal::getGoal).containsExactly(g1, g2, g3);
+        assertThat(goalsCaptor.getValue()).allSatisfy(hg -> assertThat(hg.getHouse()).isSameAs(starter));
+        verify(joinedOnly, never()).getId();
+    }
+
+    @Test
+    void 기본_집_목표_채움은_목표가_비어_있으면_아무것도_하지_않는다() {
+        houseCommandService.fillStarterHouseGoals(7L, List.of());
+
+        verify(houseMemberRepository, never()).findByUserIdAndStatusWithHouse(any(), any());
+        verify(houseGoalRepository, never()).saveAll(any());
     }
 }

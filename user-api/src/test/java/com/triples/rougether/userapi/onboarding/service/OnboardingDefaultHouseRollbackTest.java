@@ -6,9 +6,10 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
-import com.triples.rougether.domain.character.entity.Character;
-import com.triples.rougether.domain.character.repository.CharacterRepository;
-import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.goal.repository.UserGoalRepository;
+import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.userapi.auth.service.SignupService;
 import com.triples.rougether.domain.goal.entity.Goal;
 import com.triples.rougether.domain.goal.repository.GoalRepository;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
@@ -33,8 +34,8 @@ class OnboardingDefaultHouseRollbackTest {
     @Autowired private OnboardingCommandService onboardingCommandService;
     @Autowired private UserRepository userRepository;
     @Autowired private GoalRepository goalRepository;
-    @Autowired private CharacterRepository characterRepository;
-    @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private UserGoalRepository userGoalRepository;
+    @Autowired private SignupService signupService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
@@ -43,7 +44,6 @@ class OnboardingDefaultHouseRollbackTest {
 
     private Long userId;
     private Long goalId;
-    private Long characterId;
 
     @AfterEach
     void cleanUp() {
@@ -55,35 +55,33 @@ class OnboardingDefaultHouseRollbackTest {
             jdbcTemplate.update("DELETE FROM house WHERE owner_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_goals WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM wallet_histories WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
-        }
-        if (characterId != null) {
-            jdbcTemplate.update("DELETE FROM characters WHERE id = ?", characterId);
         }
         if (goalId != null) {
             jdbcTemplate.update("DELETE FROM goals WHERE id = ?", goalId);
         }
     }
 
+    // #322: 집은 가입 때 이미 있으므로, 온보딩 목표 저장과 집 목표 채움이 한 트랜잭션임을 본다
     @Test
-    void 기본_집_생성이_실패하면_완료를_만든_캐릭터_선택도_롤백된다() {
-        userId = userRepository.save(User.signUp()).getId();
+    void 기본_집_목표_채움이_실패하면_목표_저장도_롤백된다() {
+        userId = signupService.register(null).getId();
         goalId = goalRepository.save(goal()).getId();
-        characterId = characterRepository.save(
-                new Character("rollback", "롤백", "characters/rollback.png", 1, true)).getId();
-        onboardingCommandService.replaceGoals(
-                userId, new OnboardingGoalsRequest(List.of(goalId), goalId));
+        House starter = houseMemberRepository.findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE)
+                .getFirst().getHouse();
         doThrow(new RuntimeException("기본 집 목표 저장 실패"))
                 .when(houseGoalRepository).saveAll(anyList());
 
-        assertThatThrownBy(() -> onboardingCommandService.selectCharacter(userId, characterId))
+        assertThatThrownBy(() -> onboardingCommandService.replaceGoals(
+                userId, new OnboardingGoalsRequest(List.of(goalId), goalId)))
                 .isInstanceOf(RuntimeException.class);
 
-        assertThat(userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId)).isEmpty();
-        assertThat(houseRepository.findAll())
-                .noneMatch(house -> house.getOwner().getId().equals(userId));
-        assertThat(houseMemberRepository.findAll())
-                .noneMatch(member -> member.getUser().getId().equals(userId));
+        assertThat(userGoalRepository.existsByUserId(userId)).isFalse();
+        assertThat(houseGoalRepository.findByHouseId(starter.getId())).isEmpty();
+        // 집 자체는 가입 때 만들어진 그대로 남아 있음
+        assertThat(houseRepository.findById(starter.getId())).isPresent();
     }
 
     private Goal goal() {

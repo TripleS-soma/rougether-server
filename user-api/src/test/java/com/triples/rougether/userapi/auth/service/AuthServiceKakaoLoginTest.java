@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
@@ -25,8 +24,6 @@ class AuthServiceKakaoLoginTest {
 
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private UserWalletRepository userWalletRepository;
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
@@ -48,16 +45,18 @@ class AuthServiceKakaoLoginTest {
     @Mock
     private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
+    @Mock
+    private SignupService signupService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository, userWalletRepository, refreshTokenRepository, tokenService,
+                userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher,
-                org.mockito.Mockito.mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
     }
 
     @Test

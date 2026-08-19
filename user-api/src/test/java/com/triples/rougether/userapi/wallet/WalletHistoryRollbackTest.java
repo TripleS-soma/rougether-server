@@ -74,6 +74,11 @@ class WalletHistoryRollbackTest {
                     + "(select id from routines where user_id = ?)", id);
             jdbcTemplate.update("delete from streaks where user_id = ?", id);
             jdbcTemplate.update("delete from routines where user_id = ?", id);
+            // dev-login 가입은 기본 집(나의 집)·소유자 멤버십도 만든다(#322) — users 삭제 전에 치운다
+            jdbcTemplate.update("delete from house_goals where house_id in (select id from house where owner_user_id = ?)", id);
+            jdbcTemplate.update("delete from house_members where house_id in (select id from house where owner_user_id = ?)", id);
+            jdbcTemplate.update("delete from house_members where user_id = ?", id);
+            jdbcTemplate.update("delete from house where owner_user_id = ?", id);
             jdbcTemplate.update("delete from user_wallets where user_id = ?", id);
             jdbcTemplate.update("delete from users where id = ?", id);
         }

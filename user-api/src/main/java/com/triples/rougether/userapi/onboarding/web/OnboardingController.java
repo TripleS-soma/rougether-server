@@ -34,14 +34,14 @@ public class OnboardingController {
         return onboardingQueryService.getOnboarding(authUser.id());
     }
 
-    @Operation(summary = "온보딩 목표 선택 저장", description = "온보딩에서 선택한 목표를 전체 교체 방식으로 저장합니다. 기존에 저장된 목표 선택은 모두 삭제되고 요청한 목록으로 대체됩니다. goalIds는 목표 마스터 목록 조회(GET /api/v1/goals) 응답의 id를 사용하며 활성 목표만 저장할 수 있고, 중복 id는 한 번만 저장됩니다. primaryGoalId를 지정하면 해당 목표를 대표 목표로 저장하며, 생략하면 대표 목표 없이 저장됩니다. 응답 goals는 sortOrder 오름차순으로 반환합니다. 이 저장으로 목표와 대표 캐릭터가 처음 모두 갖춰지면 기본 집을 함께 생성합니다.")
+    @Operation(summary = "온보딩 목표 선택 저장", description = "온보딩에서 선택한 목표를 전체 교체 방식으로 저장합니다. 기존에 저장된 목표 선택은 모두 삭제되고 요청한 목록으로 대체됩니다. goalIds는 목표 마스터 목록 조회(GET /api/v1/goals) 응답의 id를 사용하며 활성 목표만 저장할 수 있고, 중복 id는 한 번만 저장됩니다. primaryGoalId를 지정하면 해당 목표를 대표 목표로 저장하며, 생략하면 대표 목표 없이 저장됩니다. 응답 goals는 sortOrder 오름차순으로 반환합니다. 가입 때 지급된 기본 집(나의 집)의 집 목표가 아직 비어 있으면 이 저장에서 대표 목표 우선·sortOrder 순으로 최대 3개를 채우며, 이미 채워진 집 목표는 이후 목표 변경에도 바뀌지 않습니다.")
     @PutMapping("/goals")
     public OnboardingGoalsResponse replaceGoals(@CurrentUser AuthUser authUser,
                                                 @RequestBody OnboardingGoalsRequest request) {
         return onboardingCommandService.replaceGoals(authUser.id(), request);
     }
 
-    @Operation(summary = "대표 캐릭터 선택 (온보딩)", description = "온보딩에서 첫 캐릭터를 무료 선택합니다. characterId는 캐릭터 마스터 목록 조회(GET /api/v1/characters) 응답의 id를 사용하며 활성 캐릭터만 선택할 수 있습니다. 보유한 캐릭터가 없는 최초 선택이면 해당 캐릭터를 자동 지급하고 즉시 대표로 착용합니다. 이 저장으로 목표와 대표 캐릭터가 처음 모두 갖춰지면 기본 집을 함께 생성합니다. 온보딩 이후 착용 교체는 PUT /api/v1/me/characters/select 사용을 권장합니다 (이 경로의 교체 동작은 하위호환으로 유지). 변경된 대표 캐릭터는 내 방 조회(GET /api/v1/rooms/me) 응답에 즉시 반영됩니다.")
+    @Operation(summary = "대표 캐릭터 선택 (온보딩)", description = "온보딩에서 첫 캐릭터를 무료 선택합니다. characterId는 캐릭터 마스터 목록 조회(GET /api/v1/characters) 응답의 id를 사용하며 활성 캐릭터만 선택할 수 있습니다. 보유한 캐릭터가 없는 최초 선택이면 해당 캐릭터를 자동 지급하고 즉시 대표로 착용합니다. 온보딩 이후 착용 교체는 PUT /api/v1/me/characters/select 사용을 권장합니다 (이 경로의 교체 동작은 하위호환으로 유지). 변경된 대표 캐릭터는 내 방 조회(GET /api/v1/rooms/me) 응답에 즉시 반영됩니다.")
     @PutMapping("/character")
     public OnboardingCharacterResponse selectCharacter(@CurrentUser AuthUser authUser,
                                                        @Valid @RequestBody OnboardingCharacterRequest request) {
