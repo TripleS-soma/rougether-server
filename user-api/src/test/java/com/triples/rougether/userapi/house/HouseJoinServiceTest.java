@@ -27,10 +27,12 @@ import com.triples.rougether.userapi.house.dto.HouseJoinDetailResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,7 +49,17 @@ class HouseJoinServiceTest {
     @Mock private HouseJoinRequestRepository houseJoinRequestRepository;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
+    @Mock private BotResidencyService botResidencyService;
     @InjectMocks private HouseJoinService houseJoinService;
+
+    @BeforeEach
+    void stubBotYield() {
+        // 봇 없는 집의 기존 계약: 자리가 있으면 true, 만석이면 false(HOUSE_FULL). 봇 양보 자체는 BotResidencyTest 가 검증한다.
+        lenient().when(botResidencyService.yieldSeat(any()))
+                .thenAnswer(invocation -> !((House) invocation.getArgument(0)).isFull());
+        lenient().when(botResidencyService.hasSeatForHuman(any()))
+                .thenAnswer(invocation -> !((House) invocation.getArgument(0)).isFull());
+    }
 
     private House joinableHouse(Long id) {
         House house = mock(House.class);

@@ -90,4 +90,17 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
             + "and h.deletedAt is null group by hm.user.id")
     List<UserMetricCount> countActiveByUserIds(@Param("userIds") Collection<Long> userIds,
                                                @Param("status") HouseMemberStatus status);
+
+    // 동거 봇 입주·양보·해체(#309). 호출자는 house 행 락을 잡은 상태여야 한다(정원 카운트와 함께 갱신되므로).
+    // 사람(봇 아닌) ACTIVE 멤버 수 — 소유자 탈퇴 가드·해체 판정의 분모.
+    @Query("select count(hm) from HouseMember hm join hm.user u "
+            + "where hm.house.id = :houseId and hm.status = :status and u.bot = false")
+    long countActiveHumans(@Param("houseId") Long houseId, @Param("status") HouseMemberStatus status);
+
+    // ACTIVE 봇 멤버를 가입 늦은 순으로 — 양보(가장 나중에 들어온 봇부터)·해체(전원)에 쓴다.
+    @Query("select hm from HouseMember hm join fetch hm.user u "
+            + "where hm.house.id = :houseId and hm.status = :status and u.bot = true "
+            + "order by hm.joinedAt desc, hm.id desc")
+    List<HouseMember> findActiveBotMembersLatestFirst(@Param("houseId") Long houseId,
+                                                      @Param("status") HouseMemberStatus status);
 }

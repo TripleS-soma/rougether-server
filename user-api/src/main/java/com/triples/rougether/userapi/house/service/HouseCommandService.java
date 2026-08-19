@@ -12,6 +12,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.house.dto.HouseUpdateRequest;
@@ -35,6 +36,7 @@ public class HouseCommandService {
     private static final Duration INVITE_CODE_TTL = Duration.ofDays(7);
 
     private final HouseRepository houseRepository;
+    private final BotResidencyService botResidencyService;
     private final HouseMemberRepository houseMemberRepository;
     private final HouseGoalRepository houseGoalRepository;
     private final GoalRepository goalRepository;
@@ -50,7 +52,8 @@ public class HouseCommandService {
                                UserRepository userRepository,
                                InviteCodeGenerator inviteCodeGenerator,
                                HouseCoverImageCatalog houseCoverImageCatalog,
-                               BannedWordChecker bannedWordChecker) {
+                               BannedWordChecker bannedWordChecker,
+                               BotResidencyService botResidencyService) {
         this.houseRepository = houseRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseGoalRepository = houseGoalRepository;
@@ -59,6 +62,7 @@ public class HouseCommandService {
         this.inviteCodeGenerator = inviteCodeGenerator;
         this.houseCoverImageCatalog = houseCoverImageCatalog;
         this.bannedWordChecker = bannedWordChecker;
+        this.botResidencyService = botResidencyService;
     }
 
     @Transactional
@@ -93,8 +97,11 @@ public class HouseCommandService {
                 .findFirst()
                 .map(HouseCoverImageCatalog.PublishedCoverImage::coverImageKey)
                 .orElse(null);
-        saveHouse(owner, ONBOARDING_STARTER_HOUSE_NAME, null, coverImageKey,
+        House house = saveHouse(owner, ONBOARDING_STARTER_HOUSE_NAME, null, coverImageKey,
                 DEFAULT_MAX_MEMBERS, starterGoals);
+        // 동거 봇(#309): 첫 사용자가 빈 집을 보지 않게 봇 2명을 함께 들인다. 사용자가 직접 만든 집엔 넣지 않는다.
+        // 방금 저장한 house 는 이 트랜잭션이 소유하므로 별도 락 없이 카운트를 갱신해도 안전하다.
+        botResidencyService.joinStarterHouse(house);
     }
 
     private House saveHouse(User owner, String name, String description, String coverImageKey,
