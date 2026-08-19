@@ -31,7 +31,7 @@ public record HousePreviewDetailResponse(
         List<GoalSummary> goals,
         @Schema(description = "요청자가 이 집의 활성(ACTIVE) 구성원인지. true 면 상세(GET /api/v1/houses/{houseId}) 화면으로 전환", example = "false")
         boolean isMember,
-        @Schema(description = "정원 초과 여부. true 면 참여(POST /api/v1/houses/{houseId}/join) 불가 - 가입 버튼 비활성", example = "false")
+        @Schema(description = "정원 초과 여부. true 면 참여(POST /api/v1/houses/{houseId}/join) 불가 - 가입 버튼 비활성 동거 봇이 채운 자리는 사람이 참여하면 봇이 비켜주므로 봇만으로 찬 정원은 false", example = "false")
         boolean isFull,
         @Schema(description = "내 최근 입주 신청 상태. 신청 이력이 없거나 이미 구성원이면 null", example = "PENDING")
         HouseJoinRequestStatus myJoinRequestStatus,
@@ -40,10 +40,12 @@ public record HousePreviewDetailResponse(
         @Schema(description = "구성원별 방 렌더 데이터 (가입순, ACTIVE 구성원만). 미리보기 화면의 구성원 타일 렌더용")
         List<MemberRoomSummary> memberRooms) {
 
+    // isFull 은 "사람이 더 들어갈 수 없음" — 정원이 찼어도 비켜줄 동거 봇(#309)이 있으면 false 로 내려 참여 버튼을 살린다.
     public static HousePreviewDetailResponse of(House house, List<GoalSummary> goals, boolean isMember,
                                                 HouseJoinRequestStatus myJoinRequestStatus,
                                                 List<MissionSummary> missions,
-                                                List<MemberRoomSummary> memberRooms) {
+                                                List<MemberRoomSummary> memberRooms,
+                                                boolean isFull) {
         return new HousePreviewDetailResponse(
                 house.getId(),
                 house.getName(),
@@ -54,7 +56,7 @@ public record HousePreviewDetailResponse(
                 house.getLevel(),
                 goals,
                 isMember,
-                house.isFull(),
+                isFull,
                 myJoinRequestStatus,
                 missions,
                 memberRooms);

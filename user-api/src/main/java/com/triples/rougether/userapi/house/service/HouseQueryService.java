@@ -105,9 +105,12 @@ public class HouseQueryService {
                         .map(HouseJoinRequest::getStatus)
                         .filter(HouseQueryService::isVisibleJoinRequestStatus)
                         .orElse(null);
+        // 동거 봇(#309)이 있으면 만석이라도 사람이 참여할 때 봇이 비켜주므로 "참여 불가"로 내리지 않는다.
+        boolean noSeatForHuman = house.isFull()
+                && activeMembers.stream().noneMatch(member -> member.getUser().isBot());
         return HousePreviewDetailResponse.of(
                 house, goals, isMember, requestStatus,
-                houseMissionService.getPreviewMissions(house), memberRooms);
+                houseMissionService.getPreviewMissions(house), memberRooms, noSeatForHuman);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).

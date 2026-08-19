@@ -420,7 +420,7 @@ class HouseControllerTest {
         when(houseQueryService.getMembers(7L, 1L)).thenReturn(new HouseMemberListResponse(java.util.List.of(
                 new HouseMemberListResponse.MemberSummary(10L, 7L, "진형", HouseMemberRole.OWNER,
                         HouseMemberStatus.ACTIVE, Instant.parse("2026-07-03T00:00:00Z"),
-                        Instant.parse("2026-07-20T05:00:00Z")))));
+                        Instant.parse("2026-07-20T05:00:00Z"), false))));
 
         mockMvc.perform(get("/api/v1/houses/1/members"))
                 .andExpect(status().isOk())

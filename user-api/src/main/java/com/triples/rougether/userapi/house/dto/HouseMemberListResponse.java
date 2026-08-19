@@ -26,7 +26,11 @@ public record HouseMemberListResponse(List<MemberSummary> items) {
             @Schema(description = "마지막 접속 시각 (UTC). 로그인 또는 refresh 재발급 성공 시 갱신되며 "
                     + "access token TTL(30분) 단위 해상도라 실시간 접속중 표시가 아닌 \"N분/시간 전 접속\" 표시 용도. "
                     + "갱신 이력이 없으면 null")
-            Instant lastAccessedAt) {
+            Instant lastAccessedAt,
+            @Schema(description = "동거 봇 여부. true 면 서버가 움직이는 봇 구성원 — 프론트는 배지로 표시하고, "
+                    + "소유권 양도 대상으로 고를 수 없음(400 HOUSE_OWNER_TRANSFER_TO_BOT). 온보딩 기본 집에 2명이 함께 들어오며 "
+                    + "집이 만석일 때 사람이 참여하면 가장 나중에 들어온 봇이 자리를 비움", example = "false")
+            boolean bot) {
 
         public static MemberSummary of(HouseMember member) {
             return new MemberSummary(
@@ -36,7 +40,8 @@ public record HouseMemberListResponse(List<MemberSummary> items) {
                     member.getRole(),
                     member.getStatus(),
                     member.getJoinedAt(),
-                    member.getUser().getLastAccessedAt());
+                    member.getUser().getLastAccessedAt(),
+                    member.getUser().isBot());
         }
     }
 }
