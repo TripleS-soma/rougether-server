@@ -17,7 +17,7 @@ It is intentionally simpler than ECS/Fargate. Use this for an early team environ
 
 ## Cost Notes
 
-Check the AWS console before applying. AWS Free Tier eligibility depends on account creation date and current AWS offers. AWS documents current EC2 and RDS Free Tier behavior in the EC2/RDS docs, and `t3.micro` can incur CPU credit charges if Unlimited mode is used. This Terraform sets EC2 CPU credits to `standard`.
+Check the AWS console before applying. AWS Free Tier eligibility depends on account creation date and current AWS offers. The application host defaults to `t3.medium`, but that is a baseline rather than a guarantee that the active workload and one candidate fit together; the live memory preflight decides whether activation is safe. This size is generally billable. AWS documents current EC2 and RDS Free Tier behavior in the EC2/RDS docs, and T3 instances can incur CPU credit charges if Unlimited mode is used. This Terraform sets EC2 CPU credits to `standard`.
 
 ## Prepare
 
@@ -98,22 +98,45 @@ After the stack creates the GitHub Actions deploy role, pushes to `main` run
    always means the commit passed the test gate
 4. after both test and build succeed, promote `:unverified-<sha>` to the immutable
    commit SHA tags (manifest copy, seconds)
-5. deploy the immutable commit SHA tags through SSM
-6. restart the EC2 systemd services and verify local health endpoints
-   (`batch` 는 `127.0.0.1:8082/actuator/health` 로 인스턴스 안에서만 확인)
-7. verify public health endpoints (`user-api`, `admin-api`)
-8. promote all three verified SHA images to `:dev`; if promotion partially fails,
+5. read `ROUGETHER_DEPLOY_MODE`; `hold` skips EC2 mutation, `legacy` uses the emergency hard-restart path, and `blue-green` performs the normal same-host switch
+6. in `blue-green`, cold-start one inactive API slot, require three consecutive local health successes, atomically reload Nginx, verify the fixed port, drain for 30 seconds, and only then stop the previous slot
+7. restart the single `batch` container once after both API switches and verify `127.0.0.1:8082/actuator/health`
+8. verify public health endpoints (`user-api`, `admin-api`)
+9. promote all three verified SHA images to `:dev`; if promotion partially fails,
    restore the previous complete tag set
 
-The SSM deploy script records the previously deployed images before restarting
-the services. If the new `user-api`, `admin-api`, or `batch` image fails its local
-health check, the script rewrites the systemd image env files back to the previous
-images and restarts the services. `batch` 는 독립 유닛이라 롤백이 user-api/admin-api
-복구를 가리지 않는다. 되돌릴 이전 `batch` 이미지가 있으면 그 이미지로 재기동하고, 최초 도입
-배포처럼 이전 이미지가 없으면 방금 기동한 실패 `batch` 를 정지·비활성화해 crash-loop 를 막는다.
-The GitHub Actions run still
-fails so the bad deployment is visible, but the EC2 service is rolled back when a
-previous image is available.
+The SSM deploy script records image, active color, active port, release SHA, and a
+`deploying`/`ready` status atomically. Candidate failure before the switch leaves the active
+slot untouched. Failure after the switch moves Nginx back to the previous slot and then
+stops the failed candidate. If admin or batch fails, the already-switched user API is also
+returned to the previous complete release set. The GitHub Actions run remains failed so the
+bad release is visible.
+
+### First blue/green activation
+
+The repository variable defaults to `hold` when absent. Before merging the preparation PR,
+set it explicitly and confirm the main workflow builds/tests but skips SSM and `:dev` promotion:
+
+```bash
+gh variable set ROUGETHER_DEPLOY_MODE --body hold
+```
+
+On the existing EC2, run `deploy/scripts/bootstrap-blue-green-router.sh` once without flags.
+It installs the template units/Nginx and, only when the memory preflight passes, cold-starts each
+blue candidate on `18080`/`18081`; legacy services and fixed ports remain unchanged. Inspect memory, systemd, and Nginx logs,
+then run the same script with `--activate`. The one-time activation hands each fixed port to
+Nginx and writes the blue slot state; its trap restores the legacy services if the handoff fails.
+
+After direct and CloudFront health pass, enable normal deployments:
+
+```bash
+gh variable set ROUGETHER_DEPLOY_MODE --body blue-green
+gh workflow run docker-publish.yml --ref main
+```
+
+`legacy` exists only for emergency recovery and brings back the former hard-restart behavior.
+Do not run `terraform apply` for the `t3.medium` default until the active AWS account and state
+lineage are confirmed and `terraform plan` shows no unintended instance replacement.
 
 Manual local build examples remain useful for bootstrap or debugging. Build, tag,
 and push `:dev` images before replacing the EC2 instance:

@@ -810,9 +810,10 @@ resource "aws_instance" "app" {
     runtime_env_helpers               = file("${path.module}/templates/runtime-env-helpers.sh")
     use_baked_ami                     = var.use_baked_ami
     # 순정 AMI 폴백이 쓰는 유닛 정의 — packer 가 굽는 파일과 같은 정본을 주입해 두 경로가 갈라지지 않게 한다
-    user_api_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api.service"))
-    admin_api_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api.service"))
-    batch_unit     = trimspace(file("${path.module}/../../packer/files/rougether-batch.service"))
+    user_api_blue_green_unit  = trimspace(file("${path.module}/../../packer/files/rougether-user-api@.service"))
+    admin_api_blue_green_unit = trimspace(file("${path.module}/../../packer/files/rougether-admin-api@.service"))
+    batch_unit                = trimspace(file("${path.module}/../../packer/files/rougether-batch.service"))
+    blue_green_nginx_config   = trimspace(file("${path.module}/../../packer/files/rougether-blue-green.conf"))
   })
 
   depends_on = [

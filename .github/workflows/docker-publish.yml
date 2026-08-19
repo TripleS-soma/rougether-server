@@ -30,6 +30,7 @@ env:
   APPLE_KEY_ID_PARAMETER: /rougether-dev/apple/key-id
   APPLE_PRIVATE_KEY_PARAMETER: /rougether-dev/apple/private-key
   APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER: /rougether-dev/apple/refresh-token-enc-key
+  DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'hold' }}
 
 jobs:
   test:
@@ -39,6 +40,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Validate deployment mode
+        shell: bash
+        run: |
+          case "$DEPLOY_MODE" in
+            hold|legacy|blue-green) ;;
+            *) echo "Invalid ROUGETHER_DEPLOY_MODE: $DEPLOY_MODE" >&2; exit 2 ;;
+          esac
 
       - name: Set up JDK 25
         uses: actions/setup-java@v5
@@ -117,6 +126,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Sync Webex alert configuration to SSM
+        if: env.DEPLOY_MODE != 'hold'
         shell: bash
         env:
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
@@ -167,6 +177,7 @@ jobs:
         run: bash .github/scripts/promote-ecr-dev-tags.sh user-api admin-api batch
 
       - name: Discover running EC2 instance
+        if: env.DEPLOY_MODE != 'hold'
         id: ec2
         shell: bash
         run: |
@@ -187,7 +198,8 @@ jobs:
           echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
           echo "public_ip=$public_ip" >> "$GITHUB_OUTPUT"
 
-      - name: Restart containers through SSM
+      - name: Deploy containers through SSM
+        if: env.DEPLOY_MODE != 'hold'
         shell: bash
         env:
           WEBEX_ROOM_ID: ${{ vars.WEBEX_ROOM_ID }}
@@ -195,6 +207,7 @@ jobs:
           # 이 step 에만 둔다: 워크플로우 전역 env 로 두면 Gradle test 잡의 Spring 컨텍스트가 이 값을 읽어
           # "테스트 컨텍스트에선 봇 컴포넌트 미등록" 테스트가 깨진다(#320 사후 수정).
           ROUGETHER_BOTS_ENABLED: ${{ vars.ROUGETHER_BOTS_ENABLED || 'true' }}
+          ROUGETHER_DEPLOY_MODE: ${{ env.DEPLOY_MODE }}
         run: |
           set -euo pipefail
 
@@ -229,6 +242,7 @@ jobs:
               -e "s|__WEBEX_ROOM_ID__|${WEBEX_ROOM_ID}|g" \
               -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
               -e "s|__BOTS_ENABLED__|${ROUGETHER_BOTS_ENABLED}|g" \
+              -e "s|__DEPLOY_MODE__|${ROUGETHER_DEPLOY_MODE}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
           script="$(printf "bash -se <<'ROUGETHER_DEPLOY_SCRIPT'\n%s\nROUGETHER_DEPLOY_SCRIPT\n" "$deploy_script")"
@@ -254,6 +268,7 @@ jobs:
               "${{ steps.ec2.outputs.instance_id }}"
 
       - name: Verify public health endpoints
+        if: env.DEPLOY_MODE != 'hold'
         shell: bash
         run: |
           set -euo pipefail
@@ -299,6 +314,7 @@ jobs:
       # 승격은 repo 별 순차라 중간 실패 시 세 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
       # 스크립트가 기존 digest 를 먼저 저장하고, 실패하면 전체 태그 세트를 복원한다.
       - name: Promote deployed images to :dev
+        if: env.DEPLOY_MODE != 'hold'
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}

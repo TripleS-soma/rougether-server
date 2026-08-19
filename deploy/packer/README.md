@@ -2,16 +2,16 @@
 
 공통 런타임을 AMI 에 미리 굽고(half-baked), 인스턴스 고유·가변 레이어만 부팅 시 user-data 로 처리합니다.
 
-- AMI 에 굽는 것 — dnf update, Docker, AWS CLI, python3, rougether systemd 유닛 정의(`files/*.service`)
+- AMI 에 굽는 것 — dnf update, Docker, Nginx, AWS CLI, python3, 색상별 rougether systemd 유닛과 프록시 기본 설정
 - 부팅 시 처리하는 것 — SSM 시크릿 → env 파일, Firebase 자격증명, ECR 로그인, 이미지 pull, 서비스 enable/start
 - 굽지 않는 것 — 시크릿 전부(AMI 스냅샷에 남으면 안 됨), 앱 이미지(태그가 배포마다 바뀜)
 
 유닛 파일 사본은 현재 두 곳에 존재합니다 — 유닛을 수정할 때는 둘을 함께 갱신해야 합니다.
 
 - `files/*.service` (이 디렉터리) — packer 가 AMI 에 굽고, terraform 순정 AMI 폴백(user-data)도 같은 파일을 주입받는다.
-- `.github/scripts/deploy-ec2-with-rollback.sh` 의 `write_units()` — GitHub Actions 배포가 **매 배포마다** 자체 인라인 사본으로 유닛을 덮어쓴다. 즉 구운 유닛은 첫 배포까지만 유효하고, 여기만 빼먹으면 유닛 변경이 다음 배포에서 소리 없이 되돌아간다.
+- `.github/scripts/deploy-ec2-with-rollback.sh` 의 `write_blue_green_units()` — GitHub Actions 배포가 **매 배포마다** template 유닛을 덮어쓴다. `write_units()`는 `legacy` 비상 복구 모드에서만 사용한다.
 
-배포 스크립트도 `files/*.service` 를 소비하도록 단일화하는 것이 후속 과제입니다. 유닛의 `__FIREBASE_MOUNT_OPTION__` 는 부팅/배포 시 sed 로 치환되는 자리표시자이므로 그대로 두어야 합니다.
+유닛의 `__FIREBASE_MOUNT_OPTION__` 는 부팅 시 sed 로 치환되는 자리표시자이므로 그대로 두어야 합니다. 새 AMI는 `user-api@blue`, `admin-api@blue`의 내부 health를 먼저 통과시킨 뒤 Nginx가 외부 고정 포트 `8080`, `8081`을 소유하게 합니다.
 
 ## 빌드
 

@@ -15,7 +15,7 @@ umask 077
 # 여기서는 인스턴스 고유·가변 레이어(시크릿, env, 이미지 pull, 기동)만 처리한다.
 %{ else ~}
 dnf update -y
-dnf install -y docker awscli python3
+dnf install -y docker awscli python3 nginx
 %{ endif ~}
 systemctl enable --now docker
 
@@ -201,12 +201,14 @@ docker pull ${user_api_image}
 docker pull ${admin_api_image}
 docker pull ${batch_image}
 
-cat > "$ENV_DIR/user-api.deploy.env" <<EOF
-ROUGETHER_USER_API_IMAGE=${user_api_image}
+cat > "$ENV_DIR/user-api-blue.deploy.env" <<EOF
+ROUGETHER_IMAGE=${user_api_image}
+ROUGETHER_HOST_PORT=18080
 EOF
 
-cat > "$ENV_DIR/admin-api.deploy.env" <<EOF
-ROUGETHER_ADMIN_API_IMAGE=${admin_api_image}
+cat > "$ENV_DIR/admin-api-blue.deploy.env" <<EOF
+ROUGETHER_IMAGE=${admin_api_image}
+ROUGETHER_HOST_PORT=18081
 EOF
 
 cat > "$ENV_DIR/batch.deploy.env" <<EOF
@@ -215,50 +217,68 @@ EOF
 
 cat > "$ENV_DIR/deploy-state.env" <<EOF
 USER_API_IMAGE=${user_api_image}
+USER_API_ACTIVE_COLOR=blue
+USER_API_ACTIVE_PORT=18080
 ADMIN_API_IMAGE=${admin_api_image}
+ADMIN_API_ACTIVE_COLOR=blue
+ADMIN_API_ACTIVE_PORT=18081
 BATCH_API_IMAGE=${batch_image}
+DEPLOYMENT_STATUS=ready
 DEPLOYED_SHA=bootstrap
+TARGET_SHA=bootstrap
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
-chmod 600 "$ENV_DIR/user-api.deploy.env" "$ENV_DIR/admin-api.deploy.env" "$ENV_DIR/batch.deploy.env" "$ENV_DIR/deploy-state.env"
+chmod 600 "$ENV_DIR/user-api-blue.deploy.env" "$ENV_DIR/admin-api-blue.deploy.env" "$ENV_DIR/batch.deploy.env" "$ENV_DIR/deploy-state.env"
 
 %{ if use_baked_ami ~}
 # 유닛 정의는 AMI 에 구워져 있다 (deploy/packer/files/*.service).
-# 주의: GitHub Actions 배포(deploy-ec2-with-rollback.sh write_units)가 매 배포마다 자체 사본으로 덮어쓴다.
+# GitHub Actions blue/green 배포가 같은 template 유닛을 최신 메모리 정책으로 덮어쓴다.
 %{ else ~}
-# 순정 AL2023 폴백: deploy/packer/files/*.service 를 templatefile 로 주입받아 설치한다.
-# 주의: 유닛 사본은 배포 스크립트(write_units)에도 있으므로 수정 시 함께 갱신할 것 (deploy/packer/README.md).
-cat > /etc/systemd/system/rougether-user-api.service <<'EOF'
-${user_api_unit}
+# 순정 AL2023 폴백: deploy/packer/files 정본을 templatefile 로 주입받아 설치한다.
+# 주의: 유닛 사본은 배포 스크립트(write_blue_green_units)에도 있으므로 수정 시 함께 갱신할 것.
+cat > /etc/systemd/system/rougether-user-api@.service <<'EOF'
+${user_api_blue_green_unit}
 EOF
 
-cat > /etc/systemd/system/rougether-admin-api.service <<'EOF'
-${admin_api_unit}
+cat > /etc/systemd/system/rougether-admin-api@.service <<'EOF'
+${admin_api_blue_green_unit}
 EOF
 
 cat > /etc/systemd/system/rougether-batch.service <<'EOF'
 ${batch_unit}
 EOF
+
+mkdir -p /etc/nginx/conf.d
+cat > /etc/nginx/conf.d/rougether.conf <<'EOF'
+${blue_green_nginx_config}
+EOF
 %{ endif ~}
 
 # baked AMI 에 유닛이 실제로 구워졌는지 확인 — 잘못된 AMI 로 떴을 때 set -e 로 조용히 죽는 대신 원인을 남긴다
-for unit in rougether-user-api rougether-admin-api rougether-batch; do
-  if [ ! -f "/etc/systemd/system/$unit.service" ]; then
-    echo "ERROR: /etc/systemd/system/$unit.service 가 없습니다 — rougether-base AMI 가 아니거나 베이크가 누락됐습니다 (deploy/packer/README.md 참고)" >&2
+for unit_file in rougether-user-api@.service rougether-admin-api@.service rougether-batch.service; do
+  if [ ! -f "/etc/systemd/system/$unit_file" ]; then
+    echo "ERROR: /etc/systemd/system/$unit_file 가 없습니다 — rougether-base AMI 가 아니거나 베이크가 누락됐습니다 (deploy/packer/README.md 참고)" >&2
     exit 1
   fi
 done
 
-sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api.service
+sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-user-api@.service
 sed -i "s|__FIREBASE_MOUNT_OPTION__|$firebase_mount_option|" /etc/systemd/system/rougether-batch.service
 
-systemctl daemon-reload
-systemctl enable rougether-user-api rougether-admin-api rougether-batch
+PRIVATE_IP="$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')"
+if [ -z "$PRIVATE_IP" ]; then
+  echo "ERROR: admin Nginx upstream에 사용할 private IP를 찾지 못했습니다" >&2
+  exit 1
+fi
+sed -i "s|server 127.0.0.1:18081;|server $PRIVATE_IP:18081;|" /etc/nginx/conf.d/rougether.conf
+nginx -t
 
-# t3.micro에서 세 JVM을 동시에 cold start하면 CPU/메모리 경합으로 각 앱이 health를 열기까지
-# 10분 이상 걸릴 수 있다. 초기 부트스트랩은 한 서비스씩 준비시켜 작은 인스턴스에서도 안정적으로
-# 완료하고, 이후 배포는 rollback 스크립트의 별도 health gate를 사용한다.
+systemctl daemon-reload
+systemctl enable rougether-user-api@blue rougether-admin-api@blue rougether-batch nginx
+
+# 초기 부트스트랩은 blue backend를 내부 포트에서 검증한 뒤 Nginx가 고정 포트를 소유한다.
+# 이후 배포는 한 API 후보씩만 추가 기동하는 동일 호스트 blue/green 경로를 사용한다.
 wait_for_bootstrap_health() {
   local name="$1"
   local url="$2"
@@ -277,9 +297,12 @@ wait_for_bootstrap_health() {
   return 1
 }
 
-systemctl restart rougether-user-api
-wait_for_bootstrap_health user-api http://127.0.0.1:8080/api/v1/health
-systemctl restart rougether-admin-api
-wait_for_bootstrap_health admin-api http://127.0.0.1:8081/admin/health
+systemctl restart rougether-user-api@blue
+wait_for_bootstrap_health user-api-blue http://127.0.0.1:18080/api/v1/health
+systemctl restart rougether-admin-api@blue
+wait_for_bootstrap_health admin-api-blue http://127.0.0.1:18081/admin/health
+systemctl restart nginx
+wait_for_bootstrap_health user-api-proxy http://127.0.0.1:8080/api/v1/health
+wait_for_bootstrap_health admin-api-proxy http://127.0.0.1:8081/admin/health
 systemctl restart rougether-batch
 wait_for_bootstrap_health batch http://127.0.0.1:8082/actuator/health

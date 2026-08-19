@@ -20,6 +20,7 @@ WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 ENVIRONMENT="__ENVIRONMENT__"
 # 동거 봇(#307~#310) 활성 여부 — user-api.env 의 ROUGETHER_BOTS_ENABLED 로 내려간다(워크플로우 vars.ROUGETHER_BOTS_ENABLED, dev 기본 true)
 BOTS_ENABLED="__BOTS_ENABLED__"
+DEPLOY_MODE="__DEPLOY_MODE__"
 
 ENV_DIR="/etc/rougether"
 SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -31,6 +32,41 @@ USER_RUNTIME_ENV="$ENV_DIR/user-api.env"
 ADMIN_RUNTIME_ENV="$ENV_DIR/admin-api.env"
 BATCH_RUNTIME_ENV="$ENV_DIR/batch.env"
 FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
+NGINX_CONFIG_DIR="${ROUGETHER_NGINX_CONFIG_DIR:-/etc/nginx/conf.d}"
+NGINX_CONFIG_FILE="$NGINX_CONFIG_DIR/rougether.conf"
+NGINX_BIN="${ROUGETHER_NGINX_BIN:-/usr/sbin/nginx}"
+
+USER_MEMORY_LIMIT="${ROUGETHER_USER_MEMORY_LIMIT:-768m}"
+USER_MEMORY_LIMIT_KB="${ROUGETHER_USER_MEMORY_LIMIT_KB:-786432}"
+USER_JAVA_MAX_HEAP="${ROUGETHER_USER_JAVA_MAX_HEAP:-512m}"
+ADMIN_MEMORY_LIMIT="${ROUGETHER_ADMIN_MEMORY_LIMIT:-640m}"
+ADMIN_MEMORY_LIMIT_KB="${ROUGETHER_ADMIN_MEMORY_LIMIT_KB:-655360}"
+ADMIN_JAVA_MAX_HEAP="${ROUGETHER_ADMIN_JAVA_MAX_HEAP:-384m}"
+BATCH_MEMORY_LIMIT="${ROUGETHER_BATCH_MEMORY_LIMIT:-640m}"
+BATCH_JAVA_MAX_HEAP="${ROUGETHER_BATCH_JAVA_MAX_HEAP:-384m}"
+MEMORY_RESERVE_KB="${ROUGETHER_MEMORY_RESERVE_KB:-262144}"
+BLUE_GREEN_DRAIN_SECONDS="${ROUGETHER_DRAIN_SECONDS:-30}"
+
+active_user_color=""
+active_user_port=""
+active_user_image=""
+active_admin_color=""
+active_admin_port=""
+active_admin_image=""
+active_batch_image=""
+current_deployed_sha=""
+current_deployment_status="ready"
+current_target_sha=""
+user_switched=false
+admin_switched=false
+batch_switched=false
+legacy_from_blue_green=false
+legacy_cutover_started=false
+rollback_user_color=""
+rollback_user_port=""
+rollback_admin_color=""
+rollback_admin_port=""
+rollback_deployed_sha=""
 
 umask 077
 
@@ -530,10 +566,34 @@ tag_running_image_as_rollback() {
 
 protect_rollback_images() {
   local protected=true
+  local user_container="rougether-user-api"
+  local admin_container="rougether-admin-api"
 
-  tag_running_image_as_rollback rougether-user-api "$rollback_user_image" || protected=false
-  tag_running_image_as_rollback rougether-admin-api "$rollback_admin_image" || protected=false
+  if [ -n "$active_user_color" ]; then
+    user_container="$(slot_container user-api "$active_user_color")"
+  fi
+  if [ -n "$active_admin_color" ]; then
+    admin_container="$(slot_container admin-api "$active_admin_color")"
+  fi
+
+  tag_running_image_as_rollback "$user_container" "$rollback_user_image" || protected=false
+  tag_running_image_as_rollback "$admin_container" "$rollback_admin_image" || protected=false
   tag_running_image_as_rollback rougether-batch "$rollback_batch_image" || protected=false
+
+  # A previous interrupted deployment can leave an inactive candidate behind. Its image
+  # reference is kept in the slot env file; protect that tag before and after prune too.
+  local service color candidate_container candidate_env candidate_image
+  for service in user-api admin-api; do
+    for color in blue green; do
+      candidate_container="$(slot_container "$service" "$color")"
+      candidate_env="$(slot_env_file "$service" "$color")"
+      if docker inspect --format '{{.Image}}' "$candidate_container" >/dev/null 2>&1 \
+          && [ -f "$candidate_env" ]; then
+        candidate_image="$(awk -F= '$1 == "ROUGETHER_IMAGE" {print substr($0, index($0, "=") + 1); exit}' "$candidate_env")"
+        tag_running_image_as_rollback "$candidate_container" "$candidate_image" || protected=false
+      fi
+    done
+  done
 
   [ "$protected" = true ]
 }
@@ -586,6 +646,726 @@ prune_unused_docker_images() {
   echo "Docker disk usage after image cleanup"
   docker system df || true
   ensure_deploy_disk_space
+}
+
+slot_port() {
+  local service="$1"
+  local color="$2"
+
+  case "$service:$color" in
+    user-api:blue) echo 18080 ;;
+    user-api:green) echo 28080 ;;
+    admin-api:blue) echo 18081 ;;
+    admin-api:green) echo 28081 ;;
+    *) echo "invalid blue/green slot: $service/$color" >&2; return 1 ;;
+  esac
+}
+
+inactive_color() {
+  case "$1" in
+    blue) echo green ;;
+    green) echo blue ;;
+    "") echo blue ;;
+    *) echo "invalid active color: $1" >&2; return 1 ;;
+  esac
+}
+
+slot_unit() {
+  echo "rougether-$1@$2.service"
+}
+
+slot_container() {
+  echo "rougether-$1-$2"
+}
+
+slot_env_file() {
+  echo "$ENV_DIR/$1-$2.deploy.env"
+}
+
+service_health_url() {
+  local service="$1"
+  local port="$2"
+
+  case "$service" in
+    user-api) echo "http://127.0.0.1:$port/api/v1/health" ;;
+    admin-api) echo "http://127.0.0.1:$port/admin/health" ;;
+    *) echo "invalid API service: $service" >&2; return 1 ;;
+  esac
+}
+
+stable_health_url() {
+  case "$1" in
+    user-api) echo "http://127.0.0.1:8080/api/v1/health" ;;
+    admin-api) echo "http://127.0.0.1:8081/admin/health" ;;
+    *) echo "invalid API service: $1" >&2; return 1 ;;
+  esac
+}
+
+load_blue_green_state() {
+  active_user_color=""
+  active_user_port=""
+  active_user_image=""
+  active_admin_color=""
+  active_admin_port=""
+  active_admin_image=""
+  active_batch_image=""
+  current_deployed_sha=""
+  current_deployment_status="ready"
+  current_target_sha=""
+  rollback_user_image=""
+  rollback_user_color=""
+  rollback_user_port=""
+  rollback_admin_image=""
+  rollback_admin_color=""
+  rollback_admin_port=""
+  rollback_batch_image=""
+  rollback_deployed_sha=""
+
+  if [ ! -f "$STATE_FILE" ]; then
+    local service color
+    for service in user-api admin-api; do
+      for color in blue green; do
+        if docker inspect --format '{{.Image}}' "$(slot_container "$service" "$color")" >/dev/null 2>&1; then
+          echo "deploy state is missing while blue/green containers exist" >&2
+          return 1
+        fi
+      done
+    done
+    return 0
+  fi
+
+  while IFS='=' read -r key value; do
+    case "$key" in
+      USER_API_IMAGE) active_user_image="$value" ;;
+      USER_API_ACTIVE_COLOR) active_user_color="$value" ;;
+      USER_API_ACTIVE_PORT) active_user_port="$value" ;;
+      ADMIN_API_IMAGE) active_admin_image="$value" ;;
+      ADMIN_API_ACTIVE_COLOR) active_admin_color="$value" ;;
+      ADMIN_API_ACTIVE_PORT) active_admin_port="$value" ;;
+      BATCH_API_IMAGE) active_batch_image="$value" ;;
+      DEPLOYMENT_STATUS) current_deployment_status="$value" ;;
+      DEPLOYED_SHA) current_deployed_sha="$value" ;;
+      TARGET_SHA) current_target_sha="$value" ;;
+      ROLLBACK_USER_API_IMAGE) rollback_user_image="$value" ;;
+      ROLLBACK_USER_API_ACTIVE_COLOR) rollback_user_color="$value" ;;
+      ROLLBACK_USER_API_ACTIVE_PORT) rollback_user_port="$value" ;;
+      ROLLBACK_ADMIN_API_IMAGE) rollback_admin_image="$value" ;;
+      ROLLBACK_ADMIN_API_ACTIVE_COLOR) rollback_admin_color="$value" ;;
+      ROLLBACK_ADMIN_API_ACTIVE_PORT) rollback_admin_port="$value" ;;
+      ROLLBACK_BATCH_API_IMAGE) rollback_batch_image="$value" ;;
+      ROLLBACK_DEPLOYED_SHA) rollback_deployed_sha="$value" ;;
+    esac
+  done < "$STATE_FILE"
+
+  if [ -n "$active_user_color" ] || [ -n "$active_user_port" ]; then
+    [ -n "$active_user_color" ] \
+      && [ -n "$active_user_port" ] \
+      && [ "$(slot_port user-api "$active_user_color")" = "$active_user_port" ] || {
+      echo "user-api deploy state has an invalid color/port pair" >&2
+      return 1
+    }
+  fi
+  if [ -n "$active_admin_color" ] || [ -n "$active_admin_port" ]; then
+    [ -n "$active_admin_color" ] \
+      && [ -n "$active_admin_port" ] \
+      && [ "$(slot_port admin-api "$active_admin_color")" = "$active_admin_port" ] || {
+      echo "admin-api deploy state has an invalid color/port pair" >&2
+      return 1
+    }
+  fi
+
+  case "$current_deployment_status" in
+    ready) ;;
+    deploying)
+      [ -n "$current_target_sha" ] \
+        && [ -n "$rollback_user_image" ] \
+        && [ -n "$rollback_admin_image" ] \
+        && [ -n "$rollback_batch_image" ] \
+        && [ -n "$rollback_deployed_sha" ] || {
+          echo "deploying state is missing its stable rollback snapshot" >&2
+          return 1
+        }
+      if [ -n "$rollback_user_color" ] || [ -n "$rollback_user_port" ]; then
+        [ -n "$rollback_user_color" ] \
+          && [ -n "$rollback_user_port" ] \
+          && [ "$(slot_port user-api "$rollback_user_color")" = "$rollback_user_port" ] || {
+          echo "user-api rollback state has an invalid color/port pair" >&2
+          return 1
+        }
+      fi
+      if [ -n "$rollback_admin_color" ] || [ -n "$rollback_admin_port" ]; then
+        [ -n "$rollback_admin_color" ] \
+          && [ -n "$rollback_admin_port" ] \
+          && [ "$(slot_port admin-api "$rollback_admin_color")" = "$rollback_admin_port" ] || {
+          echo "admin-api rollback state has an invalid color/port pair" >&2
+          return 1
+        }
+      fi
+      ;;
+    *)
+      echo "invalid deployment status: $current_deployment_status" >&2
+      return 1
+      ;;
+  esac
+
+  if { [ -n "$active_user_color" ] || [ -n "$active_admin_color" ]; } \
+      && { [ -z "$active_user_image" ] || [ -z "$active_admin_image" ] || [ -z "$active_batch_image" ]; }; then
+    echo "blue/green deploy state is incomplete" >&2
+    return 1
+  fi
+
+  if [ -n "$active_user_color" ] || [ -n "$active_admin_color" ]; then
+    [ -f "$NGINX_CONFIG_FILE" ] || {
+      echo "blue/green state exists but Nginx routing config is missing" >&2
+      return 1
+    }
+    if [ -n "$active_user_color" ]; then
+      grep -q "server 127.0.0.1:$active_user_port;" "$NGINX_CONFIG_FILE" || {
+        echo "Nginx user upstream does not match deploy state" >&2
+        return 1
+      }
+    elif grep -Eq '^[[:space:]]*listen[[:space:]]+8080' "$NGINX_CONFIG_FILE"; then
+      echo "Nginx owns user port 8080 without an active user slot" >&2
+      return 1
+    fi
+    if [ -n "$active_admin_color" ]; then
+      grep -Eq "server [^;]+:$active_admin_port;" "$NGINX_CONFIG_FILE" || {
+        echo "Nginx admin upstream does not match deploy state" >&2
+        return 1
+      }
+    elif grep -Eq '^[[:space:]]*listen[[:space:]]+8081' "$NGINX_CONFIG_FILE"; then
+      echo "Nginx owns admin port 8081 without an active admin slot" >&2
+      return 1
+    fi
+  elif [ -f "$NGINX_CONFIG_FILE" ] \
+      && grep -Eq '^[[:space:]]*listen[[:space:]]+8080|^[[:space:]]*listen[[:space:]]+8081' "$NGINX_CONFIG_FILE"; then
+    echo "Nginx owns a fixed API port but deploy state has no active slot" >&2
+    return 1
+  fi
+}
+
+write_blue_green_state() {
+  local status="$1"
+  local deployed_sha="$2"
+  local target_sha="$DEPLOYED_SHA"
+  local temporary_state
+  local state_rollback_user_image=""
+  local state_rollback_user_color=""
+  local state_rollback_user_port=""
+  local state_rollback_admin_image=""
+  local state_rollback_admin_color=""
+  local state_rollback_admin_port=""
+  local state_rollback_batch_image=""
+  local state_rollback_deployed_sha=""
+
+  case "$status" in
+    ready)
+      target_sha="$deployed_sha"
+      ;;
+    deploying)
+      [ -n "$rollback_user_image" ] \
+        && [ -n "$rollback_admin_image" ] \
+        && [ -n "$rollback_batch_image" ] \
+        && [ -n "$rollback_deployed_sha" ] || {
+          echo "cannot checkpoint a deployment without a complete rollback snapshot" >&2
+          return 1
+        }
+      state_rollback_user_image="$rollback_user_image"
+      state_rollback_user_color="$rollback_user_color"
+      state_rollback_user_port="$rollback_user_port"
+      state_rollback_admin_image="$rollback_admin_image"
+      state_rollback_admin_color="$rollback_admin_color"
+      state_rollback_admin_port="$rollback_admin_port"
+      state_rollback_batch_image="$rollback_batch_image"
+      state_rollback_deployed_sha="$rollback_deployed_sha"
+      ;;
+    *)
+      echo "invalid deployment status: $status" >&2
+      return 1
+      ;;
+  esac
+
+  temporary_state="$(mktemp "$ENV_DIR/.deploy-state.env.XXXXXX")"
+  cat > "$temporary_state" <<EOF
+USER_API_IMAGE=$active_user_image
+USER_API_ACTIVE_COLOR=$active_user_color
+USER_API_ACTIVE_PORT=$active_user_port
+ADMIN_API_IMAGE=$active_admin_image
+ADMIN_API_ACTIVE_COLOR=$active_admin_color
+ADMIN_API_ACTIVE_PORT=$active_admin_port
+BATCH_API_IMAGE=$active_batch_image
+DEPLOYMENT_STATUS=$status
+DEPLOYED_SHA=$deployed_sha
+TARGET_SHA=$target_sha
+ROLLBACK_USER_API_IMAGE=$state_rollback_user_image
+ROLLBACK_USER_API_ACTIVE_COLOR=$state_rollback_user_color
+ROLLBACK_USER_API_ACTIVE_PORT=$state_rollback_user_port
+ROLLBACK_ADMIN_API_IMAGE=$state_rollback_admin_image
+ROLLBACK_ADMIN_API_ACTIVE_COLOR=$state_rollback_admin_color
+ROLLBACK_ADMIN_API_ACTIVE_PORT=$state_rollback_admin_port
+ROLLBACK_BATCH_API_IMAGE=$state_rollback_batch_image
+ROLLBACK_DEPLOYED_SHA=$state_rollback_deployed_sha
+DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+  chmod 600 "$temporary_state"
+  mv -f "$temporary_state" "$STATE_FILE"
+}
+
+memory_limit_kb() {
+  case "$1" in
+    user-api) echo "$USER_MEMORY_LIMIT_KB" ;;
+    admin-api) echo "$ADMIN_MEMORY_LIMIT_KB" ;;
+    *) echo "invalid API service: $1" >&2; return 1 ;;
+  esac
+}
+
+check_memory_budget() {
+  local service="$1"
+  local meminfo_path="${ROUGETHER_MEMINFO_PATH:-/proc/meminfo}"
+  local available_kb required_kb
+
+  available_kb="$(awk '/^MemAvailable:/ {print $2; exit}' "$meminfo_path")"
+  if ! [[ "$available_kb" =~ ^[0-9]+$ ]]; then
+    echo "cannot determine MemAvailable from $meminfo_path" >&2
+    return 1
+  fi
+
+  required_kb=$(( $(memory_limit_kb "$service") + MEMORY_RESERVE_KB ))
+  echo "$service memory preflight: available=${available_kb}KiB required=${required_kb}KiB"
+  if [ "$available_kb" -lt "$required_kb" ]; then
+    echo "insufficient memory to start $service candidate" >&2
+    return 1
+  fi
+}
+
+log_memory_snapshot() {
+  local meminfo_path="${ROUGETHER_MEMINFO_PATH:-/proc/meminfo}"
+  local available_kb swap_total_kb swap_free_kb
+
+  available_kb="$(awk '/^MemAvailable:/ {print $2; exit}' "$meminfo_path")"
+  swap_total_kb="$(awk '/^SwapTotal:/ {print $2; exit}' "$meminfo_path")"
+  swap_free_kb="$(awk '/^SwapFree:/ {print $2; exit}' "$meminfo_path")"
+  if [[ "$available_kb" =~ ^[0-9]+$ ]] \
+      && [[ "$swap_total_kb" =~ ^[0-9]+$ ]] \
+      && [[ "$swap_free_kb" =~ ^[0-9]+$ ]]; then
+    echo "memory snapshot: MemAvailable=${available_kb}KiB SwapUsed=$(( swap_total_kb - swap_free_kb ))KiB"
+  fi
+}
+
+wait_health_stable() {
+  local name="$1"
+  local url="$2"
+  local timeout_seconds="${ROUGETHER_HEALTH_TIMEOUT_SECONDS:-180}"
+  local required_successes="${ROUGETHER_HEALTH_REQUIRED_SUCCESSES:-3}"
+  local deadline=$(( SECONDS + timeout_seconds ))
+  local consecutive=0
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if curl -fsS --connect-timeout 2 --max-time 5 "$url" >/dev/null; then
+      consecutive=$(( consecutive + 1 ))
+      if [ "$consecutive" -ge "$required_successes" ]; then
+        echo "$name health check passed $required_successes consecutive times"
+        return 0
+      fi
+    else
+      consecutive=0
+    fi
+    sleep 2
+  done
+
+  echo "$name health check failed to become stable" >&2
+  return 1
+}
+
+write_slot_env() {
+  local service="$1"
+  local color="$2"
+  local image="$3"
+  local port
+  port="$(slot_port "$service" "$color")"
+
+  cat > "$(slot_env_file "$service" "$color")" <<EOF
+ROUGETHER_IMAGE=$image
+ROUGETHER_HOST_PORT=$port
+EOF
+  chmod 600 "$(slot_env_file "$service" "$color")"
+}
+
+write_blue_green_units() {
+  local firebase_mount_option=""
+
+  if firebase_credentials_valid "$FIREBASE_CREDENTIALS_FILE"; then
+    firebase_mount_option="-v /etc/rougether/firebase-adminsdk.json:/etc/rougether/firebase-adminsdk.json:ro"
+  fi
+
+  mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
+  chmod 700 "$ENV_DIR"
+
+  cat > "$SYSTEMD_DIR/rougether-user-api@.service" <<EOF
+[Unit]
+Description=Rougether user-api %i container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/user-api-%i.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-user-api-%i
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api-%i --memory $USER_MEMORY_LIMIT --memory-swap $USER_MEMORY_LIMIT --env JAVA_TOOL_OPTIONS=-Xmx$USER_JAVA_MAX_HEAP --env-file /etc/rougether/user-api.env $firebase_mount_option -p 127.0.0.1:\${ROUGETHER_HOST_PORT}:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
+ExecStop=/usr/bin/docker stop --time 30 rougether-user-api-%i
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > "$SYSTEMD_DIR/rougether-admin-api@.service" <<EOF
+[Unit]
+Description=Rougether admin-api %i container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/admin-api-%i.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api-%i
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api-%i --network host --memory $ADMIN_MEMORY_LIMIT --memory-swap $ADMIN_MEMORY_LIMIT --env JAVA_TOOL_OPTIONS=-Xmx$ADMIN_JAVA_MAX_HEAP --env-file /etc/rougether/admin-api.env --env SERVER_PORT=\${ROUGETHER_HOST_PORT} --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
+ExecStop=/usr/bin/docker stop --time 30 rougether-admin-api-%i
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > "$SYSTEMD_DIR/rougether-batch.service" <<EOF
+[Unit]
+Description=Rougether batch container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/batch.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-batch
+ExecStart=/usr/bin/docker run --rm --name rougether-batch --memory $BATCH_MEMORY_LIMIT --memory-swap $BATCH_MEMORY_LIMIT --env JAVA_TOOL_OPTIONS=-Xmx$BATCH_JAVA_MAX_HEAP --env-file /etc/rougether/batch.env $firebase_mount_option -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_BATCH_IMAGE}
+ExecStop=/usr/bin/docker stop --time 30 rougether-batch
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod 644 "$SYSTEMD_DIR/rougether-user-api@.service" \
+    "$SYSTEMD_DIR/rougether-admin-api@.service" \
+    "$SYSTEMD_DIR/rougether-batch.service"
+  systemctl daemon-reload
+  systemctl enable rougether-batch
+}
+
+private_upstream_ip() {
+  if [ -n "${ROUGETHER_PRIVATE_IP:-}" ]; then
+    echo "$ROUGETHER_PRIVATE_IP"
+    return 0
+  fi
+
+  ip -4 route get 1.1.1.1 | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}'
+}
+
+render_nginx_config() {
+  local destination="$1"
+  local user_port="$2"
+  local admin_port="$3"
+  local admin_upstream_ip
+  admin_upstream_ip="$(private_upstream_ip)"
+
+  if [ -n "$admin_port" ] && [ -z "$admin_upstream_ip" ]; then
+    echo "cannot determine the EC2 private IP for admin upstream" >&2
+    return 1
+  fi
+
+  {
+    echo "# Generated by deploy-ec2-with-rollback.sh; do not edit manually."
+    if [ -n "$user_port" ]; then
+      cat <<EOF
+upstream rougether_user_api {
+    server 127.0.0.1:$user_port;
+    keepalive 16;
+}
+
+server {
+    listen 8080;
+    client_max_body_size 40m;
+
+    location / {
+        proxy_pass http://rougether_user_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$http_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+    }
+}
+EOF
+    fi
+
+    if [ -n "$admin_port" ]; then
+      cat <<EOF
+upstream rougether_admin_api {
+    server $admin_upstream_ip:$admin_port;
+    keepalive 8;
+}
+
+server {
+    listen 8081;
+    client_max_body_size 12m;
+
+    location / {
+        proxy_pass http://rougether_admin_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$http_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_set_header X-Rougether-Admin-Origin \$http_x_rougether_admin_origin;
+        proxy_set_header X-Rougether-Viewer-Ip \$http_x_rougether_viewer_ip;
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+    }
+}
+EOF
+    fi
+  } > "$destination"
+}
+
+ensure_nginx_installed() {
+  if [ ! -x "$NGINX_BIN" ]; then
+    dnf install -y nginx
+  fi
+  mkdir -p "$NGINX_CONFIG_DIR"
+}
+
+apply_proxy_ports() {
+  local user_port="$1"
+  local admin_port="$2"
+  local temporary_config backup_config=""
+
+  ensure_nginx_installed || return 1
+  temporary_config="$(mktemp "$NGINX_CONFIG_DIR/.rougether.conf.XXXXXX")" || return 1
+  if ! render_nginx_config "$temporary_config" "$user_port" "$admin_port"; then
+    rm -f "$temporary_config"
+    return 1
+  fi
+
+  if [ -f "$NGINX_CONFIG_FILE" ]; then
+    backup_config="$(mktemp "$NGINX_CONFIG_DIR/.rougether.rollback.XXXXXX")"
+    cp -p "$NGINX_CONFIG_FILE" "$backup_config"
+  fi
+
+  chmod 644 "$temporary_config"
+  mv -f "$temporary_config" "$NGINX_CONFIG_FILE"
+
+  if ! "$NGINX_BIN" -t; then
+    if [ -n "$backup_config" ]; then
+      mv -f "$backup_config" "$NGINX_CONFIG_FILE"
+    else
+      rm -f "$NGINX_CONFIG_FILE"
+    fi
+    echo "nginx configuration validation failed; previous upstream remains active" >&2
+    return 1
+  fi
+
+  if systemctl is-active --quiet nginx; then
+    if ! systemctl reload nginx; then
+      if [ -n "$backup_config" ]; then
+        mv -f "$backup_config" "$NGINX_CONFIG_FILE"
+        "$NGINX_BIN" -t && systemctl reload nginx || true
+      else
+        rm -f "$NGINX_CONFIG_FILE"
+      fi
+      echo "nginx reload failed; restored previous upstream" >&2
+      return 1
+    fi
+  else
+    if ! systemctl enable --now nginx; then
+      if [ -n "$backup_config" ]; then
+        mv -f "$backup_config" "$NGINX_CONFIG_FILE"
+      else
+        rm -f "$NGINX_CONFIG_FILE"
+      fi
+      echo "nginx start failed" >&2
+      return 1
+    fi
+  fi
+
+  [ -z "$backup_config" ] || rm -f "$backup_config"
+}
+
+start_candidate() {
+  local service="$1"
+  local color="$2"
+  local image="$3"
+  local port unit
+
+  log_memory_snapshot
+  check_memory_budget "$service" || return 1
+  port="$(slot_port "$service" "$color")" || return 1
+  unit="$(slot_unit "$service" "$color")"
+  write_slot_env "$service" "$color" "$image" || return 1
+
+  systemctl stop "$unit" >/dev/null 2>&1 || true
+  docker rm -f "$(slot_container "$service" "$color")" >/dev/null 2>&1 || true
+  systemctl start "$unit" || return 1
+  wait_health_stable "$service-$color" "$(service_health_url "$service" "$port")" || return 1
+}
+
+stop_slot() {
+  local service="$1"
+  local color="$2"
+  [ -n "$color" ] || return 0
+
+  systemctl disable "$(slot_unit "$service" "$color")" >/dev/null 2>&1 || true
+  systemctl stop "$(slot_unit "$service" "$color")" >/dev/null 2>&1 || true
+  docker rm -f "$(slot_container "$service" "$color")" >/dev/null 2>&1 || true
+}
+
+deploy_api_blue_green() {
+  local service="$1"
+  local new_image="$2"
+  local previous_color candidate_color candidate_port
+  local target_user_port="$active_user_port"
+  local target_admin_port="$active_admin_port"
+  local initial_cutover=false
+
+  case "$service" in
+    user-api)
+      previous_color="$active_user_color"
+      ;;
+    admin-api)
+      previous_color="$active_admin_color"
+      ;;
+    *) echo "invalid API service: $service" >&2; return 1 ;;
+  esac
+
+  candidate_color="$(inactive_color "$previous_color")"
+  candidate_port="$(slot_port "$service" "$candidate_color")"
+  start_candidate "$service" "$candidate_color" "$new_image" || return 1
+
+  if [ -z "$previous_color" ]; then
+    initial_cutover=true
+    if ! systemctl stop "rougether-$service"; then
+      stop_slot "$service" "$candidate_color"
+      return 1
+    fi
+  fi
+
+  case "$service" in
+    user-api) target_user_port="$candidate_port" ;;
+    admin-api) target_admin_port="$candidate_port" ;;
+  esac
+
+  if ! apply_proxy_ports "$target_user_port" "$target_admin_port"; then
+    if [ "$initial_cutover" = true ]; then
+      systemctl start "rougether-$service" || true
+    fi
+    stop_slot "$service" "$candidate_color"
+    return 1
+  fi
+
+  case "$service" in
+    user-api)
+      active_user_color="$candidate_color"
+      active_user_port="$candidate_port"
+      active_user_image="$new_image"
+      user_switched=true
+      ;;
+    admin-api)
+      active_admin_color="$candidate_color"
+      active_admin_port="$candidate_port"
+      active_admin_image="$new_image"
+      admin_switched=true
+      ;;
+  esac
+
+  systemctl enable "$(slot_unit "$service" "$candidate_color")" || return 1
+  write_blue_green_state deploying "${current_deployed_sha:-bootstrap}" || return 1
+  wait_health_stable "$service-stable" "$(stable_health_url "$service")" || return 1
+
+  if [ "$initial_cutover" = true ]; then
+    systemctl disable "rougether-$service" >/dev/null 2>&1 || true
+  else
+    sleep "$BLUE_GREEN_DRAIN_SECONDS"
+    stop_slot "$service" "$previous_color"
+  fi
+}
+
+rollback_api_blue_green() {
+  local service="$1"
+  local previous_image="$2"
+  local previous_color="$3"
+  local previous_port="$4"
+  local failed_color target_user_port="$active_user_port" target_admin_port="$active_admin_port"
+
+  case "$service" in
+    user-api) failed_color="$active_user_color" ;;
+    admin-api) failed_color="$active_admin_color" ;;
+    *) echo "invalid API service: $service" >&2; return 1 ;;
+  esac
+
+  echo "$service rollback: failed_color=${failed_color:-legacy} previous_color=${previous_color:-legacy}"
+  if [ -n "$previous_color" ]; then
+    start_candidate "$service" "$previous_color" "$previous_image" || return 1
+    case "$service" in
+      user-api) target_user_port="$previous_port" ;;
+      admin-api) target_admin_port="$previous_port" ;;
+    esac
+    apply_proxy_ports "$target_user_port" "$target_admin_port" || return 1
+  else
+    # On the first migration, release the fixed port from Nginx before bringing
+    # the legacy unit back because it owns 8080/8081 directly.
+    case "$service" in
+      user-api) target_user_port="" ;;
+      admin-api) target_admin_port="" ;;
+    esac
+    apply_proxy_ports "$target_user_port" "$target_admin_port" || return 1
+    systemctl enable "rougether-$service" || return 1
+    systemctl start "rougether-$service" || return 1
+  fi
+
+  case "$service" in
+    user-api)
+      active_user_color="$previous_color"
+      active_user_port="$previous_port"
+      active_user_image="$previous_image"
+      ;;
+    admin-api)
+      active_admin_color="$previous_color"
+      active_admin_port="$previous_port"
+      active_admin_image="$previous_image"
+      ;;
+  esac
+
+  wait_health_stable "$service-rollback" "$(stable_health_url "$service")" || return 1
+  if [ -n "$failed_color" ] && [ "$failed_color" != "$previous_color" ]; then
+    stop_slot "$service" "$failed_color"
+  fi
+}
+
+blue_green_release_is_active() {
+  [ "$current_deployment_status" = ready ] \
+    && [ "$current_deployed_sha" = "$DEPLOYED_SHA" ] \
+    && [ "$active_user_image" = "$NEW_USER_IMAGE" ] \
+    && [ "$active_admin_image" = "$NEW_ADMIN_IMAGE" ] \
+    && [ "$active_batch_image" = "$NEW_BATCH_IMAGE" ] \
+    && [ -n "$active_user_color" ] \
+    && [ -n "$active_admin_color" ]
 }
 
 write_units() {
@@ -684,7 +1464,10 @@ EOF
 }
 
 capture_rollback_images() {
-  if [ -f "$STATE_FILE" ]; then
+  # A checkpoint with status=deploying contains both the currently routed slots and
+  # the last complete release. Keep the explicit rollback snapshot on retries instead
+  # of mistaking a partially switched candidate for the stable release.
+  if [ "$current_deployment_status" != deploying ] && [ -f "$STATE_FILE" ]; then
     while IFS='=' read -r key value; do
       case "$key" in
         USER_API_IMAGE)
@@ -731,6 +1514,47 @@ capture_rollback_images() {
   fi
 }
 
+prepare_blue_green_rollback_target() {
+  user_switched=false
+  admin_switched=false
+  batch_switched=false
+
+  if [ "$current_deployment_status" = deploying ]; then
+    [ "$current_target_sha" = "$DEPLOYED_SHA" ] || {
+      echo "an interrupted deployment targets $current_target_sha; refusing to overwrite it with $DEPLOYED_SHA" >&2
+      return 1
+    }
+
+    if [ "$active_user_image" != "$rollback_user_image" ] \
+        || [ "$active_user_color" != "$rollback_user_color" ] \
+        || [ "$active_user_port" != "$rollback_user_port" ]; then
+      user_switched=true
+    fi
+    if [ "$active_admin_image" != "$rollback_admin_image" ] \
+        || [ "$active_admin_color" != "$rollback_admin_color" ] \
+        || [ "$active_admin_port" != "$rollback_admin_port" ]; then
+      admin_switched=true
+    fi
+    if [ "$active_batch_image" != "$rollback_batch_image" ]; then
+      batch_switched=true
+    fi
+  else
+    rollback_user_color="$active_user_color"
+    rollback_user_port="$active_user_port"
+    rollback_admin_color="$active_admin_color"
+    rollback_admin_port="$active_admin_port"
+    rollback_deployed_sha="${current_deployed_sha:-bootstrap}"
+  fi
+
+  capture_rollback_images || return 1
+  [ -n "$rollback_user_image" ] \
+    && [ -n "$rollback_admin_image" ] \
+    && [ -n "$rollback_batch_image" ] || {
+      echo "cannot deploy without a complete rollback image set" >&2
+      return 1
+    }
+}
+
 rollback_batch() {
   # batch 는 독립 유닛이라 롤백 처리가 user-api/admin-api 복구를 가리지 않게 best-effort 로 한다.
   if [ -n "$rollback_batch_image" ]; then
@@ -747,6 +1571,7 @@ EOF
       || ! systemctl restart rougether-batch \
       || ! wait_health batch http://127.0.0.1:8082/actuator/health; then
       echo "batch rollback failed; user-api/admin-api rollback is unaffected" >&2
+      return 1
     fi
   else
     # 최초 도입 배포라 되돌릴 이전 이미지가 없다. 방금 기동한 실패 이미지가 Restart=always 로
@@ -759,7 +1584,7 @@ EOF
 }
 
 rollback() {
-  local exit_code="$?"
+  local exit_code="${1:-$?}"
   trap - ERR
 
   echo "deploy failed; attempting rollback"
@@ -772,10 +1597,16 @@ rollback() {
     echo "Firebase runtime env restore failed; continuing image rollback" >&2
   fi
 
+  if [ "$legacy_from_blue_green" = true ]; then
+    systemctl stop nginx >/dev/null 2>&1 || true
+    stop_slot user-api "$active_user_color"
+    stop_slot admin-api "$active_admin_color"
+  fi
+
   if [ -z "$rollback_user_image" ] || [ -z "$rollback_admin_image" ]; then
     # user/admin 이전 이미지가 없어도(완전 신규 박스 최초 배포) 방금 기동한 실패 batch 는
     # user/admin 가용성과 무관하게 정지해야 하므로 rollback_batch 를 먼저 부른다.
-    rollback_batch
+    rollback_batch || echo "batch rollback failed; continuing user/admin recovery" >&2
     cleanup_firebase_credentials_backup
     echo "rollback skipped: previous user-api/admin-api images are not available" >&2
     exit "$exit_code"
@@ -785,7 +1616,7 @@ rollback() {
 
   # batch 는 독립 유닛이라 user-api/admin-api 복구보다 먼저 처리한다 — 아래 user/admin 재기동이
   # set -e 로 실패해 스크립트가 죽더라도 batch 복구가 건너뛰어지지 않도록.
-  rollback_batch
+  rollback_batch || echo "batch rollback failed; continuing user/admin recovery" >&2
 
   # 두 서비스를 병렬 기동 후 순서대로 health 확인 — 순차 기동(user healthy 후 admin 시작)이면
   # 부팅 시간이 직렬로 더해진다. 두 컨테이너는 포트·상태가 독립이라 동시 기동에 제약이 없다.
@@ -805,53 +1636,193 @@ rollback() {
   exit "$exit_code"
 }
 
-capture_rollback_images
-prune_unused_docker_images
-backup_firebase_credentials
-refresh_firebase_credentials
-if ! ensure_user_runtime_env; then
-  if ! restore_firebase_credentials; then
-    echo "Firebase credential restore failed; preserving backup before exit" >&2
+rollback_legacy_dispatch() {
+  local exit_code="$?"
+
+  if [ "$legacy_from_blue_green" = true ] && [ "$legacy_cutover_started" = false ]; then
+    trap - ERR
+    echo "legacy deploy failed before fixed-port cutover; blue/green traffic remains active" >&2
+    restore_firebase_credentials || true
+    ensure_user_runtime_env || true
+    cleanup_firebase_credentials_backup
+    exit "$exit_code"
   fi
+
+  rollback "$exit_code"
+}
+
+prepare_runtime_configuration() {
+  backup_firebase_credentials
+  refresh_firebase_credentials
+
+  if ! ensure_user_runtime_env \
+      || ! refresh_social_auth_env \
+      || ! refresh_webex_alert_env \
+      || ! refresh_admin_origin_secret_env \
+      || ! refresh_llm_env "$USER_RUNTIME_ENV" \
+      || ! refresh_bots_env; then
+    if ! restore_firebase_credentials; then
+      echo "Firebase credential restore failed; preserving backup before exit" >&2
+    fi
+    ensure_user_runtime_env || true
+    cleanup_firebase_credentials_backup
+    return 1
+  fi
+}
+
+pull_release_images() {
+  aws ecr get-login-password --region "$AWS_REGION" \
+    | docker login "$REGISTRY" --username AWS --password-stdin
+  docker pull "$NEW_USER_IMAGE"
+  docker pull "$NEW_ADMIN_IMAGE"
+  docker pull "$NEW_BATCH_IMAGE"
+}
+
+finish_successful_deploy() {
+  trap - ERR
+  firebase_credentials_replaced=false
   cleanup_firebase_credentials_backup
-  exit 1
-fi
-refresh_social_auth_env
-refresh_webex_alert_env
-refresh_admin_origin_secret_env
-refresh_llm_env "$USER_RUNTIME_ENV"
-refresh_bots_env
+  docker ps
+}
 
-trap rollback ERR
+deploy_legacy() {
+  load_blue_green_state
+  if [ -n "$active_user_color" ] || [ -n "$active_admin_color" ]; then
+    [ -n "$active_user_color" ] && [ -n "$active_admin_color" ] || {
+      echo "cannot enter legacy mode from a partial blue/green state" >&2
+      return 1
+    }
+    legacy_from_blue_green=true
+  fi
 
-aws ecr get-login-password --region "$AWS_REGION" | docker login "$REGISTRY" --username AWS --password-stdin
-docker pull "$NEW_USER_IMAGE"
-docker pull "$NEW_ADMIN_IMAGE"
-docker pull "$NEW_BATCH_IMAGE"
+  capture_rollback_images
+  prune_unused_docker_images
+  prepare_runtime_configuration
+  trap rollback_legacy_dispatch ERR
 
-write_units "$NEW_USER_IMAGE" "$NEW_ADMIN_IMAGE" "$NEW_BATCH_IMAGE"
+  pull_release_images
+  write_units "$NEW_USER_IMAGE" "$NEW_ADMIN_IMAGE" "$NEW_BATCH_IMAGE"
 
-# 병렬 기동 후 순서대로 health 확인 (rollback 경로와 동일 원칙) —
-# user-api health 를 기다리는 동안 admin-api 가 함께 부팅되므로 두 번째 대기는 짧다
-systemctl restart rougether-user-api rougether-admin-api
-wait_health user-api http://127.0.0.1:8080/api/v1/health
-wait_health admin-api http://127.0.0.1:8081/admin/health
+  # Emergency compatibility path. Normal deployments use deploy_blue_green.
+  if [ "$legacy_from_blue_green" = true ]; then
+    legacy_cutover_started=true
+    systemctl stop nginx
+    stop_slot user-api "$active_user_color"
+    stop_slot admin-api "$active_admin_color"
+  fi
+  systemctl restart rougether-user-api rougether-admin-api
+  wait_health user-api http://127.0.0.1:8080/api/v1/health
+  wait_health admin-api http://127.0.0.1:8081/admin/health
 
-ensure_batch_runtime_env
-refresh_llm_env "$BATCH_RUNTIME_ENV"
-systemctl restart rougether-batch
-wait_health batch http://127.0.0.1:8082/actuator/health
+  ensure_batch_runtime_env
+  refresh_llm_env "$BATCH_RUNTIME_ENV"
+  systemctl restart rougether-batch
+  wait_health batch http://127.0.0.1:8082/actuator/health
 
-cat > "$STATE_FILE" <<EOF
+  cat > "$STATE_FILE" <<EOF
 USER_API_IMAGE=$NEW_USER_IMAGE
 ADMIN_API_IMAGE=$NEW_ADMIN_IMAGE
 BATCH_API_IMAGE=$NEW_BATCH_IMAGE
 DEPLOYED_SHA=$DEPLOYED_SHA
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
+  chmod 600 "$STATE_FILE"
+  finish_successful_deploy
+}
 
-chmod 600 "$STATE_FILE"
-trap - ERR
-firebase_credentials_replaced=false
-cleanup_firebase_credentials_backup
-docker ps
+rollback_blue_green() {
+  local exit_code="$?"
+  local rollback_ok=true
+  trap - ERR
+
+  echo "blue/green deploy failed; attempting release-set rollback"
+  if ! restore_firebase_credentials; then
+    echo "Firebase credential restore failed; continuing traffic rollback" >&2
+    rollback_ok=false
+  fi
+  if ! ensure_user_runtime_env; then
+    echo "Firebase runtime env restore failed; continuing traffic rollback" >&2
+    rollback_ok=false
+  fi
+
+  if [ "$batch_switched" = true ]; then
+    rollback_batch || rollback_ok=false
+    active_batch_image="$rollback_batch_image"
+  fi
+  if [ "$admin_switched" = true ]; then
+    rollback_api_blue_green admin-api "$rollback_admin_image" \
+      "$rollback_admin_color" "$rollback_admin_port" || rollback_ok=false
+  fi
+  if [ "$user_switched" = true ]; then
+    rollback_api_blue_green user-api "$rollback_user_image" \
+      "$rollback_user_color" "$rollback_user_port" || rollback_ok=false
+  fi
+
+  if [ "$rollback_ok" = true ]; then
+    write_blue_green_state ready "${rollback_deployed_sha:-rollback}" || rollback_ok=false
+  fi
+  cleanup_firebase_credentials_backup
+
+  if [ "$rollback_ok" = true ]; then
+    echo "blue/green rollback completed"
+  else
+    echo "blue/green rollback is incomplete; inspect SSM and systemd logs" >&2
+  fi
+  exit "$exit_code"
+}
+
+deploy_blue_green() {
+  load_blue_green_state
+
+  if blue_green_release_is_active; then
+    wait_health_stable user-api-current "$(stable_health_url user-api)"
+    wait_health_stable admin-api-current "$(stable_health_url admin-api)"
+    wait_health batch http://127.0.0.1:8082/actuator/health
+    echo "release $DEPLOYED_SHA is already active; deployment is idempotent"
+    return 0
+  fi
+
+  prepare_blue_green_rollback_target
+  prune_unused_docker_images
+  prepare_runtime_configuration
+  trap rollback_blue_green ERR
+
+  pull_release_images
+  write_blue_green_units
+
+  deploy_api_blue_green user-api "$NEW_USER_IMAGE"
+  deploy_api_blue_green admin-api "$NEW_ADMIN_IMAGE"
+
+  ensure_batch_runtime_env
+  refresh_llm_env "$BATCH_RUNTIME_ENV"
+  cat > "$BATCH_DEPLOY_ENV" <<EOF
+ROUGETHER_BATCH_IMAGE=$NEW_BATCH_IMAGE
+EOF
+  chmod 600 "$BATCH_DEPLOY_ENV"
+  active_batch_image="$NEW_BATCH_IMAGE"
+  batch_switched=true
+  write_blue_green_state deploying "${rollback_deployed_sha:-bootstrap}"
+  systemctl restart rougether-batch
+  wait_health batch http://127.0.0.1:8082/actuator/health
+
+  write_blue_green_state ready "$DEPLOYED_SHA"
+  current_deployed_sha="$DEPLOYED_SHA"
+  finish_successful_deploy
+}
+
+# BEGIN_DEPLOY_EXECUTION
+case "$DEPLOY_MODE" in
+  hold)
+    echo "deployment mode is hold; no EC2 state was changed"
+    ;;
+  legacy)
+    deploy_legacy
+    ;;
+  blue-green)
+    deploy_blue_green
+    ;;
+  *)
+    echo "invalid deployment mode: $DEPLOY_MODE (expected hold, legacy, or blue-green)" >&2
+    exit 2
+    ;;
+esac
