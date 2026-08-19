@@ -140,4 +140,36 @@ class KakaoLoginIntegrationTest {
                 oauthAccountRepository.saveAndFlush(OauthAccount.link(user, OauthProvider.KAKAO, kakaoId)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    // #322: 동시 최초가입 경쟁에서 패자 트랜잭션이 통째로 롤백돼 고아 유저·고아 기본 집이 남지 않는지(최종 상태로 검증)
+    @Test
+    void 동시_최초_로그인_경쟁이_나도_회원과_기본_집은_하나만_남는다() throws Exception {
+        String kakaoId = uniqueKakaoId();
+        when(kakaoApiClient.fetchUser("tok")).thenReturn(new KakaoUser(kakaoId, "race@b.com"));
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.List<java.util.concurrent.Future<LoginResponse>> results = new java.util.ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                return authService.kakaoLogin("tok");
+            }));
+        }
+        start.countDown();
+        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        for (java.util.concurrent.Future<LoginResponse> f : results) {
+            userIds.add(f.get(30, java.util.concurrent.TimeUnit.SECONDS).userId());
+        }
+        pool.shutdownNow();
+
+        // 두 호출 모두 같은 회원으로 수렴
+        assertThat(userIds).hasSize(1);
+        Long userId = userIds.iterator().next();
+        assertThat(oauthAccountRepository.findByProviderAndProviderUserId(OauthProvider.KAKAO, kakaoId))
+                .isPresent().get().extracting(a -> a.getUser().getId()).isEqualTo(userId);
+        // 기본 집은 승자 것 하나뿐(패자의 집·유저는 롤백)
+        assertThat(houseMemberRepository.findByUserIdAndStatusWithHouse(userId,
+                com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE)).hasSize(1);
+        assertThat(userRepository.findAll()).filteredOn(u -> "race@b.com".equals(u.getEmail())).hasSize(1);
+    }
 }

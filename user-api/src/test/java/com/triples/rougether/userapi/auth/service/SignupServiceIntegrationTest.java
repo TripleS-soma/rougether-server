@@ -52,6 +52,8 @@ class SignupServiceIntegrationTest {
         reset(houseGoalRepository);
         if (userId != null) {
             jdbcTemplate.update("DELETE FROM house_goals WHERE house_id IN (SELECT id FROM house WHERE owner_user_id = ?)", userId);
+            // 봇이 켜진 컨텍스트에서도 깨지지 않게 집 기준으로 멤버십 전부 제거
+            jdbcTemplate.update("DELETE FROM house_members WHERE house_id IN (SELECT id FROM house WHERE owner_user_id = ?)", userId);
             jdbcTemplate.update("DELETE FROM house_members WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM house WHERE owner_user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM wallet_histories WHERE user_id = ?", userId);
