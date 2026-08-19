@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseJoinRequestResponse;
 import com.triples.rougether.userapi.house.dto.HouseJoinResponse;
 import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.error.ApplicantWithdrawnException;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -38,6 +39,7 @@ public class HouseJoinService {
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final BotResidencyService botResidencyService;
 
     // 집 공용 코드(소유자 공유)는 즉시가입, 구성원 개인 코드는 방장 승인 대기 신청 생성.
     // 코드 조회는 집 코드 → 구성원 코드 순이며 두 네임스페이스는 발급 시점에 겹치지 않게 보장된다(InviteCodeGenerator).
@@ -120,7 +122,8 @@ public class HouseJoinService {
         if (request != null && request.isPending()) {
             throw new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_ALREADY_PENDING);
         }
-        if (house.isFull()) {
+        // 동거 봇(#309): 봇이 채운 만석은 신청을 받는다 — 방장이 수락하면 그때 봇이 자리를 비운다.
+        if (!botResidencyService.hasSeatForHuman(house)) {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
         if (request == null) {
@@ -209,7 +212,8 @@ public class HouseJoinService {
             // 강퇴 이력은 재가입 불가 - LEFT 재활성화와 구분.
             throw new BusinessException(HouseErrorCode.HOUSE_KICKED_MEMBER);
         }
-        if (house.isFull()) {
+        // 동거 봇(#309): 만석이어도 비켜줄 봇이 있으면 가장 나중에 들어온 봇이 자리를 비운다(사람만으로 만석이면 HOUSE_FULL).
+        if (!botResidencyService.yieldSeat(house)) {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
 

@@ -23,7 +23,9 @@ public record GuestbookListResponse(
             @Schema(description = "방명록 내용", example = "오늘도 루틴 완료! 방 예쁘다 ㅎㅎ")
             String content,
             @Schema(description = "작성 시각. 목록은 최신순(guestbookId 내림차순) 정렬")
-            Instant createdAt) {
+            Instant createdAt,
+            @Schema(description = "작성자가 동거 봇인지 여부. true 면 프론트는 작성자 이름 옆에 봇 배지를 표시", example = "false")
+            boolean authorBot) {
 
         public static GuestbookItem of(RoomGuestbook guestbook) {
             return new GuestbookItem(
@@ -31,7 +33,8 @@ public record GuestbookListResponse(
                     guestbook.getAuthor().getId(),
                     guestbook.getAuthor().getNickname(),
                     guestbook.getContent(),
-                    guestbook.getCreatedAt());
+                    guestbook.getCreatedAt(),
+                    guestbook.getAuthor().isBot());
         }
     }
 }

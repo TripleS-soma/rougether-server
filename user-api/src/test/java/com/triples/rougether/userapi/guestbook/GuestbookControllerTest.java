@@ -55,7 +55,7 @@ class GuestbookControllerTest {
     void 방명록_목록_응답_계약() throws Exception {
         authAsUser7();
         when(guestbookService.getGuestbooks(7L, 3L, 1L, null, 20)).thenReturn(new GuestbookListResponse(
-                List.of(new GuestbookItem(12L, 7L, "진형", "오늘도 루틴 완료!", Instant.parse("2026-07-05T00:00:00Z"))),
+                List.of(new GuestbookItem(12L, 7L, "진형", "오늘도 루틴 완료!", Instant.parse("2026-07-05T00:00:00Z"), false)),
                 12L, true));
 
         mockMvc.perform(get("/api/v1/rooms/3/guestbooks").param("houseId", "1"))

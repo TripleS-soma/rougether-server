@@ -25,6 +25,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseCreateResponse;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog.PublishedCoverImage;
@@ -51,6 +52,7 @@ class HouseCommandServiceTest {
     @Mock private InviteCodeGenerator inviteCodeGenerator;
     @Mock private HouseCoverImageCatalog houseCoverImageCatalog;
     @Mock private BannedWordChecker bannedWordChecker;
+    @Mock private BotResidencyService botResidencyService;
     @InjectMocks private HouseCommandService houseCommandService;
 
     private HouseCreateRequest request(Integer maxMembers, List<Long> goalIds) {

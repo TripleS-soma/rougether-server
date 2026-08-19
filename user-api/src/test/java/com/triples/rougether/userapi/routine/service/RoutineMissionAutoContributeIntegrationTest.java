@@ -31,6 +31,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
@@ -254,7 +255,8 @@ class RoutineMissionAutoContributeIntegrationTest {
         category.linkHouse(house.getId());
         HouseMemberCommandService memberCommand = new HouseMemberCommandService(
                 houseRepository, houseMemberRepository, mock(NotificationService.class),
-                routineRepository, categoryRepository);
+                routineRepository, categoryRepository,
+                new BotResidencyService(userRepository, houseMemberRepository));
 
         // 소유자 단독 구성원 - 탈퇴와 함께 집이 정리(soft delete)되는 경우까지 커버
         memberCommand.leave(userId, house.getId());
@@ -284,7 +286,8 @@ class RoutineMissionAutoContributeIntegrationTest {
         targetCategory.linkHouse(house.getId());
         HouseMemberCommandService memberCommand = new HouseMemberCommandService(
                 houseRepository, houseMemberRepository, mock(NotificationService.class),
-                routineRepository, categoryRepository);
+                routineRepository, categoryRepository,
+                new BotResidencyService(userRepository, houseMemberRepository));
 
         memberCommand.kick(userId, house.getId(), targetMembership.getId());
 
