@@ -33,13 +33,44 @@ public record RoutineCreateRequest(
         LocalDate endsOn,
         @Schema(description = "연동할 집 단체미션 ID(선택, 미지정이면 미연동). 집 미션 목록(GET /api/v1/houses/{houseId}/missions) 응답의 id 값. "
                 + "해당 미션이 있는 집의 활성 구성원만 지정할 수 있으며, 지정하면 응답의 houseMissionId 로 연동 여부를 표시함", example = "12")
-        Long houseMissionId
+        Long houseMissionId,
+        @Schema(description = "기기 캘린더 반복 일정 임포트 출처(대문자 영숫자·언더스코어, 최대 30자, 예 GOOGLE_CALENDAR). 서버는 값을 해석하지 않으며 externalId와 반드시 함께 보낸다. 일반 루틴은 생략", example = "GOOGLE_CALENDAR")
+        @Pattern(regexp = "^[A-Z][A-Z0-9_]{0,29}$") String externalSource,
+        @Schema(description = "그 캘린더 반복 일정의 시리즈 id(최대 255자, 회차 id 아님 — 반복 규칙은 앱이 완성해 repeatType·repeatDays로 보낸다). 같은 externalSource·externalId 조합은 회원당 한 번만 등록할 수 있으며 지운·스케줄을 바꾼 임포트 루틴의 조합도 다시 등록할 수 없다 — 앱은 거절된 조합을 이미 가져온 일정으로 판정해 건너뛴다. externalSource와 반드시 함께 보낸다", example = "abc123def456@google.com")
+        @Size(max = 255) @Pattern(regexp = "(?s).*\\S.*", message = "공백만으로는 지정할 수 없습니다") String externalId
 ) {
+
+    // 외부 참조는 앞뒤 공백을 떼고 검증·저장한다 — @Size/@Pattern 이 trim 된 값을 보도록 역직렬화 직후 정리
+    public RoutineCreateRequest {
+        externalSource = externalSource == null ? null : externalSource.trim();
+        externalId = externalId == null ? null : externalId.trim();
+    }
 
     // 기존 클라이언트/테스트 호환용 (houseMissionId 미지정 = 미연동)
     public RoutineCreateRequest(String title, Long categoryId, AuthType authType, String repeatType,
                                 RepeatDays repeatDays, LocalTime scheduledTime,
                                 LocalDate startsOn, LocalDate endsOn) {
-        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, null);
+        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, null, null, null);
+    }
+
+    // 기존 클라이언트/테스트 호환용 (외부 참조 미지정 = 일반 루틴)
+    public RoutineCreateRequest(String title, Long categoryId, AuthType authType, String repeatType,
+                                RepeatDays repeatDays, LocalTime scheduledTime,
+                                LocalDate startsOn, LocalDate endsOn, Long houseMissionId) {
+        this(title, categoryId, authType, repeatType, repeatDays, scheduledTime, startsOn, endsOn, houseMissionId,
+                null, null);
+    }
+
+    // 임포트 요청인지(둘 다 채워짐). 한쪽만 채워진 불완전 요청은 서비스에서 400 처리
+    public boolean hasExternalRef() {
+        return hasText(externalSource) && hasText(externalId);
+    }
+
+    public boolean hasPartialExternalRef() {
+        return hasText(externalSource) != hasText(externalId);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

@@ -34,10 +34,19 @@ public record RoutineResponse(
         Long originRoutineId,
         @Schema(description = "연동된 집 단체미션 ID(미연동이면 null). 루틴·미션 제목이 바뀌어도 이 값은 유지되므로 이름 매칭 대신 연동 판별에 사용. "
                 + "미션 삭제·집 탈퇴/강퇴 시 서버가 자동으로 해제(null)하며, DELETE /api/v1/routines/{id}/house-mission-link 로 직접 해제할 수도 있음", example = "12")
-        Long houseMissionId
+        Long houseMissionId,
+        @Schema(description = "기기 캘린더 반복 일정 임포트 출처(예 GOOGLE_CALENDAR). 일반 루틴은 null. 스케줄 수정으로 버전이 갈려도 계보 원본의 값을 그대로 보여준다", example = "GOOGLE_CALENDAR")
+        String externalSource,
+        @Schema(description = "임포트한 캘린더 반복 일정의 시리즈 id. 일반 루틴은 null", example = "abc123def456@google.com")
+        String externalId
 ) {
 
+    // 외부 참조가 이 row 에 있으면 그대로, 없으면 호출자가 계보 원본(origin)에서 읽어 넘긴 값을 쓴다
     public static RoutineResponse from(Routine routine) {
+        return from(routine, routine.getExternalSource(), routine.getExternalId());
+    }
+
+    public static RoutineResponse from(Routine routine, String externalSource, String externalId) {
         return new RoutineResponse(
                 routine.getId(),
                 routine.getTitle(),
@@ -50,7 +59,9 @@ public record RoutineResponse(
                 routine.getStartsOn(),
                 routine.getEndsOn(),
                 routine.getOriginRoutineId(),
-                routine.getHouseMissionId()
+                routine.getHouseMissionId(),
+                externalSource,
+                externalId
         );
     }
 }

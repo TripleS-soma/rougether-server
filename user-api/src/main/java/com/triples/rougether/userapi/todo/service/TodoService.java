@@ -14,6 +14,7 @@ import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.global.persistence.UniqueViolations;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
@@ -25,10 +26,8 @@ import com.triples.rougether.userapi.todo.error.TodoErrorCode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
-import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -101,7 +100,7 @@ public class TodoService {
             // flush 까지 해서 unique 위반을 이 자리에서 잡는다(트랜잭션은 예외로 롤백됨)
             return TodoResponse.from(todoRepository.saveAndFlush(todo));
         } catch (DataIntegrityViolationException e) {
-            if (!isExternalRefViolation(e)) {
+            if (!UniqueViolations.isViolationOf(e, EXTERNAL_REF_CONSTRAINT)) {
                 // 중복이 아닌 무결성 오류(길이 초과 등)를 409 로 위장하면 앱이 "이미 가져옴"으로 건너뛰어 조용히 유실된다
                 throw e;
             }
@@ -110,15 +109,6 @@ public class TodoService {
                     userId, externalSource, EXTERNAL_REF_CONSTRAINT);
             throw new BusinessException(TodoErrorCode.TODO_EXTERNAL_DUPLICATE);
         }
-    }
-
-    // 하이버네이트가 제약 이름을 뽑아준 경우 그것으로, 아니면 드라이버 메시지("for key 'todos.uk_...'")로 판정
-    private static boolean isExternalRefViolation(DataIntegrityViolationException e) {
-        if (e.getCause() instanceof ConstraintViolationException ce && ce.getConstraintName() != null) {
-            return ce.getConstraintName().toLowerCase(Locale.ROOT).contains(EXTERNAL_REF_CONSTRAINT);
-        }
-        String message = e.getMostSpecificCause().getMessage();
-        return message != null && message.toLowerCase(Locale.ROOT).contains(EXTERNAL_REF_CONSTRAINT);
     }
 
     @Transactional
