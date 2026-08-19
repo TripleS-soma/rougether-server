@@ -96,7 +96,7 @@ variable "container_registry_password_ssm_parameter" {
 variable "instance_type" {
   description = "EC2 instance type. Check current AWS Free Tier eligibility before apply."
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "key_name" {

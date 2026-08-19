@@ -17,7 +17,7 @@ It is intentionally simpler than ECS/Fargate. Use this for an early team environ
 
 ## Cost Notes
 
-Check the AWS console before applying. AWS Free Tier eligibility depends on account creation date and current AWS offers. AWS documents current EC2 and RDS Free Tier behavior in the EC2/RDS docs, and `t3.micro` can incur CPU credit charges if Unlimited mode is used. This Terraform sets EC2 CPU credits to `standard`.
+Check the AWS console before applying. AWS Free Tier eligibility depends on account creation date and current AWS offers. The dev app instance defaults to `t3.medium`, while RDS remains `db.t3.micro`. T3 instances can incur CPU credit charges if Unlimited mode is used; this Terraform sets EC2 CPU credits to `standard`.
 
 ## Prepare
 
