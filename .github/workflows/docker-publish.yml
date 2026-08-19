@@ -20,8 +20,6 @@ env:
   ECR_REPOSITORY_PREFIX: rougether-dev
   IMAGE_TAG: dev
   DEPLOYMENT_ENVIRONMENT: dev
-  # 동거 봇(#307~#310) 활성 — dev 는 기본 true. 끄려면 repo variable ROUGETHER_BOTS_ENABLED=false
-  ROUGETHER_BOTS_ENABLED: ${{ vars.ROUGETHER_BOTS_ENABLED || 'true' }}
   FIREBASE_CREDENTIALS_PARAMETER: /rougether-dev/firebase/credentials-json
   ADMIN_ORIGIN_SECRET_PARAMETER: /rougether-dev/admin/origin-secret
   WEBEX_BOT_TOKEN_PARAMETER: /rougether-dev/alerts/webex-bot-token
@@ -193,6 +191,10 @@ jobs:
         shell: bash
         env:
           WEBEX_ROOM_ID: ${{ vars.WEBEX_ROOM_ID }}
+          # 동거 봇(#307~#310) 활성 — dev 는 기본 true, 끄려면 repo variable ROUGETHER_BOTS_ENABLED=false.
+          # 이 step 에만 둔다: 워크플로우 전역 env 로 두면 Gradle test 잡의 Spring 컨텍스트가 이 값을 읽어
+          # "테스트 컨텍스트에선 봇 컴포넌트 미등록" 테스트가 깨진다(#320 사후 수정).
+          ROUGETHER_BOTS_ENABLED: ${{ vars.ROUGETHER_BOTS_ENABLED || 'true' }}
         run: |
           set -euo pipefail
 
