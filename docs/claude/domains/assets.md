@@ -17,6 +17,14 @@
 - 캐릭터 추가 포즈: 규칙 기반 3종과 별도로 `character_poses`에 `character_id`, `code`, `asset_key`, `sort_order`, `is_active`를 저장한다. `GET /api/v1/characters`와 `GET /api/v1/me/characters`의 `poses[]`는 활성 포즈만 정렬 순서대로 반환한다. 관리자는 `/assets`의 characters 탭에서 S3 key를 캐릭터 포즈로 등록·해제할 수 있다.
 - 관리자 characters 에셋 삭제는 DB에서 `characters.base_asset_key` 또는 `character_poses.asset_key`로 사용 중이면 거부한다. 미사용 파일은 `archive/admin-deleted/{timestamp}/`에 복구용 사본을 만든 뒤 원래 key를 삭제한다.
 - 가구 애니메이션: `items/{theme}/furniture/{slug}-animated-v{N}.webp` 규칙으로 S3 에 적재한다. 관리자 페이지의 `움짤만 보기` 필터도 이 명명 규칙을 기준으로 분류한다. 정적 WebP와 구분해야 하므로 확장자만으로 애니메이션 여부를 판단하지 않는다.
+
+## Asset Foundry 제작·승인 흐름
+
+- 로컬 제작 결과는 `tools/asset-pipeline/assetctl.py`로 검증하고 QA report JSON을 생성합니다. 중간 이미지와 report는 `${TMPDIR:-/tmp}` 아래에 두며 바이너리를 저장소에 커밋하지 않습니다.
+- 관리자 `/asset-foundry`는 이미지 생성기를 서버에서 실행하지 않습니다. manifest 상태, 자동 QA, 실제 `room-render-contract.v1.json` 기반 미리보기, 사람 승인, S3·DB·seed·모바일 검증 이력만 관리합니다.
+- 상태는 `DRAFT → BUILT → VALIDATED → REVIEW_CANDIDATE → APPROVED → UPLOADED → LINKED_DEV → SEED_SYNCED → CLIENT_VERIFIED` 순서로만 진행합니다. 필수 QA가 모두 PASS가 아니면 `VALIDATED`로 이동할 수 없습니다.
+- 같은 S3 key 덮어쓰기를 기본 흐름으로 삼지 않습니다. `-animated-v{N}`처럼 버전 key를 올리고, 기존 아이템 교체 작업은 `targetItemId`와 `expectedOldAssetKey`를 함께 기록해 CAS 전제와 rollback lineage를 보존합니다.
+- Asset Foundry의 `UPLOADED` 이후 상태는 작업 이력입니다. 실제 S3 업로드·기존 아이템 연결 교체·seed 변경은 각각의 운영 도구가 수행하며, 상태 변경만으로 외부 상태가 자동 변경되지 않습니다.
 - 뽑기 선물상자: `GET /api/v1/gacha`와 `GET /api/v1/gacha/{id}`의 `giftBoxAssetKey`로 테마별 투명 PNG key를 내려준다. 프론트는 다른 이미지와 동일하게 CDN base URL과 조합한다. 테마가 없거나 아직 매핑되지 않은 머신은 기본 선물상자를 사용하며, 불투명 핑크 배경이 남은 `items/698ebc78-8273-4bf7-85d4-a7ea81c7c4d0.png`는 응답에 사용하지 않는다.
 - 사용/미사용 토글: 관리자 `/catalog` 화면에서 아이템·캐릭터의 `is_active`를 전환한다(`PUT /admin/catalog/items/{id}/active`, `PUT /admin/catalog/characters/{id}/active`). 상점·캐릭터 목록·뽑기(추첨/보상 미리보기)가 전부 조회 시점에 `is_active`(아이템은 테마 활성까지)를 거르므로 토글 즉시 프론트에 반영된다. 활성화 시 S3 에셋 존재를 검증하며, 캐릭터는 규칙 파생 애니메이션 3종(`characters/{code}/animations/{idle|pose-cycle|wave}.webp`)까지 확인해 없으면 거부한다 — 프론트 404 를 사전에 막기 위함. 카탈로그 적재(import)는 insert-only 이므로 기존 행의 노출 제어는 이 토글이 담당한다.
 

@@ -16,6 +16,10 @@ AI 에이전트(Claude Code, Codex CLI)가 이미지를 생성한 뒤 바로 dev
                        캐릭터별 악세사리 합성 위치 멱등 적재
 - list_character_accessory_render_profiles:
                        캐릭터별 악세사리 합성 위치 조회
+- create_asset_pipeline_job / submit_asset_pipeline_qa / advance_asset_pipeline_job:
+                       Asset Foundry manifest·QA·승인 단계 연결 (실제 배포는 수행하지 않음)
+- list_asset_pipeline_jobs:
+                       Asset Foundry 관제 보드 작업 조회
 
 실행 (Python >= 3.10 필요, uv 가 의존성을 처리):
 
@@ -36,6 +40,7 @@ AWS·어드민 권한으로 자동 실행하지 않도록 repo 공용 MCP 설정
 - ADMIN_PASSWORD   (미설정 시 SSM /rougether-dev/admin/seed-password 에서 조회)
 - ASSET_BUCKET     (기본 rougether-assets)
 - AWS_REGION       (기본 ap-northeast-2)
+- ASSET_PUBLIC_BASE_URL (업로드 결과에 표시할 CloudFront/CDN base URL. 미설정 시 S3 URL)
 - ASSET_ALLOWED_ROOTS (업로드를 허용할 로컬 디렉터리 목록. OS path 구분자로 연결하며,
                        기본값은 MCP 프로세스의 현재 작업 디렉터리)
 
@@ -79,6 +84,10 @@ def _require_transport_safety() -> None:
 ADMIN_PASSWORD_SSM_PARAM = "/rougether-dev/admin/seed-password"
 ASSET_BUCKET = os.environ.get("ASSET_BUCKET", "rougether-assets")
 AWS_REGION = os.environ.get("AWS_REGION", "ap-northeast-2")
+ASSET_PUBLIC_BASE_URL = os.environ.get(
+    "ASSET_PUBLIC_BASE_URL",
+    f"https://{ASSET_BUCKET}.s3.{AWS_REGION}.amazonaws.com",
+).rstrip("/")
 
 # 서버(AssetKinds.ALLOWED)와 동일한 kind prefix 집합
 ALLOWED_KINDS = {"characters", "categories", "themes", "items", "house"}
@@ -92,12 +101,18 @@ ALLOWED_SLOTS = {
     "bottomLeft", "bottomCenter", "bottomRight",
 }
 CSRF_INPUT_RE = re.compile(r'name="_csrf"\s+value="([^"]+)"')
+CSRF_META_RE = re.compile(r'name="_csrf"\s+content="([^"]+)"')
+CSRF_HEADER_META_RE = re.compile(r'name="_csrf_header"\s+content="([^"]+)"')
 
 mcp = FastMCP("rougether-admin-asset")
 
 _session: requests.Session | None = None
 _s3_client = None
 _ssm_client = None
+
+
+class _AdminSessionExpired(RuntimeError):
+    pass
 
 
 def _s3():
@@ -143,17 +158,41 @@ def _login() -> requests.Session:
     return session
 
 
-def _admin_request(method: str, path: str, **kwargs) -> requests.Response:
+def _csrf_headers(session: requests.Session) -> dict[str, str]:
+    page = session.get(
+        f"{ADMIN_BASE_URL}/asset-foundry", timeout=10, allow_redirects=False)
+    if page.status_code in (301, 302, 401, 403):
+        raise _AdminSessionExpired("관리자 세션이 만료되었습니다.")
+    page.raise_for_status()
+    token_match = CSRF_META_RE.search(page.text)
+    header_match = CSRF_HEADER_META_RE.search(page.text)
+    if not token_match or not header_match:
+        raise RuntimeError("Asset Foundry 페이지에서 CSRF 정보를 찾지 못했습니다.")
+    return {header_match.group(1): token_match.group(1)}
+
+
+def _admin_request(method: str, path: str, csrf: bool = False, **kwargs) -> requests.Response:
     """세션 만료(로그인 페이지로 redirect) 시 1회 재로그인 후 재시도."""
     global _session
     if _session is None:
         _session = _login()
-    response = _session.request(method, f"{ADMIN_BASE_URL}{path}", timeout=30,
-                                allow_redirects=False, **kwargs)
+
+    def send(session: requests.Session) -> requests.Response:
+        request_kwargs = dict(kwargs)
+        headers = dict(request_kwargs.pop("headers", {}))
+        if csrf:
+            headers.update(_csrf_headers(session))
+        return session.request(method, f"{ADMIN_BASE_URL}{path}", timeout=30,
+                               allow_redirects=False, headers=headers, **request_kwargs)
+
+    try:
+        response = send(_session)
+    except _AdminSessionExpired:
+        _session = _login()
+        response = send(_session)
     if response.status_code in (301, 302, 401, 403):
         _session = _login()
-        response = _session.request(method, f"{ADMIN_BASE_URL}{path}", timeout=30,
-                                    allow_redirects=False, **kwargs)
+        response = send(_session)
     # 재로그인 후에도 redirect/거부면 raise_for_status(3xx 미포함)에 안 걸리므로 명시적으로 실패 처리
     if response.status_code in (301, 302, 401, 403):
         raise RuntimeError(f"어드민 인증이 유지되지 않습니다 (status {response.status_code}, path {path})")
@@ -249,7 +288,7 @@ def _object_exists(asset_key: str) -> bool:
 
 
 def _public_url(asset_key: str) -> str:
-    return f"https://{ASSET_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{asset_key}"
+    return f"{ASSET_PUBLIC_BASE_URL}/{asset_key}"
 
 
 def _allowed_asset_roots() -> list[Path]:
@@ -492,6 +531,81 @@ def import_character_accessory_render_profiles(
 def list_character_accessory_render_profiles() -> dict[str, Any]:
     """캐릭터별 악세사리 합성 위치를 조회한다."""
     response = _admin_request("GET", "/admin/character-accessory-render-profiles")
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def list_asset_pipeline_jobs() -> dict[str, Any]:
+    """Asset Foundry의 manifest 작업과 현재 품질/승인 단계를 조회한다."""
+    response = _admin_request("GET", "/admin/asset-foundry/jobs")
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def create_asset_pipeline_job(
+        name: str,
+        slug: str,
+        kind: str,
+        output_asset_key: str,
+        theme_code: str | None = None,
+        source_asset_key: str | None = None,
+        preview_asset_key: str | None = None,
+        target_item_id: int | None = None,
+        expected_old_asset_key: str | None = None) -> dict[str, Any]:
+    """로컬 제작을 시작할 manifest 작업을 Asset Foundry에 등록한다.
+
+    kind: STATIC_FURNITURE, ANIMATED_FURNITURE, CHARACTER_ANIMATION, HOUSE_FRAME 중 하나.
+    기존 아이템 교체라면 target_item_id와 expected_old_asset_key를 함께 보낸다.
+    이 도구는 S3 업로드나 DB 아이템 교체를 실행하지 않는다.
+    """
+    payload = {
+        "name": name,
+        "slug": slug,
+        "kind": kind,
+        "themeCode": theme_code,
+        "sourceAssetKey": source_asset_key,
+        "outputAssetKey": output_asset_key,
+        "previewAssetKey": preview_asset_key,
+        "targetItemId": target_item_id,
+        "expectedOldAssetKey": expected_old_asset_key,
+    }
+    response = _admin_request(
+        "POST", "/admin/asset-foundry/jobs", csrf=True, json=payload)
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def submit_asset_pipeline_qa(
+        job_id: int,
+        expected_revision: int,
+        checks: list[dict[str, Any]]) -> dict[str, Any]:
+    """assetctl report의 checks를 Asset Foundry 작업에 반영한다.
+
+    작업이 BUILT 또는 VALIDATED 단계일 때만 가능하며, required FAIL은 다음 단계 진행을 막는다.
+    """
+    response = _admin_request(
+        "PUT", f"/admin/asset-foundry/jobs/{job_id}/qa", csrf=True,
+        json={"expectedRevision": expected_revision, "checks": checks})
+    return {"ok": True, "result": response.json()}
+
+
+@mcp.tool()
+def advance_asset_pipeline_job(
+        job_id: int,
+        expected_revision: int,
+        target_status: str,
+        note: str) -> dict[str, Any]:
+    """Asset Foundry 작업을 허용된 다음 단계로 이동하거나 검수 작업을 DRAFT로 반환한다.
+
+    실제 S3·DB·seed 조작은 하지 않으며 운영자가 확인할 감사 이력만 남긴다.
+    """
+    response = _admin_request(
+        "PUT", f"/admin/asset-foundry/jobs/{job_id}/status", csrf=True,
+        json={
+            "expectedRevision": expected_revision,
+            "targetStatus": target_status,
+            "note": note,
+        })
     return {"ok": True, "result": response.json()}
 
 
