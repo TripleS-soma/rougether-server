@@ -9,6 +9,7 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -27,6 +28,7 @@ public class HouseMemberCommandService {
     private final NotificationService notificationService;
     private final RoutineRepository routineRepository;
     private final CategoryRepository categoryRepository;
+    private final BotResidencyService botResidencyService;
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
@@ -46,6 +48,10 @@ public class HouseMemberCommandService {
                 .filter(found -> found.getHouse().getId().equals(houseId))
                 .filter(found -> !found.getId().equals(requester.getId()))
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_TRANSFER_TARGET_INVALID));
+        // 동거 봇(#309)은 집을 운영할 수 없다 — 방장은 항상 사람.
+        if (BotResidencyService.isBot(target)) {
+            throw new BusinessException(HouseErrorCode.HOUSE_OWNER_TRANSFER_TO_BOT);
+        }
 
         requester.demoteToMember();
         target.promoteToOwner();
@@ -66,8 +72,9 @@ public class HouseMemberCommandService {
                 .filter(HouseMember::isActive)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
 
-        long activeCount = houseMemberRepository.countByHouseIdAndStatus(houseId, HouseMemberStatus.ACTIVE);
-        if (me.isOwner() && activeCount > 1) {
+        // 동거 봇(#309)은 소유권을 받을 수 없으므로 "다른 사람 구성원"이 있을 때만 양도를 강제한다.
+        long activeHumans = houseMemberRepository.countActiveHumans(houseId, HouseMemberStatus.ACTIVE);
+        if (me.isOwner() && activeHumans > 1) {
             throw new BusinessException(HouseErrorCode.HOUSE_OWNER_MUST_TRANSFER);
         }
 
@@ -79,10 +86,8 @@ public class HouseMemberCommandService {
 
         me.leave();
         house.decreaseMemberCount();
-        if (activeCount == 1) {
-            // 마지막 구성원 - 빈 집이 탐색에 남지 않게 정리.
-            house.softDelete();
-        }
+        // 마지막 사람이 나가면 봇만 남기지 않고 집을 정리한다(봇 LEFT + soft delete). 사람이 남아 있으면 그대로.
+        botResidencyService.dissolveIfNoHumans(house);
         notifyMemberLeft(recipients, me);
         clearMemberLinks(userId, houseId);
     }

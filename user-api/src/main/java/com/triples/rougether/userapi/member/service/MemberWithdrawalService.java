@@ -22,6 +22,7 @@ import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepos
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.auth.client.AppleRevokeClient;
 import com.triples.rougether.userapi.auth.client.KakaoUnlinkClient;
 import com.triples.rougether.userapi.auth.service.AppleRefreshTokenCipher;
@@ -50,6 +51,7 @@ public class MemberWithdrawalService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final OauthAccountRepository oauthAccountRepository;
     private final HouseRepository houseRepository;
+    private final BotResidencyService botResidencyService;
     private final HouseMemberRepository houseMemberRepository;
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final UserDeviceTokenRepository userDeviceTokenRepository;
@@ -150,22 +152,27 @@ public class MemberWithdrawalService {
             house.decreaseMemberCount();
             if (leaver.isOwner()) {
                 transferOwnershipOrDissolve(house, leaver, activeMembers);
+            } else {
+                // 마지막 사람 멤버가 탈퇴하면 봇만 남기지 않는다(#309).
+                botResidencyService.dissolveIfNoHumans(house);
             }
             cleanedHouseIds.add(houseId);
         }
         return cleanedHouseIds;
     }
 
-    // 소유 집 승계 — 남은 ACTIVE 멤버 중 가입일 최선임(동률 시 membership id 오름차순, 조회 정렬이 보장).
-    // 남은 멤버가 없으면 집 해체(soft delete) — 초대코드 가입 경로도 deleted 필터로 함께 막힘.
+    // 소유 집 승계 — 남은 ACTIVE **사람** 멤버 중 가입일 최선임(동률 시 membership id 오름차순, 조회 정렬이 보장).
+    // 동거 봇(#309)은 승계 후보가 아니며, 사람이 없으면 봇을 내보내고 집 해체(soft delete) —
+    // 초대코드 가입 경로도 deleted 필터로 함께 막힘.
     private void transferOwnershipOrDissolve(House house, HouseMember leaver,
                                              List<HouseMember> activeMembers) {
         HouseMember successor = activeMembers.stream()
                 .filter(member -> !member.getId().equals(leaver.getId()))
+                .filter(member -> !BotResidencyService.isBot(member))
                 .findFirst()
                 .orElse(null);
         if (successor == null) {
-            house.softDelete();
+            botResidencyService.dissolveIfNoHumans(house);
             return;
         }
         leaver.demoteToMember();

@@ -209,6 +209,7 @@ public class HouseController {
             description = "집 소유권을 다른 활성 구성원에게 넘깁니다. 집 소유자만 호출할 수 있습니다. "
                     + "대상은 같은 집의 본인이 아닌 활성(ACTIVE) 구성원이어야 합니다. "
                     + "양도가 완료되면 대상 구성원이 OWNER 가 되고 기존 소유자는 일반 구성원(MEMBER)이 됩니다. "
+                    + "동거 봇(구성원 목록의 bot=true)에게는 양도할 수 없습니다(HOUSE_OWNER_TRANSFER_TO_BOT, 400). "
                     + "targetMembershipId 는 구성원 목록(GET /api/v1/houses/{houseId}/members) 응답의 membershipId 값을 사용합니다.")
     @PostMapping("/{houseId}/transfer-ownership")
     public TransferOwnershipResponse transferOwnership(@CurrentUser AuthUser user,
@@ -220,8 +221,8 @@ public class HouseController {
     @Operation(summary = "집 탈퇴",
             description = "참여 중인 집에서 나갑니다. 해당 집의 활성(ACTIVE) 구성원만 호출할 수 있습니다. "
                     + "탈퇴하면 상태가 LEFT 로 바뀌고 집의 현재 구성원 수가 1 감소하며, 이후 같은 집에 다시 참여하면 기존 구성원 정보가 재활성화됩니다. "
-                    + "소유자는 혼자 남은 경우에 바로 탈퇴할 수 있고, 다른 활성 구성원이 있으면 소유권을 양도한 뒤 탈퇴할 수 있습니다. "
-                    + "마지막 구성원이 나가면 집이 정리되어 탐색·조회에서 제외됩니다.")
+                    + "소유자는 사람 구성원이 본인뿐이면(동거 봇만 남아 있어도) 바로 탈퇴할 수 있고, 다른 사람 활성 구성원이 있으면 소유권을 양도한 뒤 탈퇴할 수 있습니다. "
+                    + "마지막 사람이 나가면 남은 동거 봇도 함께 나가고 집이 정리되어 탐색·조회에서 제외됩니다.")
     @DeleteMapping("/{houseId}/members/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(@CurrentUser AuthUser user,

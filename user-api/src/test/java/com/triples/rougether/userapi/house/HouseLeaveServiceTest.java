@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.house;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,13 +15,16 @@ import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
+import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
+import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,11 +35,22 @@ class HouseLeaveServiceTest {
     @Mock private HouseMemberRepository houseMemberRepository;
     @Mock private RoutineRepository routineRepository;
     @Mock private CategoryRepository categoryRepository;
-    @InjectMocks private HouseMemberCommandService houseMemberCommandService;
+    @Mock private UserRepository userRepository;
+    @Mock private NotificationService notificationService;
+    private HouseMemberCommandService houseMemberCommandService;
+
+    @BeforeEach
+    void setUp() {
+        // 봇 거주 규칙(#309)은 실제 서비스를 mock 리포지토리 위에 올려 "사람 0명 → 해체" 판정을 그대로 태운다.
+        houseMemberCommandService = new HouseMemberCommandService(
+                houseRepository, houseMemberRepository, notificationService, routineRepository, categoryRepository,
+                new BotResidencyService(userRepository, houseMemberRepository));
+    }
 
     private House aliveHouse() {
         House house = mock(House.class);
         when(house.isDeleted()).thenReturn(false);
+        lenient().when(house.getId()).thenReturn(1L); // 봇 해체 판정이 house.getId() 로 사람 수를 센다
         return house;
     }
 
@@ -52,7 +67,7 @@ class HouseLeaveServiceTest {
         HouseMember me = activeMember(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(me));
-        when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L, 2L);
 
         houseMemberCommandService.leave(7L, 1L);
 
@@ -67,7 +82,7 @@ class HouseLeaveServiceTest {
         HouseMember owner = activeMember(true);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
-        when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L, 2L);
 
         assertThatThrownBy(() -> houseMemberCommandService.leave(7L, 1L))
                 .isInstanceOf(BusinessException.class)
@@ -82,7 +97,7 @@ class HouseLeaveServiceTest {
         HouseMember lastOwner = activeMember(true);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastOwner));
-        when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L, 0L);
 
         houseMemberCommandService.leave(7L, 1L);
 
@@ -98,7 +113,7 @@ class HouseLeaveServiceTest {
         HouseMember lastMember = activeMember(false);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(lastMember));
-        when(houseMemberRepository.countByHouseIdAndStatus(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(1L, 0L);
 
         houseMemberCommandService.leave(7L, 1L);
 
