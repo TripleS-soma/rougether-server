@@ -1,5 +1,6 @@
 package com.triples.rougether.batch.weeklyreport;
 
+import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import java.time.LocalDate;
@@ -15,8 +16,8 @@ import org.springframework.data.domain.PageRequest;
 @RequiredArgsConstructor
 class WeeklyReportUserReader implements ItemReader<Long> {
 
-    static final List<RoutineLogStatus> COUNTED_STATUSES =
-            List.of(RoutineLogStatus.COMPLETED, RoutineLogStatus.FAILED);
+    // 정본은 domain WeeklyReportPolicy(관측 화면과 공유). 여기서는 별칭만 둔다.
+    static final List<RoutineLogStatus> COUNTED_STATUSES = WeeklyReportPolicy.COUNTED_LOG_STATUSES;
     private static final int PAGE_SIZE = 100;
 
     private final RoutineLogRepository routineLogRepository;
