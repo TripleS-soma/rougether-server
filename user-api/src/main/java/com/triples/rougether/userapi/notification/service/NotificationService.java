@@ -34,6 +34,10 @@ public class NotificationService {
     }
 
     public void send(Long userId, NotificationContent content, Long refId) {
+        // 동거 봇(#308)은 알림을 읽을 주체가 없다 — 저장·푸시 모두 건너뛴다(응원·입주·미션 달성 알림 등 호출처 공통).
+        if (userRepository.existsByIdAndBotTrue(userId)) {
+            return;
+        }
         User user = userRepository.getReferenceById(userId);
         Notification notification = notificationRepository.save(
                 Notification.create(user, content.type(), content.title(), content.body(), refId));

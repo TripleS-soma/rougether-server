@@ -72,7 +72,8 @@
 
             <div class="observation-note">
                 <strong>지표 기준</strong>
-                <span>최근 인증 접속은 실시간 온라인 상태가 아니라 로그인·토큰 재발급 시각입니다. 루틴·투두 내용은 노출하지 않고 건수만 집계합니다.</span>
+                <span>최근 인증 접속은 실시간 온라인 상태가 아니라 로그인·토큰 재발급 시각입니다. 루틴·투두 내용은 노출하지 않고 건수만 집계합니다.
+                    동거 봇은 요약과 활성/탈퇴/전체 목록에서 제외되며 계정 상태 "봇"으로만 조회됩니다.</span>
             </div>
 
             <div class="observation-filters">
@@ -85,6 +86,7 @@
                     <select id="accountStatus" class="observation-select">
                         <option value="ACTIVE">활성</option>
                         <option value="WITHDRAWN">탈퇴</option>
+                        <option value="BOT">봇</option>
                         <option value="ALL">전체</option>
                     </select>
                 </label>
@@ -243,7 +245,8 @@
             const statusCell = document.createElement('td');
             const status = document.createElement('span');
             status.className = 'observation-status observation-status--' + user.accountStatus.toLowerCase();
-            status.textContent = user.accountStatus === 'ACTIVE' ? '활성' : '탈퇴';
+            status.textContent = user.accountStatus === 'ACTIVE' ? '활성'
+                : user.accountStatus === 'BOT' ? '봇' : '탈퇴';
             statusCell.append(status);
             tr.append(statusCell);
 

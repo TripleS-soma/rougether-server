@@ -95,10 +95,11 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("status") RoutineLogStatus status);
 
     // 주간 회고 대상 사용자(#286): 기간 내 COMPLETED/FAILED log가 있는 사용자. 탈퇴(익명화) 회원과
-    // soft-deleted 루틴의 log는 제외한다(회고 결정값). afterUserId 초과분을 user id 오름차순으로 keyset 순회함.
+    // soft-deleted 루틴의 log는 제외한다(회고 결정값). 동거 봇(#308)도 제외 — 봇 로그로 LLM 을 호출하지 않는다.
+    // afterUserId 초과분을 user id 오름차순으로 keyset 순회함.
     @Query("select distinct r.user.id from RoutineLog l join l.routine r join r.user u "
             + "where l.routineDate between :fromDate and :toDate "
-            + "and l.status in :statuses and r.deletedAt is null and u.deletedAt is null "
+            + "and l.status in :statuses and r.deletedAt is null and u.deletedAt is null and u.bot = false "
             + "and r.user.id > :afterUserId "
             + "order by r.user.id")
     List<Long> findUserIdsWithLogsInPeriod(

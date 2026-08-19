@@ -188,6 +188,40 @@ class AdminUserObservationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("온보딩 상태")));
     }
 
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 동거_봇은_요약과_활성_탈퇴_전체_목록에서_빠지고_BOT_상태로만_조회된다() throws Exception {
+        User human = userRepository.save(User.signUp("observation-human@rougether.dev"));
+        human.recordAccess(Instant.now());
+        completeOnboarding(human);
+        User bot = userRepository.save(User.bot("observation-bot", "관측봇", "요약에 섞이면 안 됨"));
+        bot.recordAccess(Instant.now());
+        completeOnboarding(bot); // 시드가 채우는 온보딩 조건 — 그래도 KPI 에서 빠져야 한다
+
+        mockMvc.perform(get("/admin/users/summary"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeUsers").value(1))
+                .andExpect(jsonPath("$.newUsersLast7Days").value(1))
+                .andExpect(jsonPath("$.recentlyAccessedLast7Days").value(1))
+                .andExpect(jsonPath("$.onboardingCompletedUsers").value(1));
+
+        for (String status : new String[] {"ACTIVE", "WITHDRAWN", "ALL"}) {
+            mockMvc.perform(get("/admin/users").param("query", "관측봇").param("accountStatus", status))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items.length()").value(0));
+        }
+        mockMvc.perform(get("/admin/users").param("accountStatus", "BOT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].userId").value(bot.getId()))
+                .andExpect(jsonPath("$.items[0].nickname").value("관측봇"))
+                .andExpect(jsonPath("$.items[0].accountStatus").value("BOT"))
+                .andExpect(jsonPath("$.items[0].onboardingCompleted").value(true));
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("<option value=\"BOT\">봇</option>")));
+    }
+
     private void completeOnboarding(User user) {
         String suffix = String.valueOf(user.getId());
         jdbcTemplate.update(

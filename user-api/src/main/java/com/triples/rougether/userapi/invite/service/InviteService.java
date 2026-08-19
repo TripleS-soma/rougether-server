@@ -45,6 +45,7 @@ public class InviteService {
 
     @Transactional
     public MyInviteCodeResponse getMyCode(Long userId) {
+        rejectBot(userId);
         String code = userInviteCodeRepository.findByUserId(userId)
                 .map(UserInviteCode::getCode)
                 .orElseGet(() -> issueCode(userId));
@@ -68,6 +69,11 @@ public class InviteService {
         if (inviterUserId.equals(inviteeUserId)) {
             throw new BusinessException(InviteErrorCode.INVITE_SELF_NOT_ALLOWED);
         }
+        // 동거 봇(#308)은 초대자·피초대자 어느 쪽으로도 보상에 참여하지 못한다(코인 파밍 통로 차단). 락 전에 거른다.
+        if (inviteCode.getUser().isBot()) {
+            throw new BusinessException(InviteErrorCode.INVITE_BOT_NOT_ALLOWED);
+        }
+        rejectBot(inviteeUserId);
 
         lockUsersInIdOrder(inviterUserId, inviteeUserId);
 
@@ -120,6 +126,12 @@ public class InviteService {
         Long larger = Math.max(first, second);
         requireUser(smaller);
         requireUser(larger);
+    }
+
+    private void rejectBot(Long userId) {
+        if (userRepository.existsByIdAndBotTrue(userId)) {
+            throw new BusinessException(InviteErrorCode.INVITE_BOT_NOT_ALLOWED);
+        }
     }
 
     private User requireUser(Long userId) {

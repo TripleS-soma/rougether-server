@@ -6,7 +6,8 @@ public enum InviteErrorCode implements ErrorCode {
 
     INVITE_CODE_NOT_FOUND("INVITE_CODE_NOT_FOUND", "유효하지 않은 초대코드입니다.", 404),
     INVITE_SELF_NOT_ALLOWED("INVITE_SELF_NOT_ALLOWED", "자신의 초대코드는 사용할 수 없습니다.", 400),
-    INVITE_ALREADY_REDEEMED("INVITE_ALREADY_REDEEMED", "이미 초대 보상을 받았습니다.", 409);
+    INVITE_ALREADY_REDEEMED("INVITE_ALREADY_REDEEMED", "이미 초대 보상을 받았습니다.", 409),
+    INVITE_BOT_NOT_ALLOWED("INVITE_BOT_NOT_ALLOWED", "봇 계정은 초대 보상에 참여할 수 없습니다.", 403);
 
     private final String code;
     private final String message;
