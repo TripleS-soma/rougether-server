@@ -60,6 +60,10 @@ public class AuthService {
             // 탈퇴(soft delete) 회원은 없는 회원과 동일하게 거부함.
             user = userRepository.findByIdAndDeletedAtIsNull(userId)
                     .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
+            // 동거 봇(#307)은 서버가 움직이는 로그인 불가 계정 — dev-login 으로도 토큰을 발급하지 않는다.
+            if (user.isBot()) {
+                throw new BusinessException(AuthErrorCode.BOT_LOGIN_NOT_ALLOWED);
+            }
             isNewUser = false;
         }
 

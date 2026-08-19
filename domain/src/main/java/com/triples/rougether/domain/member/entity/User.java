@@ -45,8 +45,23 @@ public class User extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    // 규칙 기반 동거 봇(#307). 서버가 시드하는 로그인 불가 계정 — 관측·보상·알림·배치·회고에서 격리(#308)되고
+    // 집 구성원 응답에 bot 으로 표시(#309)된다. botKey 는 코드 프로필 카탈로그와 1:1 매핑되는 시드 멱등 키.
+    @Column(name = "is_bot", nullable = false)
+    private boolean bot;
+
+    @Column(name = "bot_key", length = 40)
+    private String botKey;
+
     private User(String email) {
         this.email = email;
+    }
+
+    private User(String botKey, String nickname, String bio) {
+        this.bot = true;
+        this.botKey = botKey;
+        this.nickname = nickname;
+        this.bio = bio;
     }
 
     // 소셜 가입 시점엔 닉네임을 받지 않음(온보딩에서 채움) → nickname null.
@@ -57,6 +72,11 @@ public class User extends BaseEntity {
     // 소셜 provider가 이메일을 제공/동의한 경우 가입 시 저장함(미제공이면 null).
     public static User signUp(String email) {
         return new User(email);
+    }
+
+    // 동거 봇 계정. oauth 계정·이메일 없이 서버가 만들며 닉네임·bio 는 프로필 카탈로그가 채운다.
+    public static User bot(String botKey, String nickname, String bio) {
+        return new User(botKey, nickname, bio);
     }
 
     // 마지막 접속(토큰 발급) 시각 기록. 로그인과 refresh 정상 회전 시 갱신됨.
