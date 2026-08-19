@@ -70,7 +70,10 @@ public class RoutineController {
             description = "로그인한 회원의 새 루틴을 등록합니다. 상태는 ACTIVE로 시작합니다. "
                     + "categoryId를 지정하지 않으면 미분류로 등록되며, 소유한 카테고리만 지정할 수 있습니다. "
                     + "repeatType이 WEEKLY/BIWEEKLY이면 repeatDays.daysOfWeek로 반복 요일을 지정하고(BIWEEKLY는 startsOn 필수), "
-                    + "MONTHLY면 repeatDays.dayOfMonth, YEARLY면 repeatDays.month/day를 지정합니다(DAILY면 repeatDays 생략).")
+                    + "MONTHLY면 repeatDays.dayOfMonth, YEARLY면 repeatDays.month/day를 지정합니다(DAILY면 repeatDays 생략). "
+                    + "기기 캘린더의 반복 일정을 가져올 때는 externalSource·externalId(시리즈 id)를 함께 보내면 외부 참조가 기록되며, "
+                    + "같은 조합은 회원당 한 번만 등록할 수 있습니다(지운 루틴·스케줄을 바꿔 갈린 옛 버전 포함). "
+                    + "임포트된 루틴은 일반 루틴과 동일하게 수정·삭제·완료할 수 있고, 스케줄을 바꿔 새 버전이 생겨도 응답의 externalSource·externalId는 계보 원본의 값을 유지합니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineResponse create(@CurrentUser AuthUser authUser,

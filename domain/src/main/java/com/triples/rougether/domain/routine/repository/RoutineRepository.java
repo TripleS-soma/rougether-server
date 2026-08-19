@@ -30,6 +30,12 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     // 과거 날짜 액션용: 과거 캘린더가 내려준 닫힌(soft-deleted) 버전 id도 소유권만 맞으면 허용
     Optional<Routine> findByIdAndUserId(Long id, Long userId);
 
+    // 기기 캘린더 임포트 중복 판정. soft delete 된 행(스케줄 수정으로 닫힌 옛 버전 포함)도 포함 — unique 와 같은 범위
+    boolean existsByUserIdAndExternalSourceAndExternalId(Long userId, String externalSource, String externalId);
+
+    // 응답의 외부 참조 해석용: 계보 원본(origin) row 중 외부 참조가 있는 것만, 소유자 스코프로(soft delete 행 포함)
+    List<Routine> findByUserIdAndIdInAndExternalIdIsNotNull(Long userId, Collection<Long> ids);
+
     // 카테고리 삭제 차단 검사용: status 무관 살아있는 루틴 존재 여부
     boolean existsByCategoryIdAndDeletedAtIsNull(Long categoryId);
 

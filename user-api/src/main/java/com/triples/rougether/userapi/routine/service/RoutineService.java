@@ -9,6 +9,7 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
+import com.triples.rougether.userapi.global.persistence.UniqueViolations;
 import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
@@ -21,16 +22,26 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.MonthDay;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class RoutineService {
+
+    private static final Logger log = LoggerFactory.getLogger(RoutineService.class);
+    // V49 uk_routines_user_external — 임포트 경로에서 unique 위반을 다른 무결성 오류와 구분하는 기준
+    private static final String EXTERNAL_REF_CONSTRAINT = "uk_routines_user_external";
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -58,12 +69,12 @@ public class RoutineService {
             routines = routineRepository
                     .findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(userId);
         }
-        return new RoutineListResponse(routines.stream().map(RoutineResponse::from).toList());
+        return new RoutineListResponse(toResponses(routines));
     }
 
     @Transactional(readOnly = true)
     public RoutineResponse get(Long userId, Long routineId) {
-        return RoutineResponse.from(findOwned(userId, routineId));
+        return toResponse(findOwned(userId, routineId));
     }
 
     @Transactional
@@ -75,17 +86,92 @@ public class RoutineService {
         validateRepeatSchedule(request.repeatType(), request.startsOn(), request.repeatDays());
         LocalDate startsOn = resolveStartsOn(request.startsOn());
         validateDateRange(startsOn, request.endsOn());
-        Routine routine = Routine.create(user, category, request.title(), request.authType(),
-                request.repeatType(), repeatDays, request.scheduledTime(),
-                startsOn, request.endsOn());
+        if (request.hasPartialExternalRef()) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_EXTERNAL_REF_INCOMPLETE);
+        }
+        Routine routine = request.hasExternalRef()
+                ? newImportedRoutine(userId, user, category, request, repeatDays, startsOn)
+                : Routine.create(user, category, request.title(), request.authType(),
+                        request.repeatType(), repeatDays, request.scheduledTime(),
+                        startsOn, request.endsOn());
         if (request.houseMissionId() != null) {
             houseLinkValidator.validateMissionLink(userId, request.houseMissionId());
             routine.linkHouseMission(request.houseMissionId());
         }
-        Routine saved = routineRepository.save(routine);
+        Routine saved = routine.hasExternalRef() ? saveImported(userId, routine) : routineRepository.save(routine);
         // 계보 루트를 자기 id로 지정(dirty → 트랜잭션 커밋 시 반영)
         saved.assignOriginToSelf();
         return RoutineResponse.from(saved);
+    }
+
+    // 기기 캘린더 반복 일정 임포트: (user, externalSource, externalId) 가 이미 있으면 409 — soft delete·옛 버전 row 도 포함해
+    // 지운·스케줄을 바꾼 시리즈를 되살리지 않는다. 앞뒤 공백은 같은 참조로 본다
+    private Routine newImportedRoutine(Long userId, User user, Category category, RoutineCreateRequest request,
+                                       String repeatDays, LocalDate startsOn) {
+        String externalSource = request.externalSource().trim();
+        String externalId = request.externalId().trim();
+        if (routineRepository.existsByUserIdAndExternalSourceAndExternalId(userId, externalSource, externalId)) {
+            throw new BusinessException(RoutineErrorCode.ROUTINE_EXTERNAL_DUPLICATE);
+        }
+        return Routine.createImported(user, category, request.title(), request.authType(),
+                request.repeatType(), repeatDays, request.scheduledTime(), startsOn, request.endsOn(),
+                externalSource, externalId);
+    }
+
+    // flush 까지 해서 unique 위반을 이 자리에서 잡는다(트랜잭션은 예외로 롤백됨). 사전 조회를 통과한 동시 요청만 여기서 걸린다.
+    // 단건 트랜잭션 전용 — 상위 @Transactional 에서 여러 건을 돌리며 409 를 잡고 계속 진행하면 커밋 시점에 UnexpectedRollbackException
+    private Routine saveImported(Long userId, Routine routine) {
+        try {
+            return routineRepository.saveAndFlush(routine);
+        } catch (DataIntegrityViolationException e) {
+            if (!UniqueViolations.isViolationOf(e, EXTERNAL_REF_CONSTRAINT)) {
+                // 중복이 아닌 무결성 오류를 409 로 위장하면 앱이 "이미 가져옴"으로 건너뛰어 조용히 유실된다
+                throw e;
+            }
+            // 원인 메시지에는 externalId 원문이 실리므로 제약 이름만 남긴다
+            log.warn("임포트 루틴 중복 저장 시도(unique 위반) userId={} source={} constraint={}",
+                    userId, routine.getExternalSource(), EXTERNAL_REF_CONSTRAINT);
+            throw new BusinessException(RoutineErrorCode.ROUTINE_EXTERNAL_DUPLICATE);
+        }
+    }
+
+    // 응답의 외부 참조는 계보 원본(origin row)에서 읽는다 — 스케줄 수정으로 갈린 새 버전에는 복사하지 않기 때문(#317).
+    // 이 row 에 값이 있으면 그대로, 없고 origin 이 다른 row 면 origin 을 조회. 목록은 origin id 를 모아 1회 배치 조회
+    private RoutineResponse toResponse(Routine routine) {
+        if (routine.hasExternalRef() || !isBranchedVersion(routine)) {
+            return RoutineResponse.from(routine);
+        }
+        // 계보는 항상 같은 유저지만 소유자 스코프를 코드에 드러낸다(findByIdAndUserId 는 soft delete 행도 읽음)
+        Routine origin = routineRepository.findByIdAndUserId(routine.getOriginRoutineId(), routine.getUser().getId())
+                .filter(Routine::hasExternalRef)
+                .orElse(null);
+        return origin != null
+                ? RoutineResponse.from(routine, origin.getExternalSource(), origin.getExternalId())
+                : RoutineResponse.from(routine);
+    }
+
+    private List<RoutineResponse> toResponses(List<Routine> routines) {
+        Set<Long> originIds = routines.stream()
+                .filter(r -> !r.hasExternalRef() && isBranchedVersion(r))
+                .map(Routine::getOriginRoutineId)
+                .collect(Collectors.toSet());
+        Map<Long, Routine> origins = originIds.isEmpty() ? Map.of()
+                : routineRepository.findByUserIdAndIdInAndExternalIdIsNotNull(
+                                routines.get(0).getUser().getId(), originIds).stream()
+                        .collect(Collectors.toMap(Routine::getId, r -> r, (a, b) -> a, HashMap::new));
+        return routines.stream()
+                .map(r -> {
+                    Routine origin = (!r.hasExternalRef() && isBranchedVersion(r)) ? origins.get(r.getOriginRoutineId()) : null;
+                    return origin != null
+                            ? RoutineResponse.from(r, origin.getExternalSource(), origin.getExternalId())
+                            : RoutineResponse.from(r);
+                })
+                .toList();
+    }
+
+    // 스케줄 수정으로 갈린 버전인지(origin 이 자기 자신이 아님)
+    private static boolean isBranchedVersion(Routine routine) {
+        return routine.getOriginRoutineId() != null && !routine.getOriginRoutineId().equals(routine.getId());
     }
 
     @Transactional
@@ -120,7 +206,7 @@ public class RoutineService {
                 newVersion.linkHouseMission(request.houseMissionId());
             }
             routine.softDelete(Instant.now());
-            return RoutineResponse.from(routineRepository.save(newVersion));
+            return toResponse(routineRepository.save(newVersion));
         }
 
         // 제자리 수정(제목·카테고리·시각·인증 변경, 또는 오늘 생성분의 스케줄 변경) — 과거에도 반영됨.
@@ -132,7 +218,7 @@ public class RoutineService {
         if (request.houseMissionId() != null) {
             routine.linkHouseMission(request.houseMissionId());
         }
-        return RoutineResponse.from(routine);
+        return toResponse(routine);
     }
 
     // 반복 스케줄 필드(repeat_type·repeat_days·starts_on·ends_on) 중 하나라도 현재값과 달라졌는지.

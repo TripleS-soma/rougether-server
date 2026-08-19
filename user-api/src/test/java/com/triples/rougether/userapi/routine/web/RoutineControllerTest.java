@@ -1,7 +1,9 @@
 package com.triples.rougether.userapi.routine.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,7 +83,7 @@ class RoutineControllerTest {
         when(routineService.list(1L, null, null)).thenReturn(new RoutineListResponse(List.of(
                 new RoutineResponse(10L, "아침 운동", 3L,
                         AuthType.PHOTO, RoutineStatus.ACTIVE,
-                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L, null))));
+                        "WEEKLY", new RepeatDays(List.of("MON")), null, null, null, 10L, null, null, null))));
 
         mockMvc.perform(get("/api/v1/routines"))
                 .andExpect(status().isOk())
@@ -98,7 +100,7 @@ class RoutineControllerTest {
     void 등록은_201과_생성된_루틴을_응답한다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "물 마시기", null, AuthType.CHECK,
-                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L, null));
+                        RoutineStatus.ACTIVE, null, null, null, null, null, 5L, null, null, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -113,7 +115,7 @@ class RoutineControllerTest {
     void 등록_요청의_houseMissionId가_서비스까지_전달되고_응답에_내려간다() throws Exception {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "공원 산책", null, AuthType.CHECK,
-                        RoutineStatus.ACTIVE, "DAILY", null, null, null, null, 5L, 12L));
+                        RoutineStatus.ACTIVE, "DAILY", null, null, null, null, 5L, 12L, null, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -133,7 +135,7 @@ class RoutineControllerTest {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(5L, "아침 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "WEEKLY", new RepeatDays(List.of("MON", "WED")),
-                        null, null, null, 5L, null));
+                        null, null, null, 5L, null, null, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -209,7 +211,7 @@ class RoutineControllerTest {
         when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
                 .thenReturn(new RoutineResponse(6L, "격주 운동", null, AuthType.CHECK,
                         RoutineStatus.ACTIVE, "BIWEEKLY", new RepeatDays(List.of("MON")),
-                        null, LocalDate.of(2026, 7, 13), null, 6L, null));
+                        null, LocalDate.of(2026, 7, 13), null, 6L, null, null, null));
 
         mockMvc.perform(post("/api/v1/routines")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -437,5 +439,134 @@ class RoutineControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("items[0].date"));
+    }
+
+    // --- 기기 캘린더 반복 일정 임포트 외부 참조 (#317) ---
+
+    private static RoutineResponse importedResponse(String source, String externalId) {
+        return new RoutineResponse(5L, "PT", null, AuthType.CHECK, RoutineStatus.ACTIVE, "WEEKLY",
+                new RepeatDays(List.of("TUE")), null, LocalDate.of(2026, 9, 1), null, 5L, null, source, externalId);
+    }
+
+    private static String importBody(String source, String externalId) {
+        StringBuilder b = new StringBuilder("{\"title\":\"PT\",\"authType\":\"CHECK\",\"repeatType\":\"WEEKLY\","
+                + "\"repeatDays\":{\"daysOfWeek\":[\"TUE\"]}");
+        if (source != null) {
+            b.append(",\"externalSource\":\"").append(source).append("\"");
+        }
+        if (externalId != null) {
+            b.append(",\"externalId\":\"").append(externalId).append("\"");
+        }
+        return b.append("}").toString();
+    }
+
+    @Test
+    void 루틴_등록_요청의_externalSource_externalId가_서비스에_전달되고_응답에_노출된다() throws Exception {
+        when(routineService.create(eq(1L), argThat(req -> req != null
+                && "GOOGLE_CALENDAR".equals(req.externalSource()) && "series-1".equals(req.externalId()))))
+                .thenReturn(importedResponse("GOOGLE_CALENDAR", "series-1"));
+
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", "series-1")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(5))
+                .andExpect(jsonPath("$.externalSource").value("GOOGLE_CALENDAR"))
+                .andExpect(jsonPath("$.externalId").value("series-1"));
+    }
+
+    @Test
+    void 루틴_externalSource가_대문자_스네이크가_아니면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("google-calendar", "series-1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("externalSource"));
+    }
+
+    @Test
+    void 루틴_externalId가_공백뿐이면_400과_VALIDATION_FAILED() throws Exception {
+        mockMvc.perform(post("/api/v1/routines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", "   ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("externalId"));
+    }
+
+    @Test
+    void 루틴_externalSource는_30자까지_허용하고_31자면_400() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(importedResponse("A".repeat(30), "series-1"));
+
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("A".repeat(30), "series-1")))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("A".repeat(31), "series-1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("externalSource"));
+    }
+
+    @Test
+    void 루틴_externalId는_255자까지_허용하고_256자면_400() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(importedResponse("GOOGLE_CALENDAR", "e".repeat(255)));
+
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", "e".repeat(255))))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", "e".repeat(256))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("externalId"));
+    }
+
+    @Test
+    void 루틴_외부_참조는_trim_후_검증되어_앞뒤_공백이_있어도_통과하고_잘린_값이_전달된다() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenReturn(importedResponse("GOOGLE_CALENDAR", "series-1"));
+
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("  GOOGLE_CALENDAR ", "  " + "e".repeat(255) + "  ")))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<RoutineCreateRequest> captor = ArgumentCaptor.forClass(RoutineCreateRequest.class);
+        verify(routineService).create(eq(1L), captor.capture());
+        assertThat(captor.getValue().externalSource()).isEqualTo("GOOGLE_CALENDAR");
+        assertThat(captor.getValue().externalId()).hasSize(255);
+    }
+
+    @Test
+    void 이미_가져온_반복_일정이면_409와_ROUTINE_EXTERNAL_DUPLICATE() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenThrow(new BusinessException(RoutineErrorCode.ROUTINE_EXTERNAL_DUPLICATE));
+
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", "series-1")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROUTINE_EXTERNAL_DUPLICATE"));
+    }
+
+    @Test
+    void 루틴_외부_참조를_한쪽만_보내면_400과_ROUTINE_EXTERNAL_REF_INCOMPLETE() throws Exception {
+        when(routineService.create(eq(1L), any(RoutineCreateRequest.class)))
+                .thenThrow(new BusinessException(RoutineErrorCode.ROUTINE_EXTERNAL_REF_INCOMPLETE));
+
+        mockMvc.perform(post("/api/v1/routines").contentType(MediaType.APPLICATION_JSON)
+                        .content(importBody("GOOGLE_CALENDAR", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ROUTINE_EXTERNAL_REF_INCOMPLETE"));
+    }
+
+    @Test
+    void 일반_루틴_응답의_externalSource_externalId는_null이다() throws Exception {
+        when(routineService.get(eq(1L), eq(5L))).thenReturn(importedResponse(null, null));
+
+        mockMvc.perform(get("/api/v1/routines/5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.externalSource").value(nullValue()))
+                .andExpect(jsonPath("$.externalId").value(nullValue()));
     }
 }

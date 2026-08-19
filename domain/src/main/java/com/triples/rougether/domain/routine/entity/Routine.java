@@ -79,6 +79,16 @@ public class Routine extends BaseEntity {
     @Column(name = "house_mission_id")
     private Long houseMissionId;
 
+    // 기기 캘린더 반복 일정 임포트 출처(예 GOOGLE_CALENDAR)와 그 캘린더의 시리즈 id. 일반 루틴은 둘 다 null.
+    // (user_id, external_source, external_id) unique 가 중복 임포트의 방어선. 임포트로 만들어진 원본 row 에만 기록하며
+    // 스케줄 수정으로 갈린 새 버전(copyAsNewVersion)에는 복사하지 않는다 — 복사하면 옛 row(soft delete, unique 포함)와 충돌.
+    // 현재 버전의 출처는 계보 뿌리(origin_routine_id) row 에서 읽는다(#317, 근본 정리는 #316)
+    @Column(name = "external_source", length = 30)
+    private String externalSource;
+
+    @Column(name = "external_id", length = 255)
+    private String externalId;
+
     private Routine(User user, Category category, String title, AuthType authType,
                     String repeatType, String repeatDays, LocalTime scheduledTime,
                     LocalDate startsOn, LocalDate endsOn) {
@@ -99,6 +109,22 @@ public class Routine extends BaseEntity {
                                  LocalDate startsOn, LocalDate endsOn) {
         return new Routine(user, category, title, authType, repeatType, repeatDays,
                 scheduledTime, startsOn, endsOn);
+    }
+
+    // 기기 캘린더 반복 일정 임포트: 외부 참조(시리즈 id)를 함께 기록. 두 값은 호출자가 둘 다 채워서 넘긴다
+    public static Routine createImported(User user, Category category, String title, AuthType authType,
+                                         String repeatType, String repeatDays, LocalTime scheduledTime,
+                                         LocalDate startsOn, LocalDate endsOn,
+                                         String externalSource, String externalId) {
+        Routine routine = new Routine(user, category, title, authType, repeatType, repeatDays,
+                scheduledTime, startsOn, endsOn);
+        routine.externalSource = externalSource;
+        routine.externalId = externalId;
+        return routine;
+    }
+
+    public boolean hasExternalRef() {
+        return externalSource != null && externalId != null;
     }
 
     // scheduledTime·endsOn은 해제(null) 반영을 위해 호출자가 유효값을 확정해 넘기며 무조건 대입함.
@@ -161,6 +187,8 @@ public class Routine extends BaseEntity {
         copy.status = this.status;
         copy.originRoutineId = this.originRoutineId;
         copy.houseMissionId = this.houseMissionId;
+        // external_source/external_id 는 의도적으로 복사하지 않는다 — 옛 버전(soft delete)이 unique 를 점유한 채 남아
+        // 재임포트를 계속 막고, 현재 버전의 출처 표시는 origin row 에서 읽는다(#317)
         return copy;
     }
 
