@@ -275,6 +275,35 @@ test_webex_alert_refresh_replaces_only_with_valid_values() {
   echo "ok - Webex alert refresh accepts only valid token and room values"
 }
 
+test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag() {
+  reset_scenario "bots-env-refresh"
+  printf 'ROUGETHER_BOTS_ENABLED=false\n' >> "$USER_RUNTIME_ENV"
+
+  BOTS_ENABLED="true"
+  refresh_bots_env
+  refresh_bots_env
+
+  assert_contains '^ROUGETHER_BOTS_ENABLED=true$' "$USER_RUNTIME_ENV" \
+    "bots flag must be written to the user-api runtime env"
+  if [ "$(grep -c '^ROUGETHER_BOTS_ENABLED=' "$USER_RUNTIME_ENV")" -ne 1 ]; then
+    echo "not ok - bots flag must not be duplicated across deploys" >&2
+    return 1
+  fi
+
+  BOTS_ENABLED="maybe"
+  refresh_bots_env
+  assert_contains '^ROUGETHER_BOTS_ENABLED=true$' "$USER_RUNTIME_ENV" \
+    "invalid bots flag must keep the current runtime value"
+  assert_not_contains 'maybe' "$USER_RUNTIME_ENV" \
+    "invalid bots flag must never enter the runtime env"
+
+  BOTS_ENABLED="false"
+  refresh_bots_env
+  assert_contains '^ROUGETHER_BOTS_ENABLED=false$' "$USER_RUNTIME_ENV" \
+    "bots flag can be turned off again"
+  echo "ok - bots flag refresh is idempotent and validates the value"
+}
+
 test_social_auth_refresh_updates_existing_runtime_env() {
   reset_scenario "social-auth-refresh"
   cat >> "$USER_RUNTIME_ENV" <<'EOF'
@@ -702,6 +731,7 @@ test_batch_env_is_bootstrapped_from_user_runtime_env
 test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
 test_admin_origin_secret_refresh_is_fail_closed
+test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
 test_first_batch_deploy_failure_stops_new_batch
 test_rollback_stops_batch_when_no_user_admin_images
 test_rollback_batch_restores_previous_image_deploy_env
