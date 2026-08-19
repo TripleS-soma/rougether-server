@@ -93,7 +93,14 @@ build {
 
   # 유닛 파일은 ssh 사용자 권한으로 /tmp 에 올린 뒤 root 로 제자리 이동
   provisioner "file" {
-    sources     = ["${path.root}/files/rougether-user-api.service", "${path.root}/files/rougether-admin-api.service", "${path.root}/files/rougether-batch.service"]
+    sources = [
+      "${path.root}/files/rougether-user-api.service",
+      "${path.root}/files/rougether-admin-api.service",
+      "${path.root}/files/rougether-user-api@.service",
+      "${path.root}/files/rougether-admin-api@.service",
+      "${path.root}/files/rougether-batch.service",
+      "${path.root}/files/rougether-blue-green.conf",
+    ]
     destination = "/tmp/"
   }
 
@@ -104,8 +111,8 @@ build {
 
       # 공통 런타임 — 부팅 때마다 하던 update/install 을 베이크 시점으로 이동
       "dnf update -y",
-      "dnf install -y docker awscli python3",
-      "systemctl enable docker",
+      "dnf install -y docker awscli python3 nginx",
+      "systemctl enable docker nginx",
 
       # rougether 유닛 정의 설치. enable/start 는 하지 않는다 —
       # env 파일·이미지가 없는 첫 부팅에서 crash-loop 하지 않도록 user-data 가 준비 후 기동한다.
@@ -113,8 +120,10 @@ build {
       # systemd 가 유닛 로드를 거부한다 — install 은 대상 디렉터리 컨텍스트를 상속한다.
       "mkdir -p /etc/rougether",
       "chmod 700 /etc/rougether",
-      "install -o root -g root -m 644 /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-batch.service /etc/systemd/system/",
-      "rm -f /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-batch.service",
+      "install -o root -g root -m 644 /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-user-api@.service /tmp/rougether-admin-api@.service /tmp/rougether-batch.service /etc/systemd/system/",
+      "install -o root -g root -m 644 /tmp/rougether-blue-green.conf /etc/nginx/conf.d/rougether.conf",
+      "rm -f /tmp/rougether-user-api.service /tmp/rougether-admin-api.service /tmp/rougether-user-api@.service /tmp/rougether-admin-api@.service /tmp/rougether-batch.service /tmp/rougether-blue-green.conf",
+      "nginx -t",
 
       # 이미지 다이어트 + 다음 부팅에서 cloud-init(user-data)이 새로 돌게 초기화
       "dnf clean all",

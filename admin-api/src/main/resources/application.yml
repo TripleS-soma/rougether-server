@@ -20,6 +20,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  session:
+    jdbc:
+      initialize-schema: never
 
 server:
   port: 8081
@@ -59,6 +62,9 @@ spring:
   # 운영 공유 DB 에서는 user-api 만 migration 을 실행함. admin 은 검증만 수행.
   flyway:
     enabled: false
+  session:
+    jdbc:
+      initialize-schema: never
 
 server:
   tomcat:

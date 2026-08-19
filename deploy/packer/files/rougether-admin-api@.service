@@ -1,0 +1,17 @@
+[Unit]
+Description=Rougether admin-api %i container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/admin-api-%i.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api-%i
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api-%i --network host --memory 640m --memory-swap 640m --env JAVA_TOOL_OPTIONS=-Xmx384m --env-file /etc/rougether/admin-api.env --env SERVER_PORT=${ROUGETHER_HOST_PORT} --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_IMAGE}
+ExecStop=/usr/bin/docker stop --time 30 rougether-admin-api-%i
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

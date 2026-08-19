@@ -12,8 +12,8 @@ cleanup_test_root() {
 }
 trap cleanup_test_root EXIT
 
-# Load function definitions only. The first exact call starts the real deployment.
-awk '/^capture_rollback_images$/{exit} {print}' "$DEPLOY_SCRIPT" > "$FUNCTIONS_FILE"
+# Load function definitions only. The marker precedes the mode dispatcher that mutates the host.
+awk '/^# BEGIN_DEPLOY_EXECUTION$/{exit} {print}' "$DEPLOY_SCRIPT" > "$FUNCTIONS_FILE"
 source "$FUNCTIONS_FILE"
 
 AWS_MOCK_MODE="fail"
@@ -77,9 +77,35 @@ reset_scenario() {
   ADMIN_RUNTIME_ENV="$ENV_DIR/admin-api.env"
   BATCH_RUNTIME_ENV="$ENV_DIR/batch.env"
   FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
+  NGINX_CONFIG_DIR="$TEST_ROOT/$name/nginx"
+  NGINX_CONFIG_FILE="$NGINX_CONFIG_DIR/rougether.conf"
+  NGINX_BIN="/usr/bin/true"
   rollback_user_image=""
   rollback_admin_image=""
   rollback_batch_image=""
+  active_user_color=""
+  active_user_port=""
+  active_user_image=""
+  active_admin_color=""
+  active_admin_port=""
+  active_admin_image=""
+  active_batch_image=""
+  current_deployed_sha=""
+  user_switched=false
+  admin_switched=false
+  batch_switched=false
+  legacy_from_blue_green=false
+  legacy_cutover_started=false
+  rollback_user_color=""
+  rollback_user_port=""
+  rollback_admin_color=""
+  rollback_admin_port=""
+  rollback_deployed_sha=""
+  NEW_USER_IMAGE="registry/user:new"
+  NEW_ADMIN_IMAGE="registry/admin:new"
+  NEW_BATCH_IMAGE="registry/batch:new"
+  DEPLOYED_SHA="new-release-sha"
+  BLUE_GREEN_DRAIN_SECONDS=0
   firebase_credentials_backup=""
   firebase_credentials_replaced=false
   AWS_MOCK_MODE="fail"
@@ -93,7 +119,7 @@ reset_scenario() {
   APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="/test/apple-enc"
   ADMIN_ORIGIN_SECRET_PARAMETER_NAME="/test/admin-origin"
 
-  mkdir -p "$ENV_DIR" "$SYSTEMD_DIR"
+  mkdir -p "$ENV_DIR" "$SYSTEMD_DIR" "$NGINX_CONFIG_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$ADMIN_RUNTIME_ENV"
   chmod 600 "$USER_RUNTIME_ENV"
@@ -131,6 +157,32 @@ assert_not_contains() {
     echo "not ok - $message" >&2
     return 1
   fi
+}
+
+assert_before() {
+  local first_pattern="$1"
+  local second_pattern="$2"
+  local path="$3"
+  local message="$4"
+  local first_line second_line
+
+  first_line="$(grep -n -m1 -- "$first_pattern" "$path" | cut -d: -f1 || true)"
+  second_line="$(grep -n -m1 -- "$second_pattern" "$path" | cut -d: -f1 || true)"
+  if [ -z "$first_line" ] || [ -z "$second_line" ] || [ "$first_line" -ge "$second_line" ]; then
+    echo "not ok - $message" >&2
+    return 1
+  fi
+}
+
+write_matching_nginx_config() {
+  local user_port="$1"
+  local admin_port="$2"
+  cat > "$NGINX_CONFIG_FILE" <<EOF
+upstream user { server 127.0.0.1:$user_port; }
+upstream admin { server 10.0.0.10:$admin_port; }
+server { listen 8080; }
+server { listen 8081; }
+EOF
 }
 
 test_prune_preserves_rollback_tags_and_checks_free_space() {
@@ -713,6 +765,296 @@ test_admin_origin_secret_refresh_is_fail_closed() {
   echo "ok - admin origin secret refresh is fail-closed"
 }
 
+test_blue_green_slot_mapping_and_state_validation() {
+  reset_scenario "blue-green-state"
+  cat > "$STATE_FILE" <<'EOF'
+USER_API_IMAGE=registry/user:old
+USER_API_ACTIVE_COLOR=green
+USER_API_ACTIVE_PORT=28080
+ADMIN_API_IMAGE=registry/admin:old
+ADMIN_API_ACTIVE_COLOR=blue
+ADMIN_API_ACTIVE_PORT=18081
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYED_SHA=old-release
+EOF
+  write_matching_nginx_config 28080 18081
+
+  load_blue_green_state
+
+  [ "$active_user_color" = green ] && [ "$active_user_port" = 28080 ] \
+    && [ "$active_admin_color" = blue ] && [ "$active_admin_port" = 18081 ] \
+    || { echo "not ok - valid active slot state must load exactly" >&2; return 1; }
+  [ "$(inactive_color "$active_user_color")" = blue ] \
+    || { echo "not ok - inactive user slot must alternate" >&2; return 1; }
+
+  sed -i.bak 's/ADMIN_API_ACTIVE_PORT=18081/ADMIN_API_ACTIVE_PORT=28081/' "$STATE_FILE"
+  active_admin_color=""
+  active_admin_port=""
+  if load_blue_green_state >/dev/null 2>&1; then
+    echo "not ok - mismatched color and port must fail closed" >&2
+    return 1
+  fi
+  echo "ok - blue/green state validates color and port pairs"
+}
+
+test_blue_green_units_bind_internal_ports_and_cap_memory() {
+  reset_scenario "blue-green-units"
+  write_blue_green_units
+
+  assert_contains '127.0.0.1:${ROUGETHER_HOST_PORT}:8080' \
+    "$SYSTEMD_DIR/rougether-user-api@.service" \
+    "user slots must bind only their loopback candidate port"
+  assert_contains '--memory 768m --memory-swap 768m' \
+    "$SYSTEMD_DIR/rougether-user-api@.service" \
+    "user candidate must have a hard Docker memory cap without swap allowance"
+  assert_contains 'JAVA_TOOL_OPTIONS=-Xmx512m' \
+    "$SYSTEMD_DIR/rougether-user-api@.service" \
+    "user JVM heap must stay below its container cap"
+  assert_contains '--network host --memory 640m --memory-swap 640m' \
+    "$SYSTEMD_DIR/rougether-admin-api@.service" \
+    "admin slots must preserve host-network origin verification and cap memory"
+  assert_contains '--env-file /etc/rougether/admin-api.env --env SERVER_PORT=${ROUGETHER_HOST_PORT}' \
+    "$SYSTEMD_DIR/rougether-admin-api@.service" \
+    "admin slot port must override the legacy runtime env value"
+  assert_contains '--memory 640m --memory-swap 640m' \
+    "$SYSTEMD_DIR/rougether-batch.service" \
+    "single batch container must also have a hard memory cap"
+  echo "ok - blue/green units isolate candidate ports and cap memory"
+}
+
+test_memory_preflight_failure_does_not_start_candidate() {
+  reset_scenario "blue-green-memory"
+  local meminfo="$ENV_DIR/meminfo"
+  local calls="$ENV_DIR/calls.log"
+  cat > "$meminfo" <<'EOF'
+MemAvailable:     500000 kB
+SwapTotal:       2097148 kB
+SwapFree:        2097148 kB
+EOF
+
+  local exit_code=0
+  ( ROUGETHER_MEMINFO_PATH="$meminfo"
+    systemctl() { echo "systemctl $*" >> "$calls"; return 0; }
+    docker() { echo "docker $*" >> "$calls"; return 0; }
+    start_candidate user-api blue registry/user:new
+  ) >/dev/null 2>&1 || exit_code="$?"
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - insufficient MemAvailable must reject the candidate" >&2
+    return 1
+  fi
+  if [ -f "$calls" ]; then
+    assert_not_contains 'systemctl start' "$calls" "memory rejection must not start systemd candidate"
+    assert_not_contains 'docker rm' "$calls" "memory rejection must not touch candidate container"
+  fi
+  echo "ok - memory preflight failure leaves the active service untouched"
+}
+
+test_candidate_health_precedes_initial_proxy_cutover() {
+  reset_scenario "blue-green-order"
+  local calls="$ENV_DIR/calls.log"
+
+  ( start_candidate() {
+      echo "candidate-start $1 $2" >> "$calls"
+      echo "candidate-healthy $1 $2" >> "$calls"
+    }
+    apply_proxy_ports() { echo "proxy-switch user=$1 admin=$2" >> "$calls"; }
+    wait_health_stable() { echo "stable-health $1" >> "$calls"; }
+    stop_slot() { echo "stop-slot $1 $2" >> "$calls"; }
+    systemctl() { echo "systemctl $*" >> "$calls"; return 0; }
+    sleep() { :; }
+    deploy_api_blue_green user-api registry/user:new
+  )
+
+  assert_before 'candidate-healthy user-api blue' 'systemctl stop rougether-user-api' "$calls" \
+    "candidate must be healthy before the legacy service releases port 8080"
+  assert_before 'systemctl stop rougether-user-api' 'proxy-switch user=18080' "$calls" \
+    "initial proxy switch must happen only after fixed-port handoff"
+  assert_before 'proxy-switch user=18080' 'stable-health user-api-stable' "$calls" \
+    "stable health must run after the atomic proxy switch"
+  echo "ok - candidate health precedes initial proxy cutover"
+}
+
+test_candidate_health_failure_never_stops_active_service() {
+  reset_scenario "blue-green-candidate-fail"
+  local calls="$ENV_DIR/calls.log"
+
+  local exit_code=0
+  ( start_candidate() { echo "candidate-failed" >> "$calls"; return 1; }
+    apply_proxy_ports() { echo "proxy-switch" >> "$calls"; }
+    systemctl() { echo "systemctl $*" >> "$calls"; return 0; }
+    deploy_api_blue_green user-api registry/user:new
+  ) >/dev/null 2>&1 || exit_code="$?"
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - candidate health failure must fail deployment" >&2
+    return 1
+  fi
+  assert_not_contains 'systemctl stop rougether-user-api' "$calls" \
+    "failed candidate must not stop the active legacy service"
+  assert_not_contains 'proxy-switch' "$calls" \
+    "failed candidate must not change the proxy upstream"
+  echo "ok - candidate failure leaves active traffic unchanged"
+}
+
+test_nginx_reload_failure_restores_previous_config() {
+  reset_scenario "blue-green-nginx-rollback"
+  local expected="$ENV_DIR/expected-nginx.conf"
+  printf '%s\n' 'previous upstream' > "$NGINX_CONFIG_FILE"
+  cp "$NGINX_CONFIG_FILE" "$expected"
+
+  local exit_code=0
+  ( ensure_nginx_installed() { :; }
+    render_nginx_config() { printf 'candidate upstream %s %s\n' "$2" "$3" > "$1"; }
+    systemctl() {
+      case "$1 $2" in
+        'is-active --quiet') return 0 ;;
+        'reload nginx') return 1 ;;
+      esac
+      return 0
+    }
+    apply_proxy_ports 18080 18081
+  ) >/dev/null 2>&1 || exit_code="$?"
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - failed nginx reload must fail the switch" >&2
+    return 1
+  fi
+  assert_file_equal "$expected" "$NGINX_CONFIG_FILE" \
+    "failed nginx reload must atomically restore the previous config"
+  echo "ok - nginx reload failure restores the previous upstream"
+}
+
+test_blue_green_rollback_restarts_previous_slot_before_switching_back() {
+  reset_scenario "blue-green-service-rollback"
+  local calls="$ENV_DIR/calls.log"
+  active_user_color=green
+  active_user_port=28080
+  active_user_image=registry/user:failed
+  active_admin_port=18081
+
+  ( start_candidate() { echo "start-previous $1 $2 $3" >> "$calls"; }
+    apply_proxy_ports() { echo "proxy user=$1 admin=$2" >> "$calls"; }
+    wait_health_stable() { echo "stable $1" >> "$calls"; }
+    stop_slot() { echo "stop-failed $1 $2" >> "$calls"; }
+    rollback_api_blue_green user-api registry/user:previous blue 18080
+  )
+
+  assert_before 'start-previous user-api blue registry/user:previous' \
+    'proxy user=18080 admin=18081' "$calls" \
+    "previous slot must be healthy before traffic rolls back"
+  assert_before 'proxy user=18080 admin=18081' 'stable user-api-rollback' "$calls" \
+    "rollback must verify the fixed endpoint after switching back"
+  assert_before 'stable user-api-rollback' 'stop-failed user-api green' "$calls" \
+    "failed slot must stay available until rollback traffic is healthy"
+  echo "ok - blue/green rollback switches back before stopping the failed slot"
+}
+
+test_blue_green_orchestration_is_sequential_and_restarts_batch_once() {
+  reset_scenario "blue-green-orchestration"
+  local calls="$ENV_DIR/calls.log"
+
+  ( load_blue_green_state() { :; }
+    blue_green_release_is_active() { return 1; }
+    capture_rollback_images() {
+      rollback_user_image=registry/user:old
+      rollback_admin_image=registry/admin:old
+      rollback_batch_image=registry/batch:old
+    }
+    prune_unused_docker_images() { :; }
+    prepare_runtime_configuration() { :; }
+    pull_release_images() { :; }
+    write_blue_green_units() { :; }
+    deploy_api_blue_green() { echo "deploy-api $1" >> "$calls"; }
+    ensure_batch_runtime_env() { :; }
+    refresh_llm_env() { :; }
+    write_blue_green_state() { echo "state $1 $2" >> "$calls"; }
+    systemctl() { echo "systemctl $*" >> "$calls"; }
+    wait_health() { echo "health $1" >> "$calls"; }
+    finish_successful_deploy() { :; }
+    deploy_blue_green
+  )
+
+  assert_before 'deploy-api user-api' 'deploy-api admin-api' "$calls" \
+    "user candidate transaction must finish before admin candidate starts"
+  assert_before 'deploy-api admin-api' 'systemctl restart rougether-batch' "$calls" \
+    "batch must restart only after both API switches"
+  if [ "$(grep -c '^systemctl restart rougether-batch$' "$calls")" -ne 1 ]; then
+    echo "not ok - batch must restart exactly once" >&2
+    return 1
+  fi
+  assert_contains '^state ready new-release-sha$' "$calls" \
+    "successful release set must finish with one ready state"
+  echo "ok - blue/green APIs are sequential and batch restarts once"
+}
+
+test_active_release_is_idempotent() {
+  reset_scenario "blue-green-idempotent"
+  local calls="$ENV_DIR/calls.log"
+  cat > "$STATE_FILE" <<EOF
+USER_API_IMAGE=$NEW_USER_IMAGE
+USER_API_ACTIVE_COLOR=blue
+USER_API_ACTIVE_PORT=18080
+ADMIN_API_IMAGE=$NEW_ADMIN_IMAGE
+ADMIN_API_ACTIVE_COLOR=green
+ADMIN_API_ACTIVE_PORT=28081
+BATCH_API_IMAGE=$NEW_BATCH_IMAGE
+DEPLOYED_SHA=$DEPLOYED_SHA
+EOF
+  write_matching_nginx_config 18080 28081
+
+  ( wait_health_stable() { echo "stable $1" >> "$calls"; }
+    wait_health() { echo "health $1" >> "$calls"; }
+    capture_rollback_images() { echo "unexpected mutation" >> "$calls"; return 1; }
+    deploy_blue_green
+  ) >/dev/null
+
+  assert_not_contains 'unexpected mutation' "$calls" \
+    "already-active SHA must not pull, switch, or rewrite deployment state"
+  assert_contains '^stable user-api-current$' "$calls" "idempotent deploy must verify user health"
+  assert_contains '^stable admin-api-current$' "$calls" "idempotent deploy must verify admin health"
+  assert_contains '^health batch$' "$calls" "idempotent deploy must verify batch health"
+  echo "ok - already active release is idempotent"
+}
+
+test_legacy_emergency_mode_releases_nginx_ports_before_restart() {
+  reset_scenario "legacy-from-blue-green"
+  local calls="$ENV_DIR/calls.log"
+  cat > "$STATE_FILE" <<'EOF'
+USER_API_IMAGE=registry/user:old
+USER_API_ACTIVE_COLOR=blue
+USER_API_ACTIVE_PORT=18080
+ADMIN_API_IMAGE=registry/admin:old
+ADMIN_API_ACTIVE_COLOR=green
+ADMIN_API_ACTIVE_PORT=28081
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYED_SHA=old-release
+EOF
+  write_matching_nginx_config 18080 28081
+
+  ( capture_rollback_images() { :; }
+    prune_unused_docker_images() { :; }
+    prepare_runtime_configuration() { :; }
+    pull_release_images() { :; }
+    write_units() { :; }
+    stop_slot() { echo "stop-slot $1 $2" >> "$calls"; }
+    systemctl() { echo "systemctl $*" >> "$calls"; }
+    wait_health() { :; }
+    ensure_batch_runtime_env() { :; }
+    refresh_llm_env() { :; }
+    finish_successful_deploy() { trap - ERR; }
+    deploy_legacy
+  )
+
+  assert_before 'systemctl stop nginx' 'systemctl restart rougether-user-api rougether-admin-api' \
+    "$calls" "legacy mode must release Nginx fixed ports before starting legacy containers"
+  assert_before 'stop-slot user-api blue' 'systemctl restart rougether-user-api rougether-admin-api' \
+    "$calls" "legacy mode must stop active user slot before fixed-port restart"
+  assert_before 'stop-slot admin-api green' 'systemctl restart rougether-user-api rougether-admin-api' \
+    "$calls" "legacy mode must stop active admin slot before fixed-port restart"
+  echo "ok - legacy emergency mode safely releases blue/green routing first"
+}
+
 test_ssm_failure_keeps_existing_credentials
 test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low
@@ -732,6 +1074,16 @@ test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
 test_admin_origin_secret_refresh_is_fail_closed
 test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
+test_blue_green_slot_mapping_and_state_validation
+test_blue_green_units_bind_internal_ports_and_cap_memory
+test_memory_preflight_failure_does_not_start_candidate
+test_candidate_health_precedes_initial_proxy_cutover
+test_candidate_health_failure_never_stops_active_service
+test_nginx_reload_failure_restores_previous_config
+test_blue_green_rollback_restarts_previous_slot_before_switching_back
+test_blue_green_orchestration_is_sequential_and_restarts_batch_once
+test_active_release_is_idempotent
+test_legacy_emergency_mode_releases_nginx_ports_before_restart
 test_first_batch_deploy_failure_stops_new_batch
 test_rollback_stops_batch_when_no_user_admin_images
 test_rollback_batch_restores_previous_image_deploy_env

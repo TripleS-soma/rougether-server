@@ -1,0 +1,17 @@
+[Unit]
+Description=Rougether user-api %i container
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/rougether/user-api-%i.deploy.env
+ExecStartPre=-/usr/bin/docker rm -f rougether-user-api-%i
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api-%i --memory 768m --memory-swap 768m --env JAVA_TOOL_OPTIONS=-Xmx512m --env-file /etc/rougether/user-api.env __FIREBASE_MOUNT_OPTION__ -p 127.0.0.1:${ROUGETHER_HOST_PORT}:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 ${ROUGETHER_IMAGE}
+ExecStop=/usr/bin/docker stop --time 30 rougether-user-api-%i
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

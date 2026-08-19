@@ -30,8 +30,9 @@ allowed_ssh_cidrs       = []
 # Optional. Leave null and use SSM Session Manager instead of SSH.
 key_name = null
 
-# Free Tier eligibility depends on account creation date and current AWS offers.
-instance_type     = "t3.micro"
+# Same-host blue/green temporarily runs an active API and one candidate together.
+# Confirm the live memory preflight; a t3.medium is not a universal capacity guarantee.
+instance_type     = "t3.medium"
 db_instance_class = "db.t3.micro"
 
 admin_seed_username = "admin"

@@ -94,9 +94,9 @@ variable "container_registry_password_ssm_parameter" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. Check current AWS Free Tier eligibility before apply."
+  description = "EC2 instance type. Same-host blue/green activation still requires the live memory preflight to pass."
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "key_name" {
