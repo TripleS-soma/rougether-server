@@ -4,15 +4,12 @@ import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.userapi.auth.client.GoogleUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
-import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,11 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class GoogleLoginHandler {
 
     private final UserRepository userRepository;
-    private final UserWalletRepository userWalletRepository;
     private final OauthAccountRepository oauthAccountRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
-    private final WalletHistoryRecorder walletHistoryRecorder;
+    private final SignupService signupService;
 
     @Transactional
     public LoginResponse login(GoogleUser googleUser) {
@@ -54,11 +50,8 @@ public class GoogleLoginHandler {
     }
 
     private User register(GoogleUser googleUser) {
-        User user = userRepository.save(User.signUp(googleUser.email()));
-        // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
-        // 가입 보너스는 재화 원장에도 기록함(#253).
-        walletHistoryRecorder.recordSignupBonus(
-                userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user)));
+        // 유저·지갑·원장·기본 집을 한 번에 지급(SignupService, #322)
+        User user = signupService.register(googleUser.email());
         // IDENTITY 전략이라 즉시 INSERT됨 → 경쟁 패자는 여기서 unique 충돌이 발생함.
         oauthAccountRepository.save(OauthAccount.link(user, OauthProvider.GOOGLE, googleUser.id()));
         return user;

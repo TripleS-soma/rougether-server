@@ -5,10 +5,8 @@ import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient;
 import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.AppleUser;
@@ -19,7 +17,6 @@ import com.triples.rougether.userapi.auth.client.KakaoUser;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
-import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final UserWalletRepository userWalletRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
     private final RefreshTokenReuseGuard refreshTokenReuseGuard;
@@ -43,18 +39,15 @@ public class AuthService {
     private final AppleLoginHandler appleLoginHandler;
     private final AppleTokenExchangeClient appleTokenExchangeClient;
     private final AppleRefreshTokenCipher appleRefreshTokenCipher;
-    private final WalletHistoryRecorder walletHistoryRecorder;
+    private final SignupService signupService;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
         User user;
         boolean isNewUser;
         if (userId == null) {
-            user = userRepository.save(User.signUp());
-            // 가입 시 통화별 지갑을 함께 발급(COIN=완료 보상, DIAMOND=구매). 초기 잔액은 SignupWalletPolicy 소관.
-            // 가입 보너스는 재화 원장에도 기록함(#253).
-            walletHistoryRecorder.recordSignupBonus(
-                    userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user)));
+            // 신규 가입 — 지갑·원장·기본 집까지 소셜 가입과 동일하게 지급(SignupService)
+            user = signupService.register(null);
             isNewUser = true;
         } else {
             // 탈퇴(soft delete) 회원은 없는 회원과 동일하게 거부함.

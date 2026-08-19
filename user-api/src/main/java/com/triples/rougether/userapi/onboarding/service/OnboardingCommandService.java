@@ -44,12 +44,9 @@ public class OnboardingCommandService {
             throw new BusinessException(MemberErrorCode.GOAL_REQUIRED);
         }
 
-        // 두 온보딩 저장 경로를 같은 유저 행으로 직렬화해 완료 전환과 기본 집 생성을 1회로 묶음.
+        // 같은 유저의 목표 교체·기본 집 목표 채움을 유저 행 락으로 직렬화(재시도·동시 호출에도 집 목표는 1회만 채움)
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
-        boolean hadGoals = userGoalRepository.existsByUserId(userId);
-        boolean hasSelectedCharacter =
-                userCharacterRepository.existsByUserIdAndSelectedTrueAndDeletedAtIsNull(userId);
 
         LinkedHashSet<Long> goalIds = new LinkedHashSet<>(request.goalIds());
 
@@ -76,19 +73,15 @@ public class OnboardingCommandService {
         List<UserGoal> ordered = saved.stream()
                 .sorted(Comparator.comparingInt(ug -> ug.getGoal().getSortOrder()))
                 .toList();
-        if (!hadGoals && hasSelectedCharacter) {
-            houseCommandService.createOnboardingStarterHouse(user, starterHouseGoals(ordered));
-        }
+        // 가입 때 만들어진 기본 집(#322)은 목표가 비어 있다 — 첫 목표 저장에서 대표 우선·정렬순 최대 3개를 채운다
+        houseCommandService.fillStarterHouseGoals(userId, starterHouseGoals(ordered));
         return OnboardingGoalsResponse.of(ordered);
     }
 
     public OnboardingCharacterResponse selectCharacter(Long userId, Long characterId) {
-        // master 조회보다 먼저 current read 락을 잡아 대기 후 상대 트랜잭션의 온보딩 저장을 보게 함.
+        // 대표 캐릭터 유일성(is_selected) 보장을 위해 유저 행 락으로 동시 선택을 직렬화
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
-        boolean hadSelectedCharacter =
-                userCharacterRepository.existsByUserIdAndSelectedTrueAndDeletedAtIsNull(userId);
-        boolean hasGoals = userGoalRepository.existsByUserId(userId);
 
         Character character = characterRepository.findById(characterId)
                 .filter(Character::isActive)
@@ -110,10 +103,6 @@ public class OnboardingCommandService {
             userCharacterRepository.save(UserCharacter.createSelected(user, character));
         }
 
-        if (!hadSelectedCharacter && hasGoals) {
-            List<UserGoal> userGoals = userGoalRepository.findByUserIdWithGoalOrderBySortOrder(userId);
-            houseCommandService.createOnboardingStarterHouse(user, starterHouseGoals(userGoals));
-        }
         return new OnboardingCharacterResponse(characterId);
     }
 

@@ -30,28 +30,28 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "개발용 로그인", description = "userId로 토큰을 발급하는 개발 전용 로그인입니다. userId를 생략하면 새 회원을 생성해 로그인하며, 이때 통화별 지갑(COIN·DIAMOND)도 함께 발급합니다. 운영에서는 사용하지 않습니다.")
+    @Operation(summary = "개발용 로그인", description = "userId로 토큰을 발급하는 개발 전용 로그인입니다. userId를 생략하면 새 회원을 생성해 로그인하며, 이때 소셜 가입과 동일하게 통화별 지갑(COIN·DIAMOND)과 기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 함께 지급합니다. 운영에서는 사용하지 않습니다.")
     @SecurityRequirements
     @PostMapping("/dev-login")
     public LoginResponse devLogin(@RequestBody DevLoginRequest request) {
         return authService.devLogin(request.userId());
     }
 
-    @Operation(summary = "카카오 로그인", description = "카카오 access token으로 로그인합니다. 서버가 카카오에 토큰을 검증한 뒤 카카오 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)을 자동 생성하고 카카오 계정을 연동하며, 카카오가 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "카카오 로그인", description = "카카오 access token으로 로그인합니다. 서버가 카카오에 토큰을 검증한 뒤 카카오 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 카카오 계정을 연동하며, 카카오가 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/kakao")
     public LoginResponse kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
         return authService.kakaoLogin(request.accessToken());
     }
 
-    @Operation(summary = "구글 로그인", description = "구글 id token으로 로그인합니다. 서버가 토큰의 서명·발급자·대상·만료를 검증한 뒤 구글 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)을 자동 생성하고 구글 계정을 연동하며, 구글이 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "구글 로그인", description = "구글 id token으로 로그인합니다. 서버가 토큰의 서명·발급자·대상·만료를 검증한 뒤 구글 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 구글 계정을 연동하며, 구글이 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/google")
     public LoginResponse googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
         return authService.googleLogin(request.idToken());
     }
 
-    @Operation(summary = "애플 로그인", description = "Sign in with Apple의 identityToken과 authorizationCode로 로그인합니다. 두 값 모두 네이티브 Sign in with Apple 응답이 함께 반환합니다. 서버가 identityToken의 서명·발급자·대상·만료를 검증한 뒤 애플 계정 기준으로 회원을 찾고, authorizationCode는 refresh token으로 교환해 회원탈퇴 시 연동 해제(revoke)에 사용합니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)을 자동 생성하고 애플 계정을 연동하며, 애플이 이메일을 제공한 경우 함께 저장합니다. 애플은 최초 로그인에만 이메일을 제공하고 이메일 가리기를 선택하면 relay 주소를 주므로, 이메일이 없거나 relay 주소일 수 있습니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "애플 로그인", description = "Sign in with Apple의 identityToken과 authorizationCode로 로그인합니다. 두 값 모두 네이티브 Sign in with Apple 응답이 함께 반환합니다. 서버가 identityToken의 서명·발급자·대상·만료를 검증한 뒤 애플 계정 기준으로 회원을 찾고, authorizationCode는 refresh token으로 교환해 회원탈퇴 시 연동 해제(revoke)에 사용합니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 애플 계정을 연동하며, 애플이 이메일을 제공한 경우 함께 저장합니다. 애플은 최초 로그인에만 이메일을 제공하고 이메일 가리기를 선택하면 relay 주소를 주므로, 이메일이 없거나 relay 주소일 수 있습니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/apple")
     public LoginResponse appleLogin(@Valid @RequestBody AppleLoginRequest request) {
