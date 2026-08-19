@@ -81,7 +81,8 @@ public class BotSocialActions {
         this.roomCommandService = roomCommandService;
     }
 
-    // ---- 응원: 같은 집 사람이 오늘 완료(루틴·투두)한 뒤 30~90분 창에서, 사람당 하루 2회 미만이면 1회 ----
+    // ---- 응원: 같은 집 사람이 오늘 완료(루틴·투두)한 뒤 30~90분 창에서 1회. 상한은 "사람 기준" — 그 사람이 오늘 받은
+    // 봇 응원이 (어느 봇에게서든) 2회 미만이어야 하고, 같은 완료에는 봇 전체를 통틀어 한 번만 보낸다(2026-08-19 결정). ----
 
     public record CheerPlan(HouseMember target, String type) {
     }
@@ -96,27 +97,27 @@ public class BotSocialActions {
         if (latestCompletion.isEmpty()) {
             return List.of();
         }
-        Map<Long, List<HouseMemberCheer>> sentToday = houseMemberCheerRepository
-                .findBySender_IdAndCheerDate(context.botId(), context.date())
+        Map<Long, List<HouseMemberCheer>> botCheersToday = houseMemberCheerRepository
+                .findBySender_BotTrueAndTarget_IdInAndCheerDate(latestCompletion.keySet(), context.date())
                 .stream()
                 .collect(Collectors.groupingBy(cheer -> cheer.getTarget().getId()));
 
         return humans.stream()
                 .filter(human -> latestCompletion.containsKey(human.getUser().getId()))
                 .filter(human -> isCheerDue(context, human.getUser().getId(),
-                        latestCompletion.get(human.getUser().getId()), sentToday.getOrDefault(human.getUser().getId(), List.of())))
+                        latestCompletion.get(human.getUser().getId()), botCheersToday.getOrDefault(human.getUser().getId(), List.of())))
                 .map(human -> new CheerPlan(human, BotDecision.cheerType(context.botId(), context.date(),
                         human.getUser().getId(), latestCompletion.get(human.getUser().getId()).getEpochSecond())))
                 .toList();
     }
 
     private boolean isCheerDue(BotTickContext context, long targetUserId, Instant completedAt,
-                               List<HouseMemberCheer> sentToTarget) {
-        if (sentToTarget.size() >= BotDecision.CHEER_DAILY_LIMIT_PER_HUMAN) {
+                               List<HouseMemberCheer> botCheersToTarget) {
+        if (botCheersToTarget.size() >= BotDecision.CHEER_DAILY_LIMIT_PER_HUMAN) {
             return false;
         }
-        // 이 완료 이후 이미 보냈으면 같은 완료에 두 번 보내지 않는다.
-        boolean alreadyCheeredSince = sentToTarget.stream()
+        // 이 완료 이후 어느 봇이든 이미 보냈으면 같은 완료에 두 번 보내지 않는다.
+        boolean alreadyCheeredSince = botCheersToTarget.stream()
                 .anyMatch(cheer -> !cheer.getCreatedAt().isBefore(completedAt));
         if (alreadyCheeredSince) {
             return false;

@@ -258,9 +258,10 @@ class BotActivityServiceTest {
     }
 
     @Test
-    void 응원은_완료_후_30_90분_창에서_같은_완료에_한_번_사람당_하루_2회까지만_보낸다() {
+    void 응원은_완료_후_30_90분_창에서_같은_완료에_봇_전체_한_번_사람_기준_하루_2회까지만_보낸다() {
         LocalDate today = LocalDate.now(KST);
         User bot = bot("bot-latte"); // SPREAD 08–22
+        User other = bot("bot-pine"); // SPREAD — 사람 기준 상한·같은 완료 1회가 봇 전체 합산인지 본다
         User owner = human("cheer-owner");
         House house = house(owner, 4);
         join(house, bot);
@@ -271,12 +272,19 @@ class BotActivityServiceTest {
         BotTickReport first = botActivityService.runTick(at1);
         assertThat(first.cheersSent()).isEqualTo(1);
         assertThat(first.failures()).isZero();
-        pinCheerCreatedAt(bot.getId(), at1.toInstant()); // 시뮬레이션 시각과 맞춘다(실제 저장 시각은 벽시계)
+        pinCheerCreatedAt(bot.getId(), owner.getId(), at1.toInstant()); // 시뮬레이션 시각과 맞춘다(실제 저장 시각은 벽시계)
 
         // 같은 완료로는 다시 보내지 않고, 90분이 지나면 창이 닫힌다
         assertThat(botActivityService.runTick(at1).cheersSent()).isZero();
         assertThat(botActivityService.runTick(at1.plusMinutes(10)).cheersSent()).isZero();
         assertThat(cheerCount(bot.getId(), owner.getId())).isEqualTo(1);
+
+        // 다른 봇이 들어와도 "같은 완료"에는 봇 전체를 통틀어 한 번만 — 두 번째 봇은 보내지 않는다
+        HouseMember otherMembership = join(house, other);
+        assertThat(botActivityService.runTick(at1).cheersSent()).isZero();
+        assertThat(cheerCount(other.getId(), owner.getId())).isZero();
+        otherMembership.leave(); // 다음 단계는 봇 1명으로 진행(벽시계 created_at 이 섞이지 않게)
+        houseMemberRepository.save(otherMembership);
 
         // 두 번째 완료(투두) → 두 번째 응원
         Todo todo = Todo.create(owner, category, "사람 투두", null, today, null);
@@ -284,13 +292,17 @@ class BotActivityServiceTest {
         todoRepository.save(todo);
         ZonedDateTime at2 = at1.plusMinutes(100); // 완료 후 85분
         assertThat(botActivityService.runTick(at2).cheersSent()).isEqualTo(1);
-        pinCheerCreatedAt(bot.getId(), at2.toInstant());
+        pinCheerCreatedAt(bot.getId(), owner.getId(), at2.toInstant());
         assertThat(cheerCount(bot.getId(), owner.getId())).isEqualTo(2);
 
-        // 세 번째 완료가 있어도 사람당 하루 2회 상한
+        // 세 번째 완료가 있어도 사람 기준 하루 2회 — 아직 한 번도 안 보낸 다른 봇도 막힌다
+        otherMembership.reactivate();
+        houseMemberRepository.save(otherMembership);
         completeRoutineAt(owner, category, "사람 루틴 2", today, at2.plusMinutes(15).toInstant());
-        assertThat(botActivityService.runTick(at2.plusMinutes(100)).cheersSent()).isZero();
+        BotTickReport third = botActivityService.runTick(at2.plusMinutes(100));
+        assertThat(third.cheersSent()).isZero();
         assertThat(cheerCount(bot.getId(), owner.getId())).isEqualTo(2);
+        assertThat(cheerCount(other.getId(), owner.getId())).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM house_member_cheers WHERE sender_user_id = ? AND target_user_id = ? AND cheer_type IN ('great','support','best')",
                 Long.class, bot.getId(), owner.getId())).isEqualTo(2L);
@@ -356,10 +368,10 @@ class BotActivityServiceTest {
                 .findFirst().orElseThrow();
         assertThat(botActivityService.runTick(today.atTime(timeOfTick(noCleanTick)).atZone(KST)).cobwebsCleaned()).isZero();
 
-        int cleanTick = BotDecision.activeTicks(BotActivityProfile.SPREAD).stream()
-                .filter(t -> BotDecision.shouldCleanCobweb(bot.getId(), today, t, owner.getId()))
-                .findFirst().orElseThrow();
-        BotTickReport report = botActivityService.runTick(today.atTime(timeOfTick(cleanTick)).atZone(KST));
+        // 틱당 1%라 특정 날에는 청소 틱이 없을 수 있다 → 과거 날짜까지 훑어 청소로 판정되는 (날짜, 틱)을 잡는다.
+        // 청소 자체는 날짜와 무관하게 실제 거미줄·지갑에 반영된다.
+        ZonedDateTime cleanAt = cobwebCleanTick(bot.getId(), owner.getId(), today);
+        BotTickReport report = botActivityService.runTick(cleanAt);
 
         assertThat(report.failures()).isZero();
         assertThat(report.cobwebsCleaned()).isEqualTo(1);
@@ -371,7 +383,20 @@ class BotActivityServiceTest {
                 "SELECT COUNT(*) FROM wallet_histories WHERE user_id = ? AND reason = 'COBWEB_CLEAN'", Long.class, bot.getId()))
                 .isEqualTo(1L);
         // 청소된 뒤에는 더 청소하지 않는다
-        assertThat(botActivityService.runTick(today.atTime(timeOfTick(cleanTick)).atZone(KST)).cobwebsCleaned()).isZero();
+        assertThat(botActivityService.runTick(cleanAt).cobwebsCleaned()).isZero();
+    }
+
+    // 봇 활동 창(SPREAD) 안에서 shouldCleanCobweb 이 true 인 가장 최근 (날짜, 틱). 1%/틱이라 하루 84틱에 없을 수 있어 과거로 거슬러 간다.
+    static ZonedDateTime cobwebCleanTick(long botId, long roomUserId, LocalDate from) {
+        for (int d = 0; d < 400; d++) {
+            LocalDate date = from.minusDays(d);
+            for (int tick : BotDecision.activeTicks(BotActivityProfile.SPREAD)) {
+                if (BotDecision.shouldCleanCobweb(botId, date, tick, roomUserId)) {
+                    return date.atTime(timeOfTick(tick)).atZone(KST);
+                }
+            }
+        }
+        throw new AssertionError("거미줄 청소 틱을 찾지 못함");
     }
 
     @Test
@@ -533,8 +558,10 @@ class BotActivityServiceTest {
     // 방금 저장된(가장 최근) 응원의 created_at 을 시뮬레이션 시각으로 맞춘다 — 서비스는 벽시계로 저장하므로
     // "이 완료 이후 이미 보냈는지" 판정을 시뮬레이션 시각 축에서 검증하기 위한 테스트 전용 보정.
     // JDBC Timestamp 는 세션 타임존 차이로 Hibernate 가 읽는 값과 어긋나므로(#309 에서 확인) 엔티티로 고친다.
-    private void pinCheerCreatedAt(Long senderId, Instant at) {
-        HouseMemberCheer latest = houseMemberCheerRepository.findBySender_IdAndCheerDate(senderId, LocalDate.now(KST)).stream()
+    private void pinCheerCreatedAt(Long senderId, Long targetId, Instant at) {
+        HouseMemberCheer latest = houseMemberCheerRepository
+                .findBySender_BotTrueAndTarget_IdInAndCheerDate(List.of(targetId), LocalDate.now(KST)).stream()
+                .filter(cheer -> cheer.getSender().getId().equals(senderId))
                 .max(java.util.Comparator.comparingLong(HouseMemberCheer::getId)).orElseThrow();
         ReflectionTestUtils.setField(latest, "createdAt", at);
         houseMemberCheerRepository.save(latest);
@@ -590,9 +617,10 @@ class BotActivityServiceTest {
         return house;
     }
 
-    private void join(House house, User bot) {
-        houseMemberRepository.save(HouseMember.create(house, bot, HouseMemberRole.MEMBER));
+    private HouseMember join(House house, User bot) {
+        HouseMember member = houseMemberRepository.save(HouseMember.create(house, bot, HouseMemberRole.MEMBER));
         house.increaseMemberCount();
         houseRepository.save(house);
+        return member;
     }
 }

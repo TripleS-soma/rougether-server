@@ -21,8 +21,8 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -86,13 +86,11 @@ class BotActivityPlanningFailureTest {
                 VALUES (?, ?, NULL, NULL, ?)
                 """, owner.getId(), Timestamp.from(appearedAt), Timestamp.from(appearedAt));
         // 첫 봇이 그 틱에 거미줄을 치우기로 판정되는 틱을 고른다 → 같은 봇의 앞선 응원 판정이 던져도 청소는 진행돼야 한다
-        int tick = BotDecision.activeTicks(BotActivityProfile.SPREAD).stream()
-                .filter(t -> BotDecision.shouldCleanCobweb(first.getId(), today, t, owner.getId()))
-                .findFirst().orElseThrow();
+        ZonedDateTime cleanAt = BotActivityServiceTest.cobwebCleanTick(first.getId(), owner.getId(), today);
         doThrow(new IllegalStateException("판정 조회 장애 시뮬레이션"))
                 .when(botSocialActions).cheersDue(argThat(context -> context != null && context.botId() == first.getId()), any());
 
-        BotTickReport report = botActivityService.runTick(today.atTime(LocalTime.ofSecondOfDay(tick * 600L)).atZone(KST));
+        BotTickReport report = botActivityService.runTick(cleanAt);
 
         assertThat(report.failures()).isEqualTo(1);           // 첫 봇의 응원 판정 1건만 실패로 집계
         assertThat(report.cobwebsCleaned()).isEqualTo(1);     // 같은 봇의 뒤 행동(거미줄 청소)은 진행
