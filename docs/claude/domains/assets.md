@@ -12,6 +12,7 @@
 
 ## 구현 노트
 
+- 관리자 에셋 업로드 `POST /admin/assets`는 multipart `key`로 전체 object key를 직접 지정할 수 있다. `key`는 선택한 `kind/` prefix로 시작하고 이미지 content type과 확장자가 일치해야 하며, 경로 순회·중복 구분자·URL query 문자는 거부한다. 같은 key가 이미 있으면 S3 조건부 업로드로 덮어쓰지 않고 `409 ASSET_KEY_ALREADY_EXISTS`를 반환한다. `key`를 생략하면 기존 `{kind}/{uuid}.{ext}` 자동 발급을 유지한다.
 - 캐릭터 애니메이션: `characters/{code}/animations/{idle|pose-cycle|wave}.webp` (애니메이션 WebP) 규칙으로 S3 에 적재한다. API 는 이 key 를 DB 저장 없이 code 로 파생해 내려주므로(`CharacterAnimations.of`), **새 캐릭터를 카탈로그에 등록하기 전에 애니메이션 3종 적재가 전제 조건**이다 — 빠지면 프론트에서 해당 캐릭터 애니메이션이 404 가 된다. 포맷은 애니메이션 WebP 로 확정(2026-07-15) — APNG 는 RN Android 미재생이라 전환했고, 원본 APNG(.png)는 S3 에 보존돼 있다. 신규 제작 시 APNG 로 만들어도 Pillow 로 일괄 변환해 .webp 로 적재한다.
 - 캐릭터 추가 포즈: 규칙 기반 3종과 별도로 `character_poses`에 `character_id`, `code`, `asset_key`, `sort_order`, `is_active`를 저장한다. `GET /api/v1/characters`와 `GET /api/v1/me/characters`의 `poses[]`는 활성 포즈만 정렬 순서대로 반환한다. 관리자는 `/assets`의 characters 탭에서 S3 key를 캐릭터 포즈로 등록·해제할 수 있다.
 - 관리자 characters 에셋 삭제는 DB에서 `characters.base_asset_key` 또는 `character_poses.asset_key`로 사용 중이면 거부한다. 미사용 파일은 `archive/admin-deleted/{timestamp}/`에 복구용 사본을 만든 뒤 원래 key를 삭제한다.

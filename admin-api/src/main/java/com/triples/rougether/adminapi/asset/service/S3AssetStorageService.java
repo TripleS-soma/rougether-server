@@ -18,7 +18,7 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
-// 이미지를 S3 에 올리고 object key 를 발급한다. key 규칙: {kind}/{uuid}.{ext}
+// 이미지를 S3 에 올리고 요청 key 또는 {kind}/{uuid}.{ext} 형식의 자동 key 를 반환함.
 // 전체 URL 이 아니라 key 만 저장/반환하고, CDN base URL 조합은 클라이언트가 한다(spec 원칙).
 @Service
 public class S3AssetStorageService implements AssetStorageService {
@@ -41,20 +41,31 @@ public class S3AssetStorageService implements AssetStorageService {
     }
 
     @Override
-    public String upload(byte[] content, String contentType, String kind) {
+    public String upload(byte[] content, String contentType, String kind, String requestedKey) {
         String extension = EXTENSION_BY_CONTENT_TYPE.get(contentType);
         if (extension == null) {
             throw new IllegalArgumentException("지원하지 않는 이미지 형식: " + contentType);
         }
 
-        String key = kind + "/" + UUID.randomUUID() + "." + extension;
-        s3Client.putObject(
-                PutObjectRequest.builder()
-                        .bucket(properties.s3().bucket())
-                        .key(key)
-                        .contentType(contentType)
-                        .build(),
-                RequestBody.fromBytes(content));
+        String key = requestedKey == null
+                ? kind + "/" + UUID.randomUUID() + "." + extension
+                : requestedKey;
+        try {
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(properties.s3().bucket())
+                            .key(key)
+                            .contentType(contentType)
+                            // Terraform-managed AWS S3만 지원하므로 조건부 쓰기로 동일 key 덮어쓰기를 원자적으로 막는다.
+                            .ifNoneMatch("*")
+                            .build(),
+                    RequestBody.fromBytes(content));
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 409 || exception.statusCode() == 412) {
+                throw new AssetAlreadyExistsException(key);
+            }
+            throw exception;
+        }
         return key;
     }
 
