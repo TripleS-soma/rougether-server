@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.room.repository;
 
 import com.triples.rougether.domain.room.entity.RoomGuestbook;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,4 +21,7 @@ public interface RoomGuestbookRepository extends JpaRepository<RoomGuestbook, Lo
                                          @Param("houseId") Long houseId,
                                          @Param("cursor") Long cursor,
                                          Pageable pageable);
+
+    // 동거 봇 방명록(#310): 이 봇이 이 집에 since 이후 이미 남겼는지(하루 1회 판정).
+    boolean existsByAuthor_IdAndHouse_IdAndCreatedAtGreaterThanEqual(Long authorId, Long houseId, Instant since);
 }

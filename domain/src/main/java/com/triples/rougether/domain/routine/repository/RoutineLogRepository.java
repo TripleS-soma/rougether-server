@@ -4,6 +4,7 @@ import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.support.DailyCount;
+import com.triples.rougether.domain.support.UserLatestInstant;
 import com.triples.rougether.domain.support.UserMetricCount;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -144,4 +145,13 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("userIds") Collection<Long> userIds,
             @Param("status") RoutineLogStatus status,
             @Param("fromDate") LocalDate fromDate);
+
+    // 동거 봇 응원(#310): 사용자별 최근 완료 시각(since 이후) — "완료 후 30~90분 창" 판정용.
+    @Query("select l.routine.user.id as userId, max(l.completedAt) as latestAt from RoutineLog l "
+            + "where l.routine.user.id in :userIds and l.status = :status and l.completedAt >= :since "
+            + "group by l.routine.user.id")
+    List<UserLatestInstant> findLatestCompletedAtByUserIdsSince(
+            @Param("userIds") Collection<Long> userIds,
+            @Param("status") RoutineLogStatus status,
+            @Param("since") Instant since);
 }
