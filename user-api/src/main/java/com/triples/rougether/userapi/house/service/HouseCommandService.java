@@ -7,6 +7,7 @@ import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
@@ -86,22 +87,38 @@ public class HouseCommandService {
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
     }
 
-    // 온보딩 완료 시 선택 목표를 담은 기본 집을 지급함. 게시 manifest 첫 항목을 기본 커버로 사용함.
+    // 회원가입 트랜잭션에서 기본 집을 지급함(#322). 게시 manifest 첫 항목을 기본 커버로 쓰고 집 목표는 비워 둔다 —
+    // 가입 시점엔 목표가 없으므로 PUT /onboarding/goals 가 fillStarterHouseGoals 로 채운다.
+    // 호출자(SignupService)의 가입 트랜잭션에 합류해 유저·지갑·집이 함께 커밋/롤백된다.
     @Transactional
-    public void createOnboardingStarterHouse(User owner, List<Goal> selectedGoals) {
-        List<Goal> starterGoals = selectedGoals.stream().distinct().limit(3).toList();
-        if (starterGoals.isEmpty()) {
-            throw new IllegalArgumentException("온보딩 기본 집에는 목표가 하나 이상 필요합니다.");
-        }
+    public House createStarterHouse(User owner) {
         String coverImageKey = houseCoverImageCatalog.items().stream()
                 .findFirst()
                 .map(HouseCoverImageCatalog.PublishedCoverImage::coverImageKey)
                 .orElse(null);
         House house = saveHouse(owner, ONBOARDING_STARTER_HOUSE_NAME, null, coverImageKey,
-                DEFAULT_MAX_MEMBERS, starterGoals);
+                DEFAULT_MAX_MEMBERS, List.of());
         // 동거 봇(#309): 첫 사용자가 빈 집을 보지 않게 봇 2명을 함께 들인다. 사용자가 직접 만든 집엔 넣지 않는다.
         // 방금 저장한 house 는 이 트랜잭션이 소유하므로 별도 락 없이 카운트를 갱신해도 안전하다.
         botResidencyService.joinStarterHouse(house);
+        return house;
+    }
+
+    // 온보딩 목표 저장 시 기본 집의 목표를 1회 채움(#322). 대상은 "내가 OWNER 이고 house_goals 가 비어 있는 집" —
+    // 일반 집 생성 API 는 목표 1~3개가 필수라 비어 있는 집은 기본 집뿐이다. 이미 목표가 있으면 건드리지 않고(이후 목표
+    // 변경은 반영하지 않음), 기본 집을 나가 소유권이 넘어갔으면 대상이 아니다. 최대 3개(호출자가 정렬해 넘김).
+    @Transactional
+    public void fillStarterHouseGoals(Long userId, List<Goal> goals) {
+        List<Goal> starterGoals = goals.stream().distinct().limit(3).toList();
+        if (starterGoals.isEmpty()) {
+            return;
+        }
+        houseMemberRepository.findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE).stream()
+                .filter(HouseMember::isOwner)
+                .map(HouseMember::getHouse)
+                .filter(house -> !houseGoalRepository.existsByHouseId(house.getId()))
+                .forEach(house -> houseGoalRepository.saveAll(
+                        starterGoals.stream().map(goal -> HouseGoal.create(house, goal)).toList()));
     }
 
     private House saveHouse(User owner, String name, String description, String coverImageKey,

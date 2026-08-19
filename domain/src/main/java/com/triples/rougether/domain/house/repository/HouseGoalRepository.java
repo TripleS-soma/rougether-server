@@ -11,6 +11,9 @@ public interface HouseGoalRepository extends JpaRepository<HouseGoal, Long> {
 
     List<HouseGoal> findByHouseId(Long houseId);
 
+    // 기본 집 목표 채움 판정용 — 집 목표가 하나라도 연결돼 있는지
+    boolean existsByHouseId(Long houseId);
+
     // 집 상세의 goals 조회 (goal fetch join).
     @Query("select hg from HouseGoal hg join fetch hg.goal where hg.house.id = :houseId")
     List<HouseGoal> findByHouseIdWithGoal(@Param("houseId") Long houseId);
