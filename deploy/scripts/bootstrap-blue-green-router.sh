@@ -154,6 +154,7 @@ fi
 private_ip="$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')"
 [ -n "$private_ip" ] || { echo "cannot determine private ENI IP" >&2; exit 1; }
 
+# BEGIN_NGINX_FUNCTIONS
 render_nginx() {
   local user_port="$1" admin_port="$2" destination="$3"
   {
@@ -202,18 +203,51 @@ EOF
 }
 
 apply_nginx() {
-  local user_port="$1" admin_port="$2" temporary
-  temporary="$(mktemp "$NGINX_CONFIG_DIR/.rougether.conf.XXXXXX")"
-  render_nginx "$user_port" "$admin_port" "$temporary"
-  chmod 644 "$temporary"
-  mv -f "$temporary" "$NGINX_CONFIG_FILE"
-  nginx -t
-  if systemctl is-active --quiet nginx; then
-    systemctl reload nginx
-  else
-    systemctl enable --now nginx
+  local user_port="$1" admin_port="$2" temporary backup="" had_existing=false
+  temporary="$(mktemp "$NGINX_CONFIG_DIR/.rougether.conf.XXXXXX")" || return 1
+  if [ -f "$NGINX_CONFIG_FILE" ]; then
+    backup="$(mktemp "$NGINX_CONFIG_DIR/.rougether.conf.backup.XXXXXX")" \
+      || { rm -f "$temporary"; return 1; }
+    cp -p "$NGINX_CONFIG_FILE" "$backup" \
+      || { rm -f "$temporary" "$backup"; return 1; }
+    had_existing=true
   fi
+
+  restore_previous_nginx() {
+    if [ "$had_existing" = true ]; then
+      mv -f "$backup" "$NGINX_CONFIG_FILE" || return 1
+      backup=""
+    else
+      rm -f "$NGINX_CONFIG_FILE"
+    fi
+    nginx -t || return 1
+    if systemctl is-active --quiet nginx; then
+      systemctl reload nginx || return 1
+    fi
+  }
+
+  reload_or_start_nginx() {
+    if systemctl is-active --quiet nginx; then
+      systemctl reload nginx
+    else
+      systemctl enable --now nginx
+    fi
+  }
+
+  if ! render_nginx "$user_port" "$admin_port" "$temporary" \
+      || ! chmod 644 "$temporary" \
+      || ! mv -f "$temporary" "$NGINX_CONFIG_FILE" \
+      || ! nginx -t \
+      || ! reload_or_start_nginx; then
+    rm -f "$temporary"
+    restore_previous_nginx || echo "failed to restore the previous Nginx configuration" >&2
+    [ -z "$backup" ] || rm -f "$backup"
+    return 1
+  fi
+
+  [ -z "$backup" ] || rm -f "$backup"
 }
+# END_NGINX_FUNCTIONS
 
 rollback_activation() {
   local exit_code="$?"

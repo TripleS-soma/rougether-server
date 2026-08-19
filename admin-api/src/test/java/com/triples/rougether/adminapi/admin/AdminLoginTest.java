@@ -100,10 +100,11 @@ class AdminLoginTest {
                 .andExpect(cookie().exists("JSESSIONID"))
                 .andReturn();
         Cookie initialCookie = loginPage.getResponse().getCookie("JSESSIONID");
-        org.assertj.core.api.Assertions.assertThat(initialCookie.getSecure()).isTrue();
+        // 기본 profile은 로컬 HTTP 개발을 지원하고, mysql profile에서만 Secure를 강제한다.
+        org.assertj.core.api.Assertions.assertThat(initialCookie.getSecure()).isFalse();
         org.assertj.core.api.Assertions.assertThat(initialCookie.isHttpOnly()).isTrue();
         org.assertj.core.api.Assertions.assertThat(loginPage.getResponse().getHeader("Set-Cookie"))
-                .contains("Path=/", "SameSite=Strict");
+                .contains("Path=/", "SameSite=strict");
 
         MvcResult loginResult = mockMvc.perform(post("/login")
                         .cookie(initialCookie)
