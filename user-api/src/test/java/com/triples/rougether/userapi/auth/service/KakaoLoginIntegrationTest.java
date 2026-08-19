@@ -33,6 +33,8 @@ class KakaoLoginIntegrationTest {
     private KakaoApiClient kakaoApiClient;
 
     @Autowired
+    private com.triples.rougether.domain.house.repository.HouseMemberRepository houseMemberRepository;
+    @Autowired
     private AuthService authService;
     @Autowired
     private UserRepository userRepository;
@@ -79,6 +81,12 @@ class KakaoLoginIntegrationTest {
                 .isEqualTo(user.getId());
 
         assertThat(refreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(user.getId())).isNotEmpty();
+
+        // 가입과 함께 기본 집(나의 집) 지급(#322) — 온보딩 전에도 내 집이 하나 있다
+        assertThat(houseMemberRepository.findByUserIdAndStatusWithHouse(user.getId(),
+                com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE))
+                .singleElement()
+                .satisfies(m -> assertThat(m.getHouse().getName()).isEqualTo("나의 집"));
     }
 
     @Test

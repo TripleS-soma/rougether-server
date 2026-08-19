@@ -14,12 +14,8 @@ import static org.mockito.Mockito.when;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.entity.UserWallet;
-import com.triples.rougether.domain.member.policy.SignupWalletPolicy;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.member.repository.UserWalletRepository;
-import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.client.KakaoApiClient;
 import com.triples.rougether.userapi.auth.dto.LoginResponse;
 import java.time.Duration;
@@ -39,8 +35,6 @@ class AuthServiceTest {
 
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private UserWalletRepository userWalletRepository;
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
@@ -62,25 +56,26 @@ class AuthServiceTest {
     @Mock
     private AppleRefreshTokenCipher appleRefreshTokenCipher;
 
+    @Mock
+    private SignupService signupService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository, userWalletRepository, refreshTokenRepository, tokenService,
+                userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher,
-                org.mockito.Mockito.mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
     }
 
     @Test
-    void userId_가_없으면_새_user_를_만들고_isNewUser_true_를_반환한다() {
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
-            User saved = invocation.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 1L);
-            return saved;
-        });
+    void userId_가_없으면_SignupService로_가입시키고_isNewUser_true_를_반환한다() {
+        User created = User.signUp();
+        ReflectionTestUtils.setField(created, "id", 1L);
+        // 지갑·원장·기본 집 지급은 SignupService 책임(SignupServiceIntegrationTest 에서 검증) — 여기선 위임만 본다
+        when(signupService.register(null)).thenReturn(created);
         stubTokenIssue();
 
         LoginResponse response = authService.devLogin(null);
@@ -89,16 +84,9 @@ class AuthServiceTest {
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-raw");
+        verify(signupService).register(null);
+        verify(userRepository, never()).save(any(User.class));
         verify(refreshTokenRepository).save(any(RefreshToken.class));
-        // 가입 시 통화별 지갑(COIN·DIAMOND)이 함께 발급돼야 함. 초기 잔액은 SignupWalletPolicy(코인 100).
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<UserWallet>> walletCaptor = ArgumentCaptor.forClass(List.class);
-        verify(userWalletRepository).saveAll(walletCaptor.capture());
-        assertThat(walletCaptor.getValue())
-                .extracting(UserWallet::getCurrencyType, UserWallet::getBalance)
-                .containsExactlyInAnyOrder(
-                        tuple(CurrencyType.COIN, SignupWalletPolicy.INITIAL_COIN_BALANCE),
-                        tuple(CurrencyType.DIAMOND, 0));
     }
 
     @Test
@@ -114,7 +102,7 @@ class AuthServiceTest {
         assertThat(response.userId()).isEqualTo(7L);
         assertThat(existing.getLastAccessedAt()).isNotNull();
         verify(userRepository, never()).save(any(User.class));
-        verify(userWalletRepository, never()).save(any(UserWallet.class));
+        verify(signupService, never()).register(any());
         verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 

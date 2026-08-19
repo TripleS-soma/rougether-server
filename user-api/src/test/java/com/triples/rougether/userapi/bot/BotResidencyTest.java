@@ -63,7 +63,7 @@ class BotResidencyTest {
         User newcomer = human("residency-newcomer");
         Goal goal = goal("residency_goal");
 
-        houseCommandService.createOnboardingStarterHouse(newcomer, List.of(goal));
+        houseCommandService.createStarterHouse(newcomer);
 
         House starter = houseRepository.findAll().stream()
                 .filter(h -> h.getOwner().getId().equals(newcomer.getId()))
@@ -89,7 +89,7 @@ class BotResidencyTest {
     @Test
     void 봇_풀이_비어_있으면_기본_집은_사람_1명으로_만들어진다() {
         User newcomer = human("residency-no-bots");
-        houseCommandService.createOnboardingStarterHouse(newcomer, List.of(goal("residency_goal_nb")));
+        houseCommandService.createStarterHouse(newcomer);
 
         House starter = houseRepository.findAll().stream()
                 .filter(h -> h.getOwner().getId().equals(newcomer.getId()))
