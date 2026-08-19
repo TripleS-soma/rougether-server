@@ -55,6 +55,8 @@ active_admin_port=""
 active_admin_image=""
 active_batch_image=""
 current_deployed_sha=""
+current_deployment_status="ready"
+current_target_sha=""
 user_switched=false
 admin_switched=false
 batch_switched=false
@@ -708,6 +710,16 @@ load_blue_green_state() {
   active_admin_image=""
   active_batch_image=""
   current_deployed_sha=""
+  current_deployment_status="ready"
+  current_target_sha=""
+  rollback_user_image=""
+  rollback_user_color=""
+  rollback_user_port=""
+  rollback_admin_image=""
+  rollback_admin_color=""
+  rollback_admin_port=""
+  rollback_batch_image=""
+  rollback_deployed_sha=""
 
   if [ ! -f "$STATE_FILE" ]; then
     local service color
@@ -731,22 +743,70 @@ load_blue_green_state() {
       ADMIN_API_ACTIVE_COLOR) active_admin_color="$value" ;;
       ADMIN_API_ACTIVE_PORT) active_admin_port="$value" ;;
       BATCH_API_IMAGE) active_batch_image="$value" ;;
+      DEPLOYMENT_STATUS) current_deployment_status="$value" ;;
       DEPLOYED_SHA) current_deployed_sha="$value" ;;
+      TARGET_SHA) current_target_sha="$value" ;;
+      ROLLBACK_USER_API_IMAGE) rollback_user_image="$value" ;;
+      ROLLBACK_USER_API_ACTIVE_COLOR) rollback_user_color="$value" ;;
+      ROLLBACK_USER_API_ACTIVE_PORT) rollback_user_port="$value" ;;
+      ROLLBACK_ADMIN_API_IMAGE) rollback_admin_image="$value" ;;
+      ROLLBACK_ADMIN_API_ACTIVE_COLOR) rollback_admin_color="$value" ;;
+      ROLLBACK_ADMIN_API_ACTIVE_PORT) rollback_admin_port="$value" ;;
+      ROLLBACK_BATCH_API_IMAGE) rollback_batch_image="$value" ;;
+      ROLLBACK_DEPLOYED_SHA) rollback_deployed_sha="$value" ;;
     esac
   done < "$STATE_FILE"
 
-  if [ -n "$active_user_color" ]; then
-    [ "$(slot_port user-api "$active_user_color")" = "$active_user_port" ] || {
+  if [ -n "$active_user_color" ] || [ -n "$active_user_port" ]; then
+    [ -n "$active_user_color" ] \
+      && [ -n "$active_user_port" ] \
+      && [ "$(slot_port user-api "$active_user_color")" = "$active_user_port" ] || {
       echo "user-api deploy state has an invalid color/port pair" >&2
       return 1
     }
   fi
-  if [ -n "$active_admin_color" ]; then
-    [ "$(slot_port admin-api "$active_admin_color")" = "$active_admin_port" ] || {
+  if [ -n "$active_admin_color" ] || [ -n "$active_admin_port" ]; then
+    [ -n "$active_admin_color" ] \
+      && [ -n "$active_admin_port" ] \
+      && [ "$(slot_port admin-api "$active_admin_color")" = "$active_admin_port" ] || {
       echo "admin-api deploy state has an invalid color/port pair" >&2
       return 1
     }
   fi
+
+  case "$current_deployment_status" in
+    ready) ;;
+    deploying)
+      [ -n "$current_target_sha" ] \
+        && [ -n "$rollback_user_image" ] \
+        && [ -n "$rollback_admin_image" ] \
+        && [ -n "$rollback_batch_image" ] \
+        && [ -n "$rollback_deployed_sha" ] || {
+          echo "deploying state is missing its stable rollback snapshot" >&2
+          return 1
+        }
+      if [ -n "$rollback_user_color" ] || [ -n "$rollback_user_port" ]; then
+        [ -n "$rollback_user_color" ] \
+          && [ -n "$rollback_user_port" ] \
+          && [ "$(slot_port user-api "$rollback_user_color")" = "$rollback_user_port" ] || {
+          echo "user-api rollback state has an invalid color/port pair" >&2
+          return 1
+        }
+      fi
+      if [ -n "$rollback_admin_color" ] || [ -n "$rollback_admin_port" ]; then
+        [ -n "$rollback_admin_color" ] \
+          && [ -n "$rollback_admin_port" ] \
+          && [ "$(slot_port admin-api "$rollback_admin_color")" = "$rollback_admin_port" ] || {
+          echo "admin-api rollback state has an invalid color/port pair" >&2
+          return 1
+        }
+      fi
+      ;;
+    *)
+      echo "invalid deployment status: $current_deployment_status" >&2
+      return 1
+      ;;
+  esac
 
   if { [ -n "$active_user_color" ] || [ -n "$active_admin_color" ]; } \
       && { [ -z "$active_user_image" ] || [ -z "$active_admin_image" ] || [ -z "$active_batch_image" ]; }; then
@@ -759,14 +819,24 @@ load_blue_green_state() {
       echo "blue/green state exists but Nginx routing config is missing" >&2
       return 1
     }
-    grep -q "server 127.0.0.1:$active_user_port;" "$NGINX_CONFIG_FILE" || {
-      echo "Nginx user upstream does not match deploy state" >&2
+    if [ -n "$active_user_color" ]; then
+      grep -q "server 127.0.0.1:$active_user_port;" "$NGINX_CONFIG_FILE" || {
+        echo "Nginx user upstream does not match deploy state" >&2
+        return 1
+      }
+    elif grep -Eq '^[[:space:]]*listen[[:space:]]+8080' "$NGINX_CONFIG_FILE"; then
+      echo "Nginx owns user port 8080 without an active user slot" >&2
       return 1
-    }
-    grep -Eq "server [^;]+:$active_admin_port;" "$NGINX_CONFIG_FILE" || {
-      echo "Nginx admin upstream does not match deploy state" >&2
+    fi
+    if [ -n "$active_admin_color" ]; then
+      grep -Eq "server [^;]+:$active_admin_port;" "$NGINX_CONFIG_FILE" || {
+        echo "Nginx admin upstream does not match deploy state" >&2
+        return 1
+      }
+    elif grep -Eq '^[[:space:]]*listen[[:space:]]+8081' "$NGINX_CONFIG_FILE"; then
+      echo "Nginx owns admin port 8081 without an active admin slot" >&2
       return 1
-    }
+    fi
   elif [ -f "$NGINX_CONFIG_FILE" ] \
       && grep -Eq '^[[:space:]]*listen[[:space:]]+8080|^[[:space:]]*listen[[:space:]]+8081' "$NGINX_CONFIG_FILE"; then
     echo "Nginx owns a fixed API port but deploy state has no active slot" >&2
@@ -779,10 +849,41 @@ write_blue_green_state() {
   local deployed_sha="$2"
   local target_sha="$DEPLOYED_SHA"
   local temporary_state
+  local state_rollback_user_image=""
+  local state_rollback_user_color=""
+  local state_rollback_user_port=""
+  local state_rollback_admin_image=""
+  local state_rollback_admin_color=""
+  local state_rollback_admin_port=""
+  local state_rollback_batch_image=""
+  local state_rollback_deployed_sha=""
 
-  if [ "$status" = ready ]; then
-    target_sha="$deployed_sha"
-  fi
+  case "$status" in
+    ready)
+      target_sha="$deployed_sha"
+      ;;
+    deploying)
+      [ -n "$rollback_user_image" ] \
+        && [ -n "$rollback_admin_image" ] \
+        && [ -n "$rollback_batch_image" ] \
+        && [ -n "$rollback_deployed_sha" ] || {
+          echo "cannot checkpoint a deployment without a complete rollback snapshot" >&2
+          return 1
+        }
+      state_rollback_user_image="$rollback_user_image"
+      state_rollback_user_color="$rollback_user_color"
+      state_rollback_user_port="$rollback_user_port"
+      state_rollback_admin_image="$rollback_admin_image"
+      state_rollback_admin_color="$rollback_admin_color"
+      state_rollback_admin_port="$rollback_admin_port"
+      state_rollback_batch_image="$rollback_batch_image"
+      state_rollback_deployed_sha="$rollback_deployed_sha"
+      ;;
+    *)
+      echo "invalid deployment status: $status" >&2
+      return 1
+      ;;
+  esac
 
   temporary_state="$(mktemp "$ENV_DIR/.deploy-state.env.XXXXXX")"
   cat > "$temporary_state" <<EOF
@@ -796,6 +897,14 @@ BATCH_API_IMAGE=$active_batch_image
 DEPLOYMENT_STATUS=$status
 DEPLOYED_SHA=$deployed_sha
 TARGET_SHA=$target_sha
+ROLLBACK_USER_API_IMAGE=$state_rollback_user_image
+ROLLBACK_USER_API_ACTIVE_COLOR=$state_rollback_user_color
+ROLLBACK_USER_API_ACTIVE_PORT=$state_rollback_user_port
+ROLLBACK_ADMIN_API_IMAGE=$state_rollback_admin_image
+ROLLBACK_ADMIN_API_ACTIVE_COLOR=$state_rollback_admin_color
+ROLLBACK_ADMIN_API_ACTIVE_PORT=$state_rollback_admin_port
+ROLLBACK_BATCH_API_IMAGE=$state_rollback_batch_image
+ROLLBACK_DEPLOYED_SHA=$state_rollback_deployed_sha
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
   chmod 600 "$temporary_state"
@@ -1250,7 +1359,8 @@ rollback_api_blue_green() {
 }
 
 blue_green_release_is_active() {
-  [ "$current_deployed_sha" = "$DEPLOYED_SHA" ] \
+  [ "$current_deployment_status" = ready ] \
+    && [ "$current_deployed_sha" = "$DEPLOYED_SHA" ] \
     && [ "$active_user_image" = "$NEW_USER_IMAGE" ] \
     && [ "$active_admin_image" = "$NEW_ADMIN_IMAGE" ] \
     && [ "$active_batch_image" = "$NEW_BATCH_IMAGE" ] \
@@ -1354,7 +1464,10 @@ EOF
 }
 
 capture_rollback_images() {
-  if [ -f "$STATE_FILE" ]; then
+  # A checkpoint with status=deploying contains both the currently routed slots and
+  # the last complete release. Keep the explicit rollback snapshot on retries instead
+  # of mistaking a partially switched candidate for the stable release.
+  if [ "$current_deployment_status" != deploying ] && [ -f "$STATE_FILE" ]; then
     while IFS='=' read -r key value; do
       case "$key" in
         USER_API_IMAGE)
@@ -1399,6 +1512,47 @@ capture_rollback_images() {
       docker tag "$current_batch_image_id" "$rollback_batch_image"
     fi
   fi
+}
+
+prepare_blue_green_rollback_target() {
+  user_switched=false
+  admin_switched=false
+  batch_switched=false
+
+  if [ "$current_deployment_status" = deploying ]; then
+    [ "$current_target_sha" = "$DEPLOYED_SHA" ] || {
+      echo "an interrupted deployment targets $current_target_sha; refusing to overwrite it with $DEPLOYED_SHA" >&2
+      return 1
+    }
+
+    if [ "$active_user_image" != "$rollback_user_image" ] \
+        || [ "$active_user_color" != "$rollback_user_color" ] \
+        || [ "$active_user_port" != "$rollback_user_port" ]; then
+      user_switched=true
+    fi
+    if [ "$active_admin_image" != "$rollback_admin_image" ] \
+        || [ "$active_admin_color" != "$rollback_admin_color" ] \
+        || [ "$active_admin_port" != "$rollback_admin_port" ]; then
+      admin_switched=true
+    fi
+    if [ "$active_batch_image" != "$rollback_batch_image" ]; then
+      batch_switched=true
+    fi
+  else
+    rollback_user_color="$active_user_color"
+    rollback_user_port="$active_user_port"
+    rollback_admin_color="$active_admin_color"
+    rollback_admin_port="$active_admin_port"
+    rollback_deployed_sha="${current_deployed_sha:-bootstrap}"
+  fi
+
+  capture_rollback_images || return 1
+  [ -n "$rollback_user_image" ] \
+    && [ -n "$rollback_admin_image" ] \
+    && [ -n "$rollback_batch_image" ] || {
+      echo "cannot deploy without a complete rollback image set" >&2
+      return 1
+    }
 }
 
 rollback_batch() {
@@ -1628,13 +1782,7 @@ deploy_blue_green() {
     return 0
   fi
 
-  rollback_user_color="$active_user_color"
-  rollback_user_port="$active_user_port"
-  rollback_admin_color="$active_admin_color"
-  rollback_admin_port="$active_admin_port"
-  rollback_deployed_sha="$current_deployed_sha"
-
-  capture_rollback_images
+  prepare_blue_green_rollback_target
   prune_unused_docker_images
   prepare_runtime_configuration
   trap rollback_blue_green ERR

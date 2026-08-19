@@ -247,26 +247,44 @@ apply_nginx() {
 
   [ -z "$backup" ] || rm -f "$backup"
 }
-# END_NGINX_FUNCTIONS
 
 rollback_activation() {
   local exit_code="$?"
+  local admin_restored=true
   trap - ERR
   echo "activation failed; restoring legacy fixed-port services" >&2
   if [ "$admin_legacy_stopped" = true ]; then
-    render_nginx 18080 "" "$NGINX_CONFIG_FILE" || true
-    nginx -t && systemctl reload nginx || true
-    systemctl start rougether-admin-api || true
+    if ! apply_nginx 18080 ""; then
+      echo "admin rollback could not release port 8081; keeping candidate routing" >&2
+      admin_restored=false
+    elif ! systemctl start rougether-admin-api; then
+      echo "legacy admin-api did not restart; restoring candidate routing" >&2
+      apply_nginx 18080 18081 || true
+      admin_restored=false
+    else
+      systemctl stop rougether-admin-api@blue >/dev/null 2>&1 || true
+    fi
+  else
+    systemctl stop rougether-admin-api@blue >/dev/null 2>&1 || true
   fi
-  systemctl stop rougether-admin-api@blue >/dev/null 2>&1 || true
+
   if [ "$user_legacy_stopped" = true ]; then
-    rm -f "$NGINX_CONFIG_FILE"
-    nginx -t && systemctl reload nginx || true
-    systemctl start rougether-user-api || true
+    if [ "$admin_restored" = false ]; then
+      echo "skipping user rollback because admin candidate routing could not be restored safely" >&2
+    elif ! apply_nginx "" ""; then
+      echo "user rollback could not release port 8080; keeping candidate routing" >&2
+    elif ! systemctl start rougether-user-api; then
+      echo "legacy user-api did not restart; restoring candidate routing" >&2
+      apply_nginx 18080 "" || true
+    else
+      systemctl stop rougether-user-api@blue >/dev/null 2>&1 || true
+    fi
+  else
+    systemctl stop rougether-user-api@blue >/dev/null 2>&1 || true
   fi
-  systemctl stop rougether-user-api@blue >/dev/null 2>&1 || true
   exit "$exit_code"
 }
+# END_NGINX_FUNCTIONS
 trap rollback_activation ERR
 
 memory_preflight 1048576

@@ -91,6 +91,8 @@ reset_scenario() {
   active_admin_image=""
   active_batch_image=""
   current_deployed_sha=""
+  current_deployment_status="ready"
+  current_target_sha=""
   user_switched=false
   admin_switched=false
   batch_switched=false
@@ -177,12 +179,15 @@ assert_before() {
 write_matching_nginx_config() {
   local user_port="$1"
   local admin_port="$2"
-  cat > "$NGINX_CONFIG_FILE" <<EOF
-upstream user { server 127.0.0.1:$user_port; }
-upstream admin { server 10.0.0.10:$admin_port; }
-server { listen 8080; }
-server { listen 8081; }
-EOF
+  : > "$NGINX_CONFIG_FILE"
+  if [ -n "$user_port" ]; then
+    printf 'upstream user { server 127.0.0.1:%s; }\nserver { listen 8080; }\n' \
+      "$user_port" >> "$NGINX_CONFIG_FILE"
+  fi
+  if [ -n "$admin_port" ]; then
+    printf 'upstream admin { server 10.0.0.10:%s; }\nserver { listen 8081; }\n' \
+      "$admin_port" >> "$NGINX_CONFIG_FILE"
+  fi
 }
 
 test_prune_preserves_rollback_tags_and_checks_free_space() {
@@ -794,6 +799,32 @@ EOF
     echo "not ok - mismatched color and port must fail closed" >&2
     return 1
   fi
+
+  cat > "$STATE_FILE" <<EOF
+USER_API_IMAGE=$NEW_USER_IMAGE
+USER_API_ACTIVE_COLOR=blue
+USER_API_ACTIVE_PORT=18080
+ADMIN_API_IMAGE=registry/admin:old
+ADMIN_API_ACTIVE_COLOR=
+ADMIN_API_ACTIVE_PORT=
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYMENT_STATUS=deploying
+DEPLOYED_SHA=old-release
+TARGET_SHA=$DEPLOYED_SHA
+ROLLBACK_USER_API_IMAGE=registry/user:old
+ROLLBACK_USER_API_ACTIVE_COLOR=
+ROLLBACK_USER_API_ACTIVE_PORT=
+ROLLBACK_ADMIN_API_IMAGE=registry/admin:old
+ROLLBACK_ADMIN_API_ACTIVE_COLOR=
+ROLLBACK_ADMIN_API_ACTIVE_PORT=
+ROLLBACK_BATCH_API_IMAGE=registry/batch:old
+ROLLBACK_DEPLOYED_SHA=old-release
+EOF
+  write_matching_nginx_config 18080 ""
+  load_blue_green_state || {
+    echo "not ok - first user cutover checkpoint must be recoverable before admin cutover" >&2
+    return 1
+  }
   echo "ok - blue/green state validates color and port pairs"
 }
 
@@ -860,6 +891,7 @@ test_candidate_health_precedes_initial_proxy_cutover() {
     }
     apply_proxy_ports() { echo "proxy-switch user=$1 admin=$2" >> "$calls"; }
     wait_health_stable() { echo "stable-health $1" >> "$calls"; }
+    write_blue_green_state() { echo "state $1" >> "$calls"; }
     stop_slot() { echo "stop-slot $1 $2" >> "$calls"; }
     systemctl() { echo "systemctl $*" >> "$calls"; return 0; }
     sleep() { :; }
@@ -988,6 +1020,112 @@ test_blue_green_orchestration_is_sequential_and_restarts_batch_once() {
   echo "ok - blue/green APIs are sequential and batch restarts once"
 }
 
+test_interrupted_deploy_retry_preserves_stable_release_snapshot() {
+  reset_scenario "blue-green-interrupted-retry"
+  cat > "$STATE_FILE" <<EOF
+USER_API_IMAGE=$NEW_USER_IMAGE
+USER_API_ACTIVE_COLOR=green
+USER_API_ACTIVE_PORT=28080
+ADMIN_API_IMAGE=registry/admin:old
+ADMIN_API_ACTIVE_COLOR=blue
+ADMIN_API_ACTIVE_PORT=18081
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYMENT_STATUS=deploying
+DEPLOYED_SHA=old-release
+TARGET_SHA=$DEPLOYED_SHA
+ROLLBACK_USER_API_IMAGE=registry/user:old
+ROLLBACK_USER_API_ACTIVE_COLOR=blue
+ROLLBACK_USER_API_ACTIVE_PORT=18080
+ROLLBACK_ADMIN_API_IMAGE=registry/admin:old
+ROLLBACK_ADMIN_API_ACTIVE_COLOR=blue
+ROLLBACK_ADMIN_API_ACTIVE_PORT=18081
+ROLLBACK_BATCH_API_IMAGE=registry/batch:old
+ROLLBACK_DEPLOYED_SHA=old-release
+EOF
+  write_matching_nginx_config 28080 18081
+
+  load_blue_green_state
+  prepare_blue_green_rollback_target
+
+  [ "$rollback_user_image" = "registry/user:old" ] \
+    && [ "$rollback_user_color" = blue ] \
+    && [ "$rollback_user_port" = 18080 ] \
+    && [ "$rollback_admin_image" = "registry/admin:old" ] \
+    && [ "$rollback_batch_image" = "registry/batch:old" ] \
+    && [ "$rollback_deployed_sha" = old-release ] || {
+      echo "not ok - retry must retain the previous complete release as rollback target" >&2
+      return 1
+    }
+  [ "$user_switched" = true ] \
+    && [ "$admin_switched" = false ] \
+    && [ "$batch_switched" = false ] || {
+      echo "not ok - retry must recover components switched by the interrupted attempt" >&2
+      return 1
+    }
+
+  local rollback_calls="$ENV_DIR/rollback-calls.log"
+  local rollback_exit_code=0
+  set +e
+  ( set +e
+    restore_firebase_credentials() { :; }
+    ensure_user_runtime_env() { :; }
+    rollback_api_blue_green() { echo "$*" >> "$rollback_calls"; }
+    write_blue_green_state() { :; }
+    cleanup_firebase_credentials_backup() { :; }
+    false
+    rollback_blue_green
+  ) >/dev/null 2>&1
+  rollback_exit_code="$?"
+  set -e
+  [ "$rollback_exit_code" -eq 1 ] \
+    && grep -q '^user-api registry/user:old blue 18080$' "$rollback_calls" || {
+      echo "not ok - retry failure must roll user-api back to the previous stable slot" >&2
+      return 1
+    }
+
+  write_blue_green_state deploying old-release
+  load_blue_green_state
+  [ "$rollback_user_image" = "registry/user:old" ] \
+    && [ "$rollback_admin_image" = "registry/admin:old" ] \
+    && [ "$rollback_batch_image" = "registry/batch:old" ] || {
+      echo "not ok - deploying checkpoints must preserve the stable release snapshot" >&2
+      return 1
+    }
+  echo "ok - interrupted retry preserves the stable release snapshot"
+}
+
+test_interrupted_deploy_rejects_a_different_target_sha() {
+  reset_scenario "blue-green-interrupted-other-target"
+  cat > "$STATE_FILE" <<'EOF'
+USER_API_IMAGE=registry/user:partial
+USER_API_ACTIVE_COLOR=green
+USER_API_ACTIVE_PORT=28080
+ADMIN_API_IMAGE=registry/admin:old
+ADMIN_API_ACTIVE_COLOR=blue
+ADMIN_API_ACTIVE_PORT=18081
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYMENT_STATUS=deploying
+DEPLOYED_SHA=old-release
+TARGET_SHA=interrupted-release
+ROLLBACK_USER_API_IMAGE=registry/user:old
+ROLLBACK_USER_API_ACTIVE_COLOR=blue
+ROLLBACK_USER_API_ACTIVE_PORT=18080
+ROLLBACK_ADMIN_API_IMAGE=registry/admin:old
+ROLLBACK_ADMIN_API_ACTIVE_COLOR=blue
+ROLLBACK_ADMIN_API_ACTIVE_PORT=18081
+ROLLBACK_BATCH_API_IMAGE=registry/batch:old
+ROLLBACK_DEPLOYED_SHA=old-release
+EOF
+  write_matching_nginx_config 28080 18081
+  load_blue_green_state
+
+  if prepare_blue_green_rollback_target >/dev/null 2>&1; then
+    echo "not ok - a new release must not overwrite another interrupted deployment" >&2
+    return 1
+  fi
+  echo "ok - interrupted deploy rejects a different target SHA"
+}
+
 test_active_release_is_idempotent() {
   reset_scenario "blue-green-idempotent"
   local calls="$ENV_DIR/calls.log"
@@ -1082,6 +1220,8 @@ test_candidate_health_failure_never_stops_active_service
 test_nginx_reload_failure_restores_previous_config
 test_blue_green_rollback_restarts_previous_slot_before_switching_back
 test_blue_green_orchestration_is_sequential_and_restarts_batch_once
+test_interrupted_deploy_retry_preserves_stable_release_snapshot
+test_interrupted_deploy_rejects_a_different_target_sha
 test_active_release_is_idempotent
 test_legacy_emergency_mode_releases_nginx_ports_before_restart
 test_first_batch_deploy_failure_stops_new_batch

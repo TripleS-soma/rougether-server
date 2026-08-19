@@ -22,7 +22,9 @@ mkdir -p "$NGINX_CONFIG_DIR"
 
 fail_validation=false
 fail_reload_once=false
+fail_admin_start=false
 reload_calls=0
+systemctl_log="$TEST_ROOT/systemctl.log"
 
 nginx() {
   [ "${1:-}" = "-t" ] || return 2
@@ -33,6 +35,7 @@ nginx() {
 }
 
 systemctl() {
+  printf '%s\n' "$*" >> "$systemctl_log"
   case "$1 ${2:-}" in
     "is-active --quiet") return 0 ;;
     "reload nginx")
@@ -43,7 +46,10 @@ systemctl() {
       fi
       ;;
     "enable --now") return 0 ;;
-    *) return 2 ;;
+    "start rougether-admin-api")
+      [ "$fail_admin_start" = false ]
+      ;;
+    *) return 0 ;;
   esac
 }
 
@@ -120,9 +126,57 @@ test_success_replaces_config_and_removes_backup() {
   [ -z "$(find "$NGINX_CONFIG_DIR" -name '.rougether.conf.backup.*' -print -quit)" ]
 }
 
+test_activation_rollback_restores_legacy_before_stopping_candidates() {
+  : > "$systemctl_log"
+  render_nginx 18080 18081 "$NGINX_CONFIG_FILE"
+  user_legacy_stopped=true
+  admin_legacy_stopped=true
+
+  local exit_code=0
+  set +e
+  ( set +e; false; rollback_activation ) >/dev/null 2>&1
+  exit_code="$?"
+  set -e
+
+  [ "$exit_code" -eq 1 ]
+  grep -q '^start rougether-admin-api$' "$systemctl_log"
+  grep -q '^stop rougether-admin-api@blue$' "$systemctl_log"
+  grep -q '^start rougether-user-api$' "$systemctl_log"
+  grep -q '^stop rougether-user-api@blue$' "$systemctl_log"
+  if grep -q 'listen 8080\|listen 8081' "$NGINX_CONFIG_FILE"; then
+    echo "expected successful rollback to release both fixed ports" >&2
+    exit 1
+  fi
+}
+
+test_failed_legacy_restart_keeps_candidate_routing_and_containers() {
+  : > "$systemctl_log"
+  render_nginx 18080 18081 "$NGINX_CONFIG_FILE"
+  user_legacy_stopped=true
+  admin_legacy_stopped=true
+  fail_admin_start=true
+
+  local exit_code=0
+  set +e
+  ( set +e; false; rollback_activation ) >/dev/null 2>&1
+  exit_code="$?"
+  set -e
+  fail_admin_start=false
+
+  [ "$exit_code" -eq 1 ]
+  grep -q 'server 127.0.0.1:18080' "$NGINX_CONFIG_FILE"
+  grep -q 'server 10.39.10.37:18081' "$NGINX_CONFIG_FILE"
+  if grep -q '^stop rougether-admin-api@blue$\|^stop rougether-user-api@blue$\|^start rougether-user-api$' "$systemctl_log"; then
+    echo "expected candidate services to stay available after failed legacy restart" >&2
+    exit 1
+  fi
+}
+
 test_validation_failure_restores_existing_config
 test_validation_failure_removes_new_config_without_backup
 test_reload_failure_restores_existing_config
 test_success_replaces_config_and_removes_backup
+test_activation_rollback_restores_legacy_before_stopping_candidates
+test_failed_legacy_restart_keeps_candidate_routing_and_containers
 
 echo "bootstrap blue/green router tests passed"
