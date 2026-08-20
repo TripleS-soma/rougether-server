@@ -86,6 +86,32 @@ class HouseExploreQueryTest {
     }
 
     @Test
+    void 비공개_집은_탐색과_goalCode_필터에서_제외한다() {
+        House privateHouse = houseRepository.save(House.createPrivate(
+                owner, "가입 기본 집", null, null, 4, "PRIVATE2",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseGoalRepository.save(HouseGoal.create(privateHouse, morningGoal));
+
+        HouseListResponse all = houseQueryService.explore(owner.getId(), 0, 20, null, false);
+        HouseListResponse filtered = houseQueryService.explore(
+                owner.getId(), 0, 20, "morning_routine", false);
+        HouseListResponse excludingJoined = houseQueryService.explore(owner.getId(), 0, 20, null, true);
+        HouseListResponse filteredExcludingJoined = houseQueryService.explore(
+                owner.getId(), 0, 20, "morning_routine", true);
+
+        assertThat(all.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .doesNotContain(privateHouse.getId());
+        assertThat(filtered.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .contains(oldest.getId())
+                .doesNotContain(privateHouse.getId());
+        assertThat(excludingJoined.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .doesNotContain(privateHouse.getId());
+        assertThat(filteredExcludingJoined.items()).extracting(HouseListResponse.HouseSummary::houseId)
+                .contains(oldest.getId())
+                .doesNotContain(privateHouse.getId());
+    }
+
+    @Test
     void goalCode로_필터링한다() {
         HouseListResponse response = houseQueryService.explore(
                 owner.getId(), 0, 20, "morning_routine", false);

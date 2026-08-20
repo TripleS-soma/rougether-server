@@ -79,7 +79,7 @@ class SignupServiceIntegrationTest {
                 .map(WalletHistory::getReason))
                 .contains(WalletHistoryReason.SIGNUP_BONUS);
 
-        // 기본 집: 나의 집, 정원 4, 게시 커버 첫 항목, OWNER 멤버십, 목표는 비어 있음(온보딩 목표 저장이 채움)
+        // 기본 집: 나의 집, 비공개, 정원 4, 게시 커버 첫 항목, OWNER 멤버십, 목표는 비어 있음(온보딩 목표 저장이 채움)
         List<HouseMember> memberships = houseMemberRepository
                 .findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE);
         assertThat(memberships).hasSize(1);
@@ -88,6 +88,7 @@ class SignupServiceIntegrationTest {
         assertThat(membership.getRole()).isEqualTo(HouseMemberRole.OWNER);
         assertThat(house.getOwner().getId()).isEqualTo(userId);
         assertThat(house.getName()).isEqualTo("나의 집");
+        assertThat(house.isPublic()).isFalse();
         assertThat(house.getCoverImageKey()).isEqualTo(DEFAULT_COVER_KEY);
         assertThat(house.getMaxMembers()).isEqualTo(4);
         // 테스트 컨텍스트는 봇 비활성(봇 풀 없음) → 사람 1명

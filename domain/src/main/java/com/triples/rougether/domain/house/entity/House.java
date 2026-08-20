@@ -51,6 +51,9 @@ public class House extends BaseEntity {
     @Column(name = "growth_points", nullable = false)
     private int growthPoints;
 
+    @Column(name = "is_public", nullable = false)
+    private boolean isPublic;
+
     @Column(name = "invite_code", length = 50)
     private String inviteCode;
 
@@ -63,6 +66,18 @@ public class House extends BaseEntity {
     // 집 생성. 생성 직후 구성원은 owner 1명, 레벨·성장포인트는 0에서 시작(개인 방 growthLevel 과 동일 기준).
     public static House create(User owner, String name, String description, String coverImageKey,
                                Integer maxMembers, String inviteCode, Instant inviteExpiresAt) {
+        return create(owner, name, description, coverImageKey, maxMembers, inviteCode, inviteExpiresAt, true);
+    }
+
+    // 가입 시 지급되는 기본 집은 탐색에 노출하지 않는다. 초대코드 참여와 구성원 기능은 일반 집과 동일하다.
+    public static House createPrivate(User owner, String name, String description, String coverImageKey,
+                                      Integer maxMembers, String inviteCode, Instant inviteExpiresAt) {
+        return create(owner, name, description, coverImageKey, maxMembers, inviteCode, inviteExpiresAt, false);
+    }
+
+    private static House create(User owner, String name, String description, String coverImageKey,
+                                Integer maxMembers, String inviteCode, Instant inviteExpiresAt,
+                                boolean isPublic) {
         House house = new House();
         house.owner = owner;
         house.name = name;
@@ -72,6 +87,7 @@ public class House extends BaseEntity {
         house.currentMemberCount = 1;
         house.level = 0;
         house.growthPoints = 0;
+        house.isPublic = isPublic;
         house.inviteCode = inviteCode;
         house.inviteExpiresAt = inviteExpiresAt;
         return house;

@@ -98,6 +98,23 @@ class HouseJoinRequestIntegrationTest {
     }
 
     @Test
+    void 비공개_집은_탐색_신청을_받지_않고_초대코드로만_가입한다() {
+        House privateHouse = houseRepository.save(House.createPrivate(
+                owner, "가입 기본 집", null, null, 4, "PRIVATE4",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(privateHouse, owner, HouseMemberRole.OWNER));
+
+        assertThatThrownBy(() -> houseJoinService.requestJoin(applicant.getId(), privateHouse.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
+
+        var joined = houseJoinService.joinByCode(applicant.getId(), "PRIVATE4");
+        assertThat(joined.houseId()).isEqualTo(privateHouse.getId());
+        assertThat(joined.pendingApproval()).isFalse();
+    }
+
+    @Test
     void 방장이_아니면_입주_신청을_처리할_수_없다() {
         User outsider = userRepository.save(User.signUp("join-request-outsider@rougether.dev"));
         var request = houseJoinService.requestJoin(applicant.getId(), house.getId());

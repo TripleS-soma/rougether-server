@@ -96,7 +96,7 @@ public class HouseJoinService {
     @Transactional
     public HouseJoinRequestResponse requestJoin(Long userId, Long houseId) {
         House house = houseRepository.findWithLockById(houseId)
-                .filter(found -> !found.isDeleted())
+                .filter(found -> !found.isDeleted() && found.isPublic())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         return HouseJoinRequestResponse.of(createOrReopenPendingRequest(house, houseId, userId));
     }

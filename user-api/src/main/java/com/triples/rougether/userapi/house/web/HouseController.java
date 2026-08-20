@@ -62,7 +62,8 @@ public class HouseController {
 
     @Operation(summary = "집 탐색 목록 조회",
             description = "참여할 수 있는 집 목록을 최신 생성순으로 반환합니다. 로그인한 회원 누구나 호출할 수 있습니다. "
-                    + "삭제되지 않은 모든 집이 대상이며, 본인이 이미 가입한 집과 정원이 가득 찬 집도 목록에 포함됩니다. "
+                    + "공개 상태이면서 삭제되지 않은 집이 대상이며, 가입 시 자동 생성되는 비공개 기본 집은 제외됩니다. "
+                    + "본인이 이미 가입한 집과 정원이 가득 찬 집도 목록에 포함됩니다. "
                     + "excludeJoined=true 를 주면 본인이 지금 가입(ACTIVE)해 있는 집을 제외합니다(탈퇴·강퇴한 집은 계속 포함). "
                     + "goalCode 를 주면 해당 목표가 연결된 집만 반환하고, 미지정 또는 빈 값이면 전체를 반환합니다. "
                     + "미지정 시 page=0, size=20 으로 조회합니다. goalCode 는 GET /api/v1/goals 응답의 code 값을 사용합니다.")
@@ -112,9 +113,10 @@ public class HouseController {
         return houseQueryService.getHouseDetail(user.id(), houseId);
     }
 
-    // 비구성원용 미리보기. 상세와 달리 구성원 검증 없음(전체공개), myRole·inviteCode 없음.
+    // 공개 집의 비구성원용 미리보기. 비공개 집은 ACTIVE 구성원만 허용하며 myRole·inviteCode 는 없음.
     @Operation(summary = "집 미리보기 (비구성원 가능)",
-            description = "탐색 목록에서 선택한 집을 참여 전에 살펴봅니다. 로그인한 회원 누구나(해당 집 비구성원·강퇴 이력자 포함) 조회할 수 있습니다. "
+            description = "탐색 목록에서 선택한 공개 집을 참여 전에 살펴봅니다. 공개 집은 로그인한 회원 누구나(해당 집 비구성원·강퇴 이력자 포함) 조회할 수 있고, "
+                    + "가입 시 자동 생성되는 비공개 기본 집은 활성 구성원만 조회할 수 있습니다. "
                     + "구성원용 상세와 동일한 집 정보(이름·소개·커버·인원·레벨·목표)를 내려주되, 구성원 전용 필드(myRole·inviteCode)는 없습니다. "
                     + "isMember 가 true 면 요청자가 이미 이 집의 활성 구성원이므로 상세 화면으로 전환하고, "
                     + "isFull 이 true 면 정원 초과라 참여할 수 없으니 가입 버튼을 비활성화합니다. "
@@ -138,7 +140,8 @@ public class HouseController {
     }
 
     @Operation(summary = "입주 신청 (구버전 호환 경로)",
-            description = "탐색한 집에 입주를 신청합니다. 신청만으로 구성원이 되거나 현재 구성원 수가 증가하지 않으며, 방장이 수락해야 입주가 확정됩니다. "
+            description = "탐색한 공개 집에 입주를 신청합니다. 비공개 집은 초대코드로만 참여할 수 있습니다. "
+                    + "신청만으로 구성원이 되거나 현재 구성원 수가 증가하지 않으며, 방장이 수락해야 입주가 확정됩니다. "
                     + "신규 앱은 POST /api/v1/houses/{houseId}/join-requests 를 사용합니다.")
     @PostMapping("/{houseId}/join")
     @ResponseStatus(HttpStatus.CREATED)
@@ -148,7 +151,8 @@ public class HouseController {
     }
 
     @Operation(summary = "입주 신청",
-            description = "탐색한 집에 입주를 신청합니다. 신청은 PENDING 상태로 생성되며 방장이 수락하기 전에는 구성원으로 등록되지 않습니다. "
+            description = "탐색한 공개 집에 입주를 신청합니다. 비공개 집은 초대코드로만 참여할 수 있습니다. "
+                    + "신청은 PENDING 상태로 생성되며 방장이 수락하기 전에는 구성원으로 등록되지 않습니다. "
                     + "거절된 신청은 다시 신청할 수 있고, 이미 신청 중이면 409를 반환합니다.")
     @PostMapping("/{houseId}/join-requests")
     @ResponseStatus(HttpStatus.CREATED)

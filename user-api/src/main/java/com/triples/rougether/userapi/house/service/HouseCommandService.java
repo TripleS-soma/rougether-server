@@ -87,7 +87,7 @@ public class HouseCommandService {
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
     }
 
-    // 회원가입 트랜잭션에서 기본 집을 지급함(#322). 게시 manifest 첫 항목을 기본 커버로 쓰고 집 목표는 비워 둔다 —
+    // 회원가입 트랜잭션에서 비공개 기본 집을 지급함(#322). 게시 manifest 첫 항목을 기본 커버로 쓰고 집 목표는 비워 둔다 —
     // 가입 시점엔 목표가 없으므로 PUT /onboarding/goals 가 fillStarterHouseGoals 로 채운다.
     // 호출자(SignupService)의 가입 트랜잭션에 합류해 유저·지갑·집이 함께 커밋/롤백된다.
     @Transactional
@@ -97,7 +97,7 @@ public class HouseCommandService {
                 .map(HouseCoverImageCatalog.PublishedCoverImage::coverImageKey)
                 .orElse(null);
         House house = saveHouse(owner, ONBOARDING_STARTER_HOUSE_NAME, null, coverImageKey,
-                DEFAULT_MAX_MEMBERS, List.of());
+                DEFAULT_MAX_MEMBERS, List.of(), false);
         // 동거 봇(#309): 첫 사용자가 빈 집을 보지 않게 봇 2명을 함께 들인다. 사용자가 직접 만든 집엔 넣지 않는다.
         // 방금 저장한 house 는 이 트랜잭션이 소유하므로 별도 락 없이 카운트를 갱신해도 안전하다.
         botResidencyService.joinStarterHouse(house);
@@ -123,9 +123,17 @@ public class HouseCommandService {
 
     private House saveHouse(User owner, String name, String description, String coverImageKey,
                             int maxMembers, List<Goal> goals) {
-        House house = houseRepository.save(House.create(
-                owner, name, description, coverImageKey, maxMembers,
-                inviteCodeGenerator.generate(), Instant.now().plus(INVITE_CODE_TTL)));
+        return saveHouse(owner, name, description, coverImageKey, maxMembers, goals, true);
+    }
+
+    private House saveHouse(User owner, String name, String description, String coverImageKey,
+                            int maxMembers, List<Goal> goals, boolean isPublic) {
+        String inviteCode = inviteCodeGenerator.generate();
+        Instant inviteExpiresAt = Instant.now().plus(INVITE_CODE_TTL);
+        House newHouse = isPublic
+                ? House.create(owner, name, description, coverImageKey, maxMembers, inviteCode, inviteExpiresAt)
+                : House.createPrivate(owner, name, description, coverImageKey, maxMembers, inviteCode, inviteExpiresAt);
+        House house = houseRepository.save(newHouse);
         houseMemberRepository.save(HouseMember.create(house, owner, HouseMemberRole.OWNER));
         houseGoalRepository.saveAll(goals.stream().map(goal -> HouseGoal.create(house, goal)).toList());
         return house;
