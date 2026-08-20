@@ -65,6 +65,7 @@ class HouseJoinServiceTest {
         House house = mock(House.class);
         lenient().when(house.getId()).thenReturn(id);
         when(house.isDeleted()).thenReturn(false);
+        lenient().when(house.isPublic()).thenReturn(true);
         lenient().when(house.isInviteExpired()).thenReturn(false);
         lenient().when(house.isFull()).thenReturn(false);
         return house;

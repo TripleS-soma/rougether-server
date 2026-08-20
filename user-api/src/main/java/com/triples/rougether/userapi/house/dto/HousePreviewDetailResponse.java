@@ -9,9 +9,9 @@ import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
-// GET /api/v1/houses/{houseId}/preview 응답 - 비구성원 포함 로그인 회원 누구나(집 정보는 전체공개 정책).
+// GET /api/v1/houses/{houseId}/preview 응답 - 공개 집은 로그인 회원 누구나, 비공개 집은 ACTIVE 구성원만.
 // 구성원 전용 상세와 동일 소싱이되 구성원 전용 의미인 myRole·inviteCode 는 없다.
-// memberRooms 는 미리보기 화면의 구성원 타일 렌더용(#177) - 방 렌더 데이터는 전체공개로 확정,
+// memberRooms 는 미리보기 화면의 구성원 타일 렌더용(#177) - 공개 집의 방 렌더 데이터는 전체공개로 확정,
 // 활동 정보(streak·lastAccessedAt·그날 현황)는 기존대로 구성원 전용이라 내리지 않는다.
 public record HousePreviewDetailResponse(
         @Schema(description = "집 ID", example = "1")

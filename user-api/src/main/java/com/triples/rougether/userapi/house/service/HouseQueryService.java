@@ -35,7 +35,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 집 탐색 목록. 최신 생성순 기본, goalCode 필터 1차 지원. 탐색·추천 겸용(별도 추천 엔드포인트 없음).
+// 공개 집 탐색 목록. 최신 생성순 기본, goalCode 필터 1차 지원. 탐색·추천 겸용(별도 추천 엔드포인트 없음).
 @Service
 public class HouseQueryService {
 
@@ -76,8 +76,8 @@ public class HouseQueryService {
         return HouseDetailResponse.of(house, me.getRole(), goals);
     }
 
-    // 미리보기 - 비구성원 포함 로그인 회원 누구나(집 정보는 전체공개 정책, #169).
-    // KICKED 이력자도 조회는 허용한다(가입 시도는 기존대로 HOUSE_KICKED_MEMBER 거부).
+    // 미리보기 - 공개 집은 비구성원 포함 로그인 회원 누구나(#169), 비공개 집은 ACTIVE 구성원만 조회한다.
+    // 공개 집의 KICKED 이력자도 조회는 허용한다(가입 시도는 기존대로 HOUSE_KICKED_MEMBER 거부).
     @Transactional(readOnly = true)
     public HousePreviewDetailResponse getPreview(Long userId, Long houseId) {
         House house = houseRepository.findById(houseId)
@@ -86,10 +86,13 @@ public class HouseQueryService {
         boolean isMember = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
                 .filter(HouseMember::isActive)
                 .isPresent();
+        if (!house.isPublic() && !isMember) {
+            throw new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND);
+        }
         List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
-        // 구성원 타일 렌더용 방 데이터(#177). 방 렌더는 미리보기를 통해 전체공개로 확정 -
+        // 구성원 타일 렌더용 방 데이터(#177). 공개 집의 방 렌더는 미리보기를 통해 전체공개로 확정 -
         // 활동 정보(streak·lastAccessedAt)는 구성원 전용이라 렌더 부분집합만 내린다.
         // 방 데이터는 구성원 수와 무관하게 배치 조회(고정 4쿼리)로 한 번에 가져온다.
         List<HouseMember> activeMembers = houseMemberRepository

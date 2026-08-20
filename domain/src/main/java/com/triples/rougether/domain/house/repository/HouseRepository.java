@@ -32,15 +32,15 @@ public interface HouseRepository extends JpaRepository<House, Long> {
     @Query("select h from House h where h.id = :houseId")
     Optional<House> findWithLockById(@Param("houseId") Long houseId);
 
-    // 탐색 목록: 삭제 안 된 집, 최신 생성순. ACTIVE 멤버가 봇뿐인 집(사람 0명)은 노출하지 않는다(#308 —
+    // 탐색 목록: 공개·미삭제 집, 최신 생성순. ACTIVE 멤버가 봇뿐인 집(사람 0명)은 노출하지 않는다(#308 —
     // 봇만 남은 집이 추천에 뜨지 않게). 아래 goalCode·excludeJoined 변형도 같은 조건을 공유한다.
-    @Query("select h from House h where h.deletedAt is null "
+    @Query("select h from House h where h.deletedAt is null and h.isPublic = true "
             + HAS_HUMAN_OR_NO_BOT_MEMBER
             + "order by h.createdAt desc, h.id desc")
     Page<House> findExplorePage(Pageable pageable);
 
     // goalCode 필터 - house_goals 를 서브쿼리로 걸어 중복 행 없이 페이징한다.
-    @Query("select h from House h where h.deletedAt is null "
+    @Query("select h from House h where h.deletedAt is null and h.isPublic = true "
             + HAS_HUMAN_OR_NO_BOT_MEMBER
             + "and h.id in (select hg.house.id from HouseGoal hg where hg.goal.code = :goalCode) "
             + "order by h.createdAt desc, h.id desc")
@@ -48,7 +48,7 @@ public interface HouseRepository extends JpaRepository<House, Long> {
 
     // excludeJoined 필터 - 내가 지금 가입해 있는(ACTIVE) 집만 제외한다. LEFT/KICKED 이력 집은 목록에 남는다.
     // NOT IN 대신 NOT EXISTS - 가입 집이 많아져도 페이지 스캔마다 서브쿼리 결과를 다시 만들지 않는다.
-    @Query("select h from House h where h.deletedAt is null "
+    @Query("select h from House h where h.deletedAt is null and h.isPublic = true "
             + HAS_HUMAN_OR_NO_BOT_MEMBER
             + "and not exists (select 1 from HouseMember hm "
             + "where hm.house = h and hm.user.id = :userId and hm.status = :status) "
@@ -57,7 +57,7 @@ public interface HouseRepository extends JpaRepository<House, Long> {
                                                      @Param("status") HouseMemberStatus status,
                                                      Pageable pageable);
 
-    @Query("select h from House h where h.deletedAt is null "
+    @Query("select h from House h where h.deletedAt is null and h.isPublic = true "
             + HAS_HUMAN_OR_NO_BOT_MEMBER
             + "and h.id in (select hg.house.id from HouseGoal hg where hg.goal.code = :goalCode) "
             + "and not exists (select 1 from HouseMember hm "

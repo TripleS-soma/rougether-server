@@ -145,6 +145,20 @@ class HousePreviewQueryTest {
     }
 
     @Test
+    void 비공개_집은_구성원만_미리볼_수_있다() {
+        House privateHouse = houseRepository.save(House.createPrivate(
+                owner, "가입 기본 집", null, null, 4, "PRIVATE3",
+                Instant.now().plus(Duration.ofDays(7))));
+        houseMemberRepository.save(HouseMember.create(privateHouse, owner, HouseMemberRole.OWNER));
+
+        assertThatThrownBy(() -> houseQueryService.getPreview(stranger.getId(), privateHouse.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
+        assertThat(houseQueryService.getPreview(owner.getId(), privateHouse.getId()).isMember()).isTrue();
+    }
+
+    @Test
     void 정원이_차면_isFull이_true다() {
         HouseMember joined = houseMemberRepository.save(
                 HouseMember.create(house, stranger, HouseMemberRole.MEMBER));

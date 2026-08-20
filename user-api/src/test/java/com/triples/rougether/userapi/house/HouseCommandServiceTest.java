@@ -84,6 +84,7 @@ class HouseCommandServiceTest {
         assertThat(saved.getMaxMembers()).isEqualTo(6);
         assertThat(saved.getCurrentMemberCount()).isEqualTo(1);
         assertThat(saved.getLevel()).isZero();
+        assertThat(saved.isPublic()).isTrue();
         assertThat(saved.getInviteCode()).isEqualTo("ABCD2345");
         // 초대코드 만료 7일
         assertThat(saved.getInviteExpiresAt())
@@ -165,6 +166,7 @@ class HouseCommandServiceTest {
         assertThat(saved.getCoverImageKey()).isEqualTo("house/cloud.png");
         assertThat(saved.getMaxMembers()).isEqualTo(4);
         assertThat(saved.getCurrentMemberCount()).isEqualTo(1);
+        assertThat(saved.isPublic()).isFalse();
 
         ArgumentCaptor<HouseMember> memberCaptor = ArgumentCaptor.forClass(HouseMember.class);
         verify(houseMemberRepository).save(memberCaptor.capture());
