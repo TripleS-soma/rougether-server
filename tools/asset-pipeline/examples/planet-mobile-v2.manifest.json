@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "name": "행성 모빌 테이블 v2",
+  "slug": "planet-mobile-v2",
+  "kind": "ANIMATED_FURNITURE",
+  "themeCode": "cozy-space",
+  "sourcePath": "./planet-mobile-source.png",
+  "outputPath": "./planet-mobile-animated-v2.webp",
+  "sourceAssetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table.png",
+  "outputAssetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table-animated-v2.webp",
+  "previewAssetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table-animated-v2.webp",
+  "targetItemId": 47,
+  "expectedOldAssetKey": "items/cozy-space/furniture/cozy-space-planet-mobile-table-animated-v1.webp",
+  "canvas": {"width": 317, "height": 330},
+  "alphaBorderMax": 0,
+  "animation": {
+    "expectedFrames": 24,
+    "requireInfiniteLoop": true,
+    "previewSizes": [86, 94],
+    "minVisibleDeltaPercent": 0.5,
+    "protectedMaskPath": "./planet-mobile-fixed-body-mask.png"
+  }
+}

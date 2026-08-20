@@ -255,7 +255,14 @@ body {
 .result-url:hover { text-decoration: underline; }
 
 /* ===== 헤더 네비게이션 ===== */
-.app-nav { display: flex; gap: 6px; }
+.app-nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+.app-nav::-webkit-scrollbar { display: none; }
 .app-nav a {
     padding: 8px 14px;
     border-radius: 9px;
@@ -267,6 +274,256 @@ body {
 }
 .app-nav a:hover { color: var(--primary); }
 .app-nav a.active { color: var(--primary-strong); background: var(--primary-soft); }
+
+/* ===== Asset Foundry ===== */
+.app-main--foundry { max-width: 1800px; padding: 26px 28px 36px; }
+.foundry-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 28px 30px;
+    color: #fff;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at 84% 16%, rgba(94, 234, 212, .32), transparent 30%),
+        radial-gradient(circle at 62% 82%, rgba(196, 181, 253, .34), transparent 32%),
+        linear-gradient(125deg, #171a35 0%, #343070 54%, #116b74 100%);
+    box-shadow: 0 22px 60px rgba(34, 37, 77, .24);
+}
+.foundry-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+}
+.foundry-hero > * { position: relative; z-index: 1; }
+.foundry-eyebrow {
+    display: inline-block;
+    margin-bottom: 9px;
+    color: #a7f3d0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.6px;
+}
+.foundry-hero h2 { font-size: clamp(24px, 2vw, 34px); letter-spacing: -.8px; }
+.foundry-hero p { max-width: 720px; margin-top: 9px; color: rgba(255,255,255,.75); font-size: 14px; line-height: 1.65; }
+.foundry-hero-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.foundry-safe-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    background: rgba(8, 15, 42, .3);
+    color: rgba(255,255,255,.84);
+    font-size: 12px;
+    backdrop-filter: blur(10px);
+}
+.foundry-safe-badge i { width: 7px; height: 7px; border-radius: 50%; background: #5eead4; box-shadow: 0 0 0 5px rgba(94,234,212,.13); }
+.foundry-primary-button, .foundry-secondary-button, .foundry-text-button {
+    border: 0;
+    font-family: inherit;
+    font-weight: 750;
+    cursor: pointer;
+}
+.foundry-primary-button {
+    min-height: 42px;
+    padding: 0 17px;
+    border-radius: 11px;
+    color: #fff;
+    background: linear-gradient(135deg, #6966f3, #8b5cf6);
+    box-shadow: 0 8px 20px rgba(99,102,241,.28);
+}
+.foundry-hero .foundry-primary-button { background: #fff; color: #32306b; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.foundry-primary-button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.foundry-secondary-button {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-soft);
+    background: #fff;
+}
+.foundry-text-button { padding: 8px 0; color: var(--primary-strong); background: transparent; font-size: 12px; }
+.foundry-alert { margin: 14px 0 0; }
+.foundry-metrics { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 12px; margin: 16px 0; }
+.foundry-metrics article {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 3px 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: #fff;
+}
+.foundry-metrics span { color: var(--text-soft); font-size: 12px; font-weight: 650; }
+.foundry-metrics strong { grid-row: 1 / span 2; grid-column: 2; font-size: 26px; letter-spacing: -1px; }
+.foundry-metrics small { color: #a0a6b3; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+.foundry-metrics .quality-metric { border-color: #c7d2fe; background: linear-gradient(145deg, #fff, #f4f3ff); }
+.foundry-metrics .quality-metric strong { color: var(--primary-strong); }
+.foundry-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.72fr) minmax(370px, .75fr);
+    gap: 16px;
+    min-height: 680px;
+    height: calc(100vh - 282px);
+}
+.foundry-board-pane, .foundry-detail {
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: #fff;
+}
+.foundry-board-pane { padding: 20px; }
+.foundry-detail { padding: 20px; }
+.foundry-section-head, .foundry-subhead, .foundry-detail-head, .foundry-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+.foundry-section-head h3, .foundry-detail-head h3 { font-size: 18px; }
+.foundry-section-head p { margin-top: 3px; color: var(--text-soft); font-size: 12px; }
+.foundry-board {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(178px, 1fr));
+    gap: 10px;
+    min-width: 1110px;
+    margin-top: 16px;
+    align-items: start;
+}
+.foundry-column { min-height: 480px; padding: 10px; border-radius: 14px; background: #f7f8fc; }
+.foundry-column--review { background: #fff8ed; }
+.foundry-column--delivery { background: #f3f2ff; }
+.foundry-column--live { background: #effbf7; }
+.foundry-column-head { display: flex; justify-content: space-between; gap: 8px; padding: 5px 4px 12px; }
+.foundry-column-head div { display: flex; flex-direction: column; gap: 2px; }
+.foundry-column-head strong { font-size: 11px; letter-spacing: 1px; }
+.foundry-column-head span { color: var(--text-soft); font-size: 9px; }
+.foundry-column-head b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: #fff; font-size: 11px; }
+.foundry-column-cards { display: flex; flex-direction: column; gap: 8px; }
+.foundry-column-empty { padding: 28px 8px; border: 1px dashed #dfe2eb; border-radius: 10px; color: #a0a6b3; text-align: center; font-size: 11px; }
+.foundry-job-card {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e5e7ee;
+    border-radius: 12px;
+    background: #fff;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: 0 5px 14px rgba(31,36,48,.045);
+    transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.foundry-job-card:hover { transform: translateY(-2px); border-color: #b9bbf8; box-shadow: 0 10px 24px rgba(54,52,130,.1); }
+.foundry-job-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(99,102,241,.12); }
+.foundry-card-kind, .foundry-kind { color: var(--primary-strong); font-size: 9px; font-weight: 800; letter-spacing: .7px; }
+.foundry-job-card > strong { display: block; margin: 7px 0 4px; font-size: 13px; line-height: 1.35; }
+.foundry-job-card > small { display: block; overflow: hidden; color: var(--text-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.foundry-card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 11px; padding-top: 9px; border-top: 1px solid #f0f1f5; }
+.foundry-card-foot span { color: var(--text-soft); font-size: 9px; }
+.foundry-card-foot b { color: #9ca3af; font-size: 10px; }
+.foundry-card-foot b.passed { color: var(--success); }
+.foundry-empty-detail { min-height: 100%; display: grid; place-content: center; justify-items: center; padding: 48px; text-align: center; }
+.foundry-empty-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; color: #fff; background: var(--gradient); font-size: 25px; }
+.foundry-empty-detail h3 { margin-top: 16px; }
+.foundry-empty-detail p { max-width: 330px; margin-top: 7px; color: var(--text-soft); font-size: 13px; line-height: 1.6; }
+.foundry-detail-head { padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+.foundry-detail-head h3 { margin: 4px 0 3px; }
+.foundry-detail-head code { color: var(--text-soft); font-size: 10px; }
+.foundry-status { padding: 6px 9px; border-radius: 999px; color: var(--primary-strong); background: var(--primary-soft); font-size: 10px; font-weight: 750; }
+.foundry-status[data-status="CLIENT_VERIFIED"] { color: #087f5b; background: #e9fbf4; }
+.foundry-twin-section, .foundry-quality-section, .foundry-lineage-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.foundry-subhead > div > span { color: var(--primary-strong); font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.foundry-subhead h4 { margin-top: 2px; font-size: 14px; }
+.foundry-subhead > span { color: var(--text-soft); font-size: 10px; }
+.foundry-preview-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 104px; gap: 12px; margin-top: 13px; align-items: start; }
+.foundry-room-stage { position: relative; overflow: hidden; width: 100%; border: 1px solid #e8e2d8; background: #fff9ea; box-shadow: inset 0 0 24px rgba(120,82,40,.06); }
+.foundry-room-surface { position: absolute; object-fit: cover; }
+.foundry-room-character { position: absolute; z-index: 5; object-fit: contain; pointer-events: none; }
+.foundry-preview-asset { position: absolute; z-index: 4; object-fit: contain; transform: translate(-50%, -50%); filter: drop-shadow(0 5px 5px rgba(78,56,36,.13)); }
+.foundry-preview-asset--house { inset: 3% !important; width: 94% !important; height: 94%; transform: none; }
+.foundry-preview-asset--character { left: 50% !important; top: 49% !important; width: 42% !important; height: 42%; }
+.foundry-room-label { position: absolute; top: 9px; left: 9px; z-index: 8; padding: 5px 8px; border: 1px solid rgba(255,255,255,.65); border-radius: 999px; background: rgba(255,255,255,.78); color: #65594e; font-size: 9px; font-weight: 700; backdrop-filter: blur(6px); }
+.foundry-preview-unavailable { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 78%; padding: 8px 11px; border: 1px solid rgba(77,70,229,.18); border-radius: 999px; background: rgba(255,255,255,.88); color: #77738a; font-size: 10px; font-weight: 700; text-align: center; backdrop-filter: blur(8px); }
+.foundry-actual-size { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 11px 8px; border: 1px solid var(--border); border-radius: 12px; background: #fafaff; }
+.foundry-actual-size > span { color: var(--text-soft); font-size: 9px; font-weight: 700; }
+.foundry-actual-size > div { display: grid; place-items: center; width: 86px; height: 86px; border-radius: 10px; background-image: linear-gradient(45deg,#eef0f5 25%,transparent 25%),linear-gradient(-45deg,#eef0f5 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eef0f5 75%),linear-gradient(-45deg,transparent 75%,#eef0f5 75%); background-size: 12px 12px; background-position: 0 0,0 6px,6px -6px,-6px 0; }
+.foundry-actual-size img { width: 86px; height: 86px; object-fit: contain; }
+.foundry-actual-size small { color: #a0a6b3; font-size: 8px; }
+.foundry-preview-key { margin-top: 8px; overflow: hidden; color: var(--text-soft); font-family: monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.foundry-score { display: grid; place-items: center; width: 42px; height: 42px; border: 4px solid #c7d2fe; border-radius: 50%; color: var(--primary-strong); font-size: 13px; font-weight: 850; }
+.foundry-check-list { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.foundry-check { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.foundry-check-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; font-size: 11px; font-weight: 850; }
+.foundry-check--pass .foundry-check-mark { color: #087f5b; background: #e9fbf4; }
+.foundry-check--fail .foundry-check-mark { color: var(--danger); background: var(--danger-soft); }
+.foundry-check--warn .foundry-check-mark { color: #a35b00; background: #fff4d9; }
+.foundry-check strong { display: block; font-size: 11px; }
+.foundry-check small { display: block; margin-top: 2px; color: var(--text-soft); font-size: 9px; }
+.foundry-check > b { color: var(--text-soft); font-size: 10px; }
+.foundry-check-empty { padding: 15px; border: 1px dashed #d9dce6; border-radius: 10px; color: var(--text-soft); font-size: 11px; line-height: 1.6; }
+#qa-report-button:disabled { cursor: not-allowed; opacity: .42; }
+.foundry-metadata { display: grid; gap: 7px; margin-top: 12px; }
+.foundry-metadata > div { display: grid; grid-template-columns: 78px minmax(0,1fr); gap: 8px; font-size: 10px; }
+.foundry-metadata dt { color: var(--text-soft); }
+.foundry-metadata dd { overflow: hidden; font-family: monospace; text-overflow: ellipsis; white-space: nowrap; }
+.foundry-timeline { position: relative; display: flex; flex-direction: column; gap: 9px; margin-top: 15px; padding-left: 5px; }
+.foundry-timeline > div { display: grid; grid-template-columns: 12px 1fr; gap: 8px; }
+.foundry-timeline i { width: 8px; height: 8px; margin-top: 3px; border: 2px solid #a5b4fc; border-radius: 50%; background: #fff; }
+.foundry-timeline strong, .foundry-timeline span { display: block; }
+.foundry-timeline strong { font-size: 10px; }
+.foundry-timeline span { margin-top: 2px; color: var(--text-soft); font-size: 9px; }
+.foundry-transition { padding-top: 16px; }
+.foundry-transition > label { color: var(--text-soft); font-size: 10px; font-weight: 700; }
+.foundry-transition-help { margin-top: 4px; color: #9ca3af; font-size: 9px; line-height: 1.45; }
+.foundry-transition textarea, .foundry-json-field textarea {
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    resize: vertical;
+}
+.foundry-transition > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+.foundry-dialog { max-width: none; padding: 0; border: 0; border-radius: 20px; background: transparent; }
+.foundry-dialog::backdrop { background: rgba(23,26,53,.52); backdrop-filter: blur(5px); }
+.foundry-dialog-card { width: min(680px, calc(100vw - 32px)); padding: 24px; border-radius: 20px; background: #fff; box-shadow: 0 30px 90px rgba(16,19,46,.3); }
+.foundry-dialog-head span { color: var(--primary-strong); font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.foundry-dialog-head h3 { margin-top: 3px; }
+.foundry-dialog-close { border: 0; background: transparent; color: var(--text-soft); font-size: 28px; cursor: pointer; }
+.foundry-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-top: 20px; }
+.foundry-form-grid label, .foundry-json-field { display: flex; flex-direction: column; gap: 6px; }
+.foundry-form-grid label > span, .foundry-json-field > span { color: var(--text-soft); font-size: 11px; font-weight: 700; }
+.foundry-form-grid input, .foundry-form-grid select { height: 42px; padding: 0 11px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; }
+.foundry-form-wide { grid-column: 1 / -1; }
+.foundry-form-hint { margin-top: 12px; padding: 10px 12px; border-radius: 10px; color: var(--text-soft); background: #f7f8fc; font-size: 11px; line-height: 1.5; }
+.foundry-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.foundry-json-field { margin-top: 18px; }
+.foundry-json-field textarea { min-height: 250px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; background: #171a35; color: #dbeafe; }
+@media (max-width: 1180px) {
+    .foundry-workspace { grid-template-columns: 1fr; height: auto; }
+    .foundry-board-pane, .foundry-detail { max-height: 720px; }
+    .foundry-metrics { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 760px) {
+    .app-main--foundry { padding: 16px; }
+    .foundry-hero { flex-direction: column; padding: 22px; }
+    .foundry-hero-actions { align-items: flex-start; flex-wrap: wrap; }
+    .foundry-metrics { grid-template-columns: repeat(2, 1fr); }
+    .foundry-preview-grid { grid-template-columns: 1fr; }
+    .foundry-form-grid { grid-template-columns: 1fr; }
+    .foundry-form-wide { grid-column: auto; }
+}
 
 /* ===== 아이템 기본 슬롯 편집 ===== */
 .app-main--wide { max-width: 1080px; }

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · Asset Foundry</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+<header class="app-header">
+    <div class="brand brand-sm">
+        <span class="brand-mark">R</span>
+        <h1>Rougether <span class="badge">ADMIN</span></h1>
+    </div>
+    <nav class="app-nav">
+        <a th:href="@{/}">에셋 업로드</a>
+        <a th:href="@{/assets}">에셋 조회</a>
+        <a th:href="@{/asset-foundry}" class="active">Asset Foundry</a>
+        <a th:href="@{/catalog}">카탈로그</a>
+        <a th:href="@{/item-slots}">가구 관리</a>
+        <a th:href="@{/accessory-render-profiles}">악세사리 관리</a>
+        <a th:href="@{/users}">유저 관리</a>
+        <a th:href="@{/weekly-reports}">AI 회고</a>
+        <a th:href="@{/banned-words}">금칙어</a>
+        <a th:href="@{/bug-reports}">버그 제보</a>
+    </nav>
+    <div class="header-right">
+        <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+        <form th:action="@{/logout}" method="post">
+            <button type="submit" class="btn-ghost">로그아웃</button>
+        </form>
+    </div>
+</header>
+
+<main class="app-main app-main--foundry">
+    <section class="foundry-hero">
+        <div>
+            <span class="foundry-eyebrow">Rougether Asset Foundry · CONTROL PLANE</span>
+            <h2>아이디어를 검증된 모바일 에셋으로</h2>
+            <p>생성 결과를 manifest로 추적하고, 품질 게이트·디지털 트윈·사람 승인을 통과한 작업만 DEV 연결 단계로 보냅니다.</p>
+        </div>
+        <div class="foundry-hero-actions">
+            <span class="foundry-safe-badge"><i></i> 안전 모드 · 자동 배포 없음</span>
+            <button type="button" class="foundry-primary-button" id="new-job-button">+ 새 작업</button>
+        </div>
+    </section>
+
+    <div class="alert alert-error foundry-alert" id="foundry-error" role="alert" hidden></div>
+    <div class="alert alert-success foundry-alert" id="foundry-success" role="status" hidden></div>
+
+    <section class="foundry-metrics" aria-label="파이프라인 현황">
+        <article><span>전체 작업</span><strong id="metric-total">—</strong><small>manifest lineage</small></article>
+        <article><span>진행 중</span><strong id="metric-active">—</strong><small>build → delivery</small></article>
+        <article><span>검수 대기</span><strong id="metric-review">—</strong><small>human in the loop</small></article>
+        <article><span>모바일 검증</span><strong id="metric-live">—</strong><small>iOS + Android</small></article>
+        <article class="quality-metric"><span>평균 품질</span><strong id="metric-quality">—</strong><small>자동 QA score</small></article>
+    </section>
+
+    <section class="foundry-workspace">
+        <div class="foundry-board-pane">
+            <div class="foundry-section-head">
+                <div>
+                    <h3>Production pipeline</h3>
+                    <p>각 카드는 하나의 버전 key와 검증 이력을 유지합니다.</p>
+                </div>
+                <button type="button" class="foundry-secondary-button" id="refresh-jobs">새로고침</button>
+            </div>
+            <div class="foundry-board" id="foundry-board" aria-live="polite"></div>
+        </div>
+
+        <aside class="foundry-detail" id="foundry-detail" aria-live="polite">
+            <div class="foundry-empty-detail" id="foundry-empty-detail">
+                <span class="foundry-empty-icon">✦</span>
+                <h3>작업을 선택하세요</h3>
+                <p>품질 게이트, 실제 RN Room 디지털 트윈, 배포 lineage를 한곳에서 확인할 수 있습니다.</p>
+            </div>
+
+            <div id="foundry-detail-content" hidden>
+                <div class="foundry-detail-head">
+                    <div>
+                        <span class="foundry-kind" id="detail-kind"></span>
+                        <h3 id="detail-name"></h3>
+                        <code id="detail-slug"></code>
+                    </div>
+                    <span class="foundry-status" id="detail-status"></span>
+                </div>
+
+                <section class="foundry-twin-section">
+                    <div class="foundry-subhead">
+                        <div>
+                            <span>DIGITAL TWIN</span>
+                            <h4>실제 Room 규격 미리보기</h4>
+                        </div>
+                        <span id="contract-version">contract —</span>
+                    </div>
+                    <div class="foundry-preview-grid">
+                        <div class="foundry-room-stage" id="foundry-room-stage">
+                            <img id="foundry-room-background" class="foundry-room-surface" alt="">
+                            <img id="foundry-room-wall" class="foundry-room-surface" alt="">
+                            <img id="foundry-room-floor" class="foundry-room-surface" alt="">
+                            <img id="foundry-preview-asset" class="foundry-preview-asset" alt="">
+                            <img id="foundry-room-character" class="foundry-room-character" alt="고양이 캐릭터">
+                            <span class="foundry-room-label">RN 1:1 · FREE_V1</span>
+                            <span class="foundry-preview-unavailable" id="foundry-preview-unavailable" hidden>
+                                CDN 미리보기에 접근할 수 없습니다
+                            </span>
+                        </div>
+                        <div class="foundry-actual-size">
+                            <span>실사용 86px</span>
+                            <div><img id="foundry-small-asset" alt=""></div>
+                            <small>움직임·외곽선 확인</small>
+                        </div>
+                    </div>
+                    <div class="foundry-preview-key" id="detail-preview-key"></div>
+                </section>
+
+                <section class="foundry-quality-section">
+                    <div class="foundry-subhead">
+                        <div>
+                            <span>QUALITY GATES</span>
+                            <h4>자동 품질 게이트</h4>
+                        </div>
+                        <div class="foundry-score" id="detail-score">—</div>
+                    </div>
+                    <div class="foundry-check-list" id="detail-checks"></div>
+                    <button type="button" class="foundry-text-button" id="qa-report-button">QA report JSON 반영</button>
+                </section>
+
+                <section class="foundry-lineage-section">
+                    <div class="foundry-subhead">
+                        <div>
+                            <span>LINEAGE & SAFETY</span>
+                            <h4>버전·연결 영향</h4>
+                        </div>
+                    </div>
+                    <dl class="foundry-metadata">
+                        <div><dt>출력 key</dt><dd id="detail-output-key"></dd></div>
+                        <div><dt>교체 대상</dt><dd id="detail-target"></dd></div>
+                        <div><dt>기존 key CAS</dt><dd id="detail-old-key"></dd></div>
+                        <div><dt>승인자</dt><dd id="detail-approver"></dd></div>
+                    </dl>
+                    <div class="foundry-timeline" id="detail-events"></div>
+                </section>
+
+                <section class="foundry-transition">
+                    <label for="transition-note">단계 변경 사유</label>
+                    <p class="foundry-transition-help">단계만 감사 이력에 기록합니다. S3·DB·seed 작업을 자동 실행하지 않습니다.</p>
+                    <textarea id="transition-note" rows="2" maxlength="500"
+                              placeholder="검증 결과나 승인 근거를 남겨주세요."></textarea>
+                    <div>
+                        <button type="button" class="foundry-secondary-button" id="return-draft-button" hidden>재작업으로 반환</button>
+                        <button type="button" class="foundry-primary-button" id="advance-button">다음 단계</button>
+                    </div>
+                </section>
+            </div>
+        </aside>
+    </section>
+</main>
+
+<dialog class="foundry-dialog" id="new-job-dialog">
+    <form method="dialog" class="foundry-dialog-card" id="new-job-form">
+        <div class="foundry-dialog-head">
+            <div><span>NEW MANIFEST</span><h3>새 에셋 작업</h3></div>
+            <button type="button" class="foundry-dialog-close" data-dialog-close="new-job-dialog" aria-label="닫기">×</button>
+        </div>
+        <div class="foundry-form-grid">
+            <label><span>작업 이름</span><input name="name" required maxlength="100" placeholder="행성 모빌 테이블 v2"></label>
+            <label><span>slug</span><input name="slug" required pattern="[a-z0-9][a-z0-9\-]{2,99}" placeholder="planet-mobile-v2"></label>
+            <label><span>프로필</span>
+                <select name="kind" id="new-job-kind" required>
+                    <option value="ANIMATED_FURNITURE">동적 가구</option>
+                    <option value="STATIC_FURNITURE">정적 가구</option>
+                    <option value="CHARACTER_ANIMATION">캐릭터 모션</option>
+                    <option value="HOUSE_FRAME">집 프레임</option>
+                </select>
+            </label>
+            <label><span>테마 코드</span><input name="themeCode" placeholder="cozy-space"></label>
+            <label class="foundry-form-wide"><span>원본 asset key</span><input name="sourceAssetKey" placeholder="items/.../source.png"></label>
+            <label class="foundry-form-wide"><span>출력 asset key</span><input name="outputAssetKey" required placeholder="items/.../slug-animated-v2.webp"></label>
+            <label class="foundry-form-wide"><span>미리보기 asset key</span><input name="previewAssetKey" placeholder="비우면 출력 key 사용"></label>
+            <label><span>기존 item ID</span><input name="targetItemId" type="number" min="1" placeholder="47"></label>
+            <label><span>기존 key CAS</span><input name="expectedOldAssetKey" placeholder="교체 작업일 때 필수"></label>
+        </div>
+        <p class="foundry-form-hint" id="new-job-hint">동적 가구는 <code>-animated-vN.webp</code> 버전 key를 사용합니다.</p>
+        <div class="foundry-dialog-actions">
+            <button type="button" class="foundry-secondary-button" data-dialog-close="new-job-dialog">취소</button>
+            <button type="submit" class="foundry-primary-button">manifest 등록</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="foundry-dialog" id="qa-report-dialog">
+    <form method="dialog" class="foundry-dialog-card" id="qa-report-form">
+        <div class="foundry-dialog-head">
+            <div><span>AUTOMATED QA</span><h3>품질 리포트 반영</h3></div>
+            <button type="button" class="foundry-dialog-close" data-dialog-close="qa-report-dialog" aria-label="닫기">×</button>
+        </div>
+        <label class="foundry-json-field">
+            <span>assetctl report JSON</span>
+            <textarea id="qa-report-json" rows="14" spellcheck="false"></textarea>
+        </label>
+        <p class="foundry-form-hint">현재 revision은 자동으로 적용됩니다. 필수 FAIL이 하나라도 있으면 VALIDATED 단계로 진행할 수 없습니다.</p>
+        <div class="foundry-dialog-actions">
+            <button type="button" class="foundry-secondary-button" data-dialog-close="qa-report-dialog">취소</button>
+            <button type="submit" class="foundry-primary-button">QA 반영</button>
+        </div>
+    </form>
+</dialog>
+
+<script th:inline="javascript">
+    window.ASSET_FOUNDRY_CONFIG = {s3BaseUrl: /*[[${s3BaseUrl}]]*/ ''};
+</script>
+<script th:src="@{/js/asset-foundry.js}"></script>
+</body>
+</html>
