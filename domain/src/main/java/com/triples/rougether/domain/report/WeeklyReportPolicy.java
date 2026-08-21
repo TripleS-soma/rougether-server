@@ -3,6 +3,7 @@ package com.triples.rougether.domain.report;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
@@ -20,6 +21,10 @@ public final class WeeklyReportPolicy {
     // batch 는 매시 30분에 가장 최근 끝난 주를 처리하므로, 주가 끝난 뒤 첫 실행 시각은 다음 일요일 00:30 KST.
     public static final LocalTime FIRST_TRIGGER_TIME = LocalTime.of(0, 30);
 
+    // push 발송 시각(KST). 새벽 생성(FIRST_TRIGGER_TIME, 일 00:30)과 분리한 발송 시각 - 회고는 자는 새벽에 만들어 두고,
+    // 알림은 사용자가 깨어서 다음 주를 계획하는 일요일 저녁에 보낸다.
+    public static final LocalTime PUSH_TIME = LocalTime.of(20, 0);
+
     private WeeklyReportPolicy() {
     }
 
@@ -31,5 +36,10 @@ public final class WeeklyReportPolicy {
 
     public static LocalDate weekEndOf(LocalDate weekStart) {
         return weekStart.plusDays(WEEK_LENGTH_DAYS - 1L);
+    }
+
+    // weekStart 주(일~토)가 끝난 뒤 처음 오는 일요일(= weekStart + 7일)의 PUSH_TIME. 이 시각(KST) 이후에만 push 한다.
+    public static LocalDateTime pushReadyAt(LocalDate weekStart) {
+        return weekStart.plusDays(WEEK_LENGTH_DAYS).atTime(PUSH_TIME);
     }
 }
