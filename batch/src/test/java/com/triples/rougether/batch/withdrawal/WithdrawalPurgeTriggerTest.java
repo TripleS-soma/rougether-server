@@ -71,6 +71,7 @@ class WithdrawalPurgeTriggerTest {
             jdbcTemplate.update(
                     "DELETE rl FROM routine_logs rl JOIN routines r ON r.id = rl.routine_id WHERE r.user_id = ?",
                     userId);
+            jdbcTemplate.update("DELETE FROM routine_recommendations WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM routines WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM todos WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM categories WHERE user_id = ?", userId);
@@ -198,6 +199,13 @@ class WithdrawalPurgeTriggerTest {
                                             sections_json, generated_at, created_at)
                 VALUES (?, '2026-08-09', '2026-08-15', 'FALLBACK', '{}', '회고', '{}', ?, ?)
                 """, userId, now(), now());
+        // 조정 추천(#329) — routines 를 3중 FK(계보·대상·적용 버전)로 참조하므로 purge 순서 회귀의 핵심 fixture
+        jdbcTemplate.update("""
+                INSERT INTO routine_recommendations (user_id, origin_routine_id, routine_id, rec_type, source,
+                                                     proposal, message, status, expires_at, created_at)
+                VALUES (?, ?, ?, 'ADJUST_DAYS', 'RULE', '{"repeatType":"WEEKLY","daysOfWeek":["MON"]}',
+                        '추천', 'ACTIVE', ?, ?)
+                """, userId, routineId, routineId, now(), now());
 
         jdbcTemplate.update("INSERT INTO user_items (user_id, item_id, acquired_at) VALUES (?, ?, ?)",
                 userId, itemId, now());
@@ -308,7 +316,8 @@ class WithdrawalPurgeTriggerTest {
 
         for (String[] tableAndColumn : new String[][] {
                 {"categories", "user_id"}, {"routines", "user_id"}, {"todos", "user_id"},
-                {"streaks", "user_id"}, {"weekly_reports", "user_id"}, {"personal_rooms", "user_id"},
+                {"streaks", "user_id"}, {"weekly_reports", "user_id"}, {"routine_recommendations", "user_id"},
+                {"personal_rooms", "user_id"},
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
                 {"room_cobwebs", "room_user_id"},
                 {"user_characters", "user_id"}, {"attendance_check_ins", "user_id"},

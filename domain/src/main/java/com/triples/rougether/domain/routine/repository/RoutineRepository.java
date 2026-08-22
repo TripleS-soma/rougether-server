@@ -89,7 +89,9 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
                                          @Param("cursorId") Long cursorId,
                                          Pageable pageable);
 
-    // 조정 추천(#329): 계보의 현재 살아있는 버전. 버전 모델상 계보당 살아있는 row 는 최대 1개.
+    // 조정 추천(#329): 계보의 현재 살아있는 버전. 버전 모델상 계보당 살아있는 row 는 최대 1개라는 가정에
+    // 기대며(강제 unique 제약은 없음 — 동시 수정 race 로 2개가 되면 이 Optional 조회가 예외로 드러낸다),
+    // 추천 수락 경로는 추천 행 락으로 직렬화해 이 가정을 지킨다.
     @Query("select r from Routine r "
             + "where r.user.id = :userId "
             + "and coalesce(r.originRoutineId, r.id) = :originKey "

@@ -169,6 +169,24 @@ class RecommendationRuleEvaluatorTest {
     }
 
     @Test
+    void 완료율이_정확히_40퍼센트인_주는_저조로_보지_않는다() {
+        // 요일 5개 WEEKLY, 직전 2주 각각 완료 2/5 = 정확히 40% → 미만이 아니라 탈락(경계 배타)
+        Routine routine = weekly(1L, "경계", "MON", "TUE", "WED", "THU", "FRI");
+        List<RoutineLog> logs = new ArrayList<>();
+        for (int week = 1; week < 3; week++) {
+            for (DayOfWeek day : List.of(DayOfWeek.MONDAY, DayOfWeek.TUESDAY)) {
+                logs.add(log(routine, dateOf(week, day), RoutineLogStatus.COMPLETED));
+            }
+            for (DayOfWeek day : List.of(DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)) {
+                logs.add(log(routine, dateOf(week, day), RoutineLogStatus.FAILED));
+            }
+        }
+
+        // 룰 1도 불성립(실패 요일들이 2주뿐) → 아무 제안 없음
+        assertThat(evaluator.evaluate(List.of(routine), byLineage(logs), WEEKS)).isEmpty();
+    }
+
+    @Test
     void 완료_이력_요일이_2개_미만이면_축소를_제안하지_않는다() {
         Routine routine = daily(1L, "독서");
         List<RoutineLog> logs = new ArrayList<>();

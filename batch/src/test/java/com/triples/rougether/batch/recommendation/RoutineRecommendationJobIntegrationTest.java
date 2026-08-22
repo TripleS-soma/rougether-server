@@ -129,6 +129,34 @@ class RoutineRecommendationJobIntegrationTest {
     }
 
     @Test
+    void 창_도중_버전이_갈려도_닫힌_옛_버전의_로그까지_계보로_합산한다() throws Exception {
+        // 1~2주차 실패는 옛 버전(v1)에, 3주차 실패는 분기된 현재 버전(v2)에 기록 — 계보 합산이어야 3주 연속이 성립
+        User user = signUp("분기");
+        Routine v1 = weeklyRoutine(user, "아침 러닝", "MON", "WED");
+        for (int week = 0; week < 2; week++) {
+            failed(v1, dateOf(week, DayOfWeek.WEDNESDAY));
+            routineLogRepository.save(RoutineLog.complete(v1, dateOf(week, DayOfWeek.MONDAY),
+                    Instant.now(), CurrencyType.COIN, 0));
+        }
+        Routine v2 = routineRepository.save(v1.copyAsNewVersion(null, null, null, null, null, null, null, null));
+        v1.softDelete(Instant.now());
+        routineRepository.save(v1);
+        failed(v2, dateOf(2, DayOfWeek.WEDNESDAY));
+        routineLogRepository.save(RoutineLog.complete(v2, dateOf(2, DayOfWeek.MONDAY),
+                Instant.now(), CurrencyType.COIN, 0));
+
+        runJobOnce();
+
+        List<RoutineRecommendation> recommendations = recommendationRepository.findAll();
+        assertThat(recommendations).hasSize(1);
+        RoutineRecommendation recommendation = recommendations.getFirst();
+        assertThat(recommendation.getOriginRoutineId()).isEqualTo(v1.getOriginRoutineId());
+        // 생성 시점 대상은 계보의 현재 살아있는 버전(v2)
+        assertThat(recommendation.getRoutineId()).isEqualTo(v2.getId());
+        assertThat(recommendation.getMessage()).contains("수요일");
+    }
+
+    @Test
     void 패턴이_없거나_창_밖_로그뿐인_사용자에게는_추천을_만들지_않는다() throws Exception {
         // 로그는 있지만 실패 패턴 없음
         User healthy = signUp("건강");
