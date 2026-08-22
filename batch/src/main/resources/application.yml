@@ -19,7 +19,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 7 # @Scheduled 트리거 수(day-end·house-mission·reminder·weekly-report·weekly-report-push·withdrawal-purge·cobweb)만큼 확보 — 오래 도는 트리거(day-end catch-up, 주간 회고 LLM 순차 호출)가 겹쳐도 reminder 5분 발화가 큐잉(=그 분 영구 누락)되지 않게
+        size: 8 # @Scheduled 트리거 수(day-end·house-mission·reminder·weekly-report·weekly-report-push·routine-recommendation·withdrawal-purge·cobweb)만큼 확보 — 오래 도는 트리거(day-end catch-up, 주간 회고 LLM 순차 호출)가 겹쳐도 reminder 5분 발화가 큐잉(=그 분 영구 누락)되지 않게
 
 server:
   port: 8082

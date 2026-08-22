@@ -138,6 +138,23 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("toDate") LocalDate toDate,
             @Param("statuses") Collection<RoutineLogStatus> statuses);
 
+    // 조정 추천 집계(#329): 기간 내 COMPLETED/FAILED log 를 루틴까지 fetch. 주간 회고 집계와 달리
+    // 계보에 살아있는 버전이 있으면 닫힌(soft delete) 옛 버전의 log 도 포함한다 — 근거 창(3주) 도중
+    // 스케줄이 바뀌어 버전이 갈려도 실패 이력이 유실되지 않게. 계보 전체가 삭제된 루틴의 log 는 제외.
+    @Query("select l from RoutineLog l "
+            + "join fetch l.routine r "
+            + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses "
+            + "and exists (select 1 from Routine live "
+            + "  where coalesce(live.originRoutineId, live.id) = coalesce(r.originRoutineId, r.id) "
+            + "  and live.deletedAt is null) "
+            + "order by l.routineDate asc, l.id asc")
+    List<RoutineLog> findLineageAliveLogsInPeriod(
+            @Param("userId") Long userId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses);
+
     @Query("select l.routine.user.id as userId, count(l.id) as metricCount from RoutineLog l "
             + "where l.routine.user.id in :userIds and l.status = :status and l.routineDate >= :fromDate "
             + "group by l.routine.user.id")

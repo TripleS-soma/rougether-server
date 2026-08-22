@@ -89,6 +89,13 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
                                          @Param("cursorId") Long cursorId,
                                          Pageable pageable);
 
+    // 조정 추천(#329): 계보의 현재 살아있는 버전. 버전 모델상 계보당 살아있는 row 는 최대 1개.
+    @Query("select r from Routine r "
+            + "where r.user.id = :userId "
+            + "and coalesce(r.originRoutineId, r.id) = :originKey "
+            + "and r.deletedAt is null")
+    Optional<Routine> findAliveByLineage(@Param("userId") Long userId, @Param("originKey") Long originKey);
+
     List<Routine> findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(Long userId);
 
     List<Routine> findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
