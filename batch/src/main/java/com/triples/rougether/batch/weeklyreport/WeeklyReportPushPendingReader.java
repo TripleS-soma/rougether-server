@@ -1,9 +1,10 @@
-package com.triples.rougether.batch.reminder;
+package com.triples.rougether.batch.weeklyreport;
 
 import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -11,16 +12,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.batch.infrastructure.item.ItemReader;
 import org.springframework.data.domain.PageRequest;
 
-// ReminderCandidateReader와 동일한 이유로 offset 대신 id 커서(id > cursorId)로 페이징한다 - writer가
-// 처리된 알림을 PENDING에서 빼내(push_status 갱신) 필터에서 빠지므로 offset이면 뒤 구간이 스킵된다.
-// (주간 회고 push 는 주 범위 스코프가 필요해 전용 WeeklyReportPushPendingReader 를 쓴다 — #330 리뷰 반영)
+// 주간 회고 push 발송 reader(#330 리뷰 반영). ReminderPendingReader 와 같은 id 커서 패턴이지만, refId 를
+// weekly_reports 로 되짚어 대상 주의 회고 알림만 읽는다 — 이전 주에 적재되고 발송 전에 중단된 잔존 PENDING 이
+// 다음 주 발송 스텝에 섞이면 "뒤늦은 지난 주 push 없음" 계약이 깨진다(범위 밖 잔존분은 PENDING 인 채 만료).
 @RequiredArgsConstructor
-class ReminderPendingReader implements ItemReader<Notification> {
+class WeeklyReportPushPendingReader implements ItemReader<Notification> {
 
     private static final int PAGE_SIZE = 200;
 
     private final NotificationRepository notificationRepository;
-    private final List<NotificationType> types;
+    private final LocalDate weekStart;
 
     private Iterator<Notification> currentBatch = Collections.emptyIterator();
     private Long cursorId = 0L;
@@ -29,7 +30,9 @@ class ReminderPendingReader implements ItemReader<Notification> {
     @Override
     public Notification read() {
         if (!currentBatch.hasNext() && !exhausted) {
-            List<Notification> batch = fetchNextBatch();
+            List<Notification> batch = notificationRepository.findWeeklyReportPendingInWeek(
+                    NotificationType.WEEKLY_REPORT, PushStatus.PENDING, weekStart, cursorId,
+                    PageRequest.of(0, PAGE_SIZE));
             if (batch.isEmpty()) {
                 exhausted = true;
             } else {
@@ -42,10 +45,5 @@ class ReminderPendingReader implements ItemReader<Notification> {
         Notification next = currentBatch.next();
         cursorId = next.getId();
         return next;
-    }
-
-    private List<Notification> fetchNextBatch() {
-        return notificationRepository.findByTypeInAndPushStatusAndIdGreaterThanOrderByIdAsc(
-                types, PushStatus.PENDING, cursorId, PageRequest.of(0, PAGE_SIZE));
     }
 }

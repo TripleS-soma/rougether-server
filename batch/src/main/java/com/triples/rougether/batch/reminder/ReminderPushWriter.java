@@ -18,10 +18,12 @@ import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.stereotype.Component;
 
+// PENDING 알림 chunk 를 설정 게이트(NotificationPushPolicy) → FCM 발송 → push_status 갱신으로 종결한다.
+// 알림 타입에 의존하지 않는 범용 발송 writer 라 weeklyReportPushJob 도 재사용함(public 인 이유)
 @Slf4j
 @Component
 @RequiredArgsConstructor
-class ReminderPushWriter implements ItemWriter<Notification> {
+public class ReminderPushWriter implements ItemWriter<Notification> {
 
     private final UserDeviceTokenRepository userDeviceTokenRepository;
     private final NotificationRepository notificationRepository;
@@ -63,7 +65,8 @@ class ReminderPushWriter implements ItemWriter<Notification> {
         try {
             result = fcmSender.send(tokens, notification.getTitle(), notification.getBody());
         } catch (Exception e) {
-            log.warn("루틴 리마인드 FCM 발송 실패 - notificationId={}", notificationId, e);
+            // 리마인드 외 타입(주간 회고 등)도 이 writer 를 지나므로 타입을 함께 남김
+            log.warn("알림 FCM 발송 실패 - notificationId={}, type={}", notificationId, notification.getType(), e);
             notificationRepository.updatePushStatus(notificationId, PushStatus.FAILED);
             return;
         }
