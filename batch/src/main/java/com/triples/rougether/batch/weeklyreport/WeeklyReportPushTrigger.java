@@ -14,6 +14,7 @@ import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,6 +31,7 @@ public class WeeklyReportPushTrigger {
 
     private final JobOperator jobOperator;
     private final Job weeklyReportPushJob;
+    private final JobRepository jobRepository;
     private final Clock clock;
 
     @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
@@ -49,6 +51,13 @@ public class WeeklyReportPushTrigger {
             log.debug("주간 회고 push 보류 - 발송 시각 전, weekStart={}", weekStart);
             return;
         }
+        // 회고 생성 job 이 그 주를 COMPLETED 하기 전이면 시작하지 않는다 — push job 은 주당 JobInstance 1개라
+        // 빈 상태로 COMPLETED 되면 뒤늦게 생성된 회고의 push 가 영구 누락된다(day-end 밀림·LLM 장애로 생성이
+        // 발송 시각을 넘긴 복구 시나리오). 생성이 끝내 안 도는 주는 보낼 것도 없고 다음 주 대상 전환으로 자연 만료된다.
+        if (!isGenerationCompleted(weekStart)) {
+            log.warn("주간 회고 push 보류 - weekStart={} 회고 생성 미완료, 다음 트리거에 재시도", weekStart);
+            return;
+        }
         JobParameters jobParameters = new JobParametersBuilder()
                 .addString(WeeklyReportPushJobConfig.WEEK_START_PARAM, weekStart.toString())
                 .toJobParameters();
@@ -66,5 +75,14 @@ public class WeeklyReportPushTrigger {
         } catch (Exception e) {
             log.error("주간 회고 push batch 실행 실패 - weekStart={}", weekStart, e);
         }
+    }
+
+    // 운영 생성 job 의 파라미터는 weekStart 하나라 그 인스턴스의 마지막 실행 상태로 판정한다
+    private boolean isGenerationCompleted(LocalDate weekStart) {
+        JobExecution generation = jobRepository.getLastJobExecution(WeeklyReportJobConfig.JOB_NAME,
+                new JobParametersBuilder()
+                        .addString(WeeklyReportJobConfig.WEEK_START_PARAM, weekStart.toString())
+                        .toJobParameters());
+        return generation != null && generation.getStatus() == BatchStatus.COMPLETED;
     }
 }

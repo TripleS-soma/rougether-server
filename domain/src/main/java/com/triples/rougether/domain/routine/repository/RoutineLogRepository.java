@@ -146,7 +146,8 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
             + "and l.status in :statuses "
             + "and exists (select 1 from Routine live "
-            + "  where coalesce(live.originRoutineId, live.id) = coalesce(r.originRoutineId, r.id) "
+            + "  where live.user.id = :userId "
+            + "  and coalesce(live.originRoutineId, live.id) = coalesce(r.originRoutineId, r.id) "
             + "  and live.deletedAt is null) "
             + "order by l.routineDate asc, l.id asc")
     List<RoutineLog> findLineageAliveLogsInPeriod(

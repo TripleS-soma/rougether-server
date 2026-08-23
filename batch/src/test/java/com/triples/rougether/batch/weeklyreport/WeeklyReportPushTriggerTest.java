@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.ArgumentMatchers.eq;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,6 +25,7 @@ import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.repository.JobRepository;
 
 class WeeklyReportPushTriggerTest {
 
@@ -32,6 +35,15 @@ class WeeklyReportPushTriggerTest {
 
     private final JobOperator jobOperator = mock(JobOperator.class);
     private final Job job = mock(Job.class);
+    private final JobRepository jobRepository = mock(JobRepository.class);
+
+    // 대상 주의 회고 생성 job 이 COMPLETED 인 상태를 만든다 — 발송 게이트 통과 전제.
+    // execution() 은 내부에서 stubbing 하므로 thenReturn 인자 안에서 호출하면 중첩 stubbing 오류 — 변수로 먼저 만든다
+    private void generationCompleted() {
+        JobExecution generation = execution(BatchStatus.COMPLETED);
+        when(jobRepository.getLastJobExecution(eq(WeeklyReportJobConfig.JOB_NAME), any(JobParameters.class)))
+                .thenReturn(generation);
+    }
 
     @Test
     void 발송_시각_전에는_job을_시작하지_않는다() throws Exception {
@@ -43,7 +55,24 @@ class WeeklyReportPushTriggerTest {
     }
 
     @Test
+    void 회고_생성이_완료되지_않은_주는_발송_시각이_지나도_보류한다() throws Exception {
+        // 생성 job 실행 기록 없음(null) — day-end 밀림·LLM 장애로 생성이 발송 시각을 넘긴 복구 시나리오
+        when(jobRepository.getLastJobExecution(eq(WeeklyReportJobConfig.JOB_NAME), any(JobParameters.class)))
+                .thenReturn(null);
+        triggerAt(SUNDAY.atTime(20, 0)).triggerHourly();
+
+        // 생성 job 이 FAILED 로 남은 경우도 동일하게 보류
+        JobExecution failedGeneration = execution(BatchStatus.FAILED);
+        when(jobRepository.getLastJobExecution(eq(WeeklyReportJobConfig.JOB_NAME), any(JobParameters.class)))
+                .thenReturn(failedGeneration);
+        triggerAt(SUNDAY.atTime(21, 0)).triggerHourly();
+
+        verify(jobOperator, never()).start(any(Job.class), any(JobParameters.class));
+    }
+
+    @Test
     void 발송_시각부터_직전_주_weekStart로_job을_시작한다() throws Exception {
+        generationCompleted();
         JobExecution completed = execution(BatchStatus.COMPLETED);
         when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(completed);
 
@@ -59,6 +88,7 @@ class WeeklyReportPushTriggerTest {
     void 주중_늦은_기동도_같은_주면_직전_주를_대상으로_발송한다() throws Exception {
         // 일요일 20:00 에 서버가 죽어 있었어도 수요일 새벽 기동 catch-up 이 같은 대상 주를 발송한다.
         // 대상은 항상 "가장 최근 끝난 주" 하나뿐이라 그보다 오래된 주의 뒤늦은 push 는 애초에 만들어지지 않는다.
+        generationCompleted();
         JobExecution completed = execution(BatchStatus.COMPLETED);
         when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(completed);
 
@@ -81,6 +111,7 @@ class WeeklyReportPushTriggerTest {
 
     @Test
     void 이미_완료된_주는_예외_없이_넘어간다() throws Exception {
+        generationCompleted();
         when(jobOperator.start(any(Job.class), any(JobParameters.class)))
                 .thenThrow(new JobInstanceAlreadyCompleteException("done"));
 
@@ -91,6 +122,7 @@ class WeeklyReportPushTriggerTest {
 
     @Test
     void 실행_중인_주는_예외_없이_이번_트리거를_스킵한다() throws Exception {
+        generationCompleted();
         when(jobOperator.start(any(Job.class), any(JobParameters.class)))
                 .thenThrow(new JobExecutionAlreadyRunningException("running"));
 
@@ -99,7 +131,7 @@ class WeeklyReportPushTriggerTest {
 
     private WeeklyReportPushTrigger triggerAt(LocalDateTime kstNow) {
         Instant instant = ZonedDateTime.of(kstNow, KST).toInstant();
-        return new WeeklyReportPushTrigger(jobOperator, job, Clock.fixed(instant, KST));
+        return new WeeklyReportPushTrigger(jobOperator, job, jobRepository, Clock.fixed(instant, KST));
     }
 
     private static JobExecution execution(BatchStatus status) {

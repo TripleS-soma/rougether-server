@@ -22,9 +22,11 @@ public interface WeeklyReportRepository extends JpaRepository<WeeklyReport, Long
     // 중복 판정은 type + refId(=회고 id, 전역 유일) 존재 여부. 탈퇴(soft delete) 회원의 purge 대기 회고는 제외.
     // RoutineRepository.findReminderCandidates 와 같은 이유로 offset 대신 id 커서(id > cursorId) 페이징 -
     // 이번 job 이 notification 에 insert 하면 not exists 필터로 결과셋이 줄어 offset 이면 뒤 구간이 스킵됨
+    // user 는 fetch join — processor 가 회고마다 report.getUser() 로 알림을 만들므로 건별 lazy 조회(N+1)를 막는다
     @Query("select w from WeeklyReport w "
+            + "join fetch w.user u "
             + "where w.weekStartDate = :weekStartDate "
-            + "and w.user.deletedAt is null "
+            + "and u.deletedAt is null "
             + "and w.id > :cursorId "
             + "and not exists (select 1 from Notification n "
             + "  where n.type = :notificationType and n.refId = w.id) "

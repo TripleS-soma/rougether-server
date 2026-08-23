@@ -255,21 +255,51 @@ class WeeklyReportPushJobIntegrationTest {
     }
 
     @Test
-    void 트리거가_발송_시각_이후에_돌면_직전_주를_적재하고_발송한다() throws Exception {
+    void 트리거는_회고_생성이_완료된_뒤에만_직전_주를_적재하고_발송한다() throws Exception {
+        // 이 테스트만 전용 주(2025-05-04~10)를 쓴다 — 생성 완료 게이트가 weeklyReportJob 메타데이터를 보므로,
+        // 생성 job 통합 테스트가 같은 DB 에 남긴 2025-03-09 인스턴스와 겹치면 1단계(보류)가 성립하지 않는다.
+        LocalDate triggerDay = LocalDate.of(2025, 5, 11);
+        LocalDate weekStart = LocalDate.of(2025, 5, 4);
+        Clock mayClock = Clock.fixed(ZonedDateTime.of(triggerDay.atTime(20, 0), KST).toInstant(), KST);
         User user = signUpWithToken("token-trigger");
-        WeeklyReport report = persistGeneratedReport(user, statsJson(7, 5));
+        WeeklyReport report = weeklyReportRepository.save(WeeklyReport.generated(user, weekStart,
+                weekStart.plusDays(6), "test-model", statsJson(7, 5), "요약", EMPTY_SECTIONS_JSON, Instant.now()));
+        WeeklyReportPushTrigger trigger =
+                new WeeklyReportPushTrigger(jobOperator, weeklyReportPushJob, jobRepository, mayClock);
 
-        // 고정 시계(일요일 20:00 KST)가 발송 시각과 같으므로 보류 없이 직전 주(WEEK_START) job 이 시작된다
-        new WeeklyReportPushTrigger(jobOperator, weeklyReportPushJob, kstClock).runForLatestCompletedWeek();
+        // 발송 시각(일요일 20:00)이 지났어도 그 주 생성 job 이 COMPLETED 가 아니면 보류 —
+        // 빈 상태로 주당 1회 JobInstance 를 소모해 뒤늦게 생성된 회고의 push 가 영구 누락되는 것을 막는다
+        trigger.runForLatestCompletedWeek();
+        assertThat(jobRepository.getLastJobExecution(
+                WeeklyReportPushJobConfig.JOB_NAME, weekStartParams(weekStart))).isNull();
+        assertThat(notificationRepository.findAll()).isEmpty();
+
+        // 생성 job COMPLETED 기록 뒤 → 발송 (생성 job 자체를 돌리는 대신 메타데이터만 만든다)
+        markGenerationCompleted(weekStart);
+        trigger.runForLatestCompletedWeek();
 
         JobExecution execution = jobRepository.getLastJobExecution(
-                WeeklyReportPushJobConfig.JOB_NAME, weekStartParams(WEEK_START));
+                WeeklyReportPushJobConfig.JOB_NAME, weekStartParams(weekStart));
         assertThat(execution).isNotNull();
         assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
         List<Notification> notifications = notificationRepository.findAll();
         assertThat(notifications).hasSize(1);
         assertThat(notifications.getFirst().getRefId()).isEqualTo(report.getId());
         assertThat(notifications.getFirst().getPushStatus()).isEqualTo(PushStatus.SENT);
+    }
+
+    // weeklyReportJob(weekStart) 인스턴스를 COMPLETED 로 남겨 push 트리거의 생성 완료 게이트를 통과시킨다.
+    private void markGenerationCompleted(LocalDate weekStart) {
+        JobParameters params = new JobParametersBuilder()
+                .addString(WeeklyReportJobConfig.WEEK_START_PARAM, weekStart.toString())
+                .toJobParameters();
+        org.springframework.batch.core.job.JobInstance instance =
+                jobRepository.createJobInstance(WeeklyReportJobConfig.JOB_NAME, params);
+        JobExecution execution = jobRepository.createJobExecution(instance, params,
+                new org.springframework.batch.infrastructure.item.ExecutionContext());
+        execution.setStatus(BatchStatus.COMPLETED);
+        execution.setEndTime(java.time.LocalDateTime.now());
+        jobRepository.update(execution);
     }
 
     // 테스트마다 run 파라미터를 달리해 같은 weekStart 로도 job 을 실제 실행시킨다(인스턴스 유일성 우회).
