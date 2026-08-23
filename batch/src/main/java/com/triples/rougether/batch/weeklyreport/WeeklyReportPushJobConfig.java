@@ -1,14 +1,11 @@
 package com.triples.rougether.batch.weeklyreport;
 
-import com.triples.rougether.batch.reminder.ReminderPendingReader;
 import com.triples.rougether.batch.reminder.ReminderPushWriter;
 import com.triples.rougether.domain.notification.entity.Notification;
-import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -64,11 +61,11 @@ class WeeklyReportPushJobConfig {
 
     @Bean
     Step weeklyReportPushSendStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
-            ReminderPendingReader weeklyReportPendingReader, ReminderPushWriter reminderPushWriter) {
+            WeeklyReportPushPendingReader weeklyReportPushPendingReader, ReminderPushWriter reminderPushWriter) {
         return new StepBuilder("weeklyReportPushSendStep", jobRepository)
                 .<Notification, Notification>chunk(CHUNK_SIZE)
                 .transactionManager(transactionManager)
-                .reader(weeklyReportPendingReader)
+                .reader(weeklyReportPushPendingReader)
                 .writer(reminderPushWriter)
                 .build();
     }
@@ -80,10 +77,11 @@ class WeeklyReportPushJobConfig {
         return new WeeklyReportPushCandidateReader(weeklyReportRepository, LocalDate.parse(weekStartParam));
     }
 
-    // reminder 쪽 pendingReminderReader 와 같은 클래스지만 WEEKLY_REPORT 타입만 읽는 별도 빈 - 이름으로 주입된다
+    // 대상 주의 회고 알림만 읽는 전용 reader(#330 리뷰 반영) — 이전 주 잔존 PENDING 의 뒤늦은 발송을 막는다
     @Bean
     @StepScope
-    ReminderPendingReader weeklyReportPendingReader(NotificationRepository notificationRepository) {
-        return new ReminderPendingReader(notificationRepository, List.of(NotificationType.WEEKLY_REPORT));
+    WeeklyReportPushPendingReader weeklyReportPushPendingReader(NotificationRepository notificationRepository,
+            @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam) {
+        return new WeeklyReportPushPendingReader(notificationRepository, LocalDate.parse(weekStartParam));
     }
 }

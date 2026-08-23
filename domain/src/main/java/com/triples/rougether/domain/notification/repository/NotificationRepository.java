@@ -44,6 +44,21 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByTypeInAndPushStatusAndIdGreaterThanOrderByIdAsc(
             Collection<NotificationType> types, PushStatus pushStatus, Long cursorId, Pageable pageable);
 
+    // 주간 회고 push 발송 reader(#330): 그 주 회고를 가리키는 PENDING 만. 이전 주에 적재되고 발송 전에 중단된
+    // 잔존 PENDING 이 다음 주 job 의 발송 스텝에 섞여 "뒤늦은 지난 주 push 없음" 계약을 깨지 않게, refId 를
+    // weekly_reports 로 되짚어 주 범위를 건다(범위 밖 잔존분은 PENDING 인 채 미발송으로 남는다 — 의도된 만료).
+    @Query("select n from Notification n "
+            + "where n.type = :type and n.pushStatus = :pushStatus and n.id > :cursorId "
+            + "and exists (select 1 from WeeklyReport w "
+            + "  where w.id = n.refId and w.weekStartDate = :weekStartDate) "
+            + "order by n.id asc")
+    List<Notification> findWeeklyReportPendingInWeek(
+            @Param("type") NotificationType type,
+            @Param("pushStatus") PushStatus pushStatus,
+            @Param("weekStartDate") java.time.LocalDate weekStartDate,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
     // Step2 writer: 발송 결과 반영. 조회 후 mutate 대신 단일 UPDATE로 커밋
     @Modifying
     @Query("update Notification n set n.pushStatus = :pushStatus where n.id = :id")

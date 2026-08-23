@@ -128,7 +128,7 @@ class WeeklyReportPushJobIntegrationTest {
 
     @AfterEach
     void cleanUp() {
-        // 발송 스텝 reader 가 주차 무관 전체 PENDING(WEEKLY_REPORT)을 훑으므로 테스트 간 알림이 남으면 서로 간섭함
+        // 적재 스텝의 중복 판정(type+refId)이 테이블 전체를 보므로 테스트 간 알림이 남으면 서로 간섭함
         notificationRepository.deleteAll();
         notificationSettingRepository.deleteAll();
         userDeviceTokenRepository.deleteAll();
@@ -240,6 +240,32 @@ class WeeklyReportPushJobIntegrationTest {
         assertThat(notifications).hasSize(1);
         assertThat(notifications.getFirst().getRefId()).isEqualTo(healthyReport.getId());
         assertThat(notifications.getFirst().getPushStatus()).isEqualTo(PushStatus.SENT);
+    }
+
+    @Test
+    void 이전_주에_적재되고_발송_전_중단된_잔존_PENDING은_다음_주_발송에_섞이지_않는다() throws Exception {
+        // 지난주: 적재(Step1) 커밋 후 발송(Step2) 전에 중단된 상황을 재현 — PENDING 알림만 남아 있음
+        User staleUser = signUpWithToken("token-stale");
+        WeeklyReport staleReport = weeklyReportRepository.save(WeeklyReport.generated(staleUser,
+                WEEK_START.minusDays(7), WEEK_START.minusDays(1), "test-model", statsJson(7, 3), "요약",
+                EMPTY_SECTIONS_JSON, Instant.now()));
+        Notification stale = notificationRepository.save(Notification.create(staleUser,
+                NotificationType.WEEKLY_REPORT, "지난주 루틴 회고가 도착했어요", "옛 본문", staleReport.getId()));
+        // 이번 주 정상 대상
+        User user = signUpWithToken("token-current");
+        WeeklyReport report = persistGeneratedReport(user, statsJson(7, 5));
+
+        runJobOnce();
+
+        // 이번 주 회고만 발송되고, 잔존분은 PENDING 인 채 미발송으로 만료된다("뒤늦은 지난 주 push 없음")
+        assertThat(testFcmSender.calls).hasSize(1);
+        assertThat(testFcmSender.calls.getFirst().tokens()).containsExactly("token-current");
+        assertThat(notificationRepository.findById(stale.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.PENDING);
+        List<Notification> currentNotifications = notificationRepository.findAll().stream()
+                .filter(notification -> notification.getRefId().equals(report.getId())).toList();
+        assertThat(currentNotifications).hasSize(1);
+        assertThat(currentNotifications.getFirst().getPushStatus()).isEqualTo(PushStatus.SENT);
     }
 
     @Test
