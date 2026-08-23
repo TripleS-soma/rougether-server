@@ -37,8 +37,9 @@ public interface WeeklyReportRepository extends JpaRepository<WeeklyReport, Long
                                           Pageable pageable);
 
     // 관리자 AI 회고 관측: 주차 범위의 회고를 주차·상태·모델별 건수로 집계. 탈퇴 회원 회고는 하드 파기되므로 별도 제외 없음.
+    // viewedCount 는 count(viewed_at) - null(미열람)을 세지 않아 그룹 내 열람 건수가 된다(#332).
     @Query("select w.weekStartDate as weekStartDate, w.status as status, w.model as model, "
-            + "count(w) as reportCount, max(w.generatedAt) as lastGeneratedAt "
+            + "count(w) as reportCount, count(w.viewedAt) as viewedCount, max(w.generatedAt) as lastGeneratedAt "
             + "from WeeklyReport w "
             + "where w.weekStartDate between :fromWeekStartDate and :toWeekStartDate "
             + "group by w.weekStartDate, w.status, w.model "

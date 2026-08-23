@@ -24,6 +24,7 @@
             <a th:href="@{/accessory-render-profiles}">악세사리 관리</a>
             <a th:href="@{/users}">유저 관리</a>
             <a th:href="@{/weekly-reports}" class="active">AI 회고</a>
+            <a th:href="@{/recommendations}">AI 추천</a>
             <a th:href="@{/banned-words}">금칙어</a>
             <a th:href="@{/bug-reports}">버그 제보</a>
         </nav>
@@ -83,7 +84,8 @@
                     그 주 배치가 끝난 시각 기준으로 되짚은 값입니다. 배치 이후 완료 취소·루틴 삭제로 기록이 사라지면
                     생성 건수가 대상 수를 넘을 수 있고 이때는 "기준 변동"으로 표시합니다.
                     회고 본문은 노출하지 않고 건수만 집계하며, FALLBACK 비율은 생성된 회고 중 LLM 응답 없이 저장된 비율입니다.
-                    "대기"는 그 주 첫 배치(일요일 00:30 KST) 이전, "미생성"은 배치가 보류·실패해 한 건도 없는 상태입니다.</span>
+                    "대기"는 그 주 첫 배치(일요일 00:30 KST) 이전, "미생성"은 배치가 보류·실패해 한 건도 없는 상태입니다.
+                    열람은 사용자가 그 주 회고 상세를 최초로 연 건수, 열람률은 만들어진 회고(생성+FALLBACK) 대비 비율입니다.</span>
             </div>
 
             <div class="observation-result-head">
@@ -105,6 +107,8 @@
                         <th>누락</th>
                         <th>커버리지</th>
                         <th>FALLBACK율</th>
+                        <th>열람</th>
+                        <th>열람률</th>
                         <th>모델</th>
                         <th>마지막 생성</th>
                     </tr>
@@ -176,6 +180,8 @@
                 tr.appendChild(numberCell(week.missingCount));
                 tr.appendChild(numberCell(week.coverageRate.toFixed(1) + '%', true));
                 tr.appendChild(numberCell(week.fallbackRate.toFixed(1) + '%'));
+                tr.appendChild(numberCell(week.viewedCount));
+                tr.appendChild(numberCell(week.viewedRate.toFixed(1) + '%'));
                 tr.appendChild(textCell(week.models.length ? week.models.join(', ') : '—'));
                 tr.appendChild(textCell(week.lastGeneratedAt
                     ? KST_DATE_TIME.format(new Date(week.lastGeneratedAt)) : '—'));

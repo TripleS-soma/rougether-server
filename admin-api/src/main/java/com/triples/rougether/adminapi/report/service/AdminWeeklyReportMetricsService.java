@@ -66,6 +66,7 @@ public class AdminWeeklyReportMetricsService {
         LocalDate weekEnd = WeeklyReportPolicy.weekEndOf(weekStart);
         long generated = sumByStatus(counts, WeeklyReportStatus.GENERATED);
         long fallback = sumByStatus(counts, WeeklyReportStatus.FALLBACK);
+        long viewed = counts.stream().mapToLong(WeeklyReportStatusCount::getViewedCount).sum();
         List<String> models = counts.stream()
                 .map(WeeklyReportStatusCount::getModel)
                 .filter(model -> model != null && !model.isBlank())
@@ -82,7 +83,7 @@ public class AdminWeeklyReportMetricsService {
         long eligible = routineLogRepository.countUsersWithLogsInPeriodAsOf(
                 weekStart, weekEnd, WeeklyReportPolicy.COUNTED_LOG_STATUSES, cutoff);
         boolean beforeFirstTrigger = now.isBefore(firstTriggerAt);
-        return WeekMetric.of(weekStart, weekEnd, beforeFirstTrigger, eligible, generated, fallback,
+        return WeekMetric.of(weekStart, weekEnd, beforeFirstTrigger, eligible, generated, fallback, viewed,
                 models, lastGeneratedAt);
     }
 

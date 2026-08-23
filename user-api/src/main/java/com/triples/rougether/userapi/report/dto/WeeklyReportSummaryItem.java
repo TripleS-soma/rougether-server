@@ -27,7 +27,9 @@ public record WeeklyReportSummaryItem(
         @Schema(description = "회고 요약 문단(최대 300자). FALLBACK이면 고정 문구", example = "이번 주는 6회 중 4회를 완료했어요. 화요일 저녁 루틴이 두 번 빠졌지만 주말엔 모두 지켰어요.")
         String summary,
         @Schema(description = "회고 생성 시각(ISO-8601)")
-        Instant generatedAt) {
+        Instant generatedAt,
+        @Schema(description = "최초 열람 시각(ISO-8601). 아직 상세를 열지 않았으면 null — 안읽음 배지 판단용", nullable = true)
+        Instant viewedAt) {
 
     public static WeeklyReportSummaryItem of(WeeklyReport report, WeeklyReportStats stats) {
         return new WeeklyReportSummaryItem(
@@ -39,6 +41,7 @@ public record WeeklyReportSummaryItem(
                 stats.completedCount(),
                 stats.scheduledCount(),
                 report.getSummary(),
-                report.getGeneratedAt());
+                report.getGeneratedAt(),
+                report.getViewedAt());
     }
 }

@@ -15,5 +15,8 @@ public interface WeeklyReportStatusCount {
 
     long getReportCount();
 
+    // 그룹 내 열람(viewed_at 기록) 건수(#332)
+    long getViewedCount();
+
     Instant getLastGeneratedAt();
 }

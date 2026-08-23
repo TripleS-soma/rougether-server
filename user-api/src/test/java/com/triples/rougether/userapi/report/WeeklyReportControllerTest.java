@@ -57,7 +57,7 @@ class WeeklyReportControllerTest {
         authAsUser1();
         WeeklyReportSummaryItem item = new WeeklyReportSummaryItem(7L, LocalDate.of(2026, 8, 9),
                 LocalDate.of(2026, 8, 15), WeeklyReportStatus.GENERATED, 0.67, 2, 3, "요약",
-                Instant.parse("2026-08-16T00:30:00Z"));
+                Instant.parse("2026-08-16T00:30:00Z"), Instant.parse("2026-08-16T11:00:00Z"));
         when(weeklyReportQueryService.getMyReports(1L)).thenReturn(new WeeklyReportListResponse(List.of(item)));
 
         mockMvc.perform(get("/api/v1/reports/weekly"))
@@ -70,7 +70,8 @@ class WeeklyReportControllerTest {
                 .andExpect(jsonPath("$.items[0].completedCount").value(2))
                 .andExpect(jsonPath("$.items[0].scheduledCount").value(3))
                 .andExpect(jsonPath("$.items[0].summary").value("요약"))
-                .andExpect(jsonPath("$.items[0].generatedAt").value("2026-08-16T00:30:00Z"));
+                .andExpect(jsonPath("$.items[0].generatedAt").value("2026-08-16T00:30:00Z"))
+                .andExpect(jsonPath("$.items[0].viewedAt").value("2026-08-16T11:00:00Z"));
     }
 
     @Test
@@ -92,7 +93,7 @@ class WeeklyReportControllerTest {
                 new WeeklyStatsResponse.StreakResponse(2, 5));
         WeeklyReportDetailResponse detail = new WeeklyReportDetailResponse(7L, LocalDate.of(2026, 8, 9),
                 LocalDate.of(2026, 8, 15), WeeklyReportStatus.GENERATED, 0.67, 2, 3, "요약",
-                Instant.parse("2026-08-16T00:30:00Z"), stats,
+                Instant.parse("2026-08-16T00:30:00Z"), Instant.parse("2026-08-16T11:00:00Z"), stats,
                 List.of("잘한 점"), List.of("실패 패턴"), List.of("제안"));
         when(weeklyReportQueryService.getMyReport(1L, 7L)).thenReturn(detail);
 
@@ -100,6 +101,7 @@ class WeeklyReportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reportId").value(7))
                 .andExpect(jsonPath("$.status").value("GENERATED"))
+                .andExpect(jsonPath("$.viewedAt").value("2026-08-16T11:00:00Z"))
                 .andExpect(jsonPath("$.stats.scheduledCount").value(3))
                 .andExpect(jsonPath("$.stats.failedCount").value(1))
                 .andExpect(jsonPath("$.stats.byWeekday[0].dayOfWeek").value("SUNDAY"))

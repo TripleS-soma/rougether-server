@@ -92,8 +92,10 @@ class AdminWeeklyReportMetricsTest {
         // 지난주 log 만 있는 사용자는 이번 주 대상이 아니다.
         userWithLog("metrics-previous-week@rougether.dev", WEEK_START.minusDays(1));
 
-        weeklyReportRepository.save(WeeklyReport.generated(generated, WEEK_START, WEEK_END,
-                "gpt-test", "{}", "생성 회고", "{}", BATCH_RAN_AT.minusSeconds(60)));
+        WeeklyReport viewedReport = WeeklyReport.generated(generated, WEEK_START, WEEK_END,
+                "gpt-test", "{}", "생성 회고", "{}", BATCH_RAN_AT.minusSeconds(60));
+        viewedReport.markViewed(BATCH_RAN_AT.plusSeconds(3600)); // 열람 1건 - 열람률 분모는 생성+FALLBACK(2건)
+        weeklyReportRepository.save(viewedReport);
         weeklyReportRepository.save(WeeklyReport.fallback(fallback, WEEK_START, WEEK_END,
                 "{}", "폴백 회고", "{}", BATCH_RAN_AT));
 
@@ -109,6 +111,8 @@ class AdminWeeklyReportMetricsTest {
                 .andExpect(jsonPath("$.weeks[0].missingCount").value(1))
                 .andExpect(jsonPath("$.weeks[0].coverageRate").value(closeTo(66.7)))
                 .andExpect(jsonPath("$.weeks[0].fallbackRate").value(50.0))
+                .andExpect(jsonPath("$.weeks[0].viewedCount").value(1))
+                .andExpect(jsonPath("$.weeks[0].viewedRate").value(50.0))
                 .andExpect(jsonPath("$.weeks[0].models[0]").value("gpt-test"))
                 .andExpect(jsonPath("$.weeks[0].lastGeneratedAt").value(BATCH_RAN_AT.toString()))
                 .andExpect(jsonPath("$.weeks[1].weekStartDate").value(WEEK_START.minusWeeks(1).toString()))

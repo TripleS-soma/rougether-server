@@ -67,6 +67,10 @@ public class WeeklyReport extends BaseCreatedEntity {
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
 
+    // 상세 최초 조회 시각(#332). NULL = 미열람. push 도달 대비 열람 전환 측정의 분자.
+    @Column(name = "viewed_at")
+    private Instant viewedAt;
+
     private WeeklyReport(User user, LocalDate weekStartDate, LocalDate weekEndDate, WeeklyReportStatus status,
                          String model, String statsJson, String summary, String sectionsJson, Instant generatedAt) {
         this.user = user;
@@ -90,5 +94,12 @@ public class WeeklyReport extends BaseCreatedEntity {
                                         String statsJson, String summary, String sectionsJson, Instant generatedAt) {
         return new WeeklyReport(user, weekStartDate, weekEndDate, WeeklyReportStatus.FALLBACK, null,
                 statsJson, summary, sectionsJson, generatedAt);
+    }
+
+    // 최초 열람만 기록함 - 재조회가 첫 열람 시각을 덮어쓰지 않음
+    public void markViewed(Instant now) {
+        if (this.viewedAt == null) {
+            this.viewedAt = now;
+        }
     }
 }
