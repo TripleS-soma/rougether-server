@@ -164,6 +164,58 @@ class AdminRecommendationMetricsTest {
     }
 
     @Test
+    void 기한이_남아도_루틴_삭제나_선행_수정으로_무효면_만료로_센다() {
+        // 사용자 목록(lazy 필터)에서 이미 빠진 ACTIVE 건은 대기가 아니라 만료와 같은 무반응 종결(#333 리뷰)
+        User user = userRepository.save(User.signUp("rec-metrics-invalid@rougether.dev"));
+        Routine deletedRoutine = saveLineageRoot(user, "삭제된 루틴");
+        saveRecommendation(user, deletedRoutine, CURRENT_WEEK, instantKst(2030, 8, 25, 0));
+        deletedRoutine.softDelete(instantKst(2030, 8, 19, 0));
+
+        Routine staleRoot = saveLineageRoot(user, "선수정된 루틴");
+        saveRecommendation(user, staleRoot, CURRENT_WEEK, instantKst(2030, 8, 25, 0));
+        // 사용자가 추천과 무관하게 스케줄을 먼저 수정 → 버전 분기, 생성 시점 대상 버전은 닫힘(stale)
+        routineRepository.save(staleRoot.copyAsNewVersion(null, null, null, null, null, null, null, null));
+        staleRoot.softDelete(instantKst(2030, 8, 19, 0));
+
+        Routine actionableRoutine = saveLineageRoot(user, "유효한 루틴");
+        saveRecommendation(user, actionableRoutine, CURRENT_WEEK, instantKst(2030, 8, 25, 0));
+
+        WeekMetric current = metricsService.getMetrics(1).weeks().get(0);
+
+        assertThat(current.createdCount()).isEqualTo(3);
+        assertThat(current.pendingCount()).isEqualTo(1);
+        assertThat(current.expiredCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 다음_주_완료율은_수락_적용_버전의_기록만_귀속한다() {
+        // 수락 뒤 사용자가 또 수정해 재분기한 버전의 log 는 이 추천의 효과에서 제외(#333 리뷰 — applied_routine_id 조인 키)
+        User user = userRepository.save(User.signUp("rec-metrics-applied@rougether.dev"));
+        Routine origin = saveLineageRoot(user, "원본 버전");
+        saveLog(origin, LocalDate.of(2030, 7, 28), true);
+        saveLog(origin, LocalDate.of(2030, 7, 30), false); // 직전 주 완료율 1/2 = 50%
+        RoutineRecommendation accepted = saveRecommendation(user, origin, BATCH_WEEK, instantKst(2030, 8, 11, 0));
+
+        Routine applied = routineRepository.save(
+                origin.copyAsNewVersion(null, null, null, null, null, null, null, null));
+        origin.softDelete(instantKst(2030, 8, 5, 9));
+        accepted.accept(instantKst(2030, 8, 5, 9), applied.getId());
+        saveLog(applied, LocalDate.of(2030, 8, 11), true);
+        saveLog(applied, LocalDate.of(2030, 8, 12), true); // 적용 버전 다음 주 완료율 2/2 = 100%
+
+        Routine refork = routineRepository.save(
+                applied.copyAsNewVersion(null, null, null, null, null, null, null, null));
+        applied.softDelete(instantKst(2030, 8, 13, 0));
+        saveLog(refork, LocalDate.of(2030, 8, 14), false);
+        saveLog(refork, LocalDate.of(2030, 8, 15), false); // 재분기 버전 log — 계보 전체로 세면 2/4 = 50%
+
+        WeekMetric batchWeek = metricsService.getMetrics(3).weeks().get(2);
+
+        assertThat(batchWeek.effectMeasuredCount()).isEqualTo(1);
+        assertThat(batchWeek.avgCompletionDeltaPp()).isEqualTo(50.0); // 100% − 50%, 재분기 log 섞이면 0.0
+    }
+
+    @Test
     void 계보가_통째로_삭제된_수락_건은_측정_불가로_센다() {
         User user = userRepository.save(User.signUp("rec-metrics-deleted@rougether.dev"));
         Routine routine = saveRoutine(user, "삭제될 루틴");
@@ -220,6 +272,13 @@ class AdminRecommendationMetricsTest {
         return routineRepository.save(Routine.create(
                 user, null, title, AuthType.CHECK, "DAILY", "[]", null,
                 LocalDate.of(2030, 7, 1), null));
+    }
+
+    // 실제 생성 경로처럼 계보 루트를 지정함 - copyAsNewVersion 이 origin 을 승계해야 하는 버전 분기 fixture 용
+    private Routine saveLineageRoot(User user, String title) {
+        Routine routine = saveRoutine(user, title);
+        routine.assignOriginToSelf();
+        return routine;
     }
 
     private void saveLog(Routine routine, LocalDate routineDate, boolean completed) {

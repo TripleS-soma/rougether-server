@@ -69,7 +69,7 @@
                 <article class="observation-metric">
                     <span>무시</span>
                     <strong id="latestDismissed">—</strong>
-                    <small id="latestExpired">만료 = 7일 무반응</small>
+                    <small id="latestExpired">만료 = 무반응 종결(기한·무효)</small>
                 </article>
                 <article class="observation-metric observation-metric--accent">
                     <span>수락률</span>
@@ -81,9 +81,11 @@
             <div class="observation-note">
                 <strong>지표 기준</strong>
                 <span>주는 추천이 생성된 시각(KST) 기준 일~토 주이며, 이번 주 배치 생성분이 보이도록 진행 중 주가 첫 행입니다.
-                    만료는 상태 전이 없이 ACTIVE인 채 expires_at(생성 후 7일)이 지난 건, 대기는 아직 응답 기한이 남은 건입니다.
-                    수락 효과는 수락 주(스케줄이 섞이는 주)를 빼고 직전 주 대비 다음 주의 루틴 계보 완료율 차이(pp)로,
-                    다음 주가 끝나야 측정되고(대기) 전후 어느 주에 기록이 없거나 루틴이 삭제되면 측정 불가로 셉니다.
+                    만료는 상태 전이 없는 무반응 종결 — ACTIVE인 채 expires_at(생성 후 7일)이 지났거나, 루틴 삭제·선행
+                    스케줄 수정으로 무효가 되어 사용자 목록에서 빠진 건이고, 대기는 기한이 남고 아직 수락 가능한 건입니다.
+                    수락 효과는 수락 주(스케줄이 섞이는 주)를 빼고 직전 주 대비 다음 주의 완료율 차이(pp)로, 직전 주는
+                    루틴 계보 전체 기록, 다음 주는 수락으로 적용된 버전의 기록만 귀속합니다. 다음 주가 끝나야 측정되고(대기)
+                    전후 어느 주에 귀속 기록이 없거나 루틴이 삭제되면 측정 불가로 셉니다.
                     추천 문구·제안 내용은 노출하지 않고 건수만 집계합니다.</span>
             </div>
 

@@ -11,7 +11,13 @@ public interface RecommendationFunnelRow {
 
     Long getOriginRoutineId();
 
+    // 생성 시점 대상 버전 - 계보 현재 버전과 다르면 stale(무효) 판정에 쓴다
+    Long getRoutineId();
+
     RecommendationStatus getStatus();
+
+    // 수락 적용으로 분기된 버전(효과 측정 조인 키). 수락 전이면 null
+    Long getAppliedRoutineId();
 
     Instant getCreatedAt();
 

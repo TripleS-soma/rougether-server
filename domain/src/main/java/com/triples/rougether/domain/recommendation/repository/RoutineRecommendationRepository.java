@@ -35,7 +35,8 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
 
     // 관리자 추천 퍼널 관측(#332): 기간 내 생성분 전체를 경량 projection 으로. MVP 규모(주당 수십 건)라
     // 주 버킷·비율 집계는 DB 함수 대신 서비스에서 KST 기준으로 계산한다.
-    @Query("select r.user.id as userId, r.originRoutineId as originRoutineId, r.status as status, "
+    @Query("select r.user.id as userId, r.originRoutineId as originRoutineId, r.routineId as routineId, "
+            + "r.status as status, r.appliedRoutineId as appliedRoutineId, "
             + "r.createdAt as createdAt, r.actedAt as actedAt, r.expiresAt as expiresAt "
             + "from RoutineRecommendation r where r.createdAt >= :from")
     List<RecommendationFunnelRow> findFunnelRowsCreatedAfter(@Param("from") Instant from);

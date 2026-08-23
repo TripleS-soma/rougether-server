@@ -98,6 +98,12 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "and r.deletedAt is null")
     Optional<Routine> findAliveByLineage(@Param("userId") Long userId, @Param("originKey") Long originKey);
 
+    // 관리자 추천 퍼널(#332): 여러 계보의 살아있는 버전을 한 번에 조회해 대기/무효 판정의 N+1 을 피한다.
+    // 계보 키(루틴 id)는 전역 유일이라 사용자 조건 없이 일괄 조회해도 계보가 섞이지 않는다.
+    @Query("select coalesce(r.originRoutineId, r.id) as originKey, r.id as routineId from Routine r "
+            + "where coalesce(r.originRoutineId, r.id) in :originKeys and r.deletedAt is null")
+    List<LineageAliveVersion> findAliveVersionsByLineages(@Param("originKeys") Collection<Long> originKeys);
+
     List<Routine> findByUserIdAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(Long userId);
 
     List<Routine> findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
