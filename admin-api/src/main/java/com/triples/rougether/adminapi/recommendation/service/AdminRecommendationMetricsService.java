@@ -130,7 +130,9 @@ public class AdminRecommendationMetricsService {
                 effectMeasured, effectPending, effectUnmeasurable, avgDeltaPp);
     }
 
-    // 대기 = 계보의 현재 버전이 생성 시점 대상 버전 그대로일 때만(사용자 목록 lazy 필터와 같은 조건)
+    // 대기 = 계보의 현재 버전이 생성 시점 대상 버전 그대로일 때만(사용자 목록 lazy 필터의 버전 판정과 동일).
+    // 목록이 추가로 거르는 proposal JSON 파손 건은 여기선 확인하지 않는다 - 파싱 계약이 user-api DTO 소관인 데다
+    // proposal 은 배치가 만드는 값이라 파손은 데이터 이상 신호이고, 그 잔차는 관측에서 pending 으로 남는 걸 감수한다.
     private static boolean isStillActionable(RecommendationFunnelRow row, Map<Long, Set<Long>> aliveByOrigin) {
         return aliveByOrigin.getOrDefault(row.getOriginRoutineId(), Set.of()).contains(row.getRoutineId());
     }
