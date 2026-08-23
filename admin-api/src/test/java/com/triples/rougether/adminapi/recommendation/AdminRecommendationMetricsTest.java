@@ -216,6 +216,33 @@ class AdminRecommendationMetricsTest {
     }
 
     @Test
+    void 다음_주가_끝난_일요일에는_day_end_확정_전이라_측정_대기이고_월요일부터_측정한다() {
+        // 토요일 FAILED log 는 day-end 배치가 자정 직후 확정하므로 하루 여유를 두고 측정한다(#333 리뷰)
+        User user = userRepository.save(User.signUp("rec-metrics-dayend@rougether.dev"));
+        Routine routine = saveLineageRoot(user, "경계 루틴");
+        saveLog(routine, LocalDate.of(2030, 7, 28), true);
+        saveLog(routine, LocalDate.of(2030, 8, 11), true);
+        RoutineRecommendation accepted = saveRecommendation(user, routine, BATCH_WEEK, instantKst(2030, 8, 11, 0));
+        accepted.accept(instantKst(2030, 8, 5, 9), routine.getId());
+
+        // 다음 주(08-11~17)가 막 끝난 일요일 08-18 07:00 — 아직 측정 대기
+        AdminRecommendationMetricsService sundayService = new AdminRecommendationMetricsService(
+                routineRecommendationRepository, routineRepository, routineLogRepository,
+                java.time.Clock.fixed(instantKst(2030, 8, 18, 7), KST));
+        WeekMetric onSunday = sundayService.getMetrics(3).weeks().get(2);
+        assertThat(onSunday.effectPendingCount()).isEqualTo(1);
+        assertThat(onSunday.effectMeasuredCount()).isZero();
+
+        // 하루 지난 월요일 08-19 07:00 — day-end 확정 여유가 지나 측정됨
+        AdminRecommendationMetricsService mondayService = new AdminRecommendationMetricsService(
+                routineRecommendationRepository, routineRepository, routineLogRepository,
+                java.time.Clock.fixed(instantKst(2030, 8, 19, 7), KST));
+        WeekMetric onMonday = mondayService.getMetrics(3).weeks().get(2);
+        assertThat(onMonday.effectMeasuredCount()).isEqualTo(1);
+        assertThat(onMonday.effectPendingCount()).isZero();
+    }
+
+    @Test
     void 계보가_통째로_삭제된_수락_건은_측정_불가로_센다() {
         User user = userRepository.save(User.signUp("rec-metrics-deleted@rougether.dev"));
         Routine routine = saveRoutine(user, "삭제될 루틴");

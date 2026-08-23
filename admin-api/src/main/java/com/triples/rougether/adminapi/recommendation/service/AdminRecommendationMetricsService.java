@@ -157,7 +157,10 @@ public class AdminRecommendationMetricsService {
         LocalDate actedWeekStart = WeeklyReportPolicy.weekStartOf(LocalDate.ofInstant(row.getActedAt(), KST));
         LocalDate afterStart = actedWeekStart.plusDays(WeeklyReportPolicy.WEEK_LENGTH_DAYS);
         LocalDate afterEnd = WeeklyReportPolicy.weekEndOf(afterStart);
-        if (!todayKst.isAfter(afterEnd)) {
+        // 토요일 FAILED log 는 day-end 배치가 자정 직후 확정하므로 주가 끝난 당일(일요일)엔 실패가 빠진 채
+        // 부풀 수 있다(#333 리뷰). 배치 확정 여유로 하루를 더 두고 월요일(KST)부터 측정한다 - admin 이
+        // batch job 메타데이터를 직접 대조하는 결합 대신 관측 지표에 충분한 근사를 택함(지표는 조회 시점 재계산).
+        if (!todayKst.isAfter(afterEnd.plusDays(1))) {
             return EffectMeasurement.PENDING;
         }
         if (row.getAppliedRoutineId() == null) {
