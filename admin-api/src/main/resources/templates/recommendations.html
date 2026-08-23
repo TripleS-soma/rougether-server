@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · AI 추천 관측</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/asset-foundry}">Asset Foundry</a>
+            <a th:href="@{/catalog}">카탈로그</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/accessory-render-profiles}">악세사리 관리</a>
+            <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/weekly-reports}">AI 회고</a>
+            <a th:href="@{/recommendations}" class="active">AI 추천</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}">버그 제보</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide observation-main">
+        <section class="upload-card">
+            <div class="upload-head observation-head">
+                <div>
+                    <span class="observation-eyebrow">AI · ROUTINE RECOMMENDATION</span>
+                    <h2>AI 조정 추천 퍼널 관측</h2>
+                    <p>주(생성 주, 일~토 KST)마다 생성→수락/무시/만료와 수락 효과(완료율 델타)를 확인합니다.</p>
+                </div>
+                <div class="observation-action-row">
+                    <select id="weeks" class="observation-select observation-select--compact" aria-label="조회 주 수">
+                        <option value="4">4주</option>
+                        <option value="8" selected>8주</option>
+                        <option value="12">12주</option>
+                        <option value="26">26주</option>
+                    </select>
+                    <button type="button" class="btn-ghost" id="refresh">새로고침</button>
+                </div>
+            </div>
+
+            <div class="observation-grid" aria-label="최근 주 요약">
+                <article class="observation-metric">
+                    <span>이번 주 생성</span>
+                    <strong id="latestCreated">—</strong>
+                    <small id="latestWeekLabel">실패 패턴 룰 기반 조정 제안</small>
+                </article>
+                <article class="observation-metric">
+                    <span>수락</span>
+                    <strong id="latestAccepted">—</strong>
+                    <small>사용자 탭으로 루틴에 적용됨</small>
+                </article>
+                <article class="observation-metric">
+                    <span>무시</span>
+                    <strong id="latestDismissed">—</strong>
+                    <small id="latestExpired">만료 = 7일 무반응</small>
+                </article>
+                <article class="observation-metric observation-metric--accent">
+                    <span>수락률</span>
+                    <strong id="latestAcceptedRate">—</strong>
+                    <small id="latestDelta">효과 = 수락 전후 주 완료율 델타</small>
+                </article>
+            </div>
+
+            <div class="observation-note">
+                <strong>지표 기준</strong>
+                <span>주는 추천이 생성된 시각(KST) 기준 일~토 주이며, 이번 주 배치 생성분이 보이도록 진행 중 주가 첫 행입니다.
+                    만료는 상태 전이 없이 ACTIVE인 채 expires_at(생성 후 7일)이 지난 건, 대기는 아직 응답 기한이 남은 건입니다.
+                    수락 효과는 수락 주(스케줄이 섞이는 주)를 빼고 직전 주 대비 다음 주의 루틴 계보 완료율 차이(pp)로,
+                    다음 주가 끝나야 측정되고(대기) 전후 어느 주에 기록이 없거나 루틴이 삭제되면 측정 불가로 셉니다.
+                    추천 문구·제안 내용은 노출하지 않고 건수만 집계합니다.</span>
+            </div>
+
+            <div class="observation-result-head">
+                <span class="slot-count" id="count"></span>
+                <span class="slot-count" id="generatedAt"></span>
+            </div>
+
+            <div class="alert alert-error" id="error" hidden></div>
+
+            <div class="slot-table-wrap">
+                <table class="slot-table">
+                    <thead>
+                    <tr>
+                        <th>주 (일~토)</th>
+                        <th>생성</th>
+                        <th>수락</th>
+                        <th>무시</th>
+                        <th>만료</th>
+                        <th>대기</th>
+                        <th>수락률</th>
+                        <th>반응률</th>
+                        <th>효과 측정</th>
+                        <th>완료율 델타</th>
+                    </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const KST_DATE_TIME = new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        const tbody = document.getElementById('rows');
+        const weeksInput = document.getElementById('weeks');
+        const errorBox = document.getElementById('error');
+
+        load();
+
+        async function load() {
+            try {
+                const res = await fetch('/admin/recommendations/metrics?weeks=' + weeksInput.value);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderSummary(data.weeks[0]);
+                renderRows(data.weeks);
+                document.getElementById('count').textContent = data.weeks.length + '주 조회';
+                document.getElementById('generatedAt').textContent =
+                    '집계 시각 ' + KST_DATE_TIME.format(new Date(data.generatedAt));
+            } catch (err) {
+                showError('AI 추천 관측 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function renderSummary(week) {
+            if (!week) return;
+            document.getElementById('latestWeekLabel').textContent =
+                week.weekStartDate + ' ~ ' + week.weekEndDate + (week.inProgress ? ' · 진행 중' : '');
+            document.getElementById('latestCreated').textContent = week.createdCount.toLocaleString();
+            document.getElementById('latestAccepted').textContent = week.acceptedCount.toLocaleString();
+            document.getElementById('latestDismissed').textContent = week.dismissedCount.toLocaleString();
+            document.getElementById('latestExpired').textContent =
+                '만료 ' + week.expiredCount.toLocaleString() + '건 · 대기 ' + week.pendingCount.toLocaleString() + '건';
+            document.getElementById('latestAcceptedRate').textContent = week.acceptedRate.toFixed(1) + '%';
+            document.getElementById('latestDelta').textContent = deltaText(week);
+        }
+
+        function renderRows(weeks) {
+            tbody.innerHTML = '';
+            weeks.forEach(week => {
+                const tr = document.createElement('tr');
+                tr.appendChild(textCell(week.weekStartDate + ' ~ ' + week.weekEndDate
+                    + (week.inProgress ? ' (진행 중)' : '')));
+                tr.appendChild(numberCell(week.createdCount));
+                tr.appendChild(numberCell(week.acceptedCount));
+                tr.appendChild(numberCell(week.dismissedCount));
+                tr.appendChild(numberCell(week.expiredCount));
+                tr.appendChild(numberCell(week.pendingCount));
+                tr.appendChild(numberCell(week.acceptedRate.toFixed(1) + '%', true));
+                tr.appendChild(numberCell(week.respondedRate.toFixed(1) + '%'));
+                tr.appendChild(textCell(effectText(week)));
+                tr.appendChild(numberCell(deltaValueText(week), week.avgCompletionDeltaPp != null));
+                tbody.appendChild(tr);
+            });
+        }
+
+        function effectText(week) {
+            if (week.acceptedCount === 0) return '—';
+            return '측정 ' + week.effectMeasuredCount + ' · 대기 ' + week.effectPendingCount
+                + ' · 불가 ' + week.effectUnmeasurableCount;
+        }
+
+        function deltaValueText(week) {
+            if (week.avgCompletionDeltaPp == null) return '—';
+            const sign = week.avgCompletionDeltaPp > 0 ? '+' : '';
+            return sign + week.avgCompletionDeltaPp.toFixed(1) + 'pp';
+        }
+
+        function deltaText(week) {
+            if (week.avgCompletionDeltaPp == null) return '효과 = 수락 전후 주 완료율 델타';
+            return '측정 ' + week.effectMeasuredCount + '건 평균 ' + deltaValueText(week);
+        }
+
+        function textCell(text) {
+            const td = document.createElement('td');
+            td.textContent = text;
+            return td;
+        }
+
+        function numberCell(value, accent) {
+            const td = document.createElement('td');
+            td.className = 'observation-number-cell' + (accent ? ' observation-number-cell--accent' : '');
+            td.textContent = typeof value === 'number' ? value.toLocaleString() : value;
+            return td;
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.hidden = false;
+            setTimeout(() => { errorBox.hidden = true; }, 5000);
+        }
+
+        weeksInput.addEventListener('change', load);
+        document.getElementById('refresh').addEventListener('click', load);
+    </script>
+</body>
+</html>

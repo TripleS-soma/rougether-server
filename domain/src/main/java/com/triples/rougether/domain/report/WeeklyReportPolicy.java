@@ -28,10 +28,14 @@ public final class WeeklyReportPolicy {
     private WeeklyReportPolicy() {
     }
 
+    // 날짜가 속한 일~토 주의 시작 일요일. 회고와 추천 관측(#332)이 같은 주 경계 정의를 공유한다.
+    public static LocalDate weekStartOf(LocalDate date) {
+        return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+    }
+
     // 오늘 기준 가장 최근에 끝난 일~토 주의 일요일. 일요일 당일이면 7일 전 일요일(오늘은 다음 주 소속).
     public static LocalDate latestCompletedWeekStart(LocalDate today) {
-        LocalDate thisWeekSunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        return thisWeekSunday.minusDays(WEEK_LENGTH_DAYS);
+        return weekStartOf(today).minusDays(WEEK_LENGTH_DAYS);
     }
 
     public static LocalDate weekEndOf(LocalDate weekStart) {

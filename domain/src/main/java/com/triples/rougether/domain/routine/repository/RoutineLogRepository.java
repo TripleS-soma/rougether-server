@@ -156,6 +156,24 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("toDate") LocalDate toDate,
             @Param("statuses") Collection<RoutineLogStatus> statuses);
 
+    // 관리자 추천 효과 측정(#332): 위 findLineageAliveLogsInPeriod 의 단일 계보 버전 — 수락된 추천의 계보 한 줄에
+    // 대해 수락 전후 주의 완료율을 비교한다. 계보 전체가 삭제됐으면 빈 결과 = 측정 불가로 처리한다.
+    @Query("select l from RoutineLog l "
+            + "join l.routine r "
+            + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses "
+            + "and coalesce(r.originRoutineId, r.id) = :originKey "
+            + "and exists (select 1 from Routine live "
+            + "  where live.user.id = :userId "
+            + "  and coalesce(live.originRoutineId, live.id) = :originKey "
+            + "  and live.deletedAt is null)")
+    List<RoutineLog> findLineageAliveLogsInPeriodByOrigin(
+            @Param("userId") Long userId,
+            @Param("originKey") Long originKey,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses);
+
     @Query("select l.routine.user.id as userId, count(l.id) as metricCount from RoutineLog l "
             + "where l.routine.user.id in :userIds and l.status = :status and l.routineDate >= :fromDate "
             + "group by l.routine.user.id")
