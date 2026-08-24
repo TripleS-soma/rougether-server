@@ -33,6 +33,11 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
     // 사용자당 활성 상한(3건) 예산 계산용: ACTIVE·미만료 건수
     long countByUserIdAndStatusAndExpiresAtAfter(Long userId, RecommendationStatus status, Instant now);
 
+    // 닫힌 루프(#334): 회고 대상 주(KST 반개구간)에 수락된 추천 - 다음 회고 프롬프트의
+    // "지난주 수락한 조정 추천" 블록 재료. 성과 숫자는 회고가 이미 집계한 계보 통계와 매칭해 쓴다.
+    List<RoutineRecommendation> findByUserIdAndStatusAndActedAtGreaterThanEqualAndActedAtLessThan(
+            Long userId, RecommendationStatus status, Instant from, Instant toExclusive);
+
     // 관리자 추천 퍼널 관측(#332): 기간 내 생성분 전체를 경량 projection 으로. MVP 규모(주당 수십 건)라
     // 주 버킷·비율 집계는 DB 함수 대신 서비스에서 KST 기준으로 계산한다.
     @Query("select r.user.id as userId, r.originRoutineId as originRoutineId, r.routineId as routineId, "

@@ -7,6 +7,9 @@ import com.triples.rougether.batch.config.BatchJdbcConfig;
 import com.triples.rougether.batch.dayend.DayEndCompletionChecker;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.entity.RecommendationType;
+import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
+import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.entity.WeeklyReportStatus;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
@@ -142,6 +145,8 @@ class WeeklyReportJobIntegrationTest {
     @Autowired
     private UserRepository userRepository;
     @Autowired
+    private RoutineRecommendationRepository routineRecommendationRepository;
+    @Autowired
     private ScriptedLlmClient llmClient;
 
     @BeforeEach
@@ -151,6 +156,7 @@ class WeeklyReportJobIntegrationTest {
 
     @AfterEach
     void cleanUp() {
+        routineRecommendationRepository.deleteAll(); // routines FK 참조라 루틴보다 먼저 지움(#334)
         weeklyReportRepository.deleteAll();
         streakRepository.deleteAll();
         routineLogRepository.deleteAll();
@@ -198,6 +204,28 @@ class WeeklyReportJobIntegrationTest {
                 .contains("닉네임: 「진형」")
                 .contains("자기소개: 「매일 조금씩」")
                 .contains("스트릭: 현재 0일, 최장 2일");
+    }
+
+    @Test
+    void 그_주에_수락한_조정_추천이_있으면_프롬프트에_결과_블록을_넣는다() throws Exception {
+        User user = signUp("수락자", null);
+        Routine run = persistRoutine(user, "달리기");
+        completed(run, WEEK_START.plusDays(1));
+        completed(run, WEEK_START.plusDays(3));
+        failed(run, WEEK_START.plusDays(5));
+        // 대상 주 월요일에 수락 → 블록 포함
+        acceptRecommendation(user, run, WEEK_START.plusDays(1));
+        // 주 시작 전에 수락한 건 → 제외
+        Routine old = persistRoutine(user, "독서");
+        completed(old, WEEK_START.plusDays(2));
+        acceptRecommendation(user, old, WEEK_START.minusDays(2));
+
+        runJobOnce();
+
+        assertThat(llmClient.lastRequest.userPrompt())
+                .contains("[지난주 수락한 조정 추천]")
+                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 2/1")
+                .doesNotContain("「독서」: 반복 요일");
     }
 
     @Test
@@ -470,6 +498,15 @@ class WeeklyReportJobIntegrationTest {
 
     private void completed(Routine routine, LocalDate date) {
         routineLogRepository.save(RoutineLog.complete(routine, date, Instant.now(), CurrencyType.COIN, 10));
+    }
+
+    // 닫힌 루프(#334) fixture: 해당 날짜 09:00 KST 에 수락된 조정 추천(월·수 제안)
+    private void acceptRecommendation(User user, Routine routine, LocalDate actedDate) {
+        RoutineRecommendation recommendation = RoutineRecommendation.rule(user, routine.getId(), routine.getId(),
+                RecommendationType.ADJUST_DAYS, "{\"repeatType\":\"WEEKLY\",\"daysOfWeek\":[\"MON\",\"WED\"]}",
+                "조정 제안", ZonedDateTime.of(actedDate.plusDays(7).atTime(0, 0), KST).toInstant());
+        recommendation.accept(ZonedDateTime.of(actedDate.atTime(9, 0), KST).toInstant(), routine.getId());
+        routineRecommendationRepository.save(recommendation);
     }
 
     private void failed(Routine routine, LocalDate date) {

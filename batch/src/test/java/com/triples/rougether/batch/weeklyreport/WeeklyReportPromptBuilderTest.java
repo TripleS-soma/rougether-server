@@ -33,7 +33,7 @@ class WeeklyReportPromptBuilderTest {
         when(study.getName()).thenReturn("공부");
         List<UserGoal> goals = List.of(UserGoal.of(user, exercise, true), UserGoal.of(user, study, false));
 
-        LlmChatRequest request = builder.build("진형", "매일 조금씩", goals, SUN, SAT, sampleStats());
+        LlmChatRequest request = builder.build("진형", "매일 조금씩", goals, SUN, SAT, sampleStats(), List.of());
 
         assertThat(request.userPrompt())
                 .contains("닉네임: 「진형」")
@@ -50,7 +50,7 @@ class WeeklyReportPromptBuilderTest {
 
     @Test
     void 이메일은_프롬프트에_들어가지_않는다() {
-        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats());
+        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats(), List.of());
 
         assertThat(request.userPrompt()).doesNotContain("secret@example.com").doesNotContain("@");
         assertThat(request.systemPrompt()).doesNotContain("@");
@@ -58,7 +58,7 @@ class WeeklyReportPromptBuilderTest {
 
     @Test
     void 비어_있는_bio_목표는_대시로_표기한다() {
-        LlmChatRequest request = builder.build(null, "  ", null, SUN, SAT, sampleStats());
+        LlmChatRequest request = builder.build(null, "  ", null, SUN, SAT, sampleStats(), List.of());
 
         assertThat(request.userPrompt())
                 .contains("닉네임: -")
@@ -75,7 +75,7 @@ class WeeklyReportPromptBuilderTest {
 
     @Test
     void 시스템_프롬프트는_JSON_스키마와_길이_제한을_명시한다() {
-        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats());
+        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats(), List.of());
 
         assertThat(request.systemPrompt())
                 .contains("\"summary\"")
@@ -83,7 +83,37 @@ class WeeklyReportPromptBuilderTest {
                 .contains("\"failurePatterns\"")
                 .contains("\"suggestions\"")
                 .contains(String.valueOf(WeeklyReportPromptBuilder.SUMMARY_MAX_CHARS))
-                .contains("JSON 객체 하나만");
+                .contains("JSON 객체 하나만")
+                .contains("[지난주 수락한 조정 추천]");
+    }
+
+    @Test
+    void 수락한_조정_추천을_그_주_성과와_함께_블록으로_표기한다() {
+        List<WeeklyReportPromptBuilder.AcceptedAdjustment> adjustments = List.of(
+                new WeeklyReportPromptBuilder.AcceptedAdjustment("달리기", "WEEKLY", List.of("MON", "WED"), 2, 1),
+                new WeeklyReportPromptBuilder.AcceptedAdjustment("물 마시기", "DAILY", List.of(), 5, 0));
+
+        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats(), adjustments);
+
+        assertThat(request.userPrompt())
+                .contains("[지난주 수락한 조정 추천]")
+                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 2/1")
+                .contains("- 「물 마시기」: 매일 반복으로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 5/0");
+    }
+
+    @Test
+    void 수락한_조정이_없으면_블록을_넣지_않는다() {
+        LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats(), List.of());
+
+        assertThat(request.userPrompt()).doesNotContain("[지난주 수락한 조정 추천]");
+    }
+
+    @Test
+    void 알_수_없는_요일_토큰은_지어내지_않고_원문으로_둔다() {
+        assertThat(WeeklyReportPromptBuilder.describeProposal("WEEKLY", List.of("MON", "XXX")))
+                .isEqualTo("반복 요일을 월·XXX로 조정하는");
+        assertThat(WeeklyReportPromptBuilder.describeProposal("WEEKLY", List.of()))
+                .isEqualTo("반복 스케줄을 조정하는");
     }
 
     private static WeeklyReportStats sampleStats() {
