@@ -88,17 +88,19 @@ class WeeklyReportPromptBuilderTest {
     }
 
     @Test
-    void 수락한_조정_추천을_그_주_성과와_함께_블록으로_표기한다() {
+    void 수락한_조정_추천을_수락_후_기록과_함께_블록으로_표기한다() {
         List<WeeklyReportPromptBuilder.AcceptedAdjustment> adjustments = List.of(
                 new WeeklyReportPromptBuilder.AcceptedAdjustment("달리기", "WEEKLY", List.of("MON", "WED"), 2, 1),
-                new WeeklyReportPromptBuilder.AcceptedAdjustment("물 마시기", "DAILY", List.of(), 5, 0));
+                new WeeklyReportPromptBuilder.AcceptedAdjustment("물 마시기", "DAILY", List.of(), 5, 0),
+                new WeeklyReportPromptBuilder.AcceptedAdjustment("명상", "WEEKLY", List.of("SAT"), 0, 0));
 
         LlmChatRequest request = builder.build("진형", null, List.of(), SUN, SAT, sampleStats(), adjustments);
 
         assertThat(request.userPrompt())
                 .contains("[지난주 수락한 조정 추천]")
-                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 2/1")
-                .contains("- 「물 마시기」: 매일 반복으로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 5/0");
+                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 수락 후 완료 2/1")
+                .contains("- 「물 마시기」: 매일 반복으로 조정하는 추천을 이번 주에 수락 — 수락 후 완료 5/0")
+                .contains("- 「명상」: 반복 요일을 토로 조정하는 추천을 이번 주에 수락 — 수락 후 아직 수행일 없음");
     }
 
     @Test

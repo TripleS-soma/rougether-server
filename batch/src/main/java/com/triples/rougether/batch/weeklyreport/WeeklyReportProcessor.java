@@ -10,12 +10,14 @@ import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
 import com.triples.rougether.domain.report.WeeklyReportSections;
 import com.triples.rougether.domain.report.WeeklyReportStats;
-import com.triples.rougether.domain.report.WeeklyReportStats.RoutineStat;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
+import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
+import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.infra.llm.LlmAuthException;
 import com.triples.rougether.infra.llm.LlmChatRequest;
@@ -27,9 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 사용자 1명 → WeeklyReport 1건. 집계 → LLM(1회 + 파싱 실패 시 1회 재요청) → 실패하면 FALLBACK(통계+고정 문구).
 // 이미 그 주 회고가 있거나 집계할 로그가 없으면 null(=skip). 재생성은 없다(결정값).
-// 닫힌 루프(#334): 대상 주에 수락된 조정 추천이 있으면 그 주 계보 성과와 함께 프롬프트에 알려준다.
+// 닫힌 루프(#334): 대상 주에 수락된 조정 추천이 있으면 수락 적용 버전의 그 주 성과와 함께 프롬프트에 알려준다.
 @Slf4j
 @RequiredArgsConstructor
 class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
@@ -52,6 +52,7 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
     private final StreakRepository streakRepository;
     private final UserRepository userRepository;
     private final UserGoalRepository userGoalRepository;
+    private final RoutineRepository routineRepository;
     private final RoutineRecommendationRepository routineRecommendationRepository;
     private final WeeklyStatsAggregator aggregator;
     private final WeeklyReportPromptBuilder promptBuilder;
@@ -80,7 +81,7 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
                 .orElseThrow(() -> new IllegalStateException("회고 대상 사용자 없음: " + userId));
         List<UserGoal> goals = userGoalRepository.findByUserIdWithGoalOrderBySortOrder(userId);
         LlmChatRequest request = promptBuilder.build(user.getNickname(), user.getBio(), goals,
-                weekStart, weekEnd, stats, acceptedAdjustments(userId, stats));
+                weekStart, weekEnd, stats, acceptedAdjustments(userId));
 
         String statsJson = toJson(stats);
         Instant generatedAt = Instant.now(clock);
@@ -118,9 +119,12 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
         return Optional.empty();
     }
 
-    // 닫힌 루프(#334): 대상 주에 수락된 추천을 그 주 계보 통계와 매칭해 프롬프트 재료로 만든다.
-    // 그 주 계보 기록이 없거나 proposal JSON 이 깨진 건은 제외한다(지어낼 숫자 없음 - 기존 lazy 정책과 동일).
-    private List<AcceptedAdjustment> acceptedAdjustments(Long userId, WeeklyReportStats stats) {
+    // 닫힌 루프(#334): 대상 주에 수락된 추천의 성과를 수락 적용 버전(applied_routine_id) log 로만 센다.
+    // 실제 수락은 버전 분기(옛 버전 soft delete)를 일으켜 회고 집계(stats)에서 수락 전 log 가 빠지므로
+    // 계보 통계 매칭은 블록 누락을 만들고(#336 리뷰), 수락 전 성과가 "조정 결과"로 섞이는 문제도 있다 -
+    // spec 의 효과 측정 조인 키와 같은 원칙으로 적용 버전만 귀속한다. 수락 후 기록이 없어도 적용 버전이
+    // 살아 있으면 "수행일 없음"으로 언급하고, 재수정·삭제로 닫힌 채 기록도 없으면 말할 사실이 없어 제외한다.
+    private List<AcceptedAdjustment> acceptedAdjustments(Long userId) {
         List<RoutineRecommendation> accepted = routineRecommendationRepository
                 .findByUserIdAndStatusAndActedAtGreaterThanEqualAndActedAtLessThan(
                         userId, RecommendationStatus.ACCEPTED,
@@ -129,22 +133,35 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
         if (accepted.isEmpty()) {
             return List.of();
         }
-        Map<Long, RoutineStat> statsByLineage = new HashMap<>();
-        for (RoutineStat stat : stats.byRoutine()) {
-            statsByLineage.putIfAbsent(stat.lineageId(), stat);
-        }
         List<AcceptedAdjustment> adjustments = new ArrayList<>();
         for (RoutineRecommendation recommendation : accepted) {
-            RoutineStat stat = statsByLineage.get(recommendation.getOriginRoutineId());
-            if (stat == null) {
+            Long appliedRoutineId = recommendation.getAppliedRoutineId();
+            if (appliedRoutineId == null) {
+                continue;
+            }
+            Routine applied = routineRepository.findById(appliedRoutineId).orElse(null);
+            if (applied == null) {
                 continue;
             }
             AcceptedProposal proposal = readProposal(recommendation);
             if (proposal == null) {
                 continue;
             }
-            adjustments.add(new AcceptedAdjustment(stat.title(), proposal.repeatType(),
-                    proposal.daysOfWeek(), stat.completed(), stat.failed()));
+            int completed = 0;
+            int failed = 0;
+            for (RoutineLog log : routineLogRepository.findByRoutineIdAndRoutineDateBetweenAndStatusIn(
+                    appliedRoutineId, weekStart, weekEnd, WeeklyReportUserReader.COUNTED_STATUSES)) {
+                if (log.getStatus() == RoutineLogStatus.COMPLETED) {
+                    completed++;
+                } else {
+                    failed++;
+                }
+            }
+            if (completed + failed == 0 && applied.getDeletedAt() != null) {
+                continue;
+            }
+            adjustments.add(new AcceptedAdjustment(applied.getTitle(), proposal.repeatType(),
+                    proposal.daysOfWeek(), completed, failed));
         }
         return adjustments;
     }

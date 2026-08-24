@@ -7,6 +7,7 @@ import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.infra.llm.LlmAuthException;
 import com.triples.rougether.infra.llm.LlmClient;
@@ -83,14 +84,16 @@ class WeeklyReportJobConfig {
     WeeklyReportProcessor weeklyReportProcessor(WeeklyReportRepository weeklyReportRepository,
             RoutineLogRepository routineLogRepository, StreakRepository streakRepository,
             UserRepository userRepository, UserGoalRepository userGoalRepository,
+            RoutineRepository routineRepository,
             RoutineRecommendationRepository routineRecommendationRepository,
             WeeklyStatsAggregator aggregator, WeeklyReportPromptBuilder promptBuilder, WeeklyReportParser parser,
             LlmClient llmClient, LlmProperties llmProperties, Clock clock,
             @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam) {
         LocalDate weekStart = LocalDate.parse(weekStartParam);
         return new WeeklyReportProcessor(weeklyReportRepository, routineLogRepository, streakRepository,
-                userRepository, userGoalRepository, routineRecommendationRepository, aggregator, promptBuilder,
-                parser, llmClient, llmProperties, clock, weekStart, weekEndOf(weekStart));
+                userRepository, userGoalRepository, routineRepository, routineRecommendationRepository,
+                aggregator, promptBuilder, parser, llmClient, llmProperties, clock, weekStart,
+                weekEndOf(weekStart));
     }
 
     static LocalDate weekEndOf(LocalDate weekStart) {

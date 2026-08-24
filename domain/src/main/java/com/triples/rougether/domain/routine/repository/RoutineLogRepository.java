@@ -33,6 +33,11 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     Optional<RoutineLog> findByRoutineIdAndRoutineDateAndStatus(
             Long routineId, LocalDate routineDate, RoutineLogStatus status);
 
+    // 닫힌 루프(#334): 수락 적용 버전(applied_routine_id)의 그 주 log 만 - 수락 전(닫힌 옛 버전) 성과가
+    // "조정 결과"로 섞이지 않게 버전 단위로 센다(#336 리뷰).
+    List<RoutineLog> findByRoutineIdAndRoutineDateBetweenAndStatusIn(
+            Long routineId, LocalDate fromDate, LocalDate toDate, Collection<RoutineLogStatus> statuses);
+
     @Query("select l from RoutineLog l join l.routine r "
             + "where coalesce(r.originRoutineId, r.id) = :originKey "
             + "and l.routineDate = :routineDate and l.status = :status")

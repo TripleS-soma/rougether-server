@@ -31,13 +31,14 @@ public class WeeklyReportPromptBuilder {
             - highlights: 잘한 점, 최대 %d개, 각 %d자 이내.
             - failurePatterns: 실패가 반복된 요일·루틴 등 패턴, 최대 %d개, 각 %d자 이내. 실패가 없으면 빈 배열.
             - suggestions: 다음 주에 시도할 구체적 제안, 최대 %d개, 각 %d자 이내.
-            - [지난주 수락한 조정 추천] 블록이 있으면 그 조정의 이번 주 결과를 회고에서 한 번 짚는다. 조정은 주중에 수락된 것이니 단정하지 말고, 성과가 좋았으면 조정 효과를 인정해 주고 여전히 어려웠으면 부담을 더 줄이는 다음 조정을 suggestions 로 제안한다.
+            - [지난주 수락한 조정 추천] 블록이 있으면 수락 사실과 수락 후 기록을 회고에서 한 번 짚는다. 수락 후 기록은 주 중간부터의 부분 기록이니 효과를 단정하지 말고, 기록이 좋으면 가볍게 격려하고 어렵거나 아직 수행일이 없으면 다음 주에 새 스케줄대로 시작해 보자고 독려한다.
             스키마: {"summary": string, "highlights": string[], "failurePatterns": string[], "suggestions": string[]}
             """.formatted(SUMMARY_MAX_CHARS, SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS,
             SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS, SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS);
 
     // 닫힌 루프(#334): 회고 대상 주에 수락된 조정 추천 1건의 프롬프트 재료.
-    // dayTokens 는 proposal 의 요일 토큰("MON"...), completed/failed 는 그 주 계보 통계.
+    // dayTokens 는 proposal 의 요일 토큰("MON"...), completed/failed 는 수락 적용 버전의 그 주 log 만 센 값
+    // (수락 전 성과가 조정 결과로 섞이지 않게 - #336 리뷰). 둘 다 0이면 수락 후 수행일이 없던 것.
     public record AcceptedAdjustment(String title, String repeatType, List<String> dayTokens,
                                      int completed, int failed) {
     }
@@ -75,8 +76,14 @@ public class WeeklyReportPromptBuilder {
             for (AcceptedAdjustment adjustment : acceptedAdjustments) {
                 sb.append("- ").append(quote(adjustment.title())).append(": ")
                         .append(describeProposal(adjustment.repeatType(), adjustment.dayTokens()))
-                        .append(" 추천을 이번 주에 수락 — 이번 주 완료 ").append(adjustment.completed())
-                        .append('/').append(adjustment.failed()).append('\n');
+                        .append(" 추천을 이번 주에 수락 — ");
+                if (adjustment.completed() + adjustment.failed() == 0) {
+                    sb.append("수락 후 아직 수행일 없음");
+                } else {
+                    sb.append("수락 후 완료 ").append(adjustment.completed())
+                            .append('/').append(adjustment.failed());
+                }
+                sb.append('\n');
             }
         }
         sb.append("\n위 기록으로 주간 회고 JSON을 작성해 주세요.");

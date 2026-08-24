@@ -207,24 +207,33 @@ class WeeklyReportJobIntegrationTest {
     }
 
     @Test
-    void 그_주에_수락한_조정_추천이_있으면_프롬프트에_결과_블록을_넣는다() throws Exception {
+    void 그_주에_수락한_조정_추천은_적용_버전의_수락_후_기록으로_프롬프트_블록을_만든다() throws Exception {
         User user = signUp("수락자", null);
-        Routine run = persistRoutine(user, "달리기");
-        completed(run, WEEK_START.plusDays(1));
-        completed(run, WEEK_START.plusDays(3));
-        failed(run, WEEK_START.plusDays(5));
-        // 대상 주 월요일에 수락 → 블록 포함
-        acceptRecommendation(user, run, WEEK_START.plusDays(1));
+        // 실제 수락 경로처럼 버전 분기 재현(#336 리뷰): 수락 전 log 는 닫힌 옛 버전에 남는다
+        Routine before = persistRoutine(user, "달리기");
+        completed(before, WEEK_START); // 수락 전 log - 적용 버전 기준 집계에 섞이면 안 됨
+        Routine applied = forkAndClose(before);
+        acceptRecommendation(user, before, applied, WEEK_START.plusDays(2));
+        completed(applied, WEEK_START.plusDays(3));
+        failed(applied, WEEK_START.plusDays(5)); // 수락 후 1/1
+
+        // 수락 후 수행일이 없어도 적용 버전이 살아 있으면 언급된다
+        Routine quietBefore = persistRoutine(user, "명상");
+        completed(quietBefore, WEEK_START.plusDays(1));
+        Routine quietApplied = forkAndClose(quietBefore);
+        acceptRecommendation(user, quietBefore, quietApplied, WEEK_START.plusDays(5));
+
         // 주 시작 전에 수락한 건 → 제외
         Routine old = persistRoutine(user, "독서");
         completed(old, WEEK_START.plusDays(2));
-        acceptRecommendation(user, old, WEEK_START.minusDays(2));
+        acceptRecommendation(user, old, old, WEEK_START.minusDays(2));
 
         runJobOnce();
 
         assertThat(llmClient.lastRequest.userPrompt())
                 .contains("[지난주 수락한 조정 추천]")
-                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 이번 주 완료 2/1")
+                .contains("- 「달리기」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 수락 후 완료 1/1")
+                .contains("- 「명상」: 반복 요일을 월·수로 조정하는 추천을 이번 주에 수락 — 수락 후 아직 수행일 없음")
                 .doesNotContain("「독서」: 반복 요일");
     }
 
@@ -500,13 +509,22 @@ class WeeklyReportJobIntegrationTest {
         routineLogRepository.save(RoutineLog.complete(routine, date, Instant.now(), CurrencyType.COIN, 10));
     }
 
-    // 닫힌 루프(#334) fixture: 해당 날짜 09:00 KST 에 수락된 조정 추천(월·수 제안)
-    private void acceptRecommendation(User user, Routine routine, LocalDate actedDate) {
-        RoutineRecommendation recommendation = RoutineRecommendation.rule(user, routine.getId(), routine.getId(),
+    // 닫힌 루프(#334) fixture: 해당 날짜 09:00 KST 에 수락된 조정 추천(월·수 제안). applied 가 적용 버전.
+    private void acceptRecommendation(User user, Routine target, Routine applied, LocalDate actedDate) {
+        RoutineRecommendation recommendation = RoutineRecommendation.rule(user, target.getId(), target.getId(),
                 RecommendationType.ADJUST_DAYS, "{\"repeatType\":\"WEEKLY\",\"daysOfWeek\":[\"MON\",\"WED\"]}",
                 "조정 제안", ZonedDateTime.of(actedDate.plusDays(7).atTime(0, 0), KST).toInstant());
-        recommendation.accept(ZonedDateTime.of(actedDate.atTime(9, 0), KST).toInstant(), routine.getId());
+        recommendation.accept(ZonedDateTime.of(actedDate.atTime(9, 0), KST).toInstant(), applied.getId());
         routineRecommendationRepository.save(recommendation);
+    }
+
+    // 실제 수락 경로의 버전 분기 재현: 새 버전으로 복제(origin 승계) 후 옛 버전을 soft delete
+    private Routine forkAndClose(Routine origin) {
+        Routine copy = routineRepository.save(
+                origin.copyAsNewVersion(null, null, null, null, null, null, null, null));
+        origin.softDelete(Instant.now());
+        routineRepository.save(origin);
+        return copy;
     }
 
     private void failed(Routine routine, LocalDate date) {
