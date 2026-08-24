@@ -27,8 +27,10 @@ public record AdminWeeklyReportMetricsResponse(
             long generatedCount,
             long fallbackCount,
             long missingCount,
+            long viewedCount,
             double coverageRate,
             double fallbackRate,
+            double viewedRate,
             List<String> models,
             Instant lastGeneratedAt) {
 
@@ -38,12 +40,15 @@ public record AdminWeeklyReportMetricsResponse(
                                     long eligibleUsers,
                                     long generatedCount,
                                     long fallbackCount,
+                                    long viewedCount,
                                     List<String> models,
                                     Instant lastGeneratedAt) {
             long produced = generatedCount + fallbackCount;
             long missing = Math.max(0, eligibleUsers - produced);
             double coverageRate = eligibleUsers == 0 ? 0.0 : Math.min(100.0, produced * 100.0 / eligibleUsers);
             double fallbackRate = produced == 0 ? 0.0 : fallbackCount * 100.0 / produced;
+            // 열람률(#332)의 분모는 만들어진 회고(생성+FALLBACK) - 도달(push) 성공 여부는 여기서 구분하지 않는다
+            double viewedRate = produced == 0 ? 0.0 : viewedCount * 100.0 / produced;
             return new WeekMetric(
                     weekStartDate,
                     weekEndDate,
@@ -52,8 +57,10 @@ public record AdminWeeklyReportMetricsResponse(
                     generatedCount,
                     fallbackCount,
                     missing,
+                    viewedCount,
                     coverageRate,
                     fallbackRate,
+                    viewedRate,
                     models,
                     lastGeneratedAt);
         }

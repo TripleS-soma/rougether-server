@@ -30,6 +30,8 @@ public record WeeklyReportDetailResponse(
         String summary,
         @Schema(description = "회고 생성 시각(ISO-8601)")
         Instant generatedAt,
+        @Schema(description = "최초 열람 시각(ISO-8601). 이 조회가 최초 열람이면 지금 시각이 기록되어 내려간다")
+        Instant viewedAt,
         @Schema(description = "주간 통계(요일별·루틴별·스트릭). 배치가 생성 시점에 계산한 값")
         WeeklyStatsResponse stats,
         @Schema(description = "잘한 점(최대 3개, 각 80자 이내). FALLBACK이면 빈 배열", example = "[\"주말 이틀 모두 달리기를 지켰어요\"]")
@@ -51,6 +53,7 @@ public record WeeklyReportDetailResponse(
                 stats.scheduledCount(),
                 report.getSummary(),
                 report.getGeneratedAt(),
+                report.getViewedAt(),
                 WeeklyStatsResponse.from(stats),
                 sections.highlights(),
                 sections.failurePatterns(),

@@ -119,6 +119,44 @@ class WeeklyReportQueryServiceTest {
     }
 
     @Test
+    void 상세_최초_조회가_열람_시각을_기록한다() {
+        WeeklyReport saved = saveGenerated(me, WEEK2, stats(5, 3), "열람 회고");
+        assertThat(saved.getViewedAt()).isNull();
+
+        WeeklyReportDetailResponse detail = weeklyReportQueryService.getMyReport(me.getId(), saved.getId());
+
+        // TIMESTAMP 컬럼(초 단위)과 응답이 어긋나지 않게 초로 절삭해 기록하는 계약
+        assertThat(detail.viewedAt()).isNotNull();
+        assertThat(detail.viewedAt().getNano()).isZero();
+        assertThat(weeklyReportRepository.findById(saved.getId()).orElseThrow().getViewedAt())
+                .isEqualTo(detail.viewedAt());
+    }
+
+    @Test
+    void 재조회는_첫_열람_시각을_덮어쓰지_않는다() {
+        WeeklyReport saved = saveGenerated(me, WEEK2, stats(5, 3), "열람 회고");
+        Instant firstViewedAt = Instant.parse("2026-08-16T09:00:00Z");
+        saved.markViewed(firstViewedAt);
+
+        WeeklyReportDetailResponse detail = weeklyReportQueryService.getMyReport(me.getId(), saved.getId());
+
+        assertThat(detail.viewedAt()).isEqualTo(firstViewedAt);
+    }
+
+    @Test
+    void 목록은_열람_전이면_viewedAt_이_null_이고_열람_후에는_시각을_내려준다() {
+        saveGenerated(me, WEEK1, stats(5, 3), "미열람 회고");
+        WeeklyReport viewed = saveGenerated(me, WEEK2, stats(4, 4), "열람 회고");
+        Instant viewedAt = Instant.parse("2026-08-16T09:00:00Z");
+        viewed.markViewed(viewedAt);
+
+        WeeklyReportListResponse response = weeklyReportQueryService.getMyReports(me.getId());
+
+        assertThat(response.items().get(0).viewedAt()).isEqualTo(viewedAt);
+        assertThat(response.items().get(1).viewedAt()).isNull();
+    }
+
+    @Test
     void 타인의_회고_id는_존재해도_404() {
         WeeklyReport theirs = saveGenerated(other, WEEK2, stats(1, 1), "남의 회고");
 
