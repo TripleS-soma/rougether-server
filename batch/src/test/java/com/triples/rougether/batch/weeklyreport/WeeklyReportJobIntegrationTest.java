@@ -214,8 +214,9 @@ class WeeklyReportJobIntegrationTest {
         completed(before, WEEK_START); // 수락 전 log - 적용 버전 기준 집계에 섞이면 안 됨
         Routine applied = forkAndClose(before);
         acceptRecommendation(user, before, applied, WEEK_START.plusDays(2));
+        completed(applied, WEEK_START.plusDays(1)); // 수락(화) 뒤 월요일로 소급 완료 - 수락 후 집계에서 제외돼야 함
         completed(applied, WEEK_START.plusDays(3));
-        failed(applied, WEEK_START.plusDays(5)); // 수락 후 1/1
+        failed(applied, WEEK_START.plusDays(5)); // 수락 후 1/1 (소급분 제외)
 
         // 수락 후 수행일이 없어도 적용 버전이 살아 있으면 언급된다
         Routine quietBefore = persistRoutine(user, "명상");

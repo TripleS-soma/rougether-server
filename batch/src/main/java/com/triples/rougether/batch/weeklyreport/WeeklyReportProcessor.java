@@ -147,10 +147,14 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
             if (proposal == null) {
                 continue;
             }
+            // 하한은 수락일(KST) - 과거 완료 허용이라 수락 뒤 적용 버전으로 수락 전 날짜를 소급 완료할 수 있는데,
+            // 그 log 까지 "수락 후"로 세면 안 된다(#336 리뷰). 수락 당일은 포함(일 단위 판정).
+            LocalDate actedDate = LocalDate.ofInstant(recommendation.getActedAt(), KST);
+            LocalDate from = actedDate.isAfter(weekStart) ? actedDate : weekStart;
             int completed = 0;
             int failed = 0;
             for (RoutineLog log : routineLogRepository.findByRoutineIdAndRoutineDateBetweenAndStatusIn(
-                    appliedRoutineId, weekStart, weekEnd, WeeklyReportUserReader.COUNTED_STATUSES)) {
+                    appliedRoutineId, from, weekEnd, WeeklyReportUserReader.COUNTED_STATUSES)) {
                 if (log.getStatus() == RoutineLogStatus.COMPLETED) {
                     completed++;
                 } else {
