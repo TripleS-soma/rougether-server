@@ -24,6 +24,7 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 - 루틴/투두 API 의존성 → [docs/claude/domains/routine-todo.md](docs/claude/domains/routine-todo.md)
 - 에셋, 이미지, CDN/object key → [docs/claude/domains/assets.md](docs/claude/domains/assets.md)
 - RoutineVillage Figma 가구·소품 제작/삽입 → [.claude/skills/routinevillage-asset-add/SKILL.md](.claude/skills/routinevillage-asset-add/SKILL.md) (`/routinevillage-asset-add`)
+- 마케팅: Instagram 광고·오가닉 콘텐츠 스킬(vendored) 목록과 출처 → [.claude/skills/VENDORED.md](.claude/skills/VENDORED.md). 유료 광고 전략은 `/ads`·`/ad-creative`, Instagram 콘텐츠는 `/ig-caption-writer` 등 `ig-*` 스킬, 마케팅 작업 시작 전 기초 컨텍스트는 `/product-marketing`.
 
 ## 공통 작업 규칙
 
