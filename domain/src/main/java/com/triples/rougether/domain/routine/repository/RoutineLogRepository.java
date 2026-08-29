@@ -179,6 +179,18 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("toDate") LocalDate toDate,
             @Param("statuses") Collection<RoutineLogStatus> statuses);
 
+    // HOLDOUT 효과 비교(#342): cohort 대상 사용자의 직전 주·다음 주 완료율을 한 번에 읽는다.
+    // 적격성 조회에서 탈퇴·봇을 이미 제외하고, 루틴 버전이 바뀌어도 사용자 전체 행동 변화를 보도록 과거 log를 유지한다.
+    @Query("select r.user.id as userId, l.routineDate as routineDate, l.status as status "
+            + "from RoutineLog l join l.routine r "
+            + "where r.user.id in :userIds and l.routineDate between :fromDate and :toDate "
+            + "and l.status in :statuses")
+    List<RecommendationExperimentCompletionRow> findExperimentCompletionRows(
+            @Param("userIds") Collection<Long> userIds,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("statuses") Collection<RoutineLogStatus> statuses);
+
     @Query("select l.routine.user.id as userId, count(l.id) as metricCount from RoutineLog l "
             + "where l.routine.user.id in :userIds and l.status = :status and l.routineDate >= :fromDate "
             + "group by l.routine.user.id")

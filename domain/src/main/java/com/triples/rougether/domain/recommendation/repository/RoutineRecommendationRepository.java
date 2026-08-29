@@ -43,6 +43,7 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
     @Query("select r.user.id as userId, r.originRoutineId as originRoutineId, r.routineId as routineId, "
             + "r.status as status, r.appliedRoutineId as appliedRoutineId, "
             + "r.createdAt as createdAt, r.actedAt as actedAt, r.expiresAt as expiresAt "
-            + "from RoutineRecommendation r where r.createdAt >= :from")
+            + "from RoutineRecommendation r join r.user u "
+            + "where r.createdAt >= :from and u.deletedAt is null and u.bot = false")
     List<RecommendationFunnelRow> findFunnelRowsCreatedAfter(@Param("from") Instant from);
 }

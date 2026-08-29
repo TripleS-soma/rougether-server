@@ -10,6 +10,13 @@
 
 ## 구현 노트
 
+### AI 조정 추천 HOLDOUT (V59)
+
+- 룰 기반 조정 추천 배치는 `ROUTINE_ADJUSTMENT_V1` 실험에 사용자 단위로 영구 배정한다. 최초 적격 진입 시 SHA-256 기반 100개 버킷 중 20개는 `CONTROL`, 80개는 `TREATMENT`이며 `recommendation_experiment_assignments`의 unique(`experiment_key`, `user_id`)가 재실행·재기동 후에도 variant를 고정한다.
+- 배치 reader 후보에게 기존 활성 상한·룰·쿨다운 판정을 동일하게 실행하고, 추천 후보가 1건 이상 나온 사용자만 추천 생성 예정 KST 주(일요일)를 `recommendation_experiment_eligibilities`에 기록한다. `CONTROL`은 판정 결과를 폐기해 추천을 저장하지 않고, `TREATMENT`는 기존 추천 생성 동작을 유지한다. 봇·탈퇴 사용자는 reader와 processor에서 모두 방어한다.
+- 관리자 `GET /admin/recommendations/metrics`는 기존 `weeks` 퍼널을 유지하고 `variantWeeks`를 추가한다. 사용자별 최초 적격 cohort에만 variant별 대상·추천 생성·수락 사용자와 cohort 직전 주/다음 주 전체 루틴 완료율을 귀속하며, 두 변화량의 차이를 `treatmentLiftPp`로 제공한다. 후속 주 적격 기록은 감사용으로 남지만 새 효과 cohort로 중복 집계하지 않는다. 날짜 경계는 `WeeklyReportPolicy`의 KST 일~토 주를 공유한다.
+- 탈퇴 purge는 `recommendation_experiment_eligibilities` → `recommendation_experiment_assignments` 순으로 지운다. 주간 회고 생성·노출은 이 HOLDOUT의 대상이 아니다.
+
 - 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).
 

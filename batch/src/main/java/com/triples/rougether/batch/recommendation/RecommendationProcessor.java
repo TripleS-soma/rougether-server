@@ -4,10 +4,16 @@ import com.triples.rougether.batch.recommendation.RecommendationRuleEvaluator.Pr
 import com.triples.rougether.batch.recommendation.RecommendationRuleEvaluator.WeekRange;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.RecommendationExperimentPolicy;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentAssignment;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentEligibility;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentVariant;
 import com.triples.rougether.domain.recommendation.entity.RecommendationStatus;
 import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentAssignmentRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
@@ -29,14 +35,17 @@ import tools.jackson.databind.json.JsonMapper;
 // 사용자 1명 → 조정 추천 0~N건(#329). 룰 평가는 evaluator(순수)가 하고, 여기서는 상한·쿨다운을 적용해 엔티티로 만든다.
 // 재실행·복구 시 중복 방지는 쿨다운(직전 14일 내 같은 계보 추천 생성 금지, 상태 무관)이 겸한다.
 @RequiredArgsConstructor
-class RecommendationProcessor implements ItemProcessor<Long, List<RoutineRecommendation>> {
+class RecommendationProcessor implements ItemProcessor<Long, RecommendationProcessingResult> {
 
     private final RoutineRecommendationRepository recommendationRepository;
+    private final RecommendationExperimentAssignmentRepository assignmentRepository;
+    private final RecommendationExperimentEligibilityRepository eligibilityRepository;
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final UserRepository userRepository;
     private final RecommendationRuleEvaluator evaluator;
     private final Clock clock;
+    private final LocalDate cohortWeekStart;
     private final LocalDate windowStart;
     private final LocalDate windowEnd;
     private final List<WeekRange> weeks;
@@ -47,19 +56,51 @@ class RecommendationProcessor implements ItemProcessor<Long, List<RoutineRecomme
     }
 
     @Override
-    public List<RoutineRecommendation> process(Long userId) {
+    public RecommendationProcessingResult process(Long userId) {
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .filter(candidate -> !candidate.isBot())
+                .orElse(null);
+        if (user == null) {
+            return null;
+        }
+        List<RoutineRecommendation> recommendations = createRecommendations(userId, user);
+        if (recommendations.isEmpty()) {
+            return null;
+        }
+        RecommendationExperimentAssignment assignment = assignmentRepository
+                .findByExperimentKeyAndUserId(RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, userId)
+                .orElse(null);
+        RecommendationExperimentAssignment newAssignment = null;
+        if (assignment == null) {
+            assignment = RecommendationExperimentAssignment.assign(user,
+                    RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1,
+                    RecommendationExperimentPolicy.assign(RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1,
+                            userId));
+            newAssignment = assignment;
+        }
+        RecommendationExperimentEligibility eligibility = assignment.getId() != null
+                && eligibilityRepository.existsByAssignmentIdAndCohortWeekStart(assignment.getId(), cohortWeekStart)
+                ? null
+                : RecommendationExperimentEligibility.record(assignment, cohortWeekStart);
+        if (assignment.getVariant() == RecommendationExperimentVariant.CONTROL) {
+            return changedResult(newAssignment, eligibility, List.of());
+        }
+        return changedResult(newAssignment, eligibility, recommendations);
+    }
+
+    private List<RoutineRecommendation> createRecommendations(Long userId, User user) {
         Instant now = Instant.now(clock);
         long activeCount = recommendationRepository.countByUserIdAndStatusAndExpiresAtAfter(
                 userId, RecommendationStatus.ACTIVE, now);
         int budget = RecommendationPolicy.ACTIVE_CAP_PER_USER - (int) activeCount;
         if (budget <= 0) {
-            return null;
+            return List.of();
         }
         List<Routine> activeRoutines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE);
         if (activeRoutines.isEmpty()) {
-            return null;
+            return List.of();
         }
         List<RoutineLog> logs = routineLogRepository.findLineageAliveLogsInPeriod(
                 userId, windowStart, windowEnd, RecommendationPolicy.COUNTED_LOG_STATUSES);
@@ -68,11 +109,10 @@ class RecommendationProcessor implements ItemProcessor<Long, List<RoutineRecomme
                         RecommendationRuleEvaluator.lineageKey(routineLog.getRoutine())));
         List<Proposal> proposals = evaluator.evaluate(activeRoutines, logsByLineage, weeks);
         if (proposals.isEmpty()) {
-            return null;
+            return List.of();
         }
         Set<Long> cooldownLineages = new HashSet<>(recommendationRepository.findOriginRoutineIdsCreatedAfter(
                 userId, now.minus(RecommendationPolicy.LINEAGE_COOLDOWN)));
-        User user = userRepository.getReferenceById(userId);
         Instant expiresAt = now.plus(RecommendationPolicy.TTL);
         List<RoutineRecommendation> recommendations = proposals.stream()
                 .filter(proposal -> !cooldownLineages.contains(proposal.originRoutineId()))
@@ -80,7 +120,17 @@ class RecommendationProcessor implements ItemProcessor<Long, List<RoutineRecomme
                 .map(proposal -> RoutineRecommendation.rule(user, proposal.originRoutineId(), proposal.routineId(),
                         RecommendationType.ADJUST_DAYS, toJson(proposal), proposal.message(), expiresAt))
                 .toList();
-        return recommendations.isEmpty() ? null : recommendations;
+        return recommendations;
+    }
+
+    private static RecommendationProcessingResult changedResult(
+            RecommendationExperimentAssignment newAssignment,
+            RecommendationExperimentEligibility eligibility,
+            List<RoutineRecommendation> recommendations) {
+        if (newAssignment == null && eligibility == null && recommendations.isEmpty()) {
+            return null;
+        }
+        return new RecommendationProcessingResult(newAssignment, eligibility, recommendations);
     }
 
     private String toJson(Proposal proposal) {

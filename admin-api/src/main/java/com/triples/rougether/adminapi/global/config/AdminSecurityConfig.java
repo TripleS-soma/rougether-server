@@ -34,7 +34,8 @@ public class AdminSecurityConfig {
                                 "/admin/character-accessory-render-profiles/**",
                                 "/users",
                                 "/admin/retention/**",
-                                "/admin/notification-digests/**"
+                                "/admin/notification-digests/**",
+                                "/admin/recommendations/**"
                         ).hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
