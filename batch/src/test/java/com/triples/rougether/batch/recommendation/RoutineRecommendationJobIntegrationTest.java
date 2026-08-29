@@ -149,6 +149,43 @@ class RoutineRecommendationJobIntegrationTest {
     }
 
     @Test
+    void 신규_배정은_결정적_정책_계산과_일치한다() throws Exception {
+        // 사전 배정 없이 job 을 돌려 processor 의 신규 배정 경로가 실제로 정책을 쓰는지 고정한다
+        // - 정책 호출을 상수로 바꿔치기하면 여기서 잡힌다.
+        User user = signUpUnassigned("신규배정");
+        Routine routine = weeklyRoutine(user, "정책 검증", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+
+        RecommendationExperimentAssignment saved = assignmentRepository.findAll().getFirst();
+        assertThat(saved.getVariant()).isEqualTo(RecommendationExperimentPolicy.assign(
+                RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, user.getId()));
+        long expectedRecommendations =
+                saved.getVariant() == RecommendationExperimentVariant.TREATMENT ? 1 : 0;
+        assertThat(recommendationRepository.count()).isEqualTo(expectedRecommendations);
+    }
+
+    @Test
+    void CONTROL_사전_배정_사용자의_재실행도_적격성을_중복_기록하지_않는다() throws Exception {
+        // 무배정 재실행 테스트는 TREATMENT 로 배정되면 2회차에 쿨다운으로 조기 종료돼 eligibility
+        // 중복 방지 분기에 닿지 않는다(variant 해시에 따라 비결정 커버). CONTROL 고정으로 확정 커버.
+        User user = signUpUnassigned("컨트롤재실행");
+        assign(user, RecommendationExperimentVariant.CONTROL);
+        Routine routine = weeklyRoutine(user, "컨트롤 산책", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+        runJobOnce();
+
+        assertThat(eligibilityRepository.count()).isEqualTo(1);
+        assertThat(assignmentRepository.count()).isEqualTo(1);
+        assertThat(recommendationRepository.count()).isZero();
+    }
+
+    @Test
     void 같은_주를_재실행해도_배정과_적격성은_중복되지_않고_variant가_유지된다() throws Exception {
         User user = signUpUnassigned("재실행");
         Routine routine = weeklyRoutine(user, "저녁 산책", "MON", "WED");

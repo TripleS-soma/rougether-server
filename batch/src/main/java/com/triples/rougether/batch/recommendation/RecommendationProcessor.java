@@ -49,6 +49,9 @@ class RecommendationProcessor implements ItemProcessor<Long, RecommendationProce
     private final LocalDate windowStart;
     private final LocalDate windowEnd;
     private final List<WeekRange> weeks;
+    // 실험 kill switch(recommendation.experiment.holdout-enabled). 끄면 배정·적격 기록과 CONTROL 게이트를
+    // 모두 건너뛰고 전원에게 추천을 준다 - 실험 종료 후 CONTROL 사용자의 추천 재개를 배포 없이 할 수 있게.
+    private final boolean holdoutEnabled;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     // proposal JSON 스키마 — 루틴 repeat_days 와 같은 요일 토큰의 절대값 스케줄
@@ -67,6 +70,10 @@ class RecommendationProcessor implements ItemProcessor<Long, RecommendationProce
         if (recommendations.isEmpty()) {
             return null;
         }
+        if (!holdoutEnabled) {
+            // 실험 비활성: 배정·적격을 새로 남기지 않고 CONTROL 게이트도 우회 - 기존 배정 행은 보존만 된다.
+            return changedResult(userId, null, null, recommendations);
+        }
         RecommendationExperimentAssignment assignment = assignmentRepository
                 .findByExperimentKeyAndUserId(RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, userId)
                 .orElse(null);
@@ -83,9 +90,9 @@ class RecommendationProcessor implements ItemProcessor<Long, RecommendationProce
                 ? null
                 : RecommendationExperimentEligibility.record(assignment, cohortWeekStart);
         if (assignment.getVariant() == RecommendationExperimentVariant.CONTROL) {
-            return changedResult(newAssignment, eligibility, List.of());
+            return changedResult(userId, newAssignment, eligibility, List.of());
         }
-        return changedResult(newAssignment, eligibility, recommendations);
+        return changedResult(userId, newAssignment, eligibility, recommendations);
     }
 
     private List<RoutineRecommendation> createRecommendations(Long userId, User user) {
@@ -124,13 +131,14 @@ class RecommendationProcessor implements ItemProcessor<Long, RecommendationProce
     }
 
     private static RecommendationProcessingResult changedResult(
+            Long userId,
             RecommendationExperimentAssignment newAssignment,
             RecommendationExperimentEligibility eligibility,
             List<RoutineRecommendation> recommendations) {
         if (newAssignment == null && eligibility == null && recommendations.isEmpty()) {
             return null;
         }
-        return new RecommendationProcessingResult(newAssignment, eligibility, recommendations);
+        return new RecommendationProcessingResult(userId, newAssignment, eligibility, recommendations);
     }
 
     private String toJson(Proposal proposal) {

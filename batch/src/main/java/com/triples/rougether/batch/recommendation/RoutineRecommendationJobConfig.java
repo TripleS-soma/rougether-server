@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -63,12 +64,12 @@ class RoutineRecommendationJobConfig {
                 .writer(chunk -> {
                     List<RecommendationExperimentAssignment> assignments = chunk.getItems().stream()
                             .map(RecommendationProcessingResult::newAssignment)
-                            .filter(java.util.Objects::nonNull)
+                            .filter(Objects::nonNull)
                             .toList();
                     assignmentRepository.saveAll(assignments);
                     List<RecommendationExperimentEligibility> eligibilities = chunk.getItems().stream()
                             .map(RecommendationProcessingResult::eligibility)
-                            .filter(java.util.Objects::nonNull)
+                            .filter(Objects::nonNull)
                             .toList();
                     eligibilityRepository.saveAll(eligibilities);
                     List<RoutineRecommendation> recommendations = chunk.getItems().stream()
@@ -99,13 +100,14 @@ class RoutineRecommendationJobConfig {
             RecommendationExperimentEligibilityRepository eligibilityRepository,
             RoutineRepository routineRepository, RoutineLogRepository routineLogRepository,
             UserRepository userRepository, RecommendationRuleEvaluator recommendationRuleEvaluator, Clock clock,
-            @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam) {
+            @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam,
+            @Value("${recommendation.experiment.holdout-enabled:true}") boolean holdoutEnabled) {
         LocalDate weekStart = LocalDate.parse(weekStartParam);
         return new RecommendationProcessor(routineRecommendationRepository, assignmentRepository,
                 eligibilityRepository, routineRepository, routineLogRepository, userRepository,
                 recommendationRuleEvaluator, clock, weekStart.plusWeeks(1),
                 RecommendationPolicy.windowStart(weekStart), WeeklyReportPolicy.weekEndOf(weekStart),
-                weeksOf(weekStart));
+                weeksOf(weekStart), holdoutEnabled);
     }
 
     // 근거 창의 일~토 주 3개(오래된 주 → 대상 주). 룰 2의 "직전 2주" = 마지막 2개

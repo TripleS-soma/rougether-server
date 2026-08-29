@@ -10,12 +10,15 @@
 
 ## 구현 노트
 
-### AI 조정 추천 HOLDOUT (V59)
+### AI 조정 추천 HOLDOUT (`recommendation_experiment_*`)
 
 - 룰 기반 조정 추천 배치는 `ROUTINE_ADJUSTMENT_V1` 실험에 사용자 단위로 영구 배정한다. 최초 적격 진입 시 SHA-256 기반 100개 버킷 중 20개는 `CONTROL`, 80개는 `TREATMENT`이며 `recommendation_experiment_assignments`의 unique(`experiment_key`, `user_id`)가 재실행·재기동 후에도 variant를 고정한다.
 - 배치 reader 후보에게 기존 활성 상한·룰·쿨다운 판정을 동일하게 실행하고, 추천 후보가 1건 이상 나온 사용자만 추천 생성 예정 KST 주(일요일)를 `recommendation_experiment_eligibilities`에 기록한다. `CONTROL`은 판정 결과를 폐기해 추천을 저장하지 않고, `TREATMENT`는 기존 추천 생성 동작을 유지한다. 봇·탈퇴 사용자는 reader와 processor에서 모두 방어한다.
 - 관리자 `GET /admin/recommendations/metrics`는 기존 `weeks` 퍼널을 유지하고 `variantWeeks`를 추가한다. 사용자별 최초 적격 cohort에만 variant별 대상·추천 생성·수락 사용자와 cohort 직전 주/다음 주 전체 루틴 완료율을 귀속하며, 두 변화량의 차이를 `treatmentLiftPp`로 제공한다. 후속 주 적격 기록은 감사용으로 남지만 새 효과 cohort로 중복 집계하지 않는다. 날짜 경계는 `WeeklyReportPolicy`의 KST 일~토 주를 공유한다.
-- 탈퇴 purge는 `recommendation_experiment_eligibilities` → `recommendation_experiment_assignments` 순으로 지운다. 주간 회고 생성·노출은 이 HOLDOUT의 대상이 아니다.
+- 이 PR부터 기존 `weeks` 퍼널도 탈퇴·봇 사용자의 추천을 제외한다(`findFunnelRowsCreatedAfter`에 필터 추가) — 과거 주차 숫자가 소급해서 달라질 수 있는 의도된 계약 변경이다.
+- `variantWeeks`는 조회 시점 스냅샷이다. 적격·배정 조회가 조회 시점의 `deleted_at`으로 거르고 탈퇴 purge가 배정 행 자체를 지우므로, 코호트 확정 후 탈퇴한 사용자는 과거 주차 분모에서도 사라진다(조회 때마다 값이 달라질 수 있고, 팔 간 이탈률 차이는 관측 불가 — 생존자 편향 한계). 팔별 이탈 관측이 필요해지면 코호트 진입 시점 스냅샷 또는 variant별 탈퇴 수 노출을 별도 설계한다.
+- `recommendation.experiment.holdout-enabled`(`RECOMMENDATION_HOLDOUT_ENABLED`, 기본 true)가 실험 kill switch다. false면 배정·적격 기록과 CONTROL 게이트를 모두 건너뛰고 전원에게 추천을 준다(기존 배정 행 보존) — 실험 종료 시 배포 없이 CONTROL 추천을 재개하는 경로. 홀드아웃 비율(20%)·실험 키·종료 조건은 spec 정본 미확정(open question)이다.
+- 탈퇴 purge는 `recommendation_experiment_eligibilities` → `recommendation_experiment_assignments` 순으로 지운다. 주간 회고 job 자체는 이 HOLDOUT의 대상이 아니지만, 회고 본문의 closed-loop 섹션은 ACCEPTED 추천에서 나오므로 CONTROL 사용자의 회고 내용은 달라진다. 이후 `WEEKLY_LLM` 추천(#334)이 도입되면 CONTROL도 AI 추천을 받게 되어 전체 루틴 로그 기반 `completionDeltaPp`가 오염된다 — 그 시점에 실험 종료(kill switch) 또는 지표 분리를 먼저 결정해야 한다.
 
 - 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).

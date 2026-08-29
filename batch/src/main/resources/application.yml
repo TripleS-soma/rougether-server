@@ -42,6 +42,12 @@ llm:
   reasoning-effort: ${LLM_REASONING_EFFORT:low}
   json-mode: ${LLM_JSON_MODE:true}
 
+# AI 추천 홀드아웃 실험 kill switch. false 면 배정·적격 기록과 CONTROL 게이트를 모두 건너뛰고
+# 전원에게 추천을 준다(기존 배정 행은 보존). 실험 종료 시 배포 없이 CONTROL 추천을 재개하는 경로.
+recommendation:
+  experiment:
+    holdout-enabled: ${RECOMMENDATION_HOLDOUT_ENABLED:true}
+
 ---
 spring:
   config:

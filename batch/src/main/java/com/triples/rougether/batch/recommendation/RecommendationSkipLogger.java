@@ -20,9 +20,9 @@ class RecommendationSkipLogger implements SkipListener<Long, RecommendationProce
 
     @Override
     public void onSkipInWrite(RecommendationProcessingResult result, Throwable t) {
-        Long userId = result.recommendations().isEmpty()
-                ? result.eligibility() == null ? null : result.eligibility().getAssignment().getUser().getId()
-                : result.recommendations().getFirst().getUser().getId();
-        log.warn("조정 추천 write skip - userId={}, count={}", userId, result.recommendations().size(), t);
+        // unique 위반 등으로 write 가 skip 되면 그 사용자의 이번 주 추천·적격 기록은 자동 재시도 없이 유실된다
+        // (JobInstance 는 COMPLETED, 쿨다운은 안 걸렸으므로 다음 주 배치에서 조건 충족 시 재생성).
+        log.warn("조정 추천 write skip - userId={}, count={}",
+                result.userId(), result.recommendations().size(), t);
     }
 }

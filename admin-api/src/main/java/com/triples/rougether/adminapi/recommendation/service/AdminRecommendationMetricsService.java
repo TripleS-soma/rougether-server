@@ -136,18 +136,24 @@ public class AdminRecommendationMetricsService {
         for (RecommendationExperimentEligibilityRow row : eligibilityRows) {
             targetsByVariant.get(row.getVariant()).add(row.getUserId());
         }
-        VariantMetric control = toVariantMetric(RecommendationExperimentVariant.CONTROL,
+        VariantComputation control = toVariantMetric(RecommendationExperimentVariant.CONTROL,
                 targetsByVariant.get(RecommendationExperimentVariant.CONTROL), recommendationRows,
                 weekStart, todayKst, completionRowsByUser);
-        VariantMetric treatment = toVariantMetric(RecommendationExperimentVariant.TREATMENT,
+        VariantComputation treatment = toVariantMetric(RecommendationExperimentVariant.TREATMENT,
                 targetsByVariant.get(RecommendationExperimentVariant.TREATMENT), recommendationRows,
                 weekStart, todayKst, completionRowsByUser);
-        Double lift = control.completionDeltaPp() == null || treatment.completionDeltaPp() == null
-                ? null : round(treatment.completionDeltaPp() - control.completionDeltaPp());
-        return new VariantWeekMetric(weekStart, WeeklyReportPolicy.weekEndOf(weekStart), control, treatment, lift);
+        // 반올림된 표시값끼리 빼면 오차가 누적되므로 lift 는 원시 delta 로 계산해 마지막에 한 번만 반올림한다.
+        Double lift = control.rawDeltaPp() == null || treatment.rawDeltaPp() == null
+                ? null : round(treatment.rawDeltaPp() - control.rawDeltaPp());
+        return new VariantWeekMetric(weekStart, WeeklyReportPolicy.weekEndOf(weekStart),
+                control.metric(), treatment.metric(), lift);
     }
 
-    private VariantMetric toVariantMetric(
+    // 표시용 metric 과 lift 계산용 원시 delta 를 함께 나른다(표시값은 반올림, 계산은 원시값).
+    private record VariantComputation(VariantMetric metric, Double rawDeltaPp) {
+    }
+
+    private VariantComputation toVariantMetric(
             RecommendationExperimentVariant variant,
             Set<Long> targetUserIds,
             List<RecommendationFunnelRow> recommendationRows,
@@ -167,8 +173,10 @@ public class AdminRecommendationMetricsService {
         LocalDate nextWeekStart = weekStart.plusWeeks(1);
         LocalDate nextWeekEnd = WeeklyReportPolicy.weekEndOf(nextWeekStart);
         if (!todayKst.isAfter(nextWeekEnd.plusDays(1))) {
-            return VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(), acceptedUserIds.size(),
-                    0, targetUserIds.size(), 0, null, null, null);
+            return new VariantComputation(
+                    VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(),
+                            acceptedUserIds.size(), 0, targetUserIds.size(), 0, null, null, null),
+                    null);
         }
 
         LocalDate baselineStart = weekStart.minusWeeks(1);
@@ -193,11 +201,18 @@ public class AdminRecommendationMetricsService {
             nextCompleted += next.completed();
             nextTotal += next.total();
         }
-        Double baselineRate = baselineTotal == 0 ? null : round(baselineCompleted * 100.0 / baselineTotal);
-        Double nextRate = nextTotal == 0 ? null : round(nextCompleted * 100.0 / nextTotal);
-        Double delta = baselineRate == null || nextRate == null ? null : round(nextRate - baselineRate);
-        return VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(), acceptedUserIds.size(),
-                measuredUsers, 0, unmeasurableUsers, baselineRate, nextRate, delta);
+        // delta 는 원시 비율로 계산하고 표시 시점에만 반올림한다(반올림값끼리의 뺄셈 금지).
+        Double rawBaseline = baselineTotal == 0 ? null : baselineCompleted * 100.0 / baselineTotal;
+        Double rawNext = nextTotal == 0 ? null : nextCompleted * 100.0 / nextTotal;
+        Double rawDelta = rawBaseline == null || rawNext == null ? null : rawNext - rawBaseline;
+        VariantMetric metric = VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(),
+                acceptedUserIds.size(), measuredUsers, 0, unmeasurableUsers,
+                roundOrNull(rawBaseline), roundOrNull(rawNext), roundOrNull(rawDelta));
+        return new VariantComputation(metric, rawDelta);
+    }
+
+    private static Double roundOrNull(Double value) {
+        return value == null ? null : round(value);
     }
 
     private record ExperimentRate(long completed, long total) {

@@ -139,9 +139,28 @@ class RecommendationProcessorTest {
         when(eligibilityRepository.existsByAssignmentIdAndCohortWeekStart(7L, COHORT_WEEK)).thenReturn(false);
     }
 
+    @Test
+    void 실험을_끄면_배정_없이_전원에게_추천을_준다() {
+        // kill switch: CONTROL 게이트 우회 + 배정·적격 기록 중단 - 실험 종료 후 추천 재개 경로.
+        stubProposal();
+
+        RecommendationProcessingResult result = processor(false).process(USER_ID);
+
+        assertThat(result.userId()).isEqualTo(USER_ID);
+        assertThat(result.recommendations()).hasSize(1);
+        assertThat(result.newAssignment()).isNull();
+        assertThat(result.eligibility()).isNull();
+        verify(assignmentRepository, never()).findByExperimentKeyAndUserId(any(), anyLong());
+        verify(eligibilityRepository, never()).existsByAssignmentIdAndCohortWeekStart(anyLong(), any());
+    }
+
     private RecommendationProcessor processor() {
+        return processor(true);
+    }
+
+    private RecommendationProcessor processor(boolean holdoutEnabled) {
         return new RecommendationProcessor(recommendationRepository, assignmentRepository, eligibilityRepository,
                 routineRepository, routineLogRepository, userRepository, evaluator, clock,
-                COHORT_WEEK, COHORT_WEEK.minusWeeks(3), COHORT_WEEK.minusWeeks(1), List.of());
+                COHORT_WEEK, COHORT_WEEK.minusWeeks(3), COHORT_WEEK.minusWeeks(1), List.of(), holdoutEnabled);
     }
 }

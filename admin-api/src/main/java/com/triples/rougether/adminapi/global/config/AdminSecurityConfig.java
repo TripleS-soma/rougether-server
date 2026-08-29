@@ -32,6 +32,9 @@ public class AdminSecurityConfig {
                         .requestMatchers(
                                 "/accessory-render-profiles",
                                 "/admin/character-accessory-render-profiles/**",
+                                // 관측 화면(page)과 API 를 함께 명시 - AdminRole 이 두 역할뿐이라 실질 격차는
+                                // 없지만 accessory-render-profiles 전례처럼 화면도 매처에 둔다.
+                                "/recommendations",
                                 "/admin/recommendations/**"
                         ).hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated()
