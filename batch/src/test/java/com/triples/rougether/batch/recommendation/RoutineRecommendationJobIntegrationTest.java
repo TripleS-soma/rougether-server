@@ -7,11 +7,17 @@ import com.triples.rougether.batch.config.BatchJdbcConfig;
 import com.triples.rougether.batch.dayend.DayEndCompletionChecker;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.RecommendationExperimentPolicy;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentAssignment;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentEligibility;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentVariant;
 import com.triples.rougether.domain.recommendation.entity.RecommendationSource;
 import com.triples.rougether.domain.recommendation.entity.RecommendationStatus;
 import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentAssignmentRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
@@ -87,6 +93,10 @@ class RoutineRecommendationJobIntegrationTest {
     @Autowired
     private RoutineRecommendationRepository recommendationRepository;
     @Autowired
+    private RecommendationExperimentAssignmentRepository assignmentRepository;
+    @Autowired
+    private RecommendationExperimentEligibilityRepository eligibilityRepository;
+    @Autowired
     private RoutineRepository routineRepository;
     @Autowired
     private RoutineLogRepository routineLogRepository;
@@ -96,9 +106,118 @@ class RoutineRecommendationJobIntegrationTest {
     @AfterEach
     void cleanUp() {
         recommendationRepository.deleteAll();
+        eligibilityRepository.deleteAll();
+        assignmentRepository.deleteAll();
         routineLogRepository.deleteAll();
         routineRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    @Test
+    void CONTROL은_적격성과_영구_배정만_저장하고_추천을_생성하지_않는다() throws Exception {
+        User user = signUpUnassigned("대조군");
+        assign(user, RecommendationExperimentVariant.CONTROL);
+        Routine routine = weeklyRoutine(user, "아침 러닝", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+
+        assertThat(assignmentRepository.findAll())
+                .singleElement()
+                .extracting(RecommendationExperimentAssignment::getVariant)
+                .isEqualTo(RecommendationExperimentVariant.CONTROL);
+        assertThat(eligibilityRepository.findAll())
+                .singleElement()
+                .extracting(RecommendationExperimentEligibility::getCohortWeekStart)
+                .isEqualTo(WEEK_START.plusWeeks(1));
+        assertThat(recommendationRepository.count()).isZero();
+    }
+
+    @Test
+    void TREATMENT는_기존_추천_생성_동작을_유지한다() throws Exception {
+        User user = signUpUnassigned("실험군");
+        assign(user, RecommendationExperimentVariant.TREATMENT);
+        Routine routine = weeklyRoutine(user, "저녁 독서", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+
+        assertThat(eligibilityRepository.count()).isEqualTo(1);
+        assertThat(recommendationRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 신규_배정은_결정적_정책_계산과_일치한다() throws Exception {
+        // 사전 배정 없이 job 을 돌려 processor 의 신규 배정 경로가 실제로 정책을 쓰는지 고정한다
+        // - 정책 호출을 상수로 바꿔치기하면 여기서 잡힌다.
+        User user = signUpUnassigned("신규배정");
+        Routine routine = weeklyRoutine(user, "정책 검증", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+
+        RecommendationExperimentAssignment saved = assignmentRepository.findAll().getFirst();
+        assertThat(saved.getVariant()).isEqualTo(RecommendationExperimentPolicy.assign(
+                RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, user.getId()));
+        long expectedRecommendations =
+                saved.getVariant() == RecommendationExperimentVariant.TREATMENT ? 1 : 0;
+        assertThat(recommendationRepository.count()).isEqualTo(expectedRecommendations);
+    }
+
+    @Test
+    void CONTROL_사전_배정_사용자의_재실행도_적격성을_중복_기록하지_않는다() throws Exception {
+        // 무배정 재실행 테스트는 TREATMENT 로 배정되면 2회차에 쿨다운으로 조기 종료돼 eligibility
+        // 중복 방지 분기에 닿지 않는다(variant 해시에 따라 비결정 커버). CONTROL 고정으로 확정 커버.
+        User user = signUpUnassigned("컨트롤재실행");
+        assign(user, RecommendationExperimentVariant.CONTROL);
+        Routine routine = weeklyRoutine(user, "컨트롤 산책", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+        runJobOnce();
+
+        assertThat(eligibilityRepository.count()).isEqualTo(1);
+        assertThat(assignmentRepository.count()).isEqualTo(1);
+        assertThat(recommendationRepository.count()).isZero();
+    }
+
+    @Test
+    void 같은_주를_재실행해도_배정과_적격성은_중복되지_않고_variant가_유지된다() throws Exception {
+        User user = signUpUnassigned("재실행");
+        Routine routine = weeklyRoutine(user, "저녁 산책", "MON", "WED");
+        failEveryWeek(routine, DayOfWeek.WEDNESDAY);
+        completeEveryWeek(routine, DayOfWeek.MONDAY);
+
+        runJobOnce();
+        RecommendationExperimentVariant firstVariant = assignmentRepository.findAll().getFirst().getVariant();
+        runJobOnce();
+
+        assertThat(assignmentRepository.count()).isEqualTo(1);
+        assertThat(assignmentRepository.findAll().getFirst().getVariant()).isEqualTo(firstVariant);
+        assertThat(eligibilityRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 봇과_탈퇴_사용자는_실험_배정과_적격성에서_제외한다() throws Exception {
+        User bot = userRepository.save(User.bot("rec-holdout-bot", "봇", "봇"));
+        Routine botRoutine = weeklyRoutine(bot, "봇 루틴", "MON", "WED");
+        failEveryWeek(botRoutine, DayOfWeek.WEDNESDAY);
+
+        User withdrawn = signUpUnassigned("탈퇴");
+        Routine withdrawnRoutine = weeklyRoutine(withdrawn, "탈퇴 루틴", "MON", "WED");
+        failEveryWeek(withdrawnRoutine, DayOfWeek.WEDNESDAY);
+        withdrawn.softDelete(NOW.minusSeconds(60));
+        userRepository.save(withdrawn);
+
+        runJobOnce();
+
+        assertThat(assignmentRepository.count()).isZero();
+        assertThat(eligibilityRepository.count()).isZero();
+        assertThat(recommendationRepository.count()).isZero();
     }
 
     @Test
@@ -171,6 +290,7 @@ class RoutineRecommendationJobIntegrationTest {
         runJobOnce();
 
         assertThat(recommendationRepository.count()).isZero();
+        assertThat(eligibilityRepository.count()).isZero();
     }
 
     @Test
@@ -205,6 +325,7 @@ class RoutineRecommendationJobIntegrationTest {
         runJobOnce();
 
         assertThat(recommendationRepository.count()).isEqualTo(3);
+        assertThat(eligibilityRepository.count()).isZero();
         assertThat(recommendationRepository.findOriginRoutineIdsCreatedAfter(user.getId(),
                 NOW.minus(Duration.ofDays(1))))
                 .doesNotContain(target.getOriginRoutineId());
@@ -226,6 +347,7 @@ class RoutineRecommendationJobIntegrationTest {
         runJobOnce();
 
         assertThat(recommendationRepository.count()).isEqualTo(1);
+        assertThat(eligibilityRepository.count()).isZero();
     }
 
     @Test
@@ -293,9 +415,20 @@ class RoutineRecommendationJobIntegrationTest {
     }
 
     private User signUp(String nickname) {
+        User user = signUpUnassigned(nickname);
+        assign(user, RecommendationExperimentVariant.TREATMENT);
+        return user;
+    }
+
+    private User signUpUnassigned(String nickname) {
         User user = User.signUp();
         user.changeNickname(nickname);
         return userRepository.save(user);
+    }
+
+    private RecommendationExperimentAssignment assign(User user, RecommendationExperimentVariant variant) {
+        return assignmentRepository.save(RecommendationExperimentAssignment.assign(
+                user, RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, variant));
     }
 
     private Routine weeklyRoutine(User user, String title, String... dayTokens) {

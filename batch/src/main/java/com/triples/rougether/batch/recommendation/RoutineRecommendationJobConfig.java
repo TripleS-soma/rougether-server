@@ -2,7 +2,11 @@ package com.triples.rougether.batch.recommendation;
 
 import com.triples.rougether.batch.recommendation.RecommendationRuleEvaluator.WeekRange;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentAssignment;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentEligibility;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentAssignmentRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
 import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
@@ -12,6 +16,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -48,14 +53,30 @@ class RoutineRecommendationJobConfig {
     @Bean
     Step routineRecommendationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
             RecommendationUserReader recommendationUserReader, RecommendationProcessor recommendationProcessor,
+            RecommendationExperimentAssignmentRepository assignmentRepository,
+            RecommendationExperimentEligibilityRepository eligibilityRepository,
             RoutineRecommendationRepository routineRecommendationRepository) {
         return new StepBuilder("routineRecommendationStep", jobRepository)
-                .<Long, List<RoutineRecommendation>>chunk(CHUNK_SIZE)
+                .<Long, RecommendationProcessingResult>chunk(CHUNK_SIZE)
                 .transactionManager(transactionManager)
                 .reader(recommendationUserReader)
                 .processor(recommendationProcessor)
-                .writer(chunk -> routineRecommendationRepository.saveAll(
-                        chunk.getItems().stream().flatMap(List::stream).toList()))
+                .writer(chunk -> {
+                    List<RecommendationExperimentAssignment> assignments = chunk.getItems().stream()
+                            .map(RecommendationProcessingResult::newAssignment)
+                            .filter(Objects::nonNull)
+                            .toList();
+                    assignmentRepository.saveAll(assignments);
+                    List<RecommendationExperimentEligibility> eligibilities = chunk.getItems().stream()
+                            .map(RecommendationProcessingResult::eligibility)
+                            .filter(Objects::nonNull)
+                            .toList();
+                    eligibilityRepository.saveAll(eligibilities);
+                    List<RoutineRecommendation> recommendations = chunk.getItems().stream()
+                            .flatMap(result -> result.recommendations().stream())
+                            .toList();
+                    routineRecommendationRepository.saveAll(recommendations);
+                })
                 .faultTolerant()
                 // 사용자 단위 예외(집계 오류 등)는 그 사용자만 건너뛰고 job 은 계속 간다(상한 SKIP_LIMIT)
                 .skipPolicy(new LimitCheckingItemSkipPolicy(SKIP_LIMIT, Map.of(Exception.class, true)))
@@ -75,14 +96,18 @@ class RoutineRecommendationJobConfig {
     @Bean
     @StepScope
     RecommendationProcessor recommendationProcessor(RoutineRecommendationRepository routineRecommendationRepository,
+            RecommendationExperimentAssignmentRepository assignmentRepository,
+            RecommendationExperimentEligibilityRepository eligibilityRepository,
             RoutineRepository routineRepository, RoutineLogRepository routineLogRepository,
             UserRepository userRepository, RecommendationRuleEvaluator recommendationRuleEvaluator, Clock clock,
-            @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam) {
+            @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam,
+            @Value("${recommendation.experiment.holdout-enabled:true}") boolean holdoutEnabled) {
         LocalDate weekStart = LocalDate.parse(weekStartParam);
-        return new RecommendationProcessor(routineRecommendationRepository, routineRepository, routineLogRepository,
-                userRepository, recommendationRuleEvaluator, clock,
+        return new RecommendationProcessor(routineRecommendationRepository, assignmentRepository,
+                eligibilityRepository, routineRepository, routineLogRepository, userRepository,
+                recommendationRuleEvaluator, clock, weekStart.plusWeeks(1),
                 RecommendationPolicy.windowStart(weekStart), WeeklyReportPolicy.weekEndOf(weekStart),
-                weeksOf(weekStart));
+                weeksOf(weekStart), holdoutEnabled);
     }
 
     // 근거 창의 일~토 주 3개(오래된 주 → 대상 주). 룰 2의 "직전 2주" = 마지막 2개

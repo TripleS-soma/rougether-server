@@ -42,7 +42,7 @@
                 <div>
                     <span class="observation-eyebrow">AI · ROUTINE RECOMMENDATION</span>
                     <h2>AI 조정 추천 퍼널 관측</h2>
-                    <p>주(생성 주, 일~토 KST)마다 생성→수락/무시/만료와 수락 효과(완료율 델타)를 확인합니다.</p>
+                    <p>주(생성 주, 일~토 KST)마다 추천 퍼널과 CONTROL/TREATMENT 완료율 변화를 확인합니다.</p>
                 </div>
                 <div class="observation-action-row">
                     <select id="weeks" class="observation-select observation-select--compact" aria-label="조회 주 수">
@@ -116,6 +116,32 @@
                     <tbody id="rows"></tbody>
                 </table>
             </div>
+
+            <div class="observation-result-head">
+                <strong>HOLDOUT 효과 비교</strong>
+                <span class="slot-count">사용자 기준 생성·수락률 · 직전 주 대비 다음 주 완료율 —
+                    직전 주는 룰이 실패 패턴을 잡은 주라 양팔 모두 변화량이 평균 회귀로 부풀 수 있어
+                    Treatment lift(차이)만 해석합니다. 값은 조회 시점 기준이며 탈퇴자는 과거 주차에서도 제외됩니다.</span>
+            </div>
+            <div class="slot-table-wrap">
+                <table class="slot-table">
+                    <thead>
+                    <tr>
+                        <th>코호트 주</th>
+                        <th>Variant</th>
+                        <th>대상</th>
+                        <th>추천 생성</th>
+                        <th>추천 수락</th>
+                        <th>효과 측정</th>
+                        <th>직전 주</th>
+                        <th>다음 주</th>
+                        <th>변화량</th>
+                        <th>Treatment lift</th>
+                    </tr>
+                    </thead>
+                    <tbody id="variantRows"></tbody>
+                </table>
+            </div>
         </section>
     </main>
 
@@ -126,6 +152,7 @@
         });
 
         const tbody = document.getElementById('rows');
+        const variantTbody = document.getElementById('variantRows');
         const weeksInput = document.getElementById('weeks');
         const errorBox = document.getElementById('error');
 
@@ -138,12 +165,46 @@
                 const data = await res.json();
                 renderSummary(data.weeks[0]);
                 renderRows(data.weeks);
+                renderVariantRows(data.variantWeeks || []);
                 document.getElementById('count').textContent = data.weeks.length + '주 조회';
                 document.getElementById('generatedAt').textContent =
                     '집계 시각 ' + KST_DATE_TIME.format(new Date(data.generatedAt));
             } catch (err) {
                 showError('AI 추천 관측 조회 중 오류: ' + err.message);
             }
+        }
+
+        function renderVariantRows(weeks) {
+            variantTbody.innerHTML = '';
+            weeks.forEach(week => {
+                [week.control, week.treatment].forEach((variant, index) => {
+                    const tr = document.createElement('tr');
+                    tr.appendChild(textCell(index === 0 ? week.weekStartDate + ' ~ ' + week.weekEndDate : ''));
+                    tr.appendChild(textCell(variant.variant));
+                    tr.appendChild(numberCell(variant.targetUserCount));
+                    tr.appendChild(textCell(variant.recommendationGeneratedUserCount + '명 · '
+                        + variant.recommendationGenerationRate.toFixed(1) + '%'));
+                    tr.appendChild(textCell(variant.recommendationAcceptedUserCount + '명 · '
+                        + variant.recommendationAcceptanceRate.toFixed(1) + '%'));
+                    tr.appendChild(textCell('측정 ' + variant.effectMeasuredUserCount + ' · 대기 '
+                        + variant.effectPendingUserCount + ' · 불가 ' + variant.effectUnmeasurableUserCount));
+                    tr.appendChild(numberCell(rateText(variant.baselineCompletionRate)));
+                    tr.appendChild(numberCell(rateText(variant.nextWeekCompletionRate)));
+                    tr.appendChild(numberCell(ppText(variant.completionDeltaPp), variant.completionDeltaPp != null));
+                    tr.appendChild(numberCell(index === 0 ? '—' : ppText(week.treatmentLiftPp),
+                        index !== 0 && week.treatmentLiftPp != null));
+                    variantTbody.appendChild(tr);
+                });
+            });
+        }
+
+        function rateText(value) {
+            return value == null ? '—' : value.toFixed(1) + '%';
+        }
+
+        function ppText(value) {
+            if (value == null) return '—';
+            return (value > 0 ? '+' : '') + value.toFixed(1) + 'pp';
         }
 
         function renderSummary(week) {

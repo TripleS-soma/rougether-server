@@ -1,8 +1,16 @@
 package com.triples.rougether.adminapi.recommendation.service;
 
 import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse;
+import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.VariantMetric;
+import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.VariantWeekMetric;
 import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.WeekMetric;
+import com.triples.rougether.domain.recommendation.RecommendationExperimentPolicy;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentVariant;
+import com.triples.rougether.domain.recommendation.entity.RecommendationSource;
 import com.triples.rougether.domain.recommendation.entity.RecommendationStatus;
+import com.triples.rougether.domain.recommendation.entity.RecommendationType;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRow;
 import com.triples.rougether.domain.recommendation.repository.RecommendationFunnelRow;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
 import com.triples.rougether.domain.report.WeeklyReportPolicy;
@@ -10,12 +18,16 @@ import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.repository.LineageAliveVersion;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
+import com.triples.rougether.domain.routine.repository.RecommendationExperimentCompletionRow;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,15 +50,18 @@ public class AdminRecommendationMetricsService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RoutineRecommendationRepository routineRecommendationRepository;
+    private final RecommendationExperimentEligibilityRepository eligibilityRepository;
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final Clock clock;
 
     public AdminRecommendationMetricsService(RoutineRecommendationRepository routineRecommendationRepository,
+                                             RecommendationExperimentEligibilityRepository eligibilityRepository,
                                              RoutineRepository routineRepository,
                                              RoutineLogRepository routineLogRepository,
                                              Clock clock) {
         this.routineRecommendationRepository = routineRecommendationRepository;
+        this.eligibilityRepository = eligibilityRepository;
         this.routineRepository = routineRepository;
         this.routineLogRepository = routineLogRepository;
         this.clock = clock;
@@ -59,20 +74,168 @@ public class AdminRecommendationMetricsService {
         LocalDate latestWeekStart = WeeklyReportPolicy.weekStartOf(todayKst);
         LocalDate oldestWeekStart = latestWeekStart.minusWeeks(boundedWeeks - 1L);
 
+        Instant oldestWeekStartInstant = oldestWeekStart.atStartOfDay(KST).toInstant();
         List<RecommendationFunnelRow> rows = routineRecommendationRepository
-                .findFunnelRowsCreatedAfter(oldestWeekStart.atStartOfDay(KST).toInstant());
+                .findFunnelRowsCreatedAfter(oldestWeekStartInstant);
         Map<LocalDate, List<RecommendationFunnelRow>> rowsByWeek = rows.stream()
                 .collect(Collectors.groupingBy(
                         row -> WeeklyReportPolicy.weekStartOf(LocalDate.ofInstant(row.getCreatedAt(), KST))));
+        List<RecommendationFunnelRow> experimentRows = routineRecommendationRepository
+                .findExperimentFunnelRowsCreatedAfter(oldestWeekStartInstant,
+                        RecommendationType.ADJUST_DAYS, RecommendationSource.RULE);
+        Map<LocalDate, List<RecommendationFunnelRow>> experimentRowsByWeek = experimentRows.stream()
+                .collect(Collectors.groupingBy(
+                        row -> WeeklyReportPolicy.weekStartOf(LocalDate.ofInstant(row.getCreatedAt(), KST))));
         Map<Long, Set<Long>> aliveByOrigin = loadAliveVersions(rows, now);
+        List<RecommendationExperimentEligibilityRow> eligibilityRows = eligibilityRepository.findActiveHumanRows(
+                RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, oldestWeekStart, latestWeekStart);
+        Map<LocalDate, List<RecommendationExperimentEligibilityRow>> eligibilityByWeek = eligibilityRows.stream()
+                .collect(Collectors.groupingBy(RecommendationExperimentEligibilityRow::getCohortWeekStart));
+        Set<Long> experimentUserIds = eligibilityRows.stream()
+                .map(RecommendationExperimentEligibilityRow::getUserId)
+                .collect(Collectors.toSet());
+        Map<Long, List<RecommendationExperimentCompletionRow>> completionRowsByUser = loadCompletionRows(
+                experimentUserIds, oldestWeekStart, latestWeekStart);
 
         List<WeekMetric> metrics = new ArrayList<>(boundedWeeks);
+        List<VariantWeekMetric> variantMetrics = new ArrayList<>(boundedWeeks);
         for (int i = 0; i < boundedWeeks; i++) {
             LocalDate weekStart = latestWeekStart.minusWeeks(i);
             metrics.add(toWeekMetric(weekStart, rowsByWeek.getOrDefault(weekStart, List.of()),
                     now, todayKst, aliveByOrigin));
+            variantMetrics.add(toVariantWeekMetric(weekStart,
+                    eligibilityByWeek.getOrDefault(weekStart, List.of()),
+                    experimentRowsByWeek.getOrDefault(weekStart, List.of()), todayKst, completionRowsByUser));
         }
-        return new AdminRecommendationMetricsResponse(metrics, now);
+        return new AdminRecommendationMetricsResponse(metrics, variantMetrics, now);
+    }
+
+    private Map<Long, List<RecommendationExperimentCompletionRow>> loadCompletionRows(
+            Set<Long> userIds, LocalDate oldestWeekStart, LocalDate latestWeekStart) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        LocalDate fromDate = oldestWeekStart.minusWeeks(1);
+        LocalDate toDate = WeeklyReportPolicy.weekEndOf(latestWeekStart.plusWeeks(1));
+        return routineLogRepository.findExperimentCompletionRows(userIds, fromDate, toDate,
+                        WeeklyReportPolicy.COUNTED_LOG_STATUSES).stream()
+                .collect(Collectors.groupingBy(RecommendationExperimentCompletionRow::getUserId));
+    }
+
+    private VariantWeekMetric toVariantWeekMetric(
+            LocalDate weekStart,
+            List<RecommendationExperimentEligibilityRow> eligibilityRows,
+            List<RecommendationFunnelRow> recommendationRows,
+            LocalDate todayKst,
+            Map<Long, List<RecommendationExperimentCompletionRow>> completionRowsByUser) {
+        Map<RecommendationExperimentVariant, Set<Long>> targetsByVariant = new EnumMap<>(
+                RecommendationExperimentVariant.class);
+        for (RecommendationExperimentVariant variant : RecommendationExperimentVariant.values()) {
+            targetsByVariant.put(variant, new HashSet<>());
+        }
+        for (RecommendationExperimentEligibilityRow row : eligibilityRows) {
+            targetsByVariant.get(row.getVariant()).add(row.getUserId());
+        }
+        VariantComputation control = toVariantMetric(RecommendationExperimentVariant.CONTROL,
+                targetsByVariant.get(RecommendationExperimentVariant.CONTROL), recommendationRows,
+                weekStart, todayKst, completionRowsByUser);
+        VariantComputation treatment = toVariantMetric(RecommendationExperimentVariant.TREATMENT,
+                targetsByVariant.get(RecommendationExperimentVariant.TREATMENT), recommendationRows,
+                weekStart, todayKst, completionRowsByUser);
+        // 반올림된 표시값끼리 빼면 오차가 누적되므로 lift 는 원시 delta 로 계산해 마지막에 한 번만 반올림한다.
+        Double lift = control.rawDeltaPp() == null || treatment.rawDeltaPp() == null
+                ? null : round(treatment.rawDeltaPp() - control.rawDeltaPp());
+        return new VariantWeekMetric(weekStart, WeeklyReportPolicy.weekEndOf(weekStart),
+                control.metric(), treatment.metric(), lift);
+    }
+
+    // 표시용 metric 과 lift 계산용 원시 delta 를 함께 나른다(표시값은 반올림, 계산은 원시값).
+    private record VariantComputation(VariantMetric metric, Double rawDeltaPp) {
+    }
+
+    private VariantComputation toVariantMetric(
+            RecommendationExperimentVariant variant,
+            Set<Long> targetUserIds,
+            List<RecommendationFunnelRow> recommendationRows,
+            LocalDate weekStart,
+            LocalDate todayKst,
+            Map<Long, List<RecommendationExperimentCompletionRow>> completionRowsByUser) {
+        Set<Long> generatedUserIds = recommendationRows.stream()
+                .map(RecommendationFunnelRow::getUserId)
+                .filter(targetUserIds::contains)
+                .collect(Collectors.toSet());
+        Set<Long> acceptedUserIds = recommendationRows.stream()
+                .filter(row -> row.getStatus() == RecommendationStatus.ACCEPTED)
+                .map(RecommendationFunnelRow::getUserId)
+                .filter(targetUserIds::contains)
+                .collect(Collectors.toSet());
+
+        LocalDate nextWeekStart = weekStart.plusWeeks(1);
+        LocalDate nextWeekEnd = WeeklyReportPolicy.weekEndOf(nextWeekStart);
+        if (!todayKst.isAfter(nextWeekEnd.plusDays(1))) {
+            return new VariantComputation(
+                    VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(),
+                            acceptedUserIds.size(), 0, targetUserIds.size(), 0, null, null, null),
+                    null);
+        }
+
+        LocalDate baselineStart = weekStart.minusWeeks(1);
+        LocalDate baselineEnd = WeeklyReportPolicy.weekEndOf(baselineStart);
+        long measuredUsers = 0;
+        long unmeasurableUsers = 0;
+        long baselineCompleted = 0;
+        long baselineTotal = 0;
+        long nextCompleted = 0;
+        long nextTotal = 0;
+        for (Long userId : targetUserIds) {
+            List<RecommendationExperimentCompletionRow> userRows = completionRowsByUser.getOrDefault(userId, List.of());
+            ExperimentRate baseline = experimentRateOf(userRows, baselineStart, baselineEnd);
+            ExperimentRate next = experimentRateOf(userRows, nextWeekStart, nextWeekEnd);
+            if (baseline.total() == 0 || next.total() == 0) {
+                unmeasurableUsers++;
+                continue;
+            }
+            measuredUsers++;
+            baselineCompleted += baseline.completed();
+            baselineTotal += baseline.total();
+            nextCompleted += next.completed();
+            nextTotal += next.total();
+        }
+        // delta 는 원시 비율로 계산하고 표시 시점에만 반올림한다(반올림값끼리의 뺄셈 금지).
+        Double rawBaseline = baselineTotal == 0 ? null : baselineCompleted * 100.0 / baselineTotal;
+        Double rawNext = nextTotal == 0 ? null : nextCompleted * 100.0 / nextTotal;
+        Double rawDelta = rawBaseline == null || rawNext == null ? null : rawNext - rawBaseline;
+        VariantMetric metric = VariantMetric.of(variant, targetUserIds.size(), generatedUserIds.size(),
+                acceptedUserIds.size(), measuredUsers, 0, unmeasurableUsers,
+                roundOrNull(rawBaseline), roundOrNull(rawNext), roundOrNull(rawDelta));
+        return new VariantComputation(metric, rawDelta);
+    }
+
+    private static Double roundOrNull(Double value) {
+        return value == null ? null : round(value);
+    }
+
+    private record ExperimentRate(long completed, long total) {
+    }
+
+    private static ExperimentRate experimentRateOf(Collection<RecommendationExperimentCompletionRow> rows,
+                                                   LocalDate from, LocalDate to) {
+        long completed = 0;
+        long total = 0;
+        for (RecommendationExperimentCompletionRow row : rows) {
+            if (row.getRoutineDate().isBefore(from) || row.getRoutineDate().isAfter(to)) {
+                continue;
+            }
+            total++;
+            if (row.getStatus() == RoutineLogStatus.COMPLETED) {
+                completed++;
+            }
+        }
+        return new ExperimentRate(completed, total);
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     // 대기 후보(ACTIVE·기한 내)의 계보 현재 버전을 일괄 조회함 - 무효(삭제·stale) 판정 재료
