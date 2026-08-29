@@ -1,6 +1,8 @@
 package com.triples.rougether.batch.reminder;
 
+import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
 import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.policy.NotificationPushPolicy;
@@ -9,33 +11,49 @@ import com.triples.rougether.domain.notification.repository.NotificationSettingR
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
+import java.time.Clock;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 // PENDING 알림 chunk 를 설정 게이트(NotificationPushPolicy) → FCM 발송 → push_status 갱신으로 종결한다.
 // 알림 타입에 의존하지 않는 범용 발송 writer 라 weeklyReportPushJob 도 재사용함(public 인 이유)
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ReminderPushWriter implements ItemWriter<Notification> {
 
     private final UserDeviceTokenRepository userDeviceTokenRepository;
     private final NotificationRepository notificationRepository;
+    private final DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final FcmSender fcmSender;
+    private final Clock clock;
+
+    public ReminderPushWriter(UserDeviceTokenRepository userDeviceTokenRepository,
+                              NotificationRepository notificationRepository,
+                              DailyIncompleteDigestRepository dailyIncompleteDigestRepository,
+                              NotificationSettingRepository notificationSettingRepository,
+                              FcmSender fcmSender,
+                              ObjectProvider<Clock> clockProvider) {
+        this.userDeviceTokenRepository = userDeviceTokenRepository;
+        this.notificationRepository = notificationRepository;
+        this.dailyIncompleteDigestRepository = dailyIncompleteDigestRepository;
+        this.notificationSettingRepository = notificationSettingRepository;
+        this.fcmSender = fcmSender;
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    }
 
     @Override
     public void write(Chunk<? extends Notification> chunk) {
         NotificationPushPolicy pushPolicy = loadPushPolicy(chunk);
         for (Notification notification : chunk) {
             if (!pushPolicy.isPushAllowed(notification.getUser().getId(), notification.getType())) {
-                notificationRepository.updatePushStatus(notification.getId(), PushStatus.BLOCKED);
+                updatePushStatus(notification, PushStatus.BLOCKED);
                 continue;
             }
             push(notification);
@@ -57,7 +75,7 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
                 .map(UserDeviceToken::getToken)
                 .toList();
         if (tokens.isEmpty()) {
-            notificationRepository.updatePushStatus(notificationId, PushStatus.FAILED);
+            updatePushStatus(notification, PushStatus.FAILED);
             return;
         }
 
@@ -67,14 +85,24 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
         } catch (Exception e) {
             // 리마인드 외 타입(주간 회고 등)도 이 writer 를 지나므로 타입을 함께 남김
             log.warn("알림 FCM 발송 실패 - notificationId={}, type={}", notificationId, notification.getType(), e);
-            notificationRepository.updatePushStatus(notificationId, PushStatus.FAILED);
+            updatePushStatus(notification, PushStatus.FAILED);
             return;
         }
 
         if (!result.invalidTokens().isEmpty()) {
             userDeviceTokenRepository.deleteAllByTokenInAndUserId(result.invalidTokens(), userId);
         }
-        notificationRepository.updatePushStatus(notificationId,
-                result.successCount() > 0 ? PushStatus.SENT : PushStatus.FAILED);
+        updatePushStatus(notification, result.successCount() > 0 ? PushStatus.SENT : PushStatus.FAILED);
+    }
+
+    private void updatePushStatus(Notification notification, PushStatus pushStatus) {
+        notificationRepository.updatePushStatus(notification.getId(), pushStatus);
+        if (notification.getType() != NotificationType.DAILY_INCOMPLETE_DIGEST) {
+            return;
+        }
+        dailyIncompleteDigestRepository.updatePushStatusByNotificationId(
+                notification.getId(),
+                pushStatus,
+                pushStatus == PushStatus.SENT ? clock.instant() : null);
     }
 }

@@ -32,6 +32,7 @@ public class AdminSecurityConfig {
                         .requestMatchers(
                                 "/accessory-render-profiles",
                                 "/admin/character-accessory-render-profiles/**",
+                                "/admin/notification-digests/**",
                                 "/users",
                                 "/admin/retention/**"
                         ).hasAnyRole("ADMIN", "SUPER_ADMIN")

@@ -16,6 +16,8 @@ import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
+import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestTargetRepository;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
@@ -55,6 +57,8 @@ public class MemberWithdrawalService {
     private final HouseMemberRepository houseMemberRepository;
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final UserDeviceTokenRepository userDeviceTokenRepository;
+    private final DailyIncompleteDigestTargetRepository dailyIncompleteDigestTargetRepository;
+    private final DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
     private final NotificationRepository notificationRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final UserGoalRepository userGoalRepository;
@@ -107,6 +111,8 @@ public class MemberWithdrawalService {
         categoryRepository.softDeleteAllByUserId(userId, now);
         // 본인 전용 데이터(알림 수신함·알림 설정·온보딩 목표)는 row 수가 적어 유예 없이 즉시 파기함.
         // 대량 데이터(로그·인증사진 row 등)는 purge 배치(batch 모듈)가 하드 삭제함.
+        dailyIncompleteDigestTargetRepository.deleteAllByDigestUserId(userId);
+        dailyIncompleteDigestRepository.deleteAllByUserId(userId);
         notificationRepository.deleteAllByUserId(userId);
         notificationSettingRepository.deleteAllByUserId(userId);
         userGoalRepository.deleteAllByUserId(userId);

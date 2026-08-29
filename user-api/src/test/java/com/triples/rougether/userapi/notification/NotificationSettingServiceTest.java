@@ -17,6 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 // 알림 설정 의미 검증 - 행 없음=ON 기본값, 부분 변경 upsert, 마스터/그룹 게이트를 실제 DB로 확인.
+// datasource 는 테스트 공통 설정(Testcontainers MySQL)을 그대로 쓴다 - H2 오버라이드는 "실제 DB" 보장을 깨고
+// 컨텍스트를 하나 더 포크하므로 두지 않는다.
 @SpringBootTest
 @Transactional
 class NotificationSettingServiceTest {
@@ -77,6 +79,8 @@ class NotificationSettingServiceTest {
 
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.ROUTINE_REMINDER)).isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.TODO_REMINDER)).isFalse();
+        assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.DAILY_INCOMPLETE_DIGEST))
+                .isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.HOUSE_KICK)).isTrue();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.FRIEND_CHEER)).isTrue();
     }

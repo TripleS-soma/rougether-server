@@ -13,6 +13,15 @@
 - 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).
 
+### 저녁 미완료 통합 알림 (`daily_incomplete_digests`)
+
+- `batch.eveningdigest`는 매시와 애플리케이션 기동 시 실행되며, KST 당일 21:00~23:59에만 현재 날짜를 처리한다. 오늘 수행 대상인 ACTIVE 루틴 중 같은 계보의 완료 로그가 없는 항목과 오늘 마감인 PENDING 투두를 사용자별로 집계하고, 탈퇴 사용자·봇·0건 사용자는 제외한다.
+- 적재 단계와 FCM 발송 단계는 서로 다른 Spring Batch step이다. 적재 단계는 `daily_incomplete_digests`의 `(user_id, digest_date)` unique로 사용자·날짜 멱등성을 보장하고, 당시 루틴 계보 id와 투두 id를 `daily_incomplete_digest_targets`에 정규화해 저장한다. `notification.ref_id`는 digest id를 가리킨다. 발송 reader와 최종 writer는 모두 현재 KST 날짜를 다시 확인해, 23:59에 시작한 job이 자정을 넘겨 전날 알림을 보내지 않게 한다.
+- 발송 단계는 기존 `ReminderPushWriter`와 `NotificationPushPolicy`를 재사용한다. `DAILY_INCOMPLETE_DIGEST`는 `REMINDER` 설정 그룹이며, 알림의 `push_status`와 digest의 `push_status`·`sent_at`을 같은 처리 흐름에서 동기화한다. 날짜별 PENDING reader를 사용하므로 자정 뒤 전날 알림을 지연 발송하지 않는다.
+- 적재(stage) step은 weekly-report와 같은 패턴으로 `skip(Exception)` 상한 50을 둔다 - 한 사용자의 집계 실패가 전체 적재를 막지 않게 하되, 같은 `targetDate` JobInstance는 COMPLETED 후 재시작이 불가하므로 스킵된 사용자는 그날 digest가 누락된다(스킵 발생은 skip logger 로그로 추적). FCM 호출 자체의 사용자별 예외는 해당 알림만 `FAILED`로 종결하지만, 설정·토큰·상태 repository 같은 내부 인프라 예외는 push step에서 skip하지 않는다. step/job을 `FAILED`로 남겨 같은 `targetDate` JobInstance를 재시작하고 커밋되지 않은 `PENDING`을 다시 처리한다. 다만 재시작 전에 자정을 넘긴 전날 `PENDING`은 상태를 바꾸거나 소급 발송하지 않고 관리자 `PENDING` 지표로 WATCH한다. FCM 성공 직후 상태 DB 갱신이 실패하면 재시작 과정에서 중복 push 가능성이 있으므로 운영 알림과 함께 관측한다.
+- `GET /admin/notification-digests/metrics?days=N`은 digest 생성 수와 `PENDING`/`SENT`/`BLOCKED`/`FAILED` 상태를 날짜별로 집계한다. 완료 전환 분모는 `SENT`만 사용하며, 실제 발송 시각(`sent_at`)부터 120분 미만에 당시 target 중 하나 이상 완료한 digest만 전환으로 센다. 아직 120분 창이 닫히지 않은 건은 별도로 분리한다.
+- 운영 WATCH: 현재 관리자 지표는 최대 90일 digest와 연결 알림을 메모리에 읽어 일별로 묶는다. 사용자 규모가 커지기 전에 상태 수는 DB `group by` 집계로 전환하고, 전환 target 조회의 실행 계획과 인덱스를 함께 점검한다.
+
 ### 월 캘린더 개수 조회
 
 - `GET /api/v1/calendar/month?yearMonth=YYYY-MM`(`CalendarController.month` → `CalendarService.month`)은 그 달 1일~말일 모든 날짜에 대해 `{date, routineCount, todoCount}`만 내려준다(목록·완료 여부 없음, 대상 없는 날도 0 포함). 달력 화면의 날짜별 표시(개수·점) 용도이며 날짜를 눌렀을 때의 상세는 기존 `GET /api/v1/calendar?date=`를 쓴다.

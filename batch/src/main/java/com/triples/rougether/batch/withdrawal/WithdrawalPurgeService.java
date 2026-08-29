@@ -74,8 +74,15 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
 
-        // 관측·알림·목표·토큰: 탈퇴 트랜잭션에서 일부를 이미 지웠어도 과거 탈퇴분 보정 겸 멱등 재실행
+        // 관측·알림·목표·토큰: 탈퇴 트랜잭션에서 일부를 이미 지웠어도 과거 탈퇴분 보정 겸 멱등 재실행.
+        // digest 는 notification 을 FK 로 참조하므로 notification 삭제보다 먼저 지운다.
         jdbcTemplate.update("DELETE FROM user_daily_activity WHERE user_id = ?", userId);
+        jdbcTemplate.update("""
+                DELETE dit FROM daily_incomplete_digest_targets dit
+                JOIN daily_incomplete_digests d ON d.id = dit.digest_id
+                WHERE d.user_id = ?
+                """, userId);
+        jdbcTemplate.update("DELETE FROM daily_incomplete_digests WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM notification_setting WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_device_token WHERE user_id = ?", userId);
