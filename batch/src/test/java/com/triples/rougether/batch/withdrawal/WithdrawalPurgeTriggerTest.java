@@ -63,6 +63,7 @@ class WithdrawalPurgeTriggerTest {
         jdbcTemplate.update("DELETE FROM invite_rewards WHERE inviter_user_id IN (?, ?)",
                 withdrawnUserId, activeUserId);
         for (Long userId : new Long[] {withdrawnUserId, activeUserId}) {
+            jdbcTemplate.update("DELETE FROM user_daily_activity WHERE user_id = ?", userId);
             jdbcTemplate.update("""
                     DELETE pv FROM photo_verifications pv
                     JOIN routine_logs rl ON rl.id = pv.routine_log_id
@@ -95,6 +96,12 @@ class WithdrawalPurgeTriggerTest {
             jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
+            jdbcTemplate.update("""
+                    DELETE dit FROM daily_incomplete_digest_targets dit
+                    JOIN daily_incomplete_digests d ON d.id = dit.digest_id
+                    WHERE d.user_id = ?
+                    """, userId);
+            jdbcTemplate.update("DELETE FROM daily_incomplete_digests WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM notification_setting WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_device_token WHERE user_id = ?", userId);
@@ -173,6 +180,10 @@ class WithdrawalPurgeTriggerTest {
 
     // users 를 참조하는 개인 데이터 전 체인을 심는다(FK 순서 회귀 검증용).
     private void insertUserData(Long userId, String tag) {
+        jdbcTemplate.update("""
+                INSERT INTO user_daily_activity (user_id, activity_date, created_at)
+                VALUES (?, ?, ?)
+                """, userId, java.sql.Date.valueOf(LocalDate.now()), now());
         jdbcTemplate.update("""
                 INSERT INTO categories (user_id, name, sort_order, created_at, updated_at)
                 VALUES (?, '카테고리', 0, ?, ?)
@@ -269,6 +280,19 @@ class WithdrawalPurgeTriggerTest {
                 INSERT INTO notification (user_id, type, title, body, created_at)
                 VALUES (?, 'ROUTINE_REMIND', '제목', '내용', ?)
                 """, userId, now());
+        Long notificationId = lastId("notification");
+        jdbcTemplate.update("""
+                INSERT INTO daily_incomplete_digests
+                    (user_id, digest_date, routine_count, todo_count, notification_id,
+                     push_status, created_at, updated_at)
+                VALUES (?, ?, 1, 0, ?, 'SENT', ?, ?)
+                """, userId, java.sql.Date.valueOf(LocalDate.now()), notificationId, now(), now());
+        Long digestId = lastId("daily_incomplete_digests");
+        jdbcTemplate.update("""
+                INSERT INTO daily_incomplete_digest_targets
+                    (digest_id, target_type, target_id, created_at)
+                VALUES (?, 'ROUTINE', ?, ?)
+                """, digestId, routineId, now());
         jdbcTemplate.update("""
                 INSERT INTO notification_setting (user_id, type, enabled, created_at, updated_at)
                 VALUES (?, 'ALL', true, ?, ?)
@@ -349,9 +373,11 @@ class WithdrawalPurgeTriggerTest {
                 {"room_cobwebs", "room_user_id"},
                 {"user_characters", "user_id"}, {"attendance_check_ins", "user_id"},
                 {"user_items", "user_id"}, {"user_wallets", "user_id"},
+                {"daily_incomplete_digests", "user_id"},
                 {"notification", "user_id"}, {"notification_setting", "user_id"},
                 {"user_device_token", "user_id"}, {"user_goals", "user_id"},
                 {"refresh_tokens", "user_id"}, {"bug_reports", "user_id"},
+                {"user_daily_activity", "user_id"},
                 {"house_member_cheers", "sender_user_id"}, {"house_join_requests", "user_id"},
                 {"user_invite_codes", "user_id"}}) {
             assertThat(countFor(tableAndColumn[0], tableAndColumn[1], withdrawnUserId))
@@ -363,6 +389,11 @@ class WithdrawalPurgeTriggerTest {
         assertThat(accessoryCountFor(activeUserId)).isEqualTo(1);
         assertThat(experimentEligibilityCountFor(withdrawnUserId)).isZero();
         assertThat(experimentEligibilityCountFor(activeUserId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM daily_incomplete_digest_targets dit
+                JOIN daily_incomplete_digests d ON d.id = dit.digest_id
+                WHERE d.user_id = ?
+                """, Integer.class, activeUserId)).isEqualTo(1);
         // 초대 보상 원장은 초대자 지급 한도 카운트 보존을 위해 남긴다
         assertThat(countFor("invite_rewards", "inviter_user_id", withdrawnUserId)).isEqualTo(1);
         // users row 는 FK 앵커(방명록 author 등)로 남고 purged_at 만 찍힌다

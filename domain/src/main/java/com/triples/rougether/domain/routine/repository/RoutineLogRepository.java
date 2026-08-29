@@ -207,4 +207,5 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("userIds") Collection<Long> userIds,
             @Param("status") RoutineLogStatus status,
             @Param("since") Instant since);
+
 }

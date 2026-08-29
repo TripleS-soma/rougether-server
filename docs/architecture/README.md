@@ -28,3 +28,4 @@
 - 방/공동집 도메인: [`docs/claude/domains/room-house.md`](../claude/domains/room-house.md)
 - 루틴/투두 도메인: [`docs/claude/domains/routine-todo.md`](../claude/domains/routine-todo.md)
 - 에셋/이미지/CDN 도메인: [`docs/claude/domains/assets.md`](../claude/domains/assets.md)
+- 리텐션·북극성 KPI 운영 기준: [`docs/operations/product-metrics.md`](../operations/product-metrics.md)

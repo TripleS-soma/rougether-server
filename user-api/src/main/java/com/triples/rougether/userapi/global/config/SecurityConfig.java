@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.global.config;
 
+import com.triples.rougether.userapi.activity.filter.UserDailyActivityFilter;
+import com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder;
 import com.triples.rougether.userapi.global.security.JwtAuthenticationFilter;
 import com.triples.rougether.userapi.global.security.RestAccessDeniedHandler;
 import com.triples.rougether.userapi.global.security.RestAuthenticationEntryPoint;
@@ -23,9 +25,13 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
+    private final UserDailyActivityRecorder userDailyActivityRecorder;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // Security 체인 안에서만 실행되게 Filter bean으로 등록하지 않음(서블릿 필터 이중 등록 방지).
+        UserDailyActivityFilter userDailyActivityFilter = new UserDailyActivityFilter(
+                userDailyActivityRecorder::record);
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
@@ -38,7 +44,14 @@ public class SecurityConfig {
                                 "/actuator/info",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                // 초대 링크 랜딩·앱 링크 검증 파일 — 앱 미설치 사용자가 보는 공개 경로.
+                                // well-known 은 와일드카드 대신 정확 경로로 - 이후 추가되는 .well-known
+                                // 엔드포인트가 의도치 않게 공개되지 않도록.
+                                "/i/*",
+                                "/h/*",
+                                "/.well-known/apple-app-site-association",
+                                "/.well-known/assetlinks.json"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -46,7 +59,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(userDailyActivityFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

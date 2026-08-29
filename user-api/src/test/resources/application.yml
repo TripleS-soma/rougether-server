@@ -55,3 +55,13 @@ routine:
 rougether:
   bots:
     enabled: false
+
+# 초대 링크 통합테스트용 연결값. 미설정(빈 값) 동작은 InviteLinkUnconfiguredTest 가 property 재정의로 검증한다.
+invite:
+  link:
+    share-base-url: https://invite.rougether.test
+    app-scheme: rougether
+    android-package: com.triples.rougether
+    android-cert-fingerprints: "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+    appstore-id: "6740000000"
+    apple-app-id: TESTTEAM99.com.triples.rougether

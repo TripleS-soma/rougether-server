@@ -4,6 +4,7 @@ public enum NotificationType {
     HOUSE_KICK(NotificationSettingType.HOUSE),
     ROUTINE_REMINDER(NotificationSettingType.REMINDER),
     TODO_REMINDER(NotificationSettingType.REMINDER),
+    DAILY_INCOMPLETE_DIGEST(NotificationSettingType.REMINDER),
     // AI 주간 회고 도착. 별도 설정 그룹을 만들지 않고 REMINDER 에 편입함(결정값) - 설정 UI·기본값·마이그레이션 스코프 회피
     WEEKLY_REPORT(NotificationSettingType.REMINDER),
     FRIEND_CHEER(NotificationSettingType.HOUSE),

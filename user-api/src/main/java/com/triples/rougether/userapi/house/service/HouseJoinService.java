@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -317,18 +318,26 @@ public class HouseJoinService {
     // 만료 여부·승인 필요 여부는 코드 종류(집 공용/구성원 개인)에 따라 각자의 만료 시각·초대자 역할로 판정한다.
     @Transactional(readOnly = true)
     public HousePreviewResponse preview(String rawInviteCode) {
+        return findPreview(rawInviteCode)
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
+    }
+
+    // 미존재를 예외가 아닌 empty 로 돌려주는 변형 - 초대 랜딩처럼 무효 코드를 정상 흐름으로 다루는 호출자용.
+    // 참여(participating) 트랜잭션 안에서 RuntimeException 을 던지면 삼켜도 rollback-only 마킹이 남아
+    // 바깥 커밋이 UnexpectedRollbackException 으로 터지므로, 그런 호출자는 예외 경로를 타면 안 된다.
+    @Transactional(readOnly = true)
+    public Optional<HousePreviewResponse> findPreview(String rawInviteCode) {
         String inviteCode = normalizeCode(rawInviteCode);
         House byHouseCode = houseRepository.findByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
         if (byHouseCode != null) {
-            return HousePreviewResponse.of(byHouseCode, byHouseCode.isInviteExpired(), false);
+            return Optional.of(HousePreviewResponse.of(byHouseCode, byHouseCode.isInviteExpired(), false));
         }
-        HouseMember inviter = houseMemberRepository.findByInviteCodeWithHouse(inviteCode)
+        return houseMemberRepository.findByInviteCodeWithHouse(inviteCode)
                 .filter(HouseMember::isActive)
                 .filter(found -> !found.getHouse().isDeleted())
-                .orElseThrow(() -> new BusinessException(HouseErrorCode.INVITE_CODE_INVALID));
-        return HousePreviewResponse.of(
-                inviter.getHouse(), inviter.isInviteExpired(), !inviter.isOwner());
+                .map(inviter -> HousePreviewResponse.of(
+                        inviter.getHouse(), inviter.isInviteExpired(), !inviter.isOwner()));
     }
 }
