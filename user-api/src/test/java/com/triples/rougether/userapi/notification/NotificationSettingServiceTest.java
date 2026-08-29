@@ -17,7 +17,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 // 알림 설정 의미 검증 - 행 없음=ON 기본값, 부분 변경 upsert, 마스터/그룹 게이트를 실제 DB로 확인.
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:notification-setting;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "spring.flyway.enabled=true",
+        "spring.flyway.locations=classpath:db/migration"
+})
 @Transactional
 class NotificationSettingServiceTest {
 
@@ -77,6 +85,8 @@ class NotificationSettingServiceTest {
 
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.ROUTINE_REMINDER)).isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.TODO_REMINDER)).isFalse();
+        assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.DAILY_INCOMPLETE_DIGEST))
+                .isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.HOUSE_KICK)).isTrue();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.FRIEND_CHEER)).isTrue();
     }

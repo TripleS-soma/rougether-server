@@ -18,6 +18,10 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.notification.digest.entity.DailyIncompleteDigest;
+import com.triples.rougether.domain.notification.digest.entity.DailyIncompleteDigestTarget;
+import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
+import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestTargetRepository;
 import com.triples.rougether.domain.notification.entity.DevicePlatform;
 import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationSetting;
@@ -100,6 +104,10 @@ class MemberWithdrawalIntegrationTest {
     private UserDeviceTokenRepository userDeviceTokenRepository;
     @Autowired
     private NotificationRepository notificationRepository;
+    @Autowired
+    private DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
+    @Autowired
+    private DailyIncompleteDigestTargetRepository dailyIncompleteDigestTargetRepository;
     @Autowired
     private NotificationSettingRepository notificationSettingRepository;
     @Autowired
@@ -284,6 +292,13 @@ class MemberWithdrawalIntegrationTest {
         Goal goal = goalRepository.save(newGoal("wd-" + UUID.randomUUID().toString().substring(0, 8)));
         notificationRepository.save(
                 Notification.create(user, NotificationType.ROUTINE_REMINDER, "제목", "내용", null));
+        DailyIncompleteDigest digest = dailyIncompleteDigestRepository.save(
+                DailyIncompleteDigest.create(user, LocalDate.now(), 1, 0));
+        Notification digestNotification = notificationRepository.save(Notification.create(
+                user, NotificationType.DAILY_INCOMPLETE_DIGEST, "제목", "내용", digest.getId()));
+        digest.linkNotification(digestNotification);
+        dailyIncompleteDigestRepository.save(digest);
+        dailyIncompleteDigestTargetRepository.save(DailyIncompleteDigestTarget.routine(digest, 101L));
         notificationSettingRepository.save(
                 NotificationSetting.create(user, NotificationSettingType.ALL, true));
         userGoalRepository.save(UserGoal.of(user, goal, true));
@@ -292,6 +307,13 @@ class MemberWithdrawalIntegrationTest {
         User other = userRepository.findById(otherLogin.userId()).orElseThrow();
         notificationRepository.save(
                 Notification.create(other, NotificationType.ROUTINE_REMINDER, "제목", "내용", null));
+        DailyIncompleteDigest otherDigest = dailyIncompleteDigestRepository.save(
+                DailyIncompleteDigest.create(other, LocalDate.now(), 1, 0));
+        Notification otherDigestNotification = notificationRepository.save(Notification.create(
+                other, NotificationType.DAILY_INCOMPLETE_DIGEST, "제목", "내용", otherDigest.getId()));
+        otherDigest.linkNotification(otherDigestNotification);
+        dailyIncompleteDigestRepository.save(otherDigest);
+        dailyIncompleteDigestTargetRepository.save(DailyIncompleteDigestTarget.routine(otherDigest, 202L));
         notificationSettingRepository.save(
                 NotificationSetting.create(other, NotificationSettingType.ALL, true));
         userGoalRepository.save(UserGoal.of(other, goal, true));
@@ -300,10 +322,16 @@ class MemberWithdrawalIntegrationTest {
 
         assertThat(notificationRepository.findPageByCursor(
                 login.userId(), null, org.springframework.data.domain.Pageable.unpaged())).isEmpty();
+        assertThat(dailyIncompleteDigestRepository.findByUserIdAndDigestDate(login.userId(), LocalDate.now()))
+                .isEmpty();
         assertThat(notificationSettingRepository.findAllByUserId(login.userId())).isEmpty();
         assertThat(userGoalRepository.findByUserId(login.userId())).isEmpty();
         assertThat(notificationRepository.findPageByCursor(
-                otherLogin.userId(), null, org.springframework.data.domain.Pageable.unpaged())).hasSize(1);
+                otherLogin.userId(), null, org.springframework.data.domain.Pageable.unpaged())).hasSize(2);
+        assertThat(dailyIncompleteDigestRepository.findByUserIdAndDigestDate(otherLogin.userId(), LocalDate.now()))
+                .isPresent();
+        assertThat(dailyIncompleteDigestTargetRepository.findAllByDigestIdOrderByIdAsc(otherDigest.getId()))
+                .hasSize(1);
         assertThat(notificationSettingRepository.findAllByUserId(otherLogin.userId())).hasSize(1);
         assertThat(userGoalRepository.findByUserId(otherLogin.userId())).hasSize(1);
     }

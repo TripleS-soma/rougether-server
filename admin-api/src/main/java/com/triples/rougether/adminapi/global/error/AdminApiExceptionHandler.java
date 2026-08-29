@@ -1,11 +1,14 @@
 package com.triples.rougether.adminapi.global.error;
 
 import com.triples.rougether.common.error.ErrorResponse;
+import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -28,6 +31,20 @@ public class AdminApiExceptionHandler {
         log.warn("validation failed: fields={}", fieldErrors);
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다.", fieldErrors));
+    }
+
+    @ExceptionHandler({HandlerMethodValidationException.class, ConstraintViolationException.class})
+    public ResponseEntity<ErrorResponse> handleParamValidation(Exception exception) {
+        log.warn("param validation failed: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleParamTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        log.warn("param type mismatch: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

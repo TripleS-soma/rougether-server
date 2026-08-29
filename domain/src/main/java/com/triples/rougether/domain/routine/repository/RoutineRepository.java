@@ -159,4 +159,21 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "group by r.user.id")
     List<UserMetricCount> countActiveByUserIds(@Param("userIds") Collection<Long> userIds,
                                                @Param("status") RoutineStatus status);
+
+    // 저녁 미완료 digest(#341): targetDate 에 살아있고 아직 계보 기준 COMPLETED log 가 없는 활성 루틴.
+    // 반복 주기 최종 판정은 RoutineRecurrence 로 한다.
+    @Query("select r from Routine r "
+            + "where r.user.id = :userId and r.status = :status "
+            + "and r.createdAt < :dayEndExclusive "
+            + "and (r.deletedAt is null or r.deletedAt >= :dayEndExclusive) "
+            + "and not exists (select 1 from RoutineLog l "
+            + "  where coalesce(l.routine.originRoutineId, l.routine.id) = coalesce(r.originRoutineId, r.id) "
+            + "  and l.routineDate = :targetDate and l.status = :completedStatus) "
+            + "order by coalesce(r.originRoutineId, r.id) asc")
+    List<Routine> findDailyIncompleteDigestRoutineCandidates(
+            @Param("userId") Long userId,
+            @Param("targetDate") LocalDate targetDate,
+            @Param("dayEndExclusive") Instant dayEndExclusive,
+            @Param("status") RoutineStatus status,
+            @Param("completedStatus") RoutineLogStatus completedStatus);
 }

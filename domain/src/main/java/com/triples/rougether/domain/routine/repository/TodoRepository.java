@@ -157,4 +157,16 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             @Param("userIds") Collection<Long> userIds,
             @Param("status") TodoStatus status,
             @Param("since") Instant since);
+
+    @Query("""
+            select t from Todo t
+            where t.user.id = :userId
+              and t.status = :status
+              and t.dueDate = :targetDate
+              and t.deletedAt is null
+            order by t.id asc
+            """)
+    List<Todo> findDailyIncompleteDigestTodoCandidates(@Param("userId") Long userId,
+                                                       @Param("targetDate") LocalDate targetDate,
+                                                       @Param("status") TodoStatus status);
 }
