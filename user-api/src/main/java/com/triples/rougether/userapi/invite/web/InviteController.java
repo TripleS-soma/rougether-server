@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.invite.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
+import com.triples.rougether.userapi.invite.dto.InvitePreviewResponse;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemRequest;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,6 +36,17 @@ public class InviteController {
     @GetMapping("/me")
     public MyInviteCodeResponse getMyCode(@CurrentUser AuthUser user) {
         return inviteService.getMyCode(user.id());
+    }
+
+    @Operation(summary = "초대코드 미리보기",
+            description = "받은 초대코드의 초대자와 보상 정보를 사용(redeem) 전에 확인합니다. "
+                    + "딥링크·클립보드로 자동 입력된 코드를 'OO님의 초대' 확인 화면으로 검증하는 용도이며, "
+                    + "확인 없이 자동으로 redeem 을 호출하지 않습니다. alreadyRedeemed 가 true 면 이 계정은 "
+                    + "이미 보상을 받은 상태라 확인 화면을 건너뜁니다. 에러코드는 redeem 과 동일합니다"
+                    + "(INVITE_CODE_NOT_FOUND, INVITE_SELF_NOT_ALLOWED, INVITE_BOT_NOT_ALLOWED).")
+    @GetMapping("/by-code/{code}")
+    public InvitePreviewResponse preview(@CurrentUser AuthUser user, @PathVariable String code) {
+        return inviteService.preview(user.id(), code);
     }
 
     @Operation(summary = "초대코드 사용",

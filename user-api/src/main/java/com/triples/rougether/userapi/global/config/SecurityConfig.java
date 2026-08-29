@@ -44,7 +44,14 @@ public class SecurityConfig {
                                 "/actuator/info",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                // 초대 링크 랜딩·앱 링크 검증 파일 — 앱 미설치 사용자가 보는 공개 경로.
+                                // well-known 은 와일드카드 대신 정확 경로로 - 이후 추가되는 .well-known
+                                // 엔드포인트가 의도치 않게 공개되지 않도록.
+                                "/i/*",
+                                "/h/*",
+                                "/.well-known/apple-app-site-association",
+                                "/.well-known/assetlinks.json"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
