@@ -42,7 +42,8 @@
         <div class="upload-card">
             <div class="upload-head">
                 <h2>버그 제보</h2>
-                <p>유저가 앱에서 제출한 버그 제보입니다. 상태를 변경하면 유저의 내 제보 목록에도 반영됩니다.</p>
+                <p>유저가 앱에서 제출한 버그 제보입니다. 상태 변경과 답장은 유저의 내 제보 목록에 반영되고,
+                    답장은 FCM 푸시로도 알립니다.</p>
             </div>
 
             <div class="slot-toolbar">
@@ -65,6 +66,7 @@
                     <th>환경</th>
                     <th>스크린샷</th>
                     <th>상태</th>
+                    <th>답장</th>
                     <th>제출일</th>
                 </tr>
                 </thead>
@@ -101,11 +103,18 @@
         }
 
         function render(items) {
-            tbody.replaceChildren(...items.map(buildRow));
+            tbody.replaceChildren(...items.flatMap(buildRows));
             countEl.textContent = items.length + '건';
         }
 
-        function buildRow(item) {
+        // 제보 1건 = 본문 행 + (접힌) 답장 패널 행. 패널은 답장 버튼으로 토글한다.
+        function buildRows(item) {
+            const detailTr = buildReplyPanelRow(item);
+            detailTr.hidden = true;
+            return [buildRow(item, detailTr), detailTr];
+        }
+
+        function buildRow(item, detailTr) {
             const tr = document.createElement('tr');
 
             const userCell = document.createElement('td');
@@ -148,13 +157,105 @@
             statusSelect.addEventListener('change', () => changeStatus(item, statusSelect));
             statusCell.appendChild(statusSelect);
 
+            const replyCell = document.createElement('td');
+            const replyToggle = document.createElement('button');
+            replyToggle.type = 'button';
+            replyToggle.className = 'btn-ghost';
+            replyToggle.textContent = '답장 ' + (item.replies ?? []).length + '건';
+            replyToggle.addEventListener('click', () => { detailTr.hidden = !detailTr.hidden; });
+            replyCell.appendChild(replyToggle);
+
             const dateCell = document.createElement('td');
             dateCell.textContent = item.createdAt
                 ? new Date(item.createdAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
                 : '-';
 
-            tr.append(userCell, bodyCell, envCell, shotCell, statusCell, dateCell);
+            tr.append(userCell, bodyCell, envCell, shotCell, statusCell, replyCell, dateCell);
             return tr;
+        }
+
+        // 답장 이력 + 작성 폼. 전송 성공 시 목록을 다시 불러 상태·답장 수를 함께 갱신한다.
+        function buildReplyPanelRow(item) {
+            const tr = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 7;
+
+            const history = document.createElement('div');
+            (item.replies ?? []).forEach((reply) => {
+                const line = document.createElement('div');
+                const meta = document.createElement('div');
+                meta.className = 'slot-key';
+                meta.textContent = reply.adminUsername + ' · '
+                    + new Date(reply.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+                const contentEl = document.createElement('div');
+                contentEl.className = 'slot-name';
+                contentEl.textContent = reply.content;
+                line.style.marginBottom = '8px';
+                line.append(meta, contentEl);
+                history.appendChild(line);
+            });
+            if (!(item.replies ?? []).length) {
+                const empty = document.createElement('div');
+                empty.className = 'slot-key';
+                empty.textContent = '아직 답장이 없습니다.';
+                history.appendChild(empty);
+            }
+
+            const textarea = document.createElement('textarea');
+            textarea.className = 'slot-search';
+            textarea.rows = 3;
+            textarea.maxLength = 2000;
+            textarea.placeholder = '답장 내용 (전송 시 유저에게 푸시 알림이 갑니다)';
+            textarea.style.width = '100%';
+            textarea.style.resize = 'vertical';
+            textarea.style.margin = '8px 0';
+
+            const statusSelect = document.createElement('select');
+            statusSelect.className = 'slot-select';
+            statusSelect.add(new Option('상태 유지', ''));
+            STATUSES.forEach(([code, label]) => statusSelect.add(new Option('→ ' + label, code)));
+
+            const sendBtn = document.createElement('button');
+            sendBtn.type = 'button';
+            sendBtn.className = 'btn-primary';
+            sendBtn.textContent = '답장 보내기';
+            sendBtn.addEventListener('click', () => sendReply(item, textarea, statusSelect, sendBtn));
+
+            const formRow = document.createElement('div');
+            formRow.style.display = 'flex';
+            formRow.style.gap = '8px';
+            formRow.append(statusSelect, sendBtn);
+
+            cell.append(history, textarea, formRow);
+            tr.appendChild(cell);
+            return tr;
+        }
+
+        async function sendReply(item, textarea, statusSelect, sendBtn) {
+            const content = textarea.value.trim();
+            if (!content) {
+                showError('답장 내용을 입력해 주세요.');
+                return;
+            }
+            sendBtn.disabled = true;
+            hideError();
+            try {
+                const body = { content };
+                if (statusSelect.value) body.status = statusSelect.value;
+                const res = await fetch('/admin/bug-reports/' + item.bugReportId + '/replies', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) {
+                    throw new Error(await errorMessage(res));
+                }
+                await load();
+            } catch (err) {
+                showError('답장 전송 실패: ' + err.message);
+            } finally {
+                sendBtn.disabled = false;
+            }
         }
 
         async function changeStatus(item, statusSelect) {

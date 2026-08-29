@@ -33,6 +33,10 @@ management:
       exposure:
         include: health,info
 
+# 버그 제보 답장 push(#348)용. 비어 있으면 stub 발송(로그만) - 운영 배포 시 반드시 설정.
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+
 # 로컬 개발용 어드민 시드 계정 (운영 mysql profile 에서는 비활성).
 admin:
   origin-secret:

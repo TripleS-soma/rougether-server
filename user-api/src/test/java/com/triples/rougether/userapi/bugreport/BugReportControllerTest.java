@@ -57,7 +57,7 @@ class BugReportControllerTest {
         authAsUser7();
         when(bugReportService.submit(eq(7L), eq("버그 제목"), eq("버그 내용"), eq("1.0.0"), eq(null), any()))
                 .thenReturn(new BugReportResponse(1L, "버그 제목", "버그 내용",
-                        BugReportStatus.RECEIVED, List.of("bug-reports/a.png"),
+                        BugReportStatus.RECEIVED, List.of("bug-reports/a.png"), List.of(),
                         Instant.parse("2026-07-23T00:00:00Z")));
 
         mockMvc.perform(multipart("/api/v1/bug-reports")
@@ -93,12 +93,16 @@ class BugReportControllerTest {
         authAsUser7();
         when(bugReportService.getMyReports(7L)).thenReturn(new BugReportListResponse(List.of(
                 new BugReportResponse(2L, "t", "c", BugReportStatus.IN_PROGRESS, List.of(),
+                        List.of(new BugReportResponse.BugReportReplyItem(
+                                "확인했어요", Instant.parse("2026-07-24T00:00:00Z"))),
                         Instant.parse("2026-07-23T00:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/me/bug-reports"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].bugReportId").value(2))
-                .andExpect(jsonPath("$.items[0].status").value("IN_PROGRESS"));
+                .andExpect(jsonPath("$.items[0].status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.items[0].replies[0].content").value("확인했어요"))
+                .andExpect(jsonPath("$.items[0].replies[0].createdAt").exists());
     }
 
     @Test

@@ -3,12 +3,15 @@ package com.triples.rougether.userapi.bugreport.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.bugreport.entity.BugReport;
 import com.triples.rougether.domain.bugreport.entity.BugReportImage;
+import com.triples.rougether.domain.bugreport.entity.BugReportReply;
 import com.triples.rougether.domain.bugreport.repository.BugReportImageRepository;
+import com.triples.rougether.domain.bugreport.repository.BugReportReplyRepository;
 import com.triples.rougether.domain.bugreport.repository.BugReportRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
+import com.triples.rougether.userapi.bugreport.dto.BugReportResponse.BugReportReplyItem;
 import com.triples.rougether.userapi.bugreport.error.BugReportErrorCode;
 import com.triples.rougether.userapi.global.storage.AssetStorageService;
 import com.triples.rougether.userapi.global.storage.StoredAsset;
@@ -23,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
-// 버그 제보 (#213) - 제출(스크린샷 최대 3장, S3 업로드) + 내 제보 목록.
+// 버그 제보 (#213) - 제출(스크린샷 최대 3장, S3 업로드) + 내 제보 목록(운영자 답장 #348 포함).
 // 금칙어 검사는 하지 않음 - 운영자만 보는 텍스트라 차단으로 정보를 잃을 이유가 없음(plan 결정).
 @Service
 public class BugReportService {
@@ -36,15 +39,18 @@ public class BugReportService {
 
     private final BugReportRepository bugReportRepository;
     private final BugReportImageRepository bugReportImageRepository;
+    private final BugReportReplyRepository bugReportReplyRepository;
     private final UserRepository userRepository;
     private final AssetStorageService assetStorageService;
 
     public BugReportService(BugReportRepository bugReportRepository,
                             BugReportImageRepository bugReportImageRepository,
+                            BugReportReplyRepository bugReportReplyRepository,
                             UserRepository userRepository,
                             AssetStorageService assetStorageService) {
         this.bugReportRepository = bugReportRepository;
         this.bugReportImageRepository = bugReportImageRepository;
+        this.bugReportReplyRepository = bugReportReplyRepository;
         this.userRepository = userRepository;
         this.assetStorageService = assetStorageService;
     }
@@ -67,16 +73,18 @@ public class BugReportService {
             bugReportImageRepository.save(BugReportImage.of(report, key, i));
             storageKeys.add(key);
         }
-        return BugReportResponse.of(report, storageKeys);
+        return BugReportResponse.of(report, storageKeys, List.of());
     }
 
     @Transactional(readOnly = true)
     public BugReportListResponse getMyReports(Long userId) {
         List<BugReport> reports = bugReportRepository.findByUserIdOrderByIdDesc(userId);
         Map<Long, List<String>> keysByReportId = screenshotKeysByReportId(reports);
+        Map<Long, List<BugReportReplyItem>> repliesByReportId = repliesByReportId(reports);
         List<BugReportResponse> items = reports.stream()
                 .map(report -> BugReportResponse.of(report,
-                        keysByReportId.getOrDefault(report.getId(), List.of())))
+                        keysByReportId.getOrDefault(report.getId(), List.of()),
+                        repliesByReportId.getOrDefault(report.getId(), List.of())))
                 .toList();
         return new BugReportListResponse(items);
     }
@@ -121,6 +129,20 @@ public class BugReportService {
                     .add(image.getStorageKey());
         }
         return keys;
+    }
+
+    // 운영자 답장(#348)을 제보별로 묶는다. 오래된 순(대화 흐름) - 목록이 소량이라 일괄 조회로 충분.
+    private Map<Long, List<BugReportReplyItem>> repliesByReportId(List<BugReport> reports) {
+        if (reports.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = reports.stream().map(BugReport::getId).toList();
+        Map<Long, List<BugReportReplyItem>> replies = new HashMap<>();
+        for (BugReportReply reply : bugReportReplyRepository.findByBugReportIdInOrderByIdAsc(ids)) {
+            replies.computeIfAbsent(reply.getBugReport().getId(), id -> new ArrayList<>())
+                    .add(BugReportReplyItem.of(reply));
+        }
+        return replies;
     }
 
     private byte[] readBytes(MultipartFile file) {
