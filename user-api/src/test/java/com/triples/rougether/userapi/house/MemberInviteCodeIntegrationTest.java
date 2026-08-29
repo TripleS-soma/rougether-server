@@ -103,7 +103,8 @@ class MemberInviteCodeIntegrationTest {
 
     @Test
     void 소문자로_입력한_집_공용_코드도_즉시가입된다() {
-        var joinResponse = houseJoinService.joinByCode(newcomer.getId(), " mbrinv22 ");
+        var joinResponse = houseJoinService.joinByCode(
+                newcomer.getId(), " " + house.getInviteCode().toLowerCase(Locale.ROOT) + " ");
 
         assertThat(joinResponse.pendingApproval()).isFalse();
         assertThat(joinResponse.membershipId()).isNotNull();

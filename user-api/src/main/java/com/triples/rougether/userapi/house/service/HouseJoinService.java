@@ -23,6 +23,8 @@ import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -109,6 +111,12 @@ public class HouseJoinService {
     // 스냅샷 조회로 REPEATABLE READ read view 가 잡혀 있어, 일반 조회는 락 대기 중 커밋된
     // 즉시가입(ACTIVE)·신청 row 를 못 보고 중복 신청을 만들거나 unique 충돌 500 이 나기 때문.
     private HouseJoinRequest createOrReopenPendingRequest(House house, Long houseId, Long userId) {
+        // 탈퇴 계정 가드 - join() 과 동일(#236 INVALID_TOKEN 컨벤션). 잔여 access token 의 재신청이 탈퇴 정리로
+        // REJECTED 된 신청을 reopen 으로 되살리고 방장 알림까지 내보내는 것을 차단한다. user 행 락(current read)이라
+        // 동시 탈퇴와도 직렬화되며, 여기서 읽은 엔티티를 신청 행과 알림 본문(닉네임)에 재사용한다.
+        User applicant = userRepository.findByIdForUpdate(userId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
         HouseMember existingMember = houseMemberRepository
                 .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
@@ -129,12 +137,11 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
         if (request == null) {
-            request = houseJoinRequestRepository.save(
-                    HouseJoinRequest.create(house, userRepository.getReferenceById(userId)));
+            request = houseJoinRequestRepository.save(HouseJoinRequest.create(house, applicant));
         } else {
             request.reopen();
         }
-        notifyJoinRequestCreated(request, house);
+        notifyJoinRequestCreated(request, house, applicant);
         return request;
     }
 
@@ -270,12 +277,18 @@ public class HouseJoinService {
         return rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
     }
 
+    // 같은 (방장, 신청자 닉네임, 집) 조합 알림의 재발송 억제 창. 철회→재신청(새 행)·거절→재신청(reopen)을
+    // 반복해 방장에게 push 를 무제한 밀어넣는 증폭을 막는다. 신청 자체의 반복 제한은 spec open question.
+    private static final Duration JOIN_REQUEST_NOTIFY_SUPPRESS_WINDOW = Duration.ofHours(1);
+
     // 신청 도착 알림 - 수락 권한자인 방장에게만 감. 방장이 신청을 몰라 수락(입주 확정)이 늦어지는 걸 막는다.
-    // 재오픈도 방장 입장에선 새 신청이라 동일하게 알린다. refId 는 승인·거절 알림과 대칭으로 신청(request) 자체.
-    private void notifyJoinRequestCreated(HouseJoinRequest request, House house) {
+    // 재오픈도 방장 입장에선 새 신청이라 동일하게 알리되, 억제 창 안의 반복 신청은 중복 발송하지 않는다.
+    // refId 는 승인·거절 알림과 대칭으로 신청(request) 자체.
+    private void notifyJoinRequestCreated(HouseJoinRequest request, House house, User applicant) {
         var content = NotificationMessages.houseJoinRequestCreated(
-                request.getUser().getNickname(), house.getName());
-        notificationService.send(house.getOwner().getId(), content, request.getId());
+                applicant.getNickname(), house.getName());
+        notificationService.sendUnlessDuplicatedSince(house.getOwner().getId(), content, request.getId(),
+                Instant.now().minus(JOIN_REQUEST_NOTIFY_SUPPRESS_WINDOW));
     }
 
     // 입주 알림 - 가입과 같은 트랜잭션에서 동기 저장(응원 #174 패턴). push 만 커밋 후 비동기로 나감.

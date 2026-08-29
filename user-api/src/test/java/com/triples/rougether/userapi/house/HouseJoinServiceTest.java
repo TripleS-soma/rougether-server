@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
@@ -323,7 +324,7 @@ class HouseJoinServiceTest {
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(7L)).thenReturn(applicant);
+        when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(applicant));
         when(houseJoinRequestRepository.save(any(HouseJoinRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -334,8 +335,24 @@ class HouseJoinServiceTest {
         verify(houseJoinRequestRepository).save(any(HouseJoinRequest.class));
         verify(house, never()).increaseMemberCount();
         verify(houseMemberRepository, never()).save(any());
-        // 신청 도착 알림은 수락 권한자인 방장에게 간다
-        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
+        // 신청 도착 알림은 수락 권한자인 방장에게 억제 창 dedup 을 거쳐 간다
+        verify(notificationService).sendUnlessDuplicatedSince(eq(houseOwner.getId()), any(), any(), any());
+    }
+
+    @Test
+    void 탈퇴한_계정의_입주_신청은_인증_무효로_차단된다() {
+        House house = joinableHouse(1L);
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        User withdrawn = mock(User.class);
+        when(withdrawn.isDeleted()).thenReturn(true);
+        when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(withdrawn));
+
+        assertThatThrownBy(() -> houseJoinService.requestJoin(7L, 1L))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(AuthErrorCode.INVALID_TOKEN));
+        // 신청이 만들어지지도, 방장에게 알림이 가지도 않는다(REJECTED reopen 부활 차단 포함)
+        verify(houseJoinRequestRepository, never()).save(any());
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -345,6 +362,7 @@ class HouseJoinServiceTest {
         User applicant = mock(User.class);
         HouseJoinRequest request = HouseJoinRequest.create(house, applicant);
         when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
+        liveJoiner(7L);
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L))
                 .thenReturn(Optional.of(request));
@@ -455,8 +473,7 @@ class HouseJoinServiceTest {
         stubMemberCodeLookup(house, inviterOf(false));
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-        User applicant = mock(User.class);
-        when(userRepository.getReferenceById(7L)).thenReturn(applicant);
+        liveJoiner(7L);
         when(houseJoinRequestRepository.save(any(HouseJoinRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -469,8 +486,8 @@ class HouseJoinServiceTest {
         verify(houseJoinRequestRepository).save(any(HouseJoinRequest.class));
         verify(houseMemberRepository, never()).save(any());
         verify(house, never()).increaseMemberCount();
-        // 신청 도착 알림은 수락 권한자인 방장에게 간다
-        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
+        // 신청 도착 알림은 수락 권한자인 방장에게 억제 창 dedup 을 거쳐 간다
+        verify(notificationService).sendUnlessDuplicatedSince(eq(houseOwner.getId()), any(), any(), any());
     }
 
     @Test
@@ -538,6 +555,7 @@ class HouseJoinServiceTest {
         User applicant = mock(User.class);
         HouseJoinRequest pending = HouseJoinRequest.create(house, applicant);
         stubMemberCodeLookup(house, inviterOf(false));
+        liveJoiner(7L);
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(pending));
 
@@ -554,6 +572,7 @@ class HouseJoinServiceTest {
         HouseJoinRequest rejected = HouseJoinRequest.create(house, applicant);
         rejected.reject();
         stubMemberCodeLookup(house, inviterOf(false));
+        when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(applicant));
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(rejected));
 
@@ -562,8 +581,8 @@ class HouseJoinServiceTest {
         assertThat(response.pendingApproval()).isTrue();
         assertThat(rejected.getStatus()).isEqualTo(HouseJoinRequestStatus.PENDING);
         verify(houseJoinRequestRepository, never()).save(any());
-        // 재오픈도 방장 입장에선 새 신청이라 도착 알림이 간다
-        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
+        // 재오픈도 방장 입장에선 새 신청이라 도착 알림이 간다(억제 창 dedup 은 서비스가 위임)
+        verify(notificationService).sendUnlessDuplicatedSince(eq(houseOwner.getId()), any(), any(), any());
     }
 
     @Test
@@ -573,6 +592,7 @@ class HouseJoinServiceTest {
         when(kicked.isActive()).thenReturn(false);
         when(kicked.isKicked()).thenReturn(true);
         stubMemberCodeLookup(house, inviterOf(false));
+        liveJoiner(7L);
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(kicked));
 
         assertThatThrownBy(() -> houseJoinService.joinByCode(7L, CODE))

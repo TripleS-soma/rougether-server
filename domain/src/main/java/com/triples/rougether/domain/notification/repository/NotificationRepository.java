@@ -34,6 +34,17 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                                                    @Param("from") Instant from,
                                                    @Param("to") Instant to);
 
+    // 사용자 대상 알림 증폭 방지: 같은 유저·타입·본문으로 since 이후 발송된 알림 존재 여부.
+    // 신청 철회→재신청처럼 원인 리소스(ref_id)가 매번 새로 만들어지는 반복은 ref_id 로 걸러지지 않아
+    // 본문 동일성으로 근사 dedup 한다(본문에 행위자·대상이 들어가는 알림 전용).
+    @Query("select (count(n) > 0) from Notification n "
+            + "where n.user.id = :userId and n.type = :type and n.body = :body "
+            + "and n.createdAt >= :since")
+    boolean existsByUserAndTypeAndBodySince(@Param("userId") Long userId,
+                                            @Param("type") NotificationType type,
+                                            @Param("body") String body,
+                                            @Param("since") Instant since);
+
     // 전체 읽음 - 안 읽은 알림만 bulk update
     @Modifying
     @Query("update Notification n set n.isRead = true where n.user.id = :userId and n.isRead = false")

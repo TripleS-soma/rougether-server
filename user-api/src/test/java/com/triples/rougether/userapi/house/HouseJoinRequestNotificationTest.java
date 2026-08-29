@@ -94,6 +94,39 @@ class HouseJoinRequestNotificationTest {
     }
 
     @Test
+    void 철회_거절_후_반복_재신청은_억제_창_안에서_방장_알림을_한_번만_보낸다() {
+        User owner = newUser("join-dedup-noti-owner@rougether.dev", "집주인4");
+        User applicant = newUser("join-dedup-noti-applicant@rougether.dev", "신청자4");
+        House house = houseWithOwner(owner, "DUPNOTI1", "중복 알림 하우스");
+
+        // 철회 후 재신청 - 신청 행이 새로 만들어져도(refId 변경) 같은 조합이면 재발송하지 않는다.
+        var first = houseJoinService.requestJoin(applicant.getId(), house.getId());
+        houseJoinService.withdrawRequest(applicant.getId(), first.requestId());
+        var second = houseJoinService.requestJoin(applicant.getId(), house.getId());
+        // 거절 후 재신청(reopen)도 마찬가지다.
+        houseJoinService.rejectRequest(owner.getId(), house.getId(), second.requestId());
+        houseJoinService.requestJoin(applicant.getId(), house.getId());
+
+        List<Map<String, Object>> ownerNotifications = notificationsOf(owner.getId());
+        assertThat(ownerNotifications).hasSize(1);
+        assertThat(ownerNotifications.get(0).get("type")).isEqualTo("HOUSE_JOIN_REQUEST_CREATED");
+    }
+
+    @Test
+    void 닉네임_미설정_신청자의_도착_알림은_이웃으로_표기된다() {
+        User owner = newUser("join-noname-noti-owner@rougether.dev", "집주인5");
+        User applicant = newUser("join-noname-noti-applicant@rougether.dev", null);
+        House house = houseWithOwner(owner, "NONAME01", "무명 하우스");
+
+        houseJoinService.requestJoin(applicant.getId(), house.getId());
+
+        List<Map<String, Object>> ownerNotifications = notificationsOf(owner.getId());
+        assertThat(ownerNotifications).hasSize(1);
+        assertThat(ownerNotifications.get(0).get("body"))
+                .isEqualTo("이웃님이 '무명 하우스'에 입주를 신청했어요. 수락하면 입주가 확정돼요.");
+    }
+
+    @Test
     void 입주_신청을_거절하면_거절_알림은_신청자에게만_간다() {
         User owner = newUser("join-reject-noti-owner@rougether.dev", "집주인");
         User applicant = newUser("join-reject-noti-applicant@rougether.dev", "신청자");
