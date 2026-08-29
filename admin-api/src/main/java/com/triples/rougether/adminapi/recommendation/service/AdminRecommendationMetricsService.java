@@ -6,7 +6,9 @@ import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetr
 import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.WeekMetric;
 import com.triples.rougether.domain.recommendation.RecommendationExperimentPolicy;
 import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentVariant;
+import com.triples.rougether.domain.recommendation.entity.RecommendationSource;
 import com.triples.rougether.domain.recommendation.entity.RecommendationStatus;
+import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRow;
 import com.triples.rougether.domain.recommendation.repository.RecommendationFunnelRow;
@@ -72,9 +74,16 @@ public class AdminRecommendationMetricsService {
         LocalDate latestWeekStart = WeeklyReportPolicy.weekStartOf(todayKst);
         LocalDate oldestWeekStart = latestWeekStart.minusWeeks(boundedWeeks - 1L);
 
+        Instant oldestWeekStartInstant = oldestWeekStart.atStartOfDay(KST).toInstant();
         List<RecommendationFunnelRow> rows = routineRecommendationRepository
-                .findFunnelRowsCreatedAfter(oldestWeekStart.atStartOfDay(KST).toInstant());
+                .findFunnelRowsCreatedAfter(oldestWeekStartInstant);
         Map<LocalDate, List<RecommendationFunnelRow>> rowsByWeek = rows.stream()
+                .collect(Collectors.groupingBy(
+                        row -> WeeklyReportPolicy.weekStartOf(LocalDate.ofInstant(row.getCreatedAt(), KST))));
+        List<RecommendationFunnelRow> experimentRows = routineRecommendationRepository
+                .findExperimentFunnelRowsCreatedAfter(oldestWeekStartInstant,
+                        RecommendationType.ADJUST_DAYS, RecommendationSource.RULE);
+        Map<LocalDate, List<RecommendationFunnelRow>> experimentRowsByWeek = experimentRows.stream()
                 .collect(Collectors.groupingBy(
                         row -> WeeklyReportPolicy.weekStartOf(LocalDate.ofInstant(row.getCreatedAt(), KST))));
         Map<Long, Set<Long>> aliveByOrigin = loadAliveVersions(rows, now);
@@ -96,7 +105,7 @@ public class AdminRecommendationMetricsService {
                     now, todayKst, aliveByOrigin));
             variantMetrics.add(toVariantWeekMetric(weekStart,
                     eligibilityByWeek.getOrDefault(weekStart, List.of()),
-                    rowsByWeek.getOrDefault(weekStart, List.of()), todayKst, completionRowsByUser));
+                    experimentRowsByWeek.getOrDefault(weekStart, List.of()), todayKst, completionRowsByUser));
         }
         return new AdminRecommendationMetricsResponse(metrics, variantMetrics, now);
     }

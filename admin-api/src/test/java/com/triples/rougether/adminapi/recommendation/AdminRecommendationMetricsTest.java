@@ -271,6 +271,33 @@ class AdminRecommendationMetricsTest {
     }
 
     @Test
+    void HOLDOUT_variant_지표에는_ADJUST_DAYS_RULE_외_추천을_포함하지_않는다() {
+        User user = userRepository.save(User.signUp("holdout-scope@rougether.dev"));
+        Routine routine = saveRoutine(user, "다른 추천 실험 루틴");
+        recordEligibility(user, RecommendationExperimentVariant.TREATMENT, CURRENT_WEEK);
+        routineRepository.flush();
+        assignmentRepository.flush();
+        eligibilityRepository.flush();
+        jdbcTemplate.update("""
+                insert into routine_recommendations
+                    (user_id, origin_routine_id, routine_id, rec_type, source, proposal, message,
+                     status, expires_at, created_at)
+                values (?, ?, ?, 'ADJUST_TIME', 'WEEKLY_LLM',
+                        '{"repeatType":"WEEKLY","daysOfWeek":["MON"]}',
+                        '다른 실험 추천', 'ACTIVE', ?, ?)
+                """, user.getId(), routine.getId(), routine.getId(),
+                Timestamp.from(instantKst(2030, 8, 25, 0)),
+                Timestamp.from(instantKst(CURRENT_WEEK, 5)));
+
+        AdminRecommendationMetricsResponse response = metricsService.getMetrics(1);
+
+        // 기존 퍼널은 하위호환으로 모든 추천을 세되, HOLDOUT은 이 실험의 타입·소스만 센다.
+        assertThat(response.weeks().getFirst().createdCount()).isEqualTo(1);
+        assertThat(response.variantWeeks().getFirst().treatment().recommendationGeneratedUserCount()).isZero();
+        assertThat(response.variantWeeks().getFirst().treatment().recommendationGenerationRate()).isZero();
+    }
+
+    @Test
     void 기한이_남아도_루틴_삭제나_선행_수정으로_무효면_만료로_센다() {
         // 사용자 목록(lazy 필터)에서 이미 빠진 ACTIVE 건은 대기가 아니라 만료와 같은 무반응 종결(#333 리뷰)
         User user = userRepository.save(User.signUp("rec-metrics-invalid@rougether.dev"));

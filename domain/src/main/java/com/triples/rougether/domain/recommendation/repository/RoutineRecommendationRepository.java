@@ -1,6 +1,8 @@
 package com.triples.rougether.domain.recommendation.repository;
 
 import com.triples.rougether.domain.recommendation.entity.RecommendationStatus;
+import com.triples.rougether.domain.recommendation.entity.RecommendationSource;
+import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -46,4 +48,17 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
             + "from RoutineRecommendation r join r.user u "
             + "where r.createdAt >= :from and u.deletedAt is null and u.bot = false")
     List<RecommendationFunnelRow> findFunnelRowsCreatedAfter(@Param("from") Instant from);
+
+    // HOLDOUT 실험 지표(#342)는 해당 실험이 만드는 룰 기반 요일 조정 추천만 귀속한다. 기존 관리자
+    // 퍼널은 다른 추천 타입·소스까지 계속 관측하므로 별도 조회로 하위호환 경계를 분리한다.
+    @Query("select r.user.id as userId, r.originRoutineId as originRoutineId, r.routineId as routineId, "
+            + "r.status as status, r.appliedRoutineId as appliedRoutineId, "
+            + "r.createdAt as createdAt, r.actedAt as actedAt, r.expiresAt as expiresAt "
+            + "from RoutineRecommendation r join r.user u "
+            + "where r.createdAt >= :from and r.recType = :recType and r.source = :source "
+            + "and u.deletedAt is null and u.bot = false")
+    List<RecommendationFunnelRow> findExperimentFunnelRowsCreatedAfter(
+            @Param("from") Instant from,
+            @Param("recType") RecommendationType recType,
+            @Param("source") RecommendationSource source);
 }
