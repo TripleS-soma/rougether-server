@@ -38,7 +38,11 @@ public class SecurityConfig {
                                 "/actuator/info",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                // 초대 링크 랜딩·앱 링크 검증 파일 — 앱 미설치 사용자가 보는 공개 경로.
+                                "/i/*",
+                                "/h/*",
+                                "/.well-known/*"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
