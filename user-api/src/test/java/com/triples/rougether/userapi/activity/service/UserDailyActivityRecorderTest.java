@@ -1,9 +1,12 @@
 package com.triples.rougether.userapi.activity.service;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -32,6 +35,7 @@ class UserDailyActivityRecorderTest {
     void 같은_KST_날짜의_반복_요청은_한_번만_DB에_기록한다() {
         LocalDate date = LocalDate.of(2026, 8, 29);
         UserDailyActivityRecorder recorder = new UserDailyActivityRecorder(writer, fixedClock(date));
+        when(writer.record(anyLong(), any())).thenReturn(1);
 
         recorder.record(7L);
         recorder.record(7L);
@@ -40,9 +44,23 @@ class UserDailyActivityRecorderTest {
     }
 
     @Test
+    void 기록_대상이_아니면_캐시에_고정하지_않는다() {
+        // 영향 row 0(탈퇴·봇) 을 "기록됨"으로 캐시하면 상태가 바뀌어도 그날 내내 재시도가 막힘.
+        LocalDate date = LocalDate.of(2026, 8, 29);
+        UserDailyActivityRecorder recorder = new UserDailyActivityRecorder(writer, fixedClock(date));
+        when(writer.record(anyLong(), any())).thenReturn(0);
+
+        recorder.record(7L);
+        recorder.record(7L);
+
+        verify(writer, times(2)).record(7L, date);
+    }
+
+    @Test
     void 같은_사용자의_동시_요청도_한_번만_DB에_기록한다() throws Exception {
         LocalDate date = LocalDate.of(2026, 8, 29);
         UserDailyActivityRecorder recorder = new UserDailyActivityRecorder(writer, fixedClock(date));
+        when(writer.record(anyLong(), any())).thenReturn(1);
         int concurrency = 24;
         CountDownLatch start = new CountDownLatch(1);
 
@@ -82,6 +100,7 @@ class UserDailyActivityRecorderTest {
         MutableClock clock = new MutableClock(
                 Instant.parse("2026-08-29T14:59:59Z"), KST);
         UserDailyActivityRecorder recorder = new UserDailyActivityRecorder(writer, clock);
+        when(writer.record(anyLong(), any())).thenReturn(1);
 
         recorder.record(7L);
         clock.setInstant(Instant.parse("2026-08-29T15:00:00Z"));

@@ -9,6 +9,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.MemberRole;
+import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,5 +103,22 @@ class UserDailyActivityWriterIntegrationTest {
 
         assertThat(activityRepository.countByUserIdAndActivityDate(human.getId(), today)).isZero();
         assertThat(activityRepository.countByUserIdAndActivityDate(bot.getId(), today)).isZero();
+    }
+
+    @Test
+    void 탈퇴한_사용자의_잔존_JWT_요청은_기록하지_않는다() throws Exception {
+        // 탈퇴 유예(access token 최대 30분) 동안 JWT 는 여전히 유효하다 - 필터 경로를 지나더라도
+        // 쓰기 SQL 의 deleted_at 가드가 기록을 막아야 한다(#236 잔존 토큰 컨벤션의 관측 버전).
+        User withdrawn = userRepository.save(User.signUp());
+        String accessToken = tokenService.issueAccessToken(withdrawn.getId(), MemberRole.NORMAL);
+        withdrawn.softDelete(Instant.now());
+        userRepository.save(withdrawn);
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+
+        mockMvc.perform(get("/api/v1/not-existing-resource")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                .andExpect(status().isNotFound());
+
+        assertThat(activityRepository.countByUserIdAndActivityDate(withdrawn.getId(), today)).isZero();
     }
 }

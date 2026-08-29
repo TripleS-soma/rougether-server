@@ -18,5 +18,6 @@ CREATE INDEX idx_routine_logs_status_completed_at
     ON routine_logs (status, completed_at, routine_id);
 
 -- 종료된 예정일 범위의 완료율 분모·분자 집계용. 전역 routine_date 범위 조회는 기존 routine 선두 인덱스를 못 탐.
-CREATE INDEX idx_routine_logs_date_status_routine
-    ON routine_logs (routine_date, status, routine_id);
+-- status 를 선두에 둠 - routine_date 가 선두면 range 뒤라 status IN 을 seek 에 못 쓰고, IN 값이 2개뿐이라 이 순서가 유리함.
+CREATE INDEX idx_routine_logs_status_date_routine
+    ON routine_logs (status, routine_date, routine_id);

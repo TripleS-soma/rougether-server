@@ -166,6 +166,8 @@ class AdminRetentionMetricsIntegrationTest {
         mockMvc.perform(get("/admin/retention/metrics").param("cohortDays", "35"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.asOfDate").value(TODAY.toString()))
+                // 이 테스트 DB 에는 BATCH_* 메타데이터가 없어 확정 정보 없음(null) - 완료율 창은 잘리지 않는다.
+                .andExpect(jsonPath("$.dayEndFinalizedThroughDate").isEmpty())
                 .andExpect(jsonPath("$.retention.d1.returnedUserCount").value(3))
                 .andExpect(jsonPath("$.retention.d1.eligibleUserCount").value(3))
                 .andExpect(jsonPath("$.retention.d7.returnedUserCount").value(2))
@@ -174,7 +176,7 @@ class AdminRetentionMetricsIntegrationTest {
                 .andExpect(jsonPath("$.retention.d30.eligibleUserCount").value(1))
                 .andExpect(jsonPath("$.retentionCohorts.length()").value(3))
                 .andExpect(jsonPath("$.northStar.qualifiedUserCount").value(1))
-                .andExpect(jsonPath("$.northStar.activeUserCount").value(3))
+                .andExpect(jsonPath("$.northStar.registeredUserCount").value(3))
                 .andExpect(jsonPath("$.northStar.percentage").value(33.3))
                 .andExpect(jsonPath("$.segments[0].segment").value("OVERALL"))
                 .andExpect(jsonPath("$.segments[0].userCount").value(3))
@@ -230,7 +232,7 @@ class AdminRetentionMetricsIntegrationTest {
     void 슈퍼관리자는_KPI_API와_화면에_접근할_수_있다() throws Exception {
         mockMvc.perform(get("/admin/retention/metrics"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.northStar.activeUserCount").value(0));
+                .andExpect(jsonPath("$.northStar.registeredUserCount").value(0));
         mockMvc.perform(get("/users"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("리텐션·핵심 행동 KPI")))

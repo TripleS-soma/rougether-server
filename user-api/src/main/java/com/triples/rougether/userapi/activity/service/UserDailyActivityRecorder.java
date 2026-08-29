@@ -36,7 +36,12 @@ public class UserDailyActivityRecorder {
         }
 
         try {
-            writer.record(userId, activityDate);
+            if (writer.record(userId, activityDate) == 0) {
+                // 대상 아님(탈퇴·봇)으로 기록되지 않은 것 - "기록됨"으로 캐시에 고정하면 원천 누락이 무증상이 됨.
+                // 캐시를 되돌려 상태가 바뀌면(집계상 있어야 할 사용자) 다음 요청이 다시 시도하게 함.
+                recordedUserIds.remove(userId);
+                log.debug("일별 사용자 활동 기록 대상이 아닙니다. userId={}, activityDate={}", userId, activityDate);
+            }
         } catch (RuntimeException e) {
             // 관측 실패가 사용자 요청을 실패시키면 안 됨. 캐시는 되돌려 다음 요청이 재시도하게 함.
             recordedUserIds.remove(userId);

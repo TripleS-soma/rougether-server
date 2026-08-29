@@ -11,6 +11,8 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
 
     // 유효 JWT가 있더라도 탈퇴 사용자·봇이면 기록하지 않음. INSERT-SELECT와 UNIQUE upsert를 한 문장으로
     // 처리해 사용자 상태 확인 SELECT를 없애고 다중 인스턴스의 동시 최초 요청도 멱등하게 수렴시킴.
+    // no-op 갱신은 자기 대입으로 표현함 - VALUES() 참조는 MySQL 8.0.20+ deprecated 라 핫 패스 경고가 쌓임.
+    // 반환값은 영향 row 수 - 0 이면 대상이 아니어서(탈퇴·봇) 기록되지 않은 것.
     @Modifying
     @Query(value = """
             INSERT INTO user_daily_activity (user_id, activity_date, created_at)
@@ -19,7 +21,7 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
             WHERE u.id = :userId
               AND u.deleted_at IS NULL
               AND u.is_bot = FALSE
-            ON DUPLICATE KEY UPDATE activity_date = VALUES(activity_date)
+            ON DUPLICATE KEY UPDATE activity_date = activity_date
             """, nativeQuery = true)
     int insertIfActiveUser(@Param("userId") Long userId,
                            @Param("activityDate") LocalDate activityDate);

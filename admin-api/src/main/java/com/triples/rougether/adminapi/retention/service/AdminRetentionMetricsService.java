@@ -14,6 +14,7 @@ import com.triples.rougether.adminapi.retention.dto.AdminRetentionMetricsRespons
 import com.triples.rougether.adminapi.retention.dto.AdminRetentionMetricsResponse.UserSegment;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository;
+import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.ActiveUserMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.CompletionEventMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.DailyActivityMetricRow;
@@ -50,10 +51,14 @@ public class AdminRetentionMetricsService {
     private static final int RESTART_EMPTY_DAYS = 3;
 
     private final AdminRetentionMetricRepository metricRepository;
+    private final DayEndFinalizationReader dayEndFinalizationReader;
     private final Clock clock;
 
-    public AdminRetentionMetricsService(AdminRetentionMetricRepository metricRepository, Clock clock) {
+    public AdminRetentionMetricsService(AdminRetentionMetricRepository metricRepository,
+                                        DayEndFinalizationReader dayEndFinalizationReader,
+                                        Clock clock) {
         this.metricRepository = metricRepository;
+        this.dayEndFinalizationReader = dayEndFinalizationReader;
         this.clock = clock;
     }
 
@@ -106,8 +111,13 @@ public class AdminRetentionMetricsService {
                 northStarQualified,
                 activeUserIds.size());
 
+        // 완료율 분모(COMPLETED+FAILED)의 FAILED 는 day-end 배치만 만든다. 배치가 아직 확정하지 않은 날짜를
+        // 창에 넣으면 COMPLETED 만 존재해 완료율이 100%로 부풀므로, 확정된 마지막 routine_date 까지로 창을 자른다.
+        // 확정 정보가 없으면(BATCH_* 미존재 환경) 자르지 않고 응답의 finalizedThroughDate=null 로 미확정 가능성을 알린다.
+        LocalDate dayEndCeiling = today.minusDays(1);
+        LocalDate finalizedThrough = dayEndFinalizationReader.findLastFinalizedDate().orElse(null);
         LocalDate completionFrom = today.minusDays(COMPLETION_RATE_DAYS);
-        LocalDate completionTo = today.minusDays(1);
+        LocalDate completionTo = clampCompletionTo(dayEndCeiling, finalizedThrough, completionFrom);
         DatePeriod completionPeriod = DatePeriod.inclusive(completionFrom, completionTo);
         Map<Long, Outcome> outcomesByUser = metricRepository
                 .findRoutineOutcomesBetween(completionFrom, completionTo).stream()
@@ -134,8 +144,20 @@ public class AdminRetentionMetricsService {
                 toSegment(UserSegment.SHARED, sharedUserIds, outcomesByUser, currentStreakByUser,
                         restartByUser, completionPeriod, restartPeriod, today));
 
-        return new AdminRetentionMetricsResponse(today, now, cohortPeriod, retention,
+        return new AdminRetentionMetricsResponse(today, now, finalizedThrough, cohortPeriod, retention,
                 retentionCohorts, northStar, segments);
+    }
+
+    // 확정일이 있으면 min(어제, 확정일). 확정일이 창 시작보다 이르면 from-1 로 잘라 0일짜리 빈 창을 만든다
+    // (BETWEEN 이 자연히 공집합 - 미확정 날짜를 분모에 섞는 것보다 빈 지표가 낫다).
+    private static LocalDate clampCompletionTo(LocalDate dayEndCeiling, LocalDate finalizedThrough,
+                                               LocalDate completionFrom) {
+        if (finalizedThrough == null) {
+            return dayEndCeiling;
+        }
+        LocalDate clamped = finalizedThrough.isBefore(dayEndCeiling) ? finalizedThrough : dayEndCeiling;
+        LocalDate emptyWindowFloor = completionFrom.minusDays(1);
+        return clamped.isBefore(emptyWindowFloor) ? emptyWindowFloor : clamped;
     }
 
     private static List<RetentionCohortMetric> toRetentionCohorts(
@@ -223,6 +245,7 @@ public class AdminRetentionMetricsService {
         return result;
     }
 
+    // 유효 스트릭 규칙은 사용자 화면과 같은 정의(Streak.effectiveCurrentCount)를 공유한다 - 재구현 금지.
     private static Map<Long, Integer> currentStreaks(
             List<StreakMetricRow> rows,
             Set<Long> activeUserIds,
@@ -232,9 +255,8 @@ public class AdminRetentionMetricsService {
             if (!activeUserIds.contains(row.getUserId())) {
                 continue;
             }
-            int effective = row.getLastSuccessDate() == null
-                    || row.getLastSuccessDate().isBefore(today.minusDays(1))
-                    ? 0 : Math.max(0, row.getCurrentCount());
+            int effective = Streak.effectiveCurrentCount(
+                    row.getCurrentCount(), row.getLastSuccessDate(), today);
             result.merge(row.getUserId(), effective, Math::max);
         }
         return result;

@@ -5,9 +5,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 // 관리자 KPI 응답. 각 비율은 화면 숫자뿐 아니라 분자·분모·관측 기간을 함께 내려 산식을 재검증할 수 있게 함.
+// dayEndFinalizedThroughDate: day-end 배치가 확정한 마지막 routine_date. 완료율 창은 이 날짜까지로 잘린다.
+// null 이면 확정 정보를 읽을 수 없는 환경(BATCH_* 미존재) - 완료율에 미확정 날짜가 섞였을 수 있음을 화면에 알린다.
 public record AdminRetentionMetricsResponse(
         LocalDate asOfDate,
         Instant generatedAt,
+        LocalDate dayEndFinalizedThroughDate,
         DatePeriod cohortPeriod,
         RetentionMetrics retention,
         List<RetentionCohortMetric> retentionCohorts,
@@ -77,22 +80,23 @@ public record AdminRetentionMetricsResponse(
         }
     }
 
-    // 최근 7개 KST 일자 중 실제 completed_at 일자가 3일 이상인 활성 비봇 사용자 비율.
+    // 최근 7개 KST 일자 중 실제 completed_at 일자가 3일 이상인 사용자 비율.
+    // 분모는 활동 여부와 무관한 탈퇴·봇 제외 전체 가입자다 - "활성 사용자"로 오독하지 않게 registered 로 명명.
     public record NorthStarMetric(
             String metricName,
             DatePeriod period,
             int minimumDistinctCompletionDays,
             long qualifiedUserCount,
-            long activeUserCount,
+            long registeredUserCount,
             double percentage) {
 
         public static NorthStarMetric of(DatePeriod period,
                                          int minimumDistinctCompletionDays,
                                          long qualifiedUserCount,
-                                         long activeUserCount) {
+                                         long registeredUserCount) {
             return new NorthStarMetric("WEEKLY_THREE_DAY_ROUTINE_COMPLETERS", period,
-                    minimumDistinctCompletionDays, qualifiedUserCount, activeUserCount,
-                    AdminRetentionMetricsResponse.percentage(qualifiedUserCount, activeUserCount));
+                    minimumDistinctCompletionDays, qualifiedUserCount, registeredUserCount,
+                    AdminRetentionMetricsResponse.percentage(qualifiedUserCount, registeredUserCount));
         }
     }
 

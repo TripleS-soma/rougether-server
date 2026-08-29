@@ -40,8 +40,8 @@ public class AdminApiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
-        log.warn("request parameter type mismatch: name={}, value={}",
-                exception.getName(), exception.getValue());
+        // 파라미터 원본 값은 사용자 입력이라 로그에 남기지 않음(name 만).
+        log.warn("request parameter type mismatch: name={}", exception.getName());
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
     }

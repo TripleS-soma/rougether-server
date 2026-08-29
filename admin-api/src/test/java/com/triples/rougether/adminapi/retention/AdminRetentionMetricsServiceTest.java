@@ -1,6 +1,7 @@
 package com.triples.rougether.adminapi.retention;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,7 @@ import com.triples.rougether.adminapi.retention.dto.AdminRetentionMetricsRespons
 import com.triples.rougether.adminapi.retention.dto.AdminRetentionMetricsResponse.SegmentMetric;
 import com.triples.rougether.adminapi.retention.dto.AdminRetentionMetricsResponse.UserSegment;
 import com.triples.rougether.adminapi.retention.service.AdminRetentionMetricsService;
+import com.triples.rougether.adminapi.retention.service.DayEndFinalizationReader;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.ActiveUserMetricRow;
@@ -22,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,11 +41,17 @@ class AdminRetentionMetricsServiceTest {
     @Mock
     AdminRetentionMetricRepository metricRepository;
 
+    @Mock
+    DayEndFinalizationReader dayEndFinalizationReader;
+
     AdminRetentionMetricsService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminRetentionMetricsService(metricRepository, Clock.fixed(NOW, KST));
+        // 기본은 확정 정보 없음(BATCH_* 미존재 환경) - 완료율 창을 자르지 않는 기존 동작.
+        when(dayEndFinalizationReader.findLastFinalizedDate()).thenReturn(Optional.empty());
+        service = new AdminRetentionMetricsService(metricRepository, dayEndFinalizationReader,
+                Clock.fixed(NOW, KST));
     }
 
     @Test
@@ -126,7 +135,7 @@ class AdminRetentionMetricsServiceTest {
         assertThat(response.northStar().period().toDate()).isEqualTo(TODAY);
         assertThat(response.northStar().minimumDistinctCompletionDays()).isEqualTo(3);
         assertThat(response.northStar().qualifiedUserCount()).isEqualTo(1);
-        assertThat(response.northStar().activeUserCount()).isEqualTo(4);
+        assertThat(response.northStar().registeredUserCount()).isEqualTo(4);
         assertThat(response.northStar().percentage()).isEqualTo(25.0);
 
         SegmentMetric overall = segment(response, UserSegment.OVERALL);
@@ -227,7 +236,7 @@ class AdminRetentionMetricsServiceTest {
         AdminRetentionMetricsResponse response = service.getMetrics(35);
 
         assertThat(response.northStar().qualifiedUserCount()).isEqualTo(1);
-        assertThat(response.northStar().activeUserCount()).isEqualTo(1);
+        assertThat(response.northStar().registeredUserCount()).isEqualTo(1);
         assertThat(response.northStar().percentage()).isEqualTo(100.0);
     }
 
@@ -297,6 +306,48 @@ class AdminRetentionMetricsServiceTest {
 
     private static DailyActivityMetricRow activity(long userId, LocalDate activityDate) {
         return new ActivityRow(userId, activityDate);
+    }
+
+    @Test
+    void 완료율_창은_day_end_확정일까지만_포함한다() {
+        // 미확정 날짜는 FAILED 가 아직 없어 COMPLETED 만 존재 - 창에 넣으면 완료율이 100% 쪽으로 왜곡된다.
+        when(dayEndFinalizationReader.findLastFinalizedDate())
+                .thenReturn(Optional.of(TODAY.minusDays(3)));
+        when(metricRepository.findActiveUsers()).thenReturn(List.of(activeUser(1L, TODAY.minusDays(40))));
+        when(metricRepository.findActivitiesBetween(any(), any(), any())).thenReturn(List.of());
+        when(metricRepository.findCompletionEvents(any(), any())).thenReturn(List.of());
+        when(metricRepository.findStreaksForActiveUsers()).thenReturn(List.of());
+        when(metricRepository.findSharedUserIds(HouseMemberStatus.ACTIVE)).thenReturn(List.of());
+        when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(3)))
+                .thenReturn(List.of(outcome(1L, 1, 2)));
+
+        AdminRetentionMetricsResponse response = service.getMetrics(35);
+
+        assertThat(response.dayEndFinalizedThroughDate()).isEqualTo(TODAY.minusDays(3));
+        SegmentMetric overall = response.segments().get(0);
+        assertThat(overall.completionRate().period().toDate()).isEqualTo(TODAY.minusDays(3));
+        assertThat(overall.completionRate().decidedLogCount()).isEqualTo(2);
+        verify(metricRepository).findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(3));
+    }
+
+    @Test
+    void 확정일이_창_시작보다_이르면_빈_창으로_잘라_미확정_혼입을_막는다() {
+        when(dayEndFinalizationReader.findLastFinalizedDate())
+                .thenReturn(Optional.of(TODAY.minusDays(45)));
+        when(metricRepository.findActiveUsers()).thenReturn(List.of(activeUser(1L, TODAY.minusDays(40))));
+        when(metricRepository.findActivitiesBetween(any(), any(), any())).thenReturn(List.of());
+        when(metricRepository.findCompletionEvents(any(), any())).thenReturn(List.of());
+        when(metricRepository.findStreaksForActiveUsers()).thenReturn(List.of());
+        when(metricRepository.findSharedUserIds(HouseMemberStatus.ACTIVE)).thenReturn(List.of());
+        when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(31)))
+                .thenReturn(List.of());
+
+        AdminRetentionMetricsResponse response = service.getMetrics(35);
+
+        SegmentMetric overall = response.segments().get(0);
+        assertThat(overall.completionRate().period().days()).isZero();
+        assertThat(overall.completionRate().decidedLogCount()).isZero();
+        assertThat(overall.completionRate().percentage()).isEqualTo(0.0);
     }
 
     private static CompletionEventMetricRow completion(long userId, LocalDate completedDate) {

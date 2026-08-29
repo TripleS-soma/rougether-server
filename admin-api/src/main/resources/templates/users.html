@@ -107,8 +107,10 @@
 
             <div class="observation-note">
                 <strong>북극성·비교 기준</strong>
-                <span>북극성은 최근 7개 KST 일자 중 실제 루틴 완료일이 3일 이상인 활성 비봇 사용자 비율입니다.
-                    공동군은 현재 미삭제 집에 다른 ACTIVE 비봇 사용자가 있는 사용자이며, 나머지는 개인군입니다.</span>
+                <span>북극성 분모는 활동 여부와 무관한 탈퇴·봇 제외 전체 가입자입니다. 분자는 최근 7개 KST 일자 중
+                    실제 루틴 완료일이 3일 이상인 사용자입니다.
+                    공동군은 현재 미삭제 집에 다른 ACTIVE 비봇 사용자가 있는 사용자이며, 나머지는 개인군입니다.
+                    <em id="completionFinalizedNote">완료율 확정 범위 확인 중…</em></span>
             </div>
 
             <div class="slot-table-wrap">
@@ -271,12 +273,17 @@
                 document.getElementById('northStarRate').textContent =
                     metrics.northStar.percentage.toFixed(1) + '%';
                 document.getElementById('northStarFormula').textContent =
-                    metrics.northStar.qualifiedUserCount.toLocaleString() + ' / ' +
-                    metrics.northStar.activeUserCount.toLocaleString() + '명 · ' +
+                    metrics.northStar.qualifiedUserCount.toLocaleString() + ' / 가입자 ' +
+                    metrics.northStar.registeredUserCount.toLocaleString() + '명 · ' +
                     periodText(metrics.northStar.period);
                 document.getElementById('retentionAsOf').textContent =
                     'KST ' + metrics.asOfDate + ' 기준 · 코호트 ' +
                     metrics.cohortPeriod.fromDate + ' ~ ' + metrics.cohortPeriod.toDate;
+                // 완료율 분모는 day-end 확정일까지만 집계됨 - 확정 정보가 없는 환경은 미확정 혼입 가능성을 알림.
+                document.getElementById('completionFinalizedNote').textContent =
+                    metrics.dayEndFinalizedThroughDate
+                        ? '완료율은 day-end 확정일 ' + metrics.dayEndFinalizedThroughDate + '까지만 집계합니다.'
+                        : '완료율: day-end 확정 정보 없음 - 미확정 날짜가 포함될 수 있습니다.';
                 renderSegmentRows(metrics.segments);
                 renderCohortRows(metrics.retentionCohorts);
             } catch (err) {
