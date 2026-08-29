@@ -12,11 +12,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 // admin API 의 validation·본문 파싱 실패를 공통 ErrorResponse 계약(spec api.md — code/message/fieldErrors)으로
 // 변환한다. user-api GlobalExceptionHandler 와 같은 코드·형태를 쓴다.
-// Thymeleaf 페이지 컨트롤러의 에러 처리에 영향을 주지 않도록 이 세 예외만 좁게 다루고,
+// Thymeleaf 페이지 컨트롤러의 에러 처리에 영향을 주지 않도록 이 네 예외 유형만 좁게 다루고,
 // 도메인 예외는 기존처럼 각 컨트롤러의 로컬 @ExceptionHandler 가 우선 처리한다.
 @RestControllerAdvice
 public class AdminApiExceptionHandler {
@@ -37,13 +36,6 @@ public class AdminApiExceptionHandler {
     @ExceptionHandler({HandlerMethodValidationException.class, ConstraintViolationException.class})
     public ResponseEntity<ErrorResponse> handleParamValidation(Exception exception) {
         log.warn("param validation failed: {}", exception.getMessage());
-        return ResponseEntity.badRequest()
-                .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
-    }
-
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ErrorResponse> handleParamTypeMismatch(MethodArgumentTypeMismatchException exception) {
-        log.warn("param type mismatch: {}", exception.getMessage());
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
     }
