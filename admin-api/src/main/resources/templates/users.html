@@ -78,6 +78,73 @@
                     동거 봇은 요약과 활성/탈퇴/전체 목록에서 제외되며 계정 상태 "봇"으로만 조회됩니다.</span>
             </div>
 
+            <div class="observation-result-head">
+                <strong>리텐션·핵심 행동 KPI</strong>
+                <span class="slot-count" id="retentionAsOf">KST 기준일 조회 중</span>
+            </div>
+            <div class="observation-grid" aria-label="리텐션과 북극성 지표">
+                <article class="observation-metric">
+                    <span>D1 Retention</span>
+                    <strong id="retentionD1">—</strong>
+                    <small id="retentionD1Formula">exact-day 인증 활동</small>
+                </article>
+                <article class="observation-metric">
+                    <span>D7 Retention</span>
+                    <strong id="retentionD7">—</strong>
+                    <small id="retentionD7Formula">exact-day 인증 활동</small>
+                </article>
+                <article class="observation-metric">
+                    <span>D30 Retention</span>
+                    <strong id="retentionD30">—</strong>
+                    <small id="retentionD30Formula">exact-day 인증 활동</small>
+                </article>
+                <article class="observation-metric observation-metric--accent">
+                    <span>주 3일 루틴 완료자</span>
+                    <strong id="northStarRate">—</strong>
+                    <small id="northStarFormula">최근 7일 completed_at 기준</small>
+                </article>
+            </div>
+
+            <div class="observation-note">
+                <strong>북극성·비교 기준</strong>
+                <span>북극성은 최근 7개 KST 일자 중 실제 루틴 완료일이 3일 이상인 활성 비봇 사용자 비율입니다.
+                    공동군은 현재 미삭제 집에 다른 ACTIVE 비봇 사용자가 있는 사용자이며, 나머지는 개인군입니다.</span>
+            </div>
+
+            <div class="slot-table-wrap">
+                <table class="slot-table observation-table">
+                    <thead>
+                    <tr>
+                        <th>현재 세그먼트</th>
+                        <th>사용자</th>
+                        <th>30일 완료율</th>
+                        <th>평균 현재 스트릭</th>
+                        <th>30일 재시작률</th>
+                    </tr>
+                    </thead>
+                    <tbody id="retentionSegmentRows"></tbody>
+                </table>
+            </div>
+
+            <div class="observation-result-head">
+                <strong>가입일별 exact-day Retention</strong>
+                <span class="slot-count">아직 D1·D7·D30에 도달하지 않은 코호트는 —로 표시</span>
+            </div>
+            <div class="slot-table-wrap">
+                <table class="slot-table observation-table">
+                    <thead>
+                    <tr>
+                        <th>가입일 (KST)</th>
+                        <th>가입자</th>
+                        <th>D1</th>
+                        <th>D7</th>
+                        <th>D30</th>
+                    </tr>
+                    </thead>
+                    <tbody id="retentionCohortRows"></tbody>
+                </table>
+            </div>
+
             <div class="observation-filters">
                 <label class="observation-filter observation-filter--search">
                     <span>사용자 검색</span>
@@ -173,7 +240,7 @@
         let total = 0;
         let characterOptions = [];
 
-        Promise.all([loadSummary(), loadCharacters()]).then(load);
+        Promise.all([loadSummary(), loadRetentionMetrics(), loadCharacters()]).then(load);
 
         async function loadSummary() {
             try {
@@ -191,6 +258,98 @@
             } catch (err) {
                 showError('요약 조회 중 오류: ' + err.message);
             }
+        }
+
+        async function loadRetentionMetrics() {
+            try {
+                const res = await fetch('/admin/retention/metrics?cohortDays=35');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const metrics = await res.json();
+                renderRetentionCard('retentionD1', 'retentionD1Formula', metrics.retention.d1);
+                renderRetentionCard('retentionD7', 'retentionD7Formula', metrics.retention.d7);
+                renderRetentionCard('retentionD30', 'retentionD30Formula', metrics.retention.d30);
+                document.getElementById('northStarRate').textContent =
+                    metrics.northStar.percentage.toFixed(1) + '%';
+                document.getElementById('northStarFormula').textContent =
+                    metrics.northStar.qualifiedUserCount.toLocaleString() + ' / ' +
+                    metrics.northStar.activeUserCount.toLocaleString() + '명 · ' +
+                    periodText(metrics.northStar.period);
+                document.getElementById('retentionAsOf').textContent =
+                    'KST ' + metrics.asOfDate + ' 기준 · 코호트 ' +
+                    metrics.cohortPeriod.fromDate + ' ~ ' + metrics.cohortPeriod.toDate;
+                renderSegmentRows(metrics.segments);
+                renderCohortRows(metrics.retentionCohorts);
+            } catch (err) {
+                showError('리텐션 KPI 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function renderRetentionCard(valueId, formulaId, metric) {
+            document.getElementById(valueId).textContent = metric.percentage.toFixed(1) + '%';
+            document.getElementById(formulaId).textContent =
+                metric.returnedUserCount.toLocaleString() + ' / ' +
+                metric.eligibleUserCount.toLocaleString() + '명';
+        }
+
+        function renderSegmentRows(segments) {
+            const labels = { OVERALL: '전체', PERSONAL: '개인군', SHARED: '공동군' };
+            const rows = segments.map(metric => {
+                const row = document.createElement('tr');
+                row.append(
+                    textCell(labels[metric.segment] ?? metric.segment),
+                    metricCell(metric.userCount),
+                    textCell(rateFormula(metric.completionRate,
+                        metric.completionRate.completedLogCount, metric.completionRate.decidedLogCount)),
+                    textCell(metric.currentStreak.average.toFixed(1) + '일 (' +
+                        metric.currentStreak.currentStreakSum.toLocaleString() + ' / ' +
+                        metric.currentStreak.userCount.toLocaleString() + '명)'),
+                    textCell(rateFormula(metric.restartRate,
+                        metric.restartRate.restartedUserCount, metric.restartRate.gapExperiencedUserCount))
+                );
+                return row;
+            });
+            document.getElementById('retentionSegmentRows').replaceChildren(...rows);
+        }
+
+        function renderCohortRows(cohorts) {
+            const rows = cohorts.map(cohort => {
+                const row = document.createElement('tr');
+                row.append(
+                    textCell(cohort.cohortDate),
+                    metricCell(cohort.cohortUserCount),
+                    textCell(retentionPointText(cohort.d1)),
+                    textCell(retentionPointText(cohort.d7)),
+                    textCell(retentionPointText(cohort.d30))
+                );
+                return row;
+            });
+            const tbody = document.getElementById('retentionCohortRows');
+            if (rows.length === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.className = 'observation-empty';
+                cell.textContent = '조회 기간에 가입 코호트가 없습니다.';
+                row.append(cell);
+                tbody.replaceChildren(row);
+            } else {
+                tbody.replaceChildren(...rows);
+            }
+        }
+
+        function retentionPointText(point) {
+            if (!point) return '—';
+            return point.percentage.toFixed(1) + '% (' + point.returnedUserCount.toLocaleString() +
+                '/' + point.eligibleUserCount.toLocaleString() + ')';
+        }
+
+        function rateFormula(metric, numerator, denominator) {
+            return metric.percentage.toFixed(1) + '% (' + numerator.toLocaleString() + '/' +
+                denominator.toLocaleString() + ') · ' + periodText(metric.period);
+        }
+
+        function periodText(period) {
+            return period.fromDate + ' ~ ' + period.toDate;
         }
 
         async function load() {
@@ -440,6 +599,7 @@
             select.addEventListener('change', reloadFromFirstPage));
         document.getElementById('refresh').addEventListener('click', () => {
             loadSummary();
+            loadRetentionMetrics();
             load();
         });
         document.getElementById('prev').addEventListener('click', () => {
