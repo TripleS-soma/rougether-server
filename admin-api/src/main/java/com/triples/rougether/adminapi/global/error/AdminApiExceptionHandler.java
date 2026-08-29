@@ -12,7 +12,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 // admin API 의 validation·본문 파싱 실패를 공통 ErrorResponse 계약(spec api.md — code/message/fieldErrors)으로
 // 변환한다. user-api GlobalExceptionHandler 와 같은 코드·형태를 쓴다.
@@ -55,11 +54,4 @@ public class AdminApiExceptionHandler {
                 .body(ErrorResponse.of("MALFORMED_REQUEST", "요청 본문을 해석할 수 없습니다."));
     }
 
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
-        log.warn("request parameter type mismatch: name={}, value={}",
-                exception.getName(), exception.getValue());
-        return ResponseEntity.badRequest()
-                .body(ErrorResponse.of("VALIDATION_FAILED", "입력값이 올바르지 않습니다."));
-    }
 }
