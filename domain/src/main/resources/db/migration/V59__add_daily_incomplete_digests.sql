@@ -1,3 +1,5 @@
+-- 저녁 미완료 통합 알림(daily digest). created_at/updated_at 의 DB DEFAULT·ON UPDATE 는 이 테이블의 의도된 예외다
+-- - push 상태 전이가 JPA auditing 을 우회하는 bulk UPDATE 로 일어나므로 갱신 시각을 DB 가 보장한다.
 CREATE TABLE daily_incomplete_digests
 (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -32,3 +34,8 @@ CREATE TABLE daily_incomplete_digest_targets
 
 CREATE INDEX idx_daily_incomplete_digest_targets_lookup
     ON daily_incomplete_digest_targets (target_type, target_id);
+
+-- 발송 reader(findDailyDigestPending)가 (type, push_status, id 커서) 로 탐침함 - 기존 인덱스로는
+-- push_status 를 못 타 매 실행 해당 타입 전체 이력을 재스캔하게 되므로 전용 인덱스를 둔다.
+CREATE INDEX idx_notification_type_push_status_id
+    ON notification (type, push_status, id);

@@ -78,10 +78,6 @@ public class DailyIncompleteDigest extends BaseEntity {
         this.notification = notification;
     }
 
-    public void updatePushStatus(PushStatus pushStatus, Instant now) {
-        this.pushStatus = pushStatus;
-        if (pushStatus == PushStatus.SENT) {
-            this.sentAt = now;
-        }
-    }
+    // push 상태 전이는 발송 흐름의 bulk UPDATE(updatePushStatusByNotificationId)가 유일한 경로다.
+    // 엔티티 메서드 버전은 SENT 외 상태의 sentAt 처리 규칙이 bulk 와 어긋난 채 죽은 코드였어서 두지 않는다.
 }

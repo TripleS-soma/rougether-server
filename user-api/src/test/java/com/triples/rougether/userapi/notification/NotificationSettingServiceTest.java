@@ -17,15 +17,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 // 알림 설정 의미 검증 - 행 없음=ON 기본값, 부분 변경 upsert, 마스터/그룹 게이트를 실제 DB로 확인.
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:notification-setting;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.flyway.enabled=true",
-        "spring.flyway.locations=classpath:db/migration"
-})
+// datasource 는 테스트 공통 설정(Testcontainers MySQL)을 그대로 쓴다 - H2 오버라이드는 "실제 DB" 보장을 깨고
+// 컨텍스트를 하나 더 포크하므로 두지 않는다.
+@SpringBootTest
 @Transactional
 class NotificationSettingServiceTest {
 

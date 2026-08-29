@@ -12,7 +12,6 @@ import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationSettingType;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
-import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
@@ -34,23 +33,20 @@ class DailyIncompleteDigestTest {
     }
 
     @Test
-    void notification을_연결하고_SENT일_때만_sentAt을_기록한다() {
+    void notification을_연결하면_PENDING_상태로_발송을_기다린다() {
+        // push 상태 전이는 발송 흐름의 bulk UPDATE 가 유일한 경로다(엔티티 전이 메서드 없음) - 여기선 연결 계약만 본다.
         User user = mock(User.class);
         DailyIncompleteDigest digest = DailyIncompleteDigest.create(user, LocalDate.of(2026, 8, 29), 2, 1);
         Notification notification = Notification.create(user, NotificationType.DAILY_INCOMPLETE_DIGEST,
                 "title", "body", 1L);
 
         digest.linkNotification(notification);
-        digest.updatePushStatus(PushStatus.FAILED, Instant.parse("2026-08-29T12:00:00Z"));
+
         assertThat(digest.getNotification()).isSameAs(notification);
-        assertThat(digest.getPushStatus()).isEqualTo(PushStatus.FAILED);
+        assertThat(digest.getPushStatus()).isEqualTo(PushStatus.PENDING);
         assertThat(digest.getSentAt()).isNull();
-
-        Instant sentAt = Instant.parse("2026-08-29T12:05:00Z");
-        digest.updatePushStatus(PushStatus.SENT, sentAt);
-
-        assertThat(digest.getPushStatus()).isEqualTo(PushStatus.SENT);
-        assertThat(digest.getSentAt()).isEqualTo(sentAt);
+        assertThatThrownBy(() -> digest.linkNotification(null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

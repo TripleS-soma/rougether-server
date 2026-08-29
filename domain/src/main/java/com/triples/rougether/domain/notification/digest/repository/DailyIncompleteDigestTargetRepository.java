@@ -28,6 +28,8 @@ public interface DailyIncompleteDigestTargetRepository extends JpaRepository<Dai
             + "and d.digestDate between :fromDate and :toDate "
             + "and l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.COMPLETED "
             + "and coalesce(r.originRoutineId, r.id) = t.targetId "
+            // 계보 id 는 사용자별 유일해 결과는 같지만, 사용자 조인을 명시해 선택도와 의도를 분명히 한다.
+            + "and r.user = d.user "
             + "and l.completedAt >= d.sentAt "
             + "and l.completedAt < :completedBefore")
     List<DailyDigestTargetCompletionEventRow> findCompletedRoutineTargetsAfterDigestSent(

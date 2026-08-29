@@ -23,7 +23,8 @@ public interface DailyIncompleteDigestRepository extends JpaRepository<DailyInco
                                          @Param("pushStatus") PushStatus pushStatus,
                                          @Param("sentAt") java.time.Instant sentAt);
 
-    @Query("select d from DailyIncompleteDigest d join fetch d.user left join fetch d.notification "
+    // user 는 지표 집계가 읽지 않으므로 fetch 하지 않는다(최대 90일치 User 엔티티 로딩 방지).
+    @Query("select d from DailyIncompleteDigest d left join fetch d.notification "
             + "where d.digestDate between :fromDate and :toDate order by d.digestDate desc, d.id desc")
     List<DailyIncompleteDigest> findWithNotificationBetween(
             @Param("fromDate") LocalDate fromDate,
