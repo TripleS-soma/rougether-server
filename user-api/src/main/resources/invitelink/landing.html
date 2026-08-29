@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>루게더 초대</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+    background: #FBF6EF; color: #4A4036;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .card {
+    background: #FFFFFF; border-radius: 24px; padding: 36px 28px;
+    max-width: 380px; width: 100%; text-align: center;
+    box-shadow: 0 8px 28px rgba(122, 102, 82, .14);
+  }
+  .logo { font-size: 15px; font-weight: 700; color: #C69A6D; letter-spacing: .12em; margin-bottom: 20px; }
+  h1 { font-size: 21px; line-height: 1.45; margin-bottom: 10px; word-break: keep-all; }
+  .subline { font-size: 14px; line-height: 1.6; color: #8A7B6C; word-break: keep-all; }
+  .code-section { margin-top: 24px; }
+  .code-label { font-size: 12px; color: #A99C8D; margin-bottom: 6px; }
+  .code-box {
+    display: flex; gap: 8px; justify-content: center; align-items: center;
+    background: #F6EEE3; border-radius: 14px; padding: 12px 14px;
+  }
+  .code-value { font-size: 22px; font-weight: 700; letter-spacing: .18em; font-family: ui-monospace, Menlo, monospace; }
+  .copy-btn {
+    border: 0; border-radius: 10px; background: #E8D8C3; color: #6B5A47;
+    font-size: 13px; font-weight: 600; padding: 8px 12px; cursor: pointer; white-space: nowrap;
+  }
+  .actions { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .store-btn {
+    display: block; border-radius: 14px; padding: 14px 16px;
+    font-size: 15px; font-weight: 700; text-decoration: none;
+  }
+  .store-btn.play { background: #7BB07E; color: #FFFFFF; }
+  .store-btn.appstore { background: #4A4036; color: #FFFFFF; }
+  .app-open { font-size: 13px; color: #8A7B6C; text-decoration: underline; margin-top: 4px; display: inline-block; }
+  .store-fallback { font-size: 13px; color: #8A7B6C; line-height: 1.6; word-break: keep-all; }
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: rgba(74, 64, 54, .92); color: #FFF; font-size: 13px;
+    padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo">ROUGETHER</div>
+  <h1>{{HEADLINE}}</h1>
+  <p class="subline">{{SUBLINE}}</p>
+  {{CODE_SECTION}}
+  <div class="actions">{{ACTION_SECTION}}</div>
+</main>
+<div id="toast" class="toast">초대코드를 복사했어요</div>
+<script>
+  // 설치 전 클릭 대비: 스토어로 넘어가기 전에 코드를 클립보드에 실어 둔다(iOS deferred 경로).
+  // 실패해도 화면의 코드·복사 버튼이 남아 있어 수동 경로로 이어진다(best-effort).
+  var PAYLOAD = "{{CLIP_PAYLOAD}}";
+  function copyPayload() {
+    if (!PAYLOAD) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(PAYLOAD).then(showToast, function () { legacyCopy(); });
+      } else {
+        legacyCopy();
+      }
+    } catch (e) { /* 클립보드 미지원 환경 — 수동 복사로 폴백 */ }
+  }
+  function legacyCopy() {
+    var area = document.createElement("textarea");
+    area.value = PAYLOAD;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    try { if (document.execCommand("copy")) showToast(); } catch (e) { /* 무시 */ }
+    document.body.removeChild(area);
+  }
+  function showToast() {
+    var toast = document.getElementById("toast");
+    toast.classList.add("show");
+    setTimeout(function () { toast.classList.remove("show"); }, 1800);
+  }
+  document.querySelectorAll("[data-copy]").forEach(function (el) {
+    el.addEventListener("click", function () { copyPayload(); });
+  });
+</script>
+</body>
+</html>
