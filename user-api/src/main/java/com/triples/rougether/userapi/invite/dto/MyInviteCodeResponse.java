@@ -7,6 +7,10 @@ public record MyInviteCodeResponse(
         @Schema(description = "내 개인 초대코드. 친구가 POST /api/v1/invites/redeem 에 넣으면 양쪽이 보상을 받는다",
                 example = "ABCD2345")
         String code,
+        @Schema(description = "코드 공유용 초대 링크(랜딩 /i/{code}). 공유 시트에는 코드 대신 이 링크를 우선 사용한다. "
+                + "서버에 링크 base URL(invite.link.share-base-url)이 설정되지 않은 환경에서는 null - 코드만 공유로 폴백",
+                example = "https://rougether.app/i/ABCD2345", nullable = true)
+        String shareUrl,
         @Schema(description = "이 코드로 실제 보상이 지급된 초대 건수. 한도 초과로 0원 지급된 건은 세지 않아 "
                 + "maxRewardedCount 를 넘지 않는다", example = "3")
         long rewardedCount,

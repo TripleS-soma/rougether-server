@@ -24,4 +24,7 @@ public interface InviteRewardRepository extends JpaRepository<InviteReward, Long
 
     // 조회 전용(내 초대코드 화면) — 판정에 쓰지 않으므로 잠금 없이 센다.
     long countByInviterIdAndInviterRewardAmountGreaterThan(Long inviterUserId, int amount);
+
+    // 조회 전용(코드 미리보기의 alreadyRedeemed 표시) — 최종 중복 판정은 redeem 의 locking read 가 한다.
+    boolean existsByInviteeId(Long inviteeUserId);
 }
