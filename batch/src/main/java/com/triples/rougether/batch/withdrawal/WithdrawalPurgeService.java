@@ -53,6 +53,13 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM weekly_reports WHERE user_id = ?", userId);
         // 조정 추천(#329)도 루틴 로그 파생 데이터이며 routines FK(계보·대상·적용 버전) 자식이라 루틴보다 먼저 지운다
         jdbcTemplate.update("DELETE FROM routine_recommendations WHERE user_id = ?", userId);
+        // HOLDOUT 배정·주별 적격 기록(#342)도 탈퇴 사용자를 지표에서 완전히 제거한다.
+        jdbcTemplate.update("""
+                DELETE e FROM recommendation_experiment_eligibilities e
+                JOIN recommendation_experiment_assignments a ON a.id = e.assignment_id
+                WHERE a.user_id = ?
+                """, userId);
+        jdbcTemplate.update("DELETE FROM recommendation_experiment_assignments WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM todos WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM routines WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM categories WHERE user_id = ?", userId);

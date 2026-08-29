@@ -72,6 +72,12 @@ class WithdrawalPurgeTriggerTest {
                     "DELETE rl FROM routine_logs rl JOIN routines r ON r.id = rl.routine_id WHERE r.user_id = ?",
                     userId);
             jdbcTemplate.update("DELETE FROM routine_recommendations WHERE user_id = ?", userId);
+            jdbcTemplate.update("""
+                    DELETE e FROM recommendation_experiment_eligibilities e
+                    JOIN recommendation_experiment_assignments a ON a.id = e.assignment_id
+                    WHERE a.user_id = ?
+                    """, userId);
+            jdbcTemplate.update("DELETE FROM recommendation_experiment_assignments WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM routines WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM todos WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM categories WHERE user_id = ?", userId);
@@ -206,6 +212,17 @@ class WithdrawalPurgeTriggerTest {
                 VALUES (?, ?, ?, 'ADJUST_DAYS', 'RULE', '{"repeatType":"WEEKLY","daysOfWeek":["MON"]}',
                         '추천', 'ACTIVE', ?, ?)
                 """, userId, routineId, routineId, now(), now());
+        jdbcTemplate.update("""
+                INSERT INTO recommendation_experiment_assignments
+                    (experiment_key, user_id, variant, created_at)
+                VALUES ('ROUTINE_ADJUSTMENT_V1', ?, 'TREATMENT', ?)
+                """, userId, now());
+        Long assignmentId = lastId("recommendation_experiment_assignments");
+        jdbcTemplate.update("""
+                INSERT INTO recommendation_experiment_eligibilities
+                    (assignment_id, cohort_week_start, created_at)
+                VALUES (?, '2026-08-16', ?)
+                """, assignmentId, now());
 
         jdbcTemplate.update("INSERT INTO user_items (user_id, item_id, acquired_at) VALUES (?, ?, ?)",
                 userId, itemId, now());
@@ -305,6 +322,15 @@ class WithdrawalPurgeTriggerTest {
         return count == null ? 0 : count;
     }
 
+    private int experimentEligibilityCountFor(Long userId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM recommendation_experiment_eligibilities e
+                JOIN recommendation_experiment_assignments a ON a.id = e.assignment_id
+                WHERE a.user_id = ?
+                """, Integer.class, userId);
+        return count == null ? 0 : count;
+    }
+
     private Timestamp purgedAtOf(Long userId) {
         return jdbcTemplate.queryForObject(
                 "SELECT purged_at FROM users WHERE id = ?", Timestamp.class, userId);
@@ -317,6 +343,7 @@ class WithdrawalPurgeTriggerTest {
         for (String[] tableAndColumn : new String[][] {
                 {"categories", "user_id"}, {"routines", "user_id"}, {"todos", "user_id"},
                 {"streaks", "user_id"}, {"weekly_reports", "user_id"}, {"routine_recommendations", "user_id"},
+                {"recommendation_experiment_assignments", "user_id"},
                 {"personal_rooms", "user_id"},
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
                 {"room_cobwebs", "room_user_id"},
@@ -334,6 +361,8 @@ class WithdrawalPurgeTriggerTest {
         }
         assertThat(accessoryCountFor(withdrawnUserId)).isZero();
         assertThat(accessoryCountFor(activeUserId)).isEqualTo(1);
+        assertThat(experimentEligibilityCountFor(withdrawnUserId)).isZero();
+        assertThat(experimentEligibilityCountFor(activeUserId)).isEqualTo(1);
         // 초대 보상 원장은 초대자 지급 한도 카운트 보존을 위해 남긴다
         assertThat(countFor("invite_rewards", "inviter_user_id", withdrawnUserId)).isEqualTo(1);
         // users row 는 FK 앵커(방명록 author 등)로 남고 purged_at 만 찍힌다

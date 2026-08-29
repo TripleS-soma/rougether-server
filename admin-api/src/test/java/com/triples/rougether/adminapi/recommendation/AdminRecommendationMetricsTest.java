@@ -1,19 +1,28 @@
 package com.triples.rougether.adminapi.recommendation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse;
+import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.VariantMetric;
+import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.VariantWeekMetric;
 import com.triples.rougether.adminapi.recommendation.dto.AdminRecommendationMetricsResponse.WeekMetric;
 import com.triples.rougether.adminapi.recommendation.service.AdminRecommendationMetricsService;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.RecommendationExperimentPolicy;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentAssignment;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentEligibility;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentVariant;
 import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentAssignmentRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
@@ -34,6 +43,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +89,12 @@ class AdminRecommendationMetricsTest {
 
     @Autowired
     RoutineRecommendationRepository routineRecommendationRepository;
+
+    @Autowired
+    RecommendationExperimentAssignmentRepository assignmentRepository;
+
+    @Autowired
+    RecommendationExperimentEligibilityRepository eligibilityRepository;
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -164,6 +180,97 @@ class AdminRecommendationMetricsTest {
     }
 
     @Test
+    void variant별_대상_추천_수락과_KST_직전주_대비_다음주_완료율을_비교한다() {
+        User controlUser = userRepository.save(User.signUp("holdout-control@rougether.dev"));
+        Routine controlRoutine = saveRoutine(controlUser, "대조군 루틴");
+        saveLog(controlRoutine, LocalDate.of(2030, 7, 28), true);
+        saveLog(controlRoutine, LocalDate.of(2030, 7, 29), false); // 직전 주 50%
+        saveLog(controlRoutine, LocalDate.of(2030, 8, 11), true);
+        saveLog(controlRoutine, LocalDate.of(2030, 8, 12), false); // 다음 주 50%, 변화 0pp
+        recordEligibility(controlUser, RecommendationExperimentVariant.CONTROL, BATCH_WEEK);
+
+        User treatmentUser = userRepository.save(User.signUp("holdout-treatment@rougether.dev"));
+        Routine treatmentRoutine = saveRoutine(treatmentUser, "실험군 루틴");
+        saveLog(treatmentRoutine, LocalDate.of(2030, 7, 28), true);
+        saveLog(treatmentRoutine, LocalDate.of(2030, 7, 29), false); // 직전 주 50%
+        saveLog(treatmentRoutine, LocalDate.of(2030, 8, 11), true);
+        saveLog(treatmentRoutine, LocalDate.of(2030, 8, 12), true); // 다음 주 100%, 변화 +50pp
+        recordEligibility(treatmentUser, RecommendationExperimentVariant.TREATMENT, BATCH_WEEK);
+        RoutineRecommendation accepted = saveRecommendation(treatmentUser, treatmentRoutine,
+                BATCH_WEEK, instantKst(2030, 8, 11, 0));
+        accepted.accept(instantKst(2030, 8, 5, 9), treatmentRoutine.getId());
+
+        VariantWeekMetric cohort = metricsService.getMetrics(3).variantWeeks().get(2);
+
+        assertThat(cohort.weekStartDate()).isEqualTo(BATCH_WEEK);
+        assertThat(cohort.weekEndDate()).isEqualTo(BATCH_WEEK.plusDays(6));
+        VariantMetric control = cohort.control();
+        assertThat(control.targetUserCount()).isEqualTo(1);
+        assertThat(control.recommendationGeneratedUserCount()).isZero();
+        assertThat(control.recommendationGenerationRate()).isZero();
+        assertThat(control.recommendationAcceptedUserCount()).isZero();
+        assertThat(control.recommendationAcceptanceRate()).isZero();
+        assertThat(control.effectMeasuredUserCount()).isEqualTo(1);
+        assertThat(control.baselineCompletionRate()).isEqualTo(50.0);
+        assertThat(control.nextWeekCompletionRate()).isEqualTo(50.0);
+        assertThat(control.completionDeltaPp()).isEqualTo(0.0);
+
+        VariantMetric treatment = cohort.treatment();
+        assertThat(treatment.targetUserCount()).isEqualTo(1);
+        assertThat(treatment.recommendationGeneratedUserCount()).isEqualTo(1);
+        assertThat(treatment.recommendationGenerationRate()).isEqualTo(100.0);
+        assertThat(treatment.recommendationAcceptedUserCount()).isEqualTo(1);
+        assertThat(treatment.recommendationAcceptanceRate()).isEqualTo(100.0);
+        assertThat(treatment.effectMeasuredUserCount()).isEqualTo(1);
+        assertThat(treatment.baselineCompletionRate()).isEqualTo(50.0);
+        assertThat(treatment.nextWeekCompletionRate()).isEqualTo(100.0);
+        assertThat(treatment.completionDeltaPp()).isEqualTo(50.0);
+        assertThat(cohort.treatmentLiftPp()).isEqualTo(50.0);
+    }
+
+    @Test
+    void 탈퇴_사용자는_variant_지표에서_제외한다() {
+        User withdrawn = userRepository.save(User.signUp("holdout-withdrawn@rougether.dev"));
+        recordEligibility(withdrawn, RecommendationExperimentVariant.CONTROL, CURRENT_WEEK);
+        Routine routine = saveRoutine(withdrawn, "탈퇴 사용자 루틴");
+        saveRecommendation(withdrawn, routine, CURRENT_WEEK, instantKst(2030, 8, 25, 0));
+        withdrawn.softDelete(NOW.minusSeconds(60));
+
+        AdminRecommendationMetricsResponse response = metricsService.getMetrics(1);
+        VariantWeekMetric current = response.variantWeeks().getFirst();
+
+        assertThat(current.control().targetUserCount()).isZero();
+        assertThat(current.treatment().targetUserCount()).isZero();
+        assertThat(response.weeks().getFirst().createdCount()).isZero();
+    }
+
+    @Test
+    void 사용자와_실험_키의_중복_배정은_DB_unique로_차단한다() {
+        User user = userRepository.save(User.signUp("holdout-unique@rougether.dev"));
+        assignmentRepository.saveAndFlush(RecommendationExperimentAssignment.assign(
+                user, RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1,
+                RecommendationExperimentVariant.CONTROL));
+
+        assertThatThrownBy(() -> assignmentRepository.saveAndFlush(RecommendationExperimentAssignment.assign(
+                user, RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1,
+                RecommendationExperimentVariant.TREATMENT)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void variant_효과는_사용자별_최초_적격_cohort에만_귀속한다() {
+        User user = userRepository.save(User.signUp("holdout-first-cohort@rougether.dev"));
+        RecommendationExperimentAssignment assignment = recordEligibility(
+                user, RecommendationExperimentVariant.CONTROL, BATCH_WEEK);
+        eligibilityRepository.save(RecommendationExperimentEligibility.record(assignment, LAST_WEEK));
+
+        AdminRecommendationMetricsResponse response = metricsService.getMetrics(3);
+
+        assertThat(response.variantWeeks().get(2).control().targetUserCount()).isEqualTo(1);
+        assertThat(response.variantWeeks().get(1).control().targetUserCount()).isZero();
+    }
+
+    @Test
     void 기한이_남아도_루틴_삭제나_선행_수정으로_무효면_만료로_센다() {
         // 사용자 목록(lazy 필터)에서 이미 빠진 ACTIVE 건은 대기가 아니라 만료와 같은 무반응 종결(#333 리뷰)
         User user = userRepository.save(User.signUp("rec-metrics-invalid@rougether.dev"));
@@ -227,7 +334,7 @@ class AdminRecommendationMetricsTest {
 
         // 다음 주(08-11~17)가 막 끝난 일요일 08-18 07:00 — 아직 측정 대기
         AdminRecommendationMetricsService sundayService = new AdminRecommendationMetricsService(
-                routineRecommendationRepository, routineRepository, routineLogRepository,
+                routineRecommendationRepository, eligibilityRepository, routineRepository, routineLogRepository,
                 java.time.Clock.fixed(instantKst(2030, 8, 18, 7), KST));
         WeekMetric onSunday = sundayService.getMetrics(3).weeks().get(2);
         assertThat(onSunday.effectPendingCount()).isEqualTo(1);
@@ -235,7 +342,7 @@ class AdminRecommendationMetricsTest {
 
         // 하루 지난 월요일 08-19 07:00 — day-end 확정 여유가 지나 측정됨
         AdminRecommendationMetricsService mondayService = new AdminRecommendationMetricsService(
-                routineRecommendationRepository, routineRepository, routineLogRepository,
+                routineRecommendationRepository, eligibilityRepository, routineRepository, routineLogRepository,
                 java.time.Clock.fixed(instantKst(2030, 8, 19, 7), KST));
         WeekMetric onMonday = mondayService.getMetrics(3).weeks().get(2);
         assertThat(onMonday.effectMeasuredCount()).isEqualTo(1);
@@ -271,6 +378,9 @@ class AdminRecommendationMetricsTest {
                 .andExpect(jsonPath("$.weeks[0].createdCount").value(0))
                 .andExpect(jsonPath("$.weeks[0].acceptedRate").value(0.0))
                 .andExpect(jsonPath("$.weeks[0].avgCompletionDeltaPp").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.variantWeeks.length()").value(1))
+                .andExpect(jsonPath("$.variantWeeks[0].control.targetUserCount").value(0))
+                .andExpect(jsonPath("$.variantWeeks[0].treatment.targetUserCount").value(0))
                 .andExpect(jsonPath("$.generatedAt").value(NOW.toString()));
     }
 
@@ -284,6 +394,20 @@ class AdminRecommendationMetricsTest {
     void 미인증이면_관측_API_에_접근할_수_없다() throws Exception {
         mockMvc.perform(get("/admin/recommendations/metrics"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void 관리자_역할이_아니면_관측_API_에_접근할_수_없다() throws Exception {
+        mockMvc.perform(get("/admin/recommendations/metrics"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void 최고_관리자도_관측_API_에_접근할_수_있다() throws Exception {
+        mockMvc.perform(get("/admin/recommendations/metrics").param("weeks", "1"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -324,6 +448,15 @@ class AdminRecommendationMetricsTest {
         jdbcTemplate.update("update routine_recommendations set created_at = ? where id = ?",
                 Timestamp.from(instantKst(createdWeekStart, 5)), recommendation.getId());
         return recommendation;
+    }
+
+    private RecommendationExperimentAssignment recordEligibility(
+            User user, RecommendationExperimentVariant variant, LocalDate cohortWeekStart) {
+        RecommendationExperimentAssignment assignment = assignmentRepository.save(
+                RecommendationExperimentAssignment.assign(
+                        user, RecommendationExperimentPolicy.ROUTINE_ADJUSTMENT_V1, variant));
+        eligibilityRepository.save(RecommendationExperimentEligibility.record(assignment, cohortWeekStart));
+        return assignment;
     }
 
     private static Instant instantKst(LocalDate date, int hour) {

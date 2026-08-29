@@ -2,7 +2,11 @@ package com.triples.rougether.batch.recommendation;
 
 import com.triples.rougether.batch.recommendation.RecommendationRuleEvaluator.WeekRange;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentAssignment;
+import com.triples.rougether.domain.recommendation.entity.RecommendationExperimentEligibility;
 import com.triples.rougether.domain.recommendation.entity.RoutineRecommendation;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentAssignmentRepository;
+import com.triples.rougether.domain.recommendation.repository.RecommendationExperimentEligibilityRepository;
 import com.triples.rougether.domain.recommendation.repository.RoutineRecommendationRepository;
 import com.triples.rougether.domain.report.WeeklyReportPolicy;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
@@ -48,14 +52,30 @@ class RoutineRecommendationJobConfig {
     @Bean
     Step routineRecommendationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
             RecommendationUserReader recommendationUserReader, RecommendationProcessor recommendationProcessor,
+            RecommendationExperimentAssignmentRepository assignmentRepository,
+            RecommendationExperimentEligibilityRepository eligibilityRepository,
             RoutineRecommendationRepository routineRecommendationRepository) {
         return new StepBuilder("routineRecommendationStep", jobRepository)
-                .<Long, List<RoutineRecommendation>>chunk(CHUNK_SIZE)
+                .<Long, RecommendationProcessingResult>chunk(CHUNK_SIZE)
                 .transactionManager(transactionManager)
                 .reader(recommendationUserReader)
                 .processor(recommendationProcessor)
-                .writer(chunk -> routineRecommendationRepository.saveAll(
-                        chunk.getItems().stream().flatMap(List::stream).toList()))
+                .writer(chunk -> {
+                    List<RecommendationExperimentAssignment> assignments = chunk.getItems().stream()
+                            .map(RecommendationProcessingResult::newAssignment)
+                            .filter(java.util.Objects::nonNull)
+                            .toList();
+                    assignmentRepository.saveAll(assignments);
+                    List<RecommendationExperimentEligibility> eligibilities = chunk.getItems().stream()
+                            .map(RecommendationProcessingResult::eligibility)
+                            .filter(java.util.Objects::nonNull)
+                            .toList();
+                    eligibilityRepository.saveAll(eligibilities);
+                    List<RoutineRecommendation> recommendations = chunk.getItems().stream()
+                            .flatMap(result -> result.recommendations().stream())
+                            .toList();
+                    routineRecommendationRepository.saveAll(recommendations);
+                })
                 .faultTolerant()
                 // 사용자 단위 예외(집계 오류 등)는 그 사용자만 건너뛰고 job 은 계속 간다(상한 SKIP_LIMIT)
                 .skipPolicy(new LimitCheckingItemSkipPolicy(SKIP_LIMIT, Map.of(Exception.class, true)))
@@ -75,12 +95,15 @@ class RoutineRecommendationJobConfig {
     @Bean
     @StepScope
     RecommendationProcessor recommendationProcessor(RoutineRecommendationRepository routineRecommendationRepository,
+            RecommendationExperimentAssignmentRepository assignmentRepository,
+            RecommendationExperimentEligibilityRepository eligibilityRepository,
             RoutineRepository routineRepository, RoutineLogRepository routineLogRepository,
             UserRepository userRepository, RecommendationRuleEvaluator recommendationRuleEvaluator, Clock clock,
             @Value("#{jobParameters['" + WEEK_START_PARAM + "']}") String weekStartParam) {
         LocalDate weekStart = LocalDate.parse(weekStartParam);
-        return new RecommendationProcessor(routineRecommendationRepository, routineRepository, routineLogRepository,
-                userRepository, recommendationRuleEvaluator, clock,
+        return new RecommendationProcessor(routineRecommendationRepository, assignmentRepository,
+                eligibilityRepository, routineRepository, routineLogRepository, userRepository,
+                recommendationRuleEvaluator, clock, weekStart.plusWeeks(1),
                 RecommendationPolicy.windowStart(weekStart), WeeklyReportPolicy.weekEndOf(weekStart),
                 weeksOf(weekStart));
     }

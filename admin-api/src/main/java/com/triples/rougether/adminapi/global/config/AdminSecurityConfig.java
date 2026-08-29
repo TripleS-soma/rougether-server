@@ -31,7 +31,8 @@ public class AdminSecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 "/accessory-render-profiles",
-                                "/admin/character-accessory-render-profiles/**"
+                                "/admin/character-accessory-render-profiles/**",
+                                "/admin/recommendations/**"
                         ).hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
