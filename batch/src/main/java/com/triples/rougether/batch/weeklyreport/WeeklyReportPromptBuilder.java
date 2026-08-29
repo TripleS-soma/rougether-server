@@ -31,12 +31,21 @@ public class WeeklyReportPromptBuilder {
             - highlights: 잘한 점, 최대 %d개, 각 %d자 이내.
             - failurePatterns: 실패가 반복된 요일·루틴 등 패턴, 최대 %d개, 각 %d자 이내. 실패가 없으면 빈 배열.
             - suggestions: 다음 주에 시도할 구체적 제안, 최대 %d개, 각 %d자 이내.
+            - [지난주 수락한 조정 추천] 블록이 있으면 수락 사실과 수락 후 기록을 회고에서 한 번 짚는다. 수락 후 기록은 주 중간부터의 부분 기록이니 효과를 단정하지 말고, 기록이 좋으면 가볍게 격려하고 어렵거나 아직 수행일이 없으면 다음 주에 새 스케줄대로 시작해 보자고 독려한다.
             스키마: {"summary": string, "highlights": string[], "failurePatterns": string[], "suggestions": string[]}
             """.formatted(SUMMARY_MAX_CHARS, SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS,
             SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS, SECTION_MAX_ITEMS, SECTION_ITEM_MAX_CHARS);
 
+    // 닫힌 루프(#334): 회고 대상 주에 수락된 조정 추천 1건의 프롬프트 재료.
+    // dayTokens 는 proposal 의 요일 토큰("MON"...), completed/failed 는 수락 적용 버전의 그 주 log 만 센 값
+    // (수락 전 성과가 조정 결과로 섞이지 않게 - #336 리뷰). 둘 다 0이면 수락 후 수행일이 없던 것.
+    public record AcceptedAdjustment(String title, String repeatType, List<String> dayTokens,
+                                     int completed, int failed) {
+    }
+
     public LlmChatRequest build(String nickname, String bio, List<UserGoal> goals,
-                                LocalDate weekStart, LocalDate weekEnd, WeeklyReportStats stats) {
+                                LocalDate weekStart, LocalDate weekEnd, WeeklyReportStats stats,
+                                List<AcceptedAdjustment> acceptedAdjustments) {
         StringBuilder sb = new StringBuilder();
         sb.append("[사용자]\n");
         sb.append("- 닉네임: ").append(quote(nickname)).append('\n');
@@ -62,8 +71,51 @@ public class WeeklyReportPromptBuilder {
             }
             sb.append(": ").append(routine.completed()).append('/').append(routine.failed()).append('\n');
         }
+        if (acceptedAdjustments != null && !acceptedAdjustments.isEmpty()) {
+            sb.append("\n[지난주 수락한 조정 추천]\n");
+            for (AcceptedAdjustment adjustment : acceptedAdjustments) {
+                sb.append("- ").append(quote(adjustment.title())).append(": ")
+                        .append(describeProposal(adjustment.repeatType(), adjustment.dayTokens()))
+                        .append(" 추천을 이번 주에 수락 — ");
+                if (adjustment.completed() + adjustment.failed() == 0) {
+                    sb.append("수락 후 아직 수행일 없음");
+                } else {
+                    sb.append("수락 후 완료 ").append(adjustment.completed())
+                            .append('/').append(adjustment.failed());
+                }
+                sb.append('\n');
+            }
+        }
         sb.append("\n위 기록으로 주간 회고 JSON을 작성해 주세요.");
         return LlmChatRequest.of(SYSTEM_PROMPT, sb.toString());
+    }
+
+    // proposal 스케줄 절대값을 사람 문장으로. 알 수 없는 표기는 지어내지 않고 원문 그대로 둔다.
+    static String describeProposal(String repeatType, List<String> dayTokens) {
+        if ("DAILY".equals(repeatType)) {
+            return "매일 반복으로 조정하는";
+        }
+        if (dayTokens == null || dayTokens.isEmpty()) {
+            return "반복 스케줄을 조정하는";
+        }
+        StringJoiner joiner = new StringJoiner("·");
+        for (String token : dayTokens) {
+            joiner.add(dayLabel(token));
+        }
+        return "반복 요일을 " + joiner + "로 조정하는";
+    }
+
+    static String dayLabel(String token) {
+        return switch (token) {
+            case "SUN" -> "일";
+            case "MON" -> "월";
+            case "TUE" -> "화";
+            case "WED" -> "수";
+            case "THU" -> "목";
+            case "FRI" -> "금";
+            case "SAT" -> "토";
+            default -> token;
+        };
     }
 
     private static String formatGoals(List<UserGoal> goals) {
