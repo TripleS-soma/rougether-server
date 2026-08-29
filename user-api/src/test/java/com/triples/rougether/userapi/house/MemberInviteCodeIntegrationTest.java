@@ -18,6 +18,7 @@ import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,6 +83,33 @@ class MemberInviteCodeIntegrationTest {
         assertThat(house.getCurrentMemberCount()).isEqualTo(3);
         assertThat(houseJoinRequestRepository.findById(joinResponse.joinRequestId())
                 .orElseThrow().getStatus()).isEqualTo(HouseJoinRequestStatus.ACCEPTED);
+    }
+
+    @Test
+    void 소문자_공백이_섞인_구성원_코드_입력도_정규화해_미리보기와_신청이_동작한다() {
+        // 링크·수기 입력은 소문자나 공백을 달고 오기 쉽다 - 발급 표기(영대문자)로 정규화해 인식해야 한다.
+        var issued = houseCommandService.reissueInviteCode(member.getId(), house.getId());
+        String sloppyInput = "  " + issued.inviteCode().toLowerCase(Locale.ROOT) + " ";
+
+        var preview = houseJoinService.preview(sloppyInput);
+        assertThat(preview.houseId()).isEqualTo(house.getId());
+        assertThat(preview.requiresApproval()).isTrue();
+
+        var joinResponse = houseJoinService.joinByCode(newcomer.getId(), sloppyInput);
+        assertThat(joinResponse.pendingApproval()).isTrue();
+        assertThat(houseJoinRequestRepository.findById(joinResponse.joinRequestId())
+                .orElseThrow().getStatus()).isEqualTo(HouseJoinRequestStatus.PENDING);
+    }
+
+    @Test
+    void 소문자로_입력한_집_공용_코드도_즉시가입된다() {
+        var joinResponse = houseJoinService.joinByCode(
+                newcomer.getId(), " " + house.getInviteCode().toLowerCase(Locale.ROOT) + " ");
+
+        assertThat(joinResponse.pendingApproval()).isFalse();
+        assertThat(joinResponse.membershipId()).isNotNull();
+        assertThat(houseMemberRepository.findByHouseIdAndUserId(house.getId(), newcomer.getId()))
+                .isPresent();
     }
 
     @Test

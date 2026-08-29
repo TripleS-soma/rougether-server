@@ -7,6 +7,7 @@ import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.message.NotificationContent;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,6 +45,17 @@ public class NotificationService {
 
         eventPublisher.publishEvent(new NotificationCreatedEvent(
                 notification.getId(), userId, content.type(), content.title(), content.body()));
+    }
+
+    // 같은 수신자·타입·본문 알림이 since 이후 이미 갔으면 저장·push 모두 건너뛴다.
+    // 신청 철회→재신청 반복처럼 호출자가 임의로 되풀이할 수 있는 사용자 대상 알림의 증폭 방어선.
+    // 억제창(since) 정책은 호출처가 정하며, 동시 요청 사이에서는 best-effort 다(락 없음).
+    public void sendUnlessDuplicatedSince(Long userId, NotificationContent content, Long refId, Instant since) {
+        if (notificationRepository.existsByUserAndTypeAndBodySince(
+                userId, content.type(), content.body(), since)) {
+            return;
+        }
+        send(userId, content, refId);
     }
 
     // 트랜잭션 커밋 이후에 알림 수신.

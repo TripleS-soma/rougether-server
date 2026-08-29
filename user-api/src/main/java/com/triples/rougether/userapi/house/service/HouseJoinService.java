@@ -23,7 +23,10 @@ import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +47,8 @@ public class HouseJoinService {
     // 집 공용 코드(소유자 공유)는 즉시가입, 구성원 개인 코드는 방장 승인 대기 신청 생성.
     // 코드 조회는 집 코드 → 구성원 코드 순이며 두 네임스페이스는 발급 시점에 겹치지 않게 보장된다(InviteCodeGenerator).
     @Transactional
-    public HouseJoinResponse joinByCode(Long userId, String inviteCode) {
+    public HouseJoinResponse joinByCode(Long userId, String rawInviteCode) {
+        String inviteCode = normalizeCode(rawInviteCode);
         House byHouseCode = houseRepository.findWithLockByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
@@ -107,6 +111,12 @@ public class HouseJoinService {
     // 스냅샷 조회로 REPEATABLE READ read view 가 잡혀 있어, 일반 조회는 락 대기 중 커밋된
     // 즉시가입(ACTIVE)·신청 row 를 못 보고 중복 신청을 만들거나 unique 충돌 500 이 나기 때문.
     private HouseJoinRequest createOrReopenPendingRequest(House house, Long houseId, Long userId) {
+        // 탈퇴 계정 가드 - join() 과 동일(#236 INVALID_TOKEN 컨벤션). 잔여 access token 의 재신청이 탈퇴 정리로
+        // REJECTED 된 신청을 reopen 으로 되살리고 방장 알림까지 내보내는 것을 차단한다. user 행 락(current read)이라
+        // 동시 탈퇴와도 직렬화되며, 여기서 읽은 엔티티를 신청 행과 알림 본문(닉네임)에 재사용한다.
+        User applicant = userRepository.findByIdForUpdate(userId)
+                .filter(found -> !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
         HouseMember existingMember = houseMemberRepository
                 .findWithLockByHouseIdAndUserId(houseId, userId)
                 .orElse(null);
@@ -127,10 +137,11 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
         if (request == null) {
-            return houseJoinRequestRepository.save(
-                    HouseJoinRequest.create(house, userRepository.getReferenceById(userId)));
+            request = houseJoinRequestRepository.save(HouseJoinRequest.create(house, applicant));
+        } else {
+            request.reopen();
         }
-        request.reopen();
+        notifyJoinRequestCreated(request, house, applicant);
         return request;
     }
 
@@ -259,6 +270,27 @@ public class HouseJoinService {
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_NOT_PENDING));
     }
 
+    // 코드는 대문자 집합으로만 발급된다(InviteCodeGenerator). 링크·수기 입력의 소문자·양끝 공백을 흡수하고
+    // (친구 초대 InviteService 와 동일 규칙), MySQL ci collation 에서는 소문자 입력이 조회는 통과하되
+    // 개인 코드 경로의 equals 재검증만 실패해 코드 종류·DB 환경에 따라 성패가 갈리던 것도 함께 막는다.
+    private String normalizeCode(String rawCode) {
+        return rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    // 같은 (방장, 신청자 닉네임, 집) 조합 알림의 재발송 억제 창. 철회→재신청(새 행)·거절→재신청(reopen)을
+    // 반복해 방장에게 push 를 무제한 밀어넣는 증폭을 막는다. 신청 자체의 반복 제한은 spec open question.
+    private static final Duration JOIN_REQUEST_NOTIFY_SUPPRESS_WINDOW = Duration.ofHours(1);
+
+    // 신청 도착 알림 - 수락 권한자인 방장에게만 감. 방장이 신청을 몰라 수락(입주 확정)이 늦어지는 걸 막는다.
+    // 재오픈도 방장 입장에선 새 신청이라 동일하게 알리되, 억제 창 안의 반복 신청은 중복 발송하지 않는다.
+    // refId 는 승인·거절 알림과 대칭으로 신청(request) 자체.
+    private void notifyJoinRequestCreated(HouseJoinRequest request, House house, User applicant) {
+        var content = NotificationMessages.houseJoinRequestCreated(
+                applicant.getNickname(), house.getName());
+        notificationService.sendUnlessDuplicatedSince(house.getOwner().getId(), content, request.getId(),
+                Instant.now().minus(JOIN_REQUEST_NOTIFY_SUPPRESS_WINDOW));
+    }
+
     // 입주 알림 - 가입과 같은 트랜잭션에서 동기 저장(응원 #174 패턴). push 만 커밋 후 비동기로 나감.
     private void notifyMemberJoined(List<HouseMember> recipients, HouseMember joined) {
         if (recipients.isEmpty()) {
@@ -284,7 +316,8 @@ public class HouseJoinService {
 
     // 만료 여부·승인 필요 여부는 코드 종류(집 공용/구성원 개인)에 따라 각자의 만료 시각·초대자 역할로 판정한다.
     @Transactional(readOnly = true)
-    public HousePreviewResponse preview(String inviteCode) {
+    public HousePreviewResponse preview(String rawInviteCode) {
+        String inviteCode = normalizeCode(rawInviteCode);
         House byHouseCode = houseRepository.findByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
