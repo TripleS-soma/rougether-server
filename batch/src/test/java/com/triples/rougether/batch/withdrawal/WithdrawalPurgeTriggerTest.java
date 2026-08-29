@@ -63,6 +63,7 @@ class WithdrawalPurgeTriggerTest {
         jdbcTemplate.update("DELETE FROM invite_rewards WHERE inviter_user_id IN (?, ?)",
                 withdrawnUserId, activeUserId);
         for (Long userId : new Long[] {withdrawnUserId, activeUserId}) {
+            jdbcTemplate.update("DELETE FROM user_daily_activity WHERE user_id = ?", userId);
             jdbcTemplate.update("""
                     DELETE pv FROM photo_verifications pv
                     JOIN routine_logs rl ON rl.id = pv.routine_log_id
@@ -167,6 +168,10 @@ class WithdrawalPurgeTriggerTest {
 
     // users 를 참조하는 개인 데이터 전 체인을 심는다(FK 순서 회귀 검증용).
     private void insertUserData(Long userId, String tag) {
+        jdbcTemplate.update("""
+                INSERT INTO user_daily_activity (user_id, activity_date, created_at)
+                VALUES (?, ?, ?)
+                """, userId, java.sql.Date.valueOf(LocalDate.now()), now());
         jdbcTemplate.update("""
                 INSERT INTO categories (user_id, name, sort_order, created_at, updated_at)
                 VALUES (?, '카테고리', 0, ?, ?)
@@ -325,6 +330,7 @@ class WithdrawalPurgeTriggerTest {
                 {"notification", "user_id"}, {"notification_setting", "user_id"},
                 {"user_device_token", "user_id"}, {"user_goals", "user_id"},
                 {"refresh_tokens", "user_id"}, {"bug_reports", "user_id"},
+                {"user_daily_activity", "user_id"},
                 {"house_member_cheers", "sender_user_id"}, {"house_join_requests", "user_id"},
                 {"user_invite_codes", "user_id"}}) {
             assertThat(countFor(tableAndColumn[0], tableAndColumn[1], withdrawnUserId))
