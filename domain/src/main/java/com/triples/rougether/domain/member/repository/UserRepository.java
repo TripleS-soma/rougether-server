@@ -3,6 +3,7 @@ package com.triples.rougether.domain.member.repository;
 import com.triples.rougether.domain.member.entity.User;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -86,4 +87,38 @@ public interface UserRepository extends JpaRepository<User, Long> {
                               @Param("accessedAfter") Instant accessedAfter,
                               @Param("onboardingStatus") String onboardingStatus,
                               Pageable pageable);
+
+    // 저녁 미완료 digest(#341) 후보 사용자. 반복 요일 판정은 batch processor 에서 수행하므로 여기서는
+    // "완료 가능성이 있는 오늘 대상"만 coarse filter 로 좁힌다. digest 중복은 user/date unique 와 같은 범위.
+    @Query("""
+            select u from User u
+            where u.id > :afterUserId
+              and u.deletedAt is null
+              and u.bot = false
+              and not exists (
+                select 1 from DailyIncompleteDigest d
+                where d.user = u and d.digestDate = :targetDate
+              )
+              and (
+                exists (
+                  select 1 from Routine r
+                  where r.user = u
+                    and r.status = com.triples.rougether.domain.routine.entity.RoutineStatus.ACTIVE
+                    and r.createdAt < :dayEndExclusive
+                    and (r.deletedAt is null or r.deletedAt >= :dayEndExclusive)
+                )
+                or exists (
+                  select 1 from Todo t
+                  where t.user = u
+                    and t.status = com.triples.rougether.domain.routine.entity.TodoStatus.PENDING
+                    and t.dueDate = :targetDate
+                    and t.deletedAt is null
+                )
+              )
+            order by u.id asc
+            """)
+    List<User> findDailyIncompleteDigestCandidates(@Param("targetDate") LocalDate targetDate,
+                                                   @Param("dayEndExclusive") Instant dayEndExclusive,
+                                                   @Param("afterUserId") long afterUserId,
+                                                   Pageable pageable);
 }

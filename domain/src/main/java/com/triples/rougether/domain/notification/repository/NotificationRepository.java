@@ -70,6 +70,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("cursorId") Long cursorId,
             Pageable pageable);
 
+    @Query("select n from Notification n "
+            + "where n.type = :type and n.pushStatus = :pushStatus and n.id > :cursorId "
+            + "and exists (select 1 from DailyIncompleteDigest d "
+            + "  where d.notification = n and d.digestDate = :digestDate) "
+            + "order by n.id asc")
+    List<Notification> findDailyDigestPending(
+            @Param("type") NotificationType type,
+            @Param("pushStatus") PushStatus pushStatus,
+            @Param("digestDate") java.time.LocalDate digestDate,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
     // Step2 writer: 발송 결과 반영. 조회 후 mutate 대신 단일 UPDATE로 커밋
     @Modifying
     @Query("update Notification n set n.pushStatus = :pushStatus where n.id = :id")

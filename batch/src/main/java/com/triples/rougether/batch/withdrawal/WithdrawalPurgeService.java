@@ -75,6 +75,12 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
 
         // 알림·목표·토큰: 탈퇴 트랜잭션에서 이미 지웠지만 과거 탈퇴분 보정 겸 멱등 재실행
+        jdbcTemplate.update("""
+                DELETE dit FROM daily_incomplete_digest_targets dit
+                JOIN daily_incomplete_digests d ON d.id = dit.digest_id
+                WHERE d.user_id = ?
+                """, userId);
+        jdbcTemplate.update("DELETE FROM daily_incomplete_digests WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM notification WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM notification_setting WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_device_token WHERE user_id = ?", userId);
