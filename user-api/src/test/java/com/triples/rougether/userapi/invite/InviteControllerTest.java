@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
+import com.triples.rougether.userapi.invite.dto.InvitePreviewResponse;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;
 import com.triples.rougether.userapi.invite.service.InviteService;
@@ -49,15 +50,29 @@ class InviteControllerTest {
 
     @Test
     void 내_초대코드_조회_응답_계약() throws Exception {
-        when(inviteService.getMyCode(1L)).thenReturn(new MyInviteCodeResponse("ABCD2345", 3, 50, 50, 10));
+        when(inviteService.getMyCode(1L)).thenReturn(new MyInviteCodeResponse(
+                "ABCD2345", "https://invite.rougether.test/i/ABCD2345", 3, 50, 50, 10));
 
         mockMvc.perform(get("/api/v1/invites/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("ABCD2345"))
+                .andExpect(jsonPath("$.shareUrl").value("https://invite.rougether.test/i/ABCD2345"))
                 .andExpect(jsonPath("$.rewardedCount").value(3))
                 .andExpect(jsonPath("$.inviterRewardCoin").value(50))
                 .andExpect(jsonPath("$.inviteeRewardCoin").value(50))
                 .andExpect(jsonPath("$.maxRewardedCount").value(10));
+    }
+
+    @Test
+    void 초대코드_미리보기_응답_계약() throws Exception {
+        when(inviteService.preview(1L, "ABCD2345"))
+                .thenReturn(new InvitePreviewResponse("소마", 50, false));
+
+        mockMvc.perform(get("/api/v1/invites/by-code/ABCD2345"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inviterNickname").value("소마"))
+                .andExpect(jsonPath("$.inviteeRewardCoin").value(50))
+                .andExpect(jsonPath("$.alreadyRedeemed").value(false));
     }
 
     @Test

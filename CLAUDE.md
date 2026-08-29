@@ -22,6 +22,7 @@ Rougether는 루틴 수행을 개인 방 성장과 공동집 경험으로 연결
 - 프론트 연동 기준, 응답 형태, 이미지 로딩 → [docs/claude/frontend.md](docs/claude/frontend.md)
 - 방/공동집 API → [docs/claude/domains/room-house.md](docs/claude/domains/room-house.md)
 - 루틴/투두 API 의존성 → [docs/claude/domains/routine-todo.md](docs/claude/domains/routine-todo.md)
+- 친구 초대, 초대 링크/딥링크 → [docs/claude/domains/invite.md](docs/claude/domains/invite.md)
 - 에셋, 이미지, CDN/object key → [docs/claude/domains/assets.md](docs/claude/domains/assets.md)
 - RoutineVillage Figma 가구·소품 제작/삽입 → [.claude/skills/routinevillage-asset-add/SKILL.md](.claude/skills/routinevillage-asset-add/SKILL.md) (`/routinevillage-asset-add`)
 

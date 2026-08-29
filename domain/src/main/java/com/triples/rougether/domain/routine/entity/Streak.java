@@ -71,10 +71,16 @@ public class Streak {
 
     // 조회일 기준 어제까지 성공한 스트릭만 현재값으로 표시함. 저장값은 다음 성공 계산을 위해 유지함.
     public int currentCountOn(LocalDate referenceDate) {
+        return effectiveCurrentCount(currentCount, lastSuccessDate, referenceDate);
+    }
+
+    // 같은 규칙을 projection(관리자 KPI 등) 처럼 엔티티 밖에서 쓸 때의 유일한 진입점.
+    // 여기 규칙이 바뀌면 사용자 화면과 관측 지표가 함께 바뀐다 - 별도 재구현 금지.
+    public static int effectiveCurrentCount(int currentCount, LocalDate lastSuccessDate, LocalDate referenceDate) {
         if (lastSuccessDate == null || lastSuccessDate.isBefore(referenceDate.minusDays(1))) {
             return 0;
         }
-        return currentCount;
+        return Math.max(0, currentCount);
     }
 
     // 오늘 첫 완료 시 호출. 어제 성공이면 +1, 아니면 1로 리셋. 이미 오늘 반영됐으면 변화 없음(방어).

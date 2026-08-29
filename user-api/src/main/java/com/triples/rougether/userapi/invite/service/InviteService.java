@@ -13,10 +13,12 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.userapi.invite.dto.InvitePreviewResponse;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;
 import com.triples.rougether.userapi.invite.error.InviteErrorCode;
 import com.triples.rougether.userapi.invite.support.UserInviteCodeGenerator;
+import com.triples.rougether.userapi.invitelink.config.InviteLinkProperties;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.util.Locale;
@@ -42,6 +44,7 @@ public class InviteService {
     private final UserWalletRepository walletRepository;
     private final UserInviteCodeGenerator codeGenerator;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    private final InviteLinkProperties linkProperties;
 
     @Transactional
     public MyInviteCodeResponse getMyCode(Long userId) {
@@ -52,10 +55,38 @@ public class InviteService {
 
         return new MyInviteCodeResponse(
                 code,
+                buildShareUrl(code),
                 inviteRewardRepository.countByInviterIdAndInviterRewardAmountGreaterThan(userId, 0),
                 InviteRewardPolicy.INVITER_REWARD_COIN,
                 InviteRewardPolicy.INVITEE_REWARD_COIN,
                 InviteRewardPolicy.MAX_REWARDED_INVITES_PER_INVITER);
+    }
+
+    // redeem 전 미리보기 - 딥링크·클립보드로 자동 입력된 코드를 "OO님의 초대" 확인 화면으로 검증한다.
+    // redeem 은 계정당 평생 1회라 자동 '사용'은 금지 계약 - 이 미리보기로 사용자 확인을 받은 뒤에만 redeem 한다.
+    // 검증 순서·에러코드는 redeem 과 동일하게 유지해 앱이 한 에러 집합만 다루게 한다.
+    // 읽기 전용이라 락은 잡지 않는다 - 동시성의 최종 판정은 redeem 의 locking read 와 unique 제약이 한다.
+    @Transactional(readOnly = true)
+    public InvitePreviewResponse preview(Long inviteeUserId, String rawCode) {
+        String code = normalize(rawCode);
+        UserInviteCode inviteCode = userInviteCodeRepository.findByCode(code)
+                .orElseThrow(() -> new BusinessException(InviteErrorCode.INVITE_CODE_NOT_FOUND));
+
+        if (inviteCode.getUser().getId().equals(inviteeUserId)) {
+            throw new BusinessException(InviteErrorCode.INVITE_SELF_NOT_ALLOWED);
+        }
+        if (inviteCode.getUser().isBot()) {
+            throw new BusinessException(InviteErrorCode.INVITE_BOT_NOT_ALLOWED);
+        }
+        rejectBot(inviteeUserId);
+        if (inviteCode.getUser().isDeleted()) {
+            throw new BusinessException(InviteErrorCode.INVITE_CODE_NOT_FOUND);
+        }
+
+        return new InvitePreviewResponse(
+                inviteCode.getUser().getNickname(),
+                InviteRewardPolicy.INVITEE_REWARD_COIN,
+                inviteRewardRepository.existsByInviteeId(inviteeUserId));
     }
 
     // 초대코드 사용 - 코드 주인(초대자)과 사용자(초대받은 사람) 양쪽에 코인을 지급한다.
@@ -119,6 +150,14 @@ public class InviteService {
     // 코드는 대문자 집합으로만 발급되므로 입력을 대문자로 맞춰 대소문자 오입력을 흡수한다.
     private String normalize(String rawCode) {
         return rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    // 공유 시트용 초대 링크(랜딩 /i/{code}). base URL 미설정 환경(로컬 등)은 null - 앱은 코드만 공유로 폴백.
+    private String buildShareUrl(String code) {
+        if (!linkProperties.hasShareBaseUrl()) {
+            return null;
+        }
+        return linkProperties.normalizedShareBaseUrl() + "/i/" + code;
     }
 
     private void lockUsersInIdOrder(Long first, Long second) {
