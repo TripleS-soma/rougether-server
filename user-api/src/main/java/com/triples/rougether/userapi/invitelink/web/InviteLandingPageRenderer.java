@@ -24,13 +24,15 @@ public class InviteLandingPageRenderer {
         this.template = loadTemplate();
     }
 
+    // 순차 replace 는 치환 결과가 다음 치환의 입력이 된다. 사용자 입력(집 이름)이 들어가는
+    // HEADLINE 을 마지막에 치환해, 자리표시자 모양의 이름이 다른 섹션으로 재치환되는 것을 막는다.
     public String render(InviteLandingView view) {
         return template
-                .replace("{{HEADLINE}}", headline(view))
-                .replace("{{SUBLINE}}", subline(view))
-                .replace("{{CODE_SECTION}}", codeSection(view))
+                .replace("{{CLIP_PAYLOAD}}", clipPayload(view))
                 .replace("{{ACTION_SECTION}}", actionSection(view))
-                .replace("{{CLIP_PAYLOAD}}", clipPayload(view));
+                .replace("{{CODE_SECTION}}", codeSection(view))
+                .replace("{{SUBLINE}}", subline(view))
+                .replace("{{HEADLINE}}", headline(view));
     }
 
     private String headline(InviteLandingView view) {

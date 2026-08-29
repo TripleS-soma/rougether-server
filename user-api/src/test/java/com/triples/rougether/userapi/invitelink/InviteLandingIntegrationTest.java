@@ -119,6 +119,24 @@ class InviteLandingIntegrationTest {
     }
 
     @Test
+    void 한_글자_닉네임도_고정_길이로_마스킹된다() {
+        friendInviter("landing-short@rougether.dev", "소", "FRSS2345");
+
+        // 별표를 길이만큼 찍으면 1글자 닉네임이 원문 그대로 나가므로 고정 길이(첫 글자+**)로 가린다.
+        assertThat(landingService.resolveFriend("FRSS2345", InviteLinkOs.IOS).displayName())
+                .isEqualTo("소**");
+    }
+
+    @Test
+    void 없는_집_코드는_무효_판정과_함께_무효_클릭으로_기록된다() {
+        InviteLandingView view = landingService.resolveHouse("HZRA2345", InviteLinkOs.OTHER);
+
+        assertThat(view.valid()).isFalse();
+        assertThat(view.expired()).isFalse();
+        assertThat(clicksOf("HZRA2345")).hasSize(1);
+    }
+
+    @Test
     void 유효한_집_코드는_집_이름과_함께_유효_판정된다() {
         User owner = userRepository.save(User.signUp("landing-house-owner@rougether.dev"));
         houseRepository.save(House.create(owner, "랜딩 테스트 집", null, null, 4, "HSEA2345",

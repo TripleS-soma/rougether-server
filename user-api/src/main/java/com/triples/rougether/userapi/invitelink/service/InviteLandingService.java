@@ -1,13 +1,11 @@
 package com.triples.rougether.userapi.invitelink.service;
 
-import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.invite.entity.InviteLinkClick;
 import com.triples.rougether.domain.invite.entity.InviteLinkOs;
 import com.triples.rougether.domain.invite.entity.InviteLinkType;
 import com.triples.rougether.domain.invite.repository.InviteLinkClickRepository;
 import com.triples.rougether.domain.invite.repository.UserInviteCodeRepository;
 import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.userapi.house.dto.HousePreviewResponse;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -62,34 +60,30 @@ public class InviteLandingService {
         return InviteLandingView.valid(InviteLinkType.FRIEND, code, maskNickname(inviter.getNickname()));
     }
 
-    // 집 코드 판정은 join-by-code 미리보기(HouseJoinService.preview)를 재사용한다.
-    // 미리보기의 미존재 예외(INVITE_CODE_INVALID)는 랜딩에선 무효 상태 뷰로 흡수한다.
+    // 집 코드 판정은 join-by-code 미리보기 조회(HouseJoinService.findPreview)를 재사용한다.
+    // 예외를 던지는 preview() 를 참여 트랜잭션 안에서 호출해 삼키면 rollback-only 마킹이 남아
+    // 커밋이 UnexpectedRollbackException(500)으로 터지므로, 반드시 empty 반환 변형을 쓴다.
     private InviteLandingView houseView(String code) {
-        try {
-            HousePreviewResponse preview = houseJoinService.preview(code);
-            if (preview.inviteExpired()) {
-                return InviteLandingView.expired(InviteLinkType.HOUSE, code, preview.name());
-            }
-            return InviteLandingView.valid(InviteLinkType.HOUSE, code, preview.name());
-        } catch (BusinessException e) {
-            return InviteLandingView.invalid(InviteLinkType.HOUSE, code);
-        }
+        return houseJoinService.findPreview(code)
+                .map(preview -> preview.inviteExpired()
+                        ? InviteLandingView.expired(InviteLinkType.HOUSE, code, preview.name())
+                        : InviteLandingView.valid(InviteLinkType.HOUSE, code, preview.name()))
+                .orElseGet(() -> InviteLandingView.invalid(InviteLinkType.HOUSE, code));
     }
 
     private void recordClick(InviteLandingView view, InviteLinkOs os) {
         clickRepository.save(InviteLinkClick.of(view.type(), view.code(), view.valid(), os));
     }
 
-    // 공개 랜딩에는 닉네임 원문을 노출하지 않는다 — 첫 글자만 남기고 마스킹.
+    // 공개 랜딩에는 닉네임 원문을 노출하지 않는다 — 첫 글자 + 고정 별표 2개.
+    // 별표를 실제 길이만큼 찍으면 닉네임 길이가 새고, 1글자 닉네임은 원문이 그대로 나가므로 고정 길이로 가린다.
     // 닉네임 미설정(온보딩 전)·익명화 계정은 null 로 돌려 렌더러가 일반 문구로 폴백하게 한다.
     private String maskNickname(String nickname) {
         if (nickname == null || nickname.isBlank()) {
             return null;
         }
         String trimmed = nickname.trim();
-        int codePoints = trimmed.codePointCount(0, trimmed.length());
-        String first = trimmed.substring(0, trimmed.offsetByCodePoints(0, 1));
-        return first + "*".repeat(codePoints - 1);
+        return trimmed.substring(0, trimmed.offsetByCodePoints(0, 1)) + "**";
     }
 
     // 코드는 대문자 집합으로만 발급된다 — redeem·join-by-code 와 동일한 정규화 규칙.
