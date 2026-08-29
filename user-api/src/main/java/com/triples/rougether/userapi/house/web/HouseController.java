@@ -252,7 +252,7 @@ public class HouseController {
                     + "만료 전 코드로만 참여(POST /api/v1/houses/join-by-code)할 수 있으므로 화면의 만료 안내에 사용합니다.")
     @GetMapping("/by-code/{inviteCode}")
     public HousePreviewResponse preview(
-            @Parameter(description = "초대코드 (영대문자+숫자 8자). 집 생성(POST /api/v1/houses) 응답, 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자), 또는 초대코드 재발급(POST /api/v1/houses/{houseId}/invite-code) 응답의 inviteCode 값")
+            @Parameter(description = "초대코드 (영대문자+숫자 8자, 소문자·양끝 공백 입력은 서버가 정규화해 인식). 집 생성(POST /api/v1/houses) 응답, 집 상세(GET /api/v1/houses/{houseId}) 응답(소유자), 또는 초대코드 재발급(POST /api/v1/houses/{houseId}/invite-code) 응답의 inviteCode 값")
             @PathVariable String inviteCode) {
         return houseJoinService.preview(inviteCode);
     }

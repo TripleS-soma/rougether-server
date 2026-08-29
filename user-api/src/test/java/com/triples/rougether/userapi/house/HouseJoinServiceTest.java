@@ -78,6 +78,15 @@ class HouseJoinServiceTest {
         return joiner;
     }
 
+    // 신청 도착 알림 수신자 스텁 - PENDING 신청을 만드는 경로는 방장(owner)과 집 이름을 읽는다.
+    private User ownerOf(House house, Long ownerUserId) {
+        User houseOwner = mock(User.class);
+        when(houseOwner.getId()).thenReturn(ownerUserId);
+        when(house.getOwner()).thenReturn(houseOwner);
+        lenient().when(house.getName()).thenReturn("알림 테스트 하우스");
+        return houseOwner;
+    }
+
     @Test
     void 초대코드로_참여하면_MEMBER_ACTIVE로_등록되고_구성원_수가_증가한다() {
         House house = joinableHouse(1L);
@@ -91,6 +100,21 @@ class HouseJoinServiceTest {
         verify(house).increaseMemberCount();
         verify(houseMemberRepository).save(any(HouseMember.class));
         assertThat(response.houseId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(HouseMemberStatus.ACTIVE);
+    }
+
+    @Test
+    void 초대코드는_소문자_양끝_공백_입력도_정규화해_인식한다() {
+        // 링크·수기 입력이 소문자나 공백을 달고 와도 발급 표기(영대문자)로 맞춰 조회해야 한다.
+        House house = joinableHouse(1L);
+        when(houseRepository.findWithLockByInviteCode(CODE)).thenReturn(Optional.of(house));
+        when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
+        liveJoiner(7L);
+        when(houseMemberRepository.save(any(HouseMember.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        HouseJoinResponse response = houseJoinService.joinByCode(7L, "  abcd2345\n");
+
+        verify(houseRepository).findWithLockByInviteCode(CODE);
         assertThat(response.status()).isEqualTo(HouseMemberStatus.ACTIVE);
     }
 
@@ -292,6 +316,7 @@ class HouseJoinServiceTest {
     @Test
     void 탐색_입주_신청은_PENDING만_만들고_구성원_수는_늘리지_않는다() {
         House house = joinableHouse(1L);
+        User houseOwner = ownerOf(house, 3L);
         User applicant = mock(User.class);
         when(applicant.getId()).thenReturn(7L);
         when(applicant.getNickname()).thenReturn("루티니");
@@ -309,6 +334,8 @@ class HouseJoinServiceTest {
         verify(houseJoinRequestRepository).save(any(HouseJoinRequest.class));
         verify(house, never()).increaseMemberCount();
         verify(houseMemberRepository, never()).save(any());
+        // 신청 도착 알림은 수락 권한자인 방장에게 간다
+        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
     }
 
     @Test
@@ -424,6 +451,7 @@ class HouseJoinServiceTest {
     @Test
     void 구성원_개인_코드로_참여하면_PENDING_신청만_만들고_즉시가입하지_않는다() {
         House house = joinableHouse(1L);
+        User houseOwner = ownerOf(house, 3L);
         stubMemberCodeLookup(house, inviterOf(false));
         when(houseMemberRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
         when(houseJoinRequestRepository.findWithLockByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
@@ -441,6 +469,8 @@ class HouseJoinServiceTest {
         verify(houseJoinRequestRepository).save(any(HouseJoinRequest.class));
         verify(houseMemberRepository, never()).save(any());
         verify(house, never()).increaseMemberCount();
+        // 신청 도착 알림은 수락 권한자인 방장에게 간다
+        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
     }
 
     @Test
@@ -519,6 +549,7 @@ class HouseJoinServiceTest {
     @Test
     void 구성원_개인_코드_참여는_거절_이력이_있으면_같은_신청을_재오픈한다() {
         House house = joinableHouse(1L);
+        User houseOwner = ownerOf(house, 3L);
         User applicant = mock(User.class);
         HouseJoinRequest rejected = HouseJoinRequest.create(house, applicant);
         rejected.reject();
@@ -531,6 +562,8 @@ class HouseJoinServiceTest {
         assertThat(response.pendingApproval()).isTrue();
         assertThat(rejected.getStatus()).isEqualTo(HouseJoinRequestStatus.PENDING);
         verify(houseJoinRequestRepository, never()).save(any());
+        // 재오픈도 방장 입장에선 새 신청이라 도착 알림이 간다
+        verify(notificationService).send(eq(houseOwner.getId()), any(), any());
     }
 
     @Test
@@ -595,5 +628,23 @@ class HouseJoinServiceTest {
 
         assertThatThrownBy(() -> houseJoinService.preview(CODE))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.INVITE_CODE_INVALID));
+    }
+
+    @Test
+    void 미리보기도_소문자_양끝_공백_입력을_정규화해_인식한다() {
+        House house = mock(House.class);
+        when(house.getId()).thenReturn(1L);
+        when(house.getName()).thenReturn("아침 루틴 하우스");
+        when(house.getCurrentMemberCount()).thenReturn(3);
+        when(house.getMaxMembers()).thenReturn(4);
+        when(house.isDeleted()).thenReturn(false);
+        when(house.isInviteExpired()).thenReturn(false);
+        when(houseRepository.findByInviteCode(CODE)).thenReturn(Optional.of(house));
+
+        HousePreviewResponse response = houseJoinService.preview(" abcd2345 ");
+
+        verify(houseRepository).findByInviteCode(CODE);
+        assertThat(response.houseId()).isEqualTo(1L);
+        assertThat(response.inviteExpired()).isFalse();
     }
 }

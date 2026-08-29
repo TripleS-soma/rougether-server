@@ -10,6 +10,7 @@ public enum NotificationType {
     HOUSE_MISSION_ACHIEVED(NotificationSettingType.HOUSE),
     HOUSE_MEMBER_JOINED(NotificationSettingType.HOUSE),
     HOUSE_MEMBER_LEFT(NotificationSettingType.HOUSE),
+    HOUSE_JOIN_REQUEST_CREATED(NotificationSettingType.HOUSE),
     HOUSE_JOIN_REQUEST_REJECTED(NotificationSettingType.HOUSE),
     HOUSE_JOIN_REQUEST_ACCEPTED(NotificationSettingType.HOUSE),
     ROOM_COBWEB_CLEANED(NotificationSettingType.HOUSE);

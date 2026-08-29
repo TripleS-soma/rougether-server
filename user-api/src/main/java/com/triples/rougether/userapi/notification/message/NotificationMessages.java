@@ -35,6 +35,13 @@ public final class NotificationMessages {
                 senderNickname + "님: " + cheerMessage);
     }
 
+    public static NotificationContent houseJoinRequestCreated(String applicantNickname, String houseName) {
+        return new NotificationContent(
+                NotificationType.HOUSE_JOIN_REQUEST_CREATED,
+                "입주 신청 도착",
+                applicantNickname + "님이 '" + houseName + "'에 입주를 신청했어요. 수락하면 입주가 확정돼요.");
+    }
+
     public static NotificationContent houseJoinRequestRejected(String houseName) {
         return new NotificationContent(
                 NotificationType.HOUSE_JOIN_REQUEST_REJECTED,

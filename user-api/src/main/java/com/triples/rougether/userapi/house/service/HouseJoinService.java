@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +45,8 @@ public class HouseJoinService {
     // 집 공용 코드(소유자 공유)는 즉시가입, 구성원 개인 코드는 방장 승인 대기 신청 생성.
     // 코드 조회는 집 코드 → 구성원 코드 순이며 두 네임스페이스는 발급 시점에 겹치지 않게 보장된다(InviteCodeGenerator).
     @Transactional
-    public HouseJoinResponse joinByCode(Long userId, String inviteCode) {
+    public HouseJoinResponse joinByCode(Long userId, String rawInviteCode) {
+        String inviteCode = normalizeCode(rawInviteCode);
         House byHouseCode = houseRepository.findWithLockByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
@@ -127,10 +129,12 @@ public class HouseJoinService {
             throw new BusinessException(HouseErrorCode.HOUSE_FULL);
         }
         if (request == null) {
-            return houseJoinRequestRepository.save(
+            request = houseJoinRequestRepository.save(
                     HouseJoinRequest.create(house, userRepository.getReferenceById(userId)));
+        } else {
+            request.reopen();
         }
-        request.reopen();
+        notifyJoinRequestCreated(request, house);
         return request;
     }
 
@@ -259,6 +263,21 @@ public class HouseJoinService {
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_JOIN_REQUEST_NOT_PENDING));
     }
 
+    // 코드는 대문자 집합으로만 발급된다(InviteCodeGenerator). 링크·수기 입력의 소문자·양끝 공백을 흡수하고
+    // (친구 초대 InviteService 와 동일 규칙), MySQL ci collation 에서는 소문자 입력이 조회는 통과하되
+    // 개인 코드 경로의 equals 재검증만 실패해 코드 종류·DB 환경에 따라 성패가 갈리던 것도 함께 막는다.
+    private String normalizeCode(String rawCode) {
+        return rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    // 신청 도착 알림 - 수락 권한자인 방장에게만 감. 방장이 신청을 몰라 수락(입주 확정)이 늦어지는 걸 막는다.
+    // 재오픈도 방장 입장에선 새 신청이라 동일하게 알린다. refId 는 승인·거절 알림과 대칭으로 신청(request) 자체.
+    private void notifyJoinRequestCreated(HouseJoinRequest request, House house) {
+        var content = NotificationMessages.houseJoinRequestCreated(
+                request.getUser().getNickname(), house.getName());
+        notificationService.send(house.getOwner().getId(), content, request.getId());
+    }
+
     // 입주 알림 - 가입과 같은 트랜잭션에서 동기 저장(응원 #174 패턴). push 만 커밋 후 비동기로 나감.
     private void notifyMemberJoined(List<HouseMember> recipients, HouseMember joined) {
         if (recipients.isEmpty()) {
@@ -284,7 +303,8 @@ public class HouseJoinService {
 
     // 만료 여부·승인 필요 여부는 코드 종류(집 공용/구성원 개인)에 따라 각자의 만료 시각·초대자 역할로 판정한다.
     @Transactional(readOnly = true)
-    public HousePreviewResponse preview(String inviteCode) {
+    public HousePreviewResponse preview(String rawInviteCode) {
+        String inviteCode = normalizeCode(rawInviteCode);
         House byHouseCode = houseRepository.findByInviteCode(inviteCode)
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
