@@ -71,10 +71,6 @@ class EveningDigestJobConfig {
                 .transactionManager(transactionManager)
                 .reader(eveningDigestPendingReader)
                 .writer(eveningDigestPushWriter)
-                .faultTolerant()
-                .skip(Exception.class)
-                .skipLimit(SKIP_LIMIT)
-                .skipListener(new EveningDigestPushSkipLogger())
                 .build();
     }
 

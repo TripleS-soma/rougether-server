@@ -1,6 +1,9 @@
 package com.triples.rougether.batch.eveningdigest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 import com.triples.rougether.batch.config.BatchJdbcConfig;
 import com.triples.rougether.batch.reminder.ReminderPushWriter;
@@ -55,9 +58,11 @@ import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @SpringBootTest(
         classes = EveningDigestJobIntegrationTest.TestConfig.class,
@@ -130,7 +135,7 @@ class EveningDigestJobIntegrationTest {
     private DailyIncompleteDigestTargetRepository targetRepository;
     @Autowired
     private NotificationRepository notificationRepository;
-    @Autowired
+    @MockitoSpyBean
     private NotificationSettingRepository notificationSettingRepository;
     @Autowired
     private UserDeviceTokenRepository userDeviceTokenRepository;
@@ -138,6 +143,8 @@ class EveningDigestJobIntegrationTest {
     private TestFcmSender fcmSender;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private Clock clock;
 
     @BeforeEach
     void createBatchSequencesForH2() {
@@ -181,7 +188,7 @@ class EveningDigestJobIntegrationTest {
         assertThat(digest.getRoutineCount()).isEqualTo(1);
         assertThat(digest.getTodoCount()).isEqualTo(1);
         assertThat(digest.getPushStatus()).isEqualTo(PushStatus.SENT);
-        assertThat(digest.getSentAt()).isNotNull();
+        assertThat(digest.getSentAt()).isEqualTo(clock.instant());
         assertThat(targetRepository.findAllByDigestIdOrderByIdAsc(digest.getId()))
                 .extracting(target -> target.getTargetType() + ":" + target.getTargetId())
                 .containsExactlyInAnyOrder(
@@ -299,6 +306,45 @@ class EveningDigestJobIntegrationTest {
     }
 
     @Test
+    void push_인프라_예외는_job을_FAILED로_남기고_같은_parameter_재시작으로_PENDING을_복구한다()
+            throws Exception {
+        User user = humanWithToken("restart-token");
+        todo(user, TARGET_DATE);
+        JobParameters parameters = jobParameters("push-infra-restart");
+        doThrow(new DataAccessResourceFailureException("notification setting repository unavailable"))
+                .when(notificationSettingRepository).findAllByUserIdIn(anySet());
+
+        JobExecution failed;
+        try {
+            failed = jobOperatorTestUtils.startJob(parameters);
+        } finally {
+            reset(notificationSettingRepository);
+        }
+
+        assertThat(failed.getStatus()).isEqualTo(BatchStatus.FAILED);
+        DailyIncompleteDigest pendingDigest = digestRepository
+                .findByUserIdAndDigestDate(user.getId(), TARGET_DATE)
+                .orElseThrow();
+        assertThat(pendingDigest.getPushStatus()).isEqualTo(PushStatus.PENDING);
+        assertThat(notificationRepository.findAll())
+                .singleElement()
+                .extracting(Notification::getPushStatus)
+                .isEqualTo(PushStatus.PENDING);
+        assertThat(fcmSender.calls).isEmpty();
+
+        JobExecution restarted = jobOperatorTestUtils.startJob(parameters);
+
+        assertThat(restarted.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        assertThat(digestRepository.findById(pendingDigest.getId()).orElseThrow().getPushStatus())
+                .isEqualTo(PushStatus.SENT);
+        assertThat(notificationRepository.findAll())
+                .singleElement()
+                .extracting(Notification::getPushStatus)
+                .isEqualTo(PushStatus.SENT);
+        assertThat(fcmSender.calls).hasSize(1);
+    }
+
+    @Test
     void 봇과_탈퇴_사용자와_미완료가_없는_사용자는_제외한다() throws Exception {
         User bot = userRepository.save(User.bot("digest-bot", "봇", "테스트"));
         todo(bot, TARGET_DATE);
@@ -319,12 +365,15 @@ class EveningDigestJobIntegrationTest {
     }
 
     private void runJob() throws Exception {
-        JobParameters parameters = new JobParametersBuilder()
-                .addString(EveningDigestJobConfig.TARGET_DATE_PARAM, TARGET_DATE.toString())
-                .addString("run", UUID.randomUUID().toString())
-                .toJobParameters();
-        JobExecution execution = jobOperatorTestUtils.startJob(parameters);
+        JobExecution execution = jobOperatorTestUtils.startJob(jobParameters(UUID.randomUUID().toString()));
         assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+    }
+
+    private JobParameters jobParameters(String run) {
+        return new JobParametersBuilder()
+                .addString(EveningDigestJobConfig.TARGET_DATE_PARAM, TARGET_DATE.toString())
+                .addString("run", run)
+                .toJobParameters();
     }
 
     private User humanWithToken(String token) {

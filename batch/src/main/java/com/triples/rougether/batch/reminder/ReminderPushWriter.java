@@ -1,7 +1,7 @@
 package com.triples.rougether.batch.reminder;
 
-import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
+import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.entity.PushStatus;
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
@@ -11,21 +11,20 @@ import com.triples.rougether.domain.notification.repository.NotificationSettingR
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 // PENDING 알림 chunk 를 설정 게이트(NotificationPushPolicy) → FCM 발송 → push_status 갱신으로 종결한다.
 // 알림 타입에 의존하지 않는 범용 발송 writer 라 weeklyReportPushJob 도 재사용함(public 인 이유)
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ReminderPushWriter implements ItemWriter<Notification> {
 
     private final UserDeviceTokenRepository userDeviceTokenRepository;
@@ -33,6 +32,21 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
     private final DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final FcmSender fcmSender;
+    private final Clock clock;
+
+    public ReminderPushWriter(UserDeviceTokenRepository userDeviceTokenRepository,
+                              NotificationRepository notificationRepository,
+                              DailyIncompleteDigestRepository dailyIncompleteDigestRepository,
+                              NotificationSettingRepository notificationSettingRepository,
+                              FcmSender fcmSender,
+                              ObjectProvider<Clock> clockProvider) {
+        this.userDeviceTokenRepository = userDeviceTokenRepository;
+        this.notificationRepository = notificationRepository;
+        this.dailyIncompleteDigestRepository = dailyIncompleteDigestRepository;
+        this.notificationSettingRepository = notificationSettingRepository;
+        this.fcmSender = fcmSender;
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    }
 
     @Override
     public void write(Chunk<? extends Notification> chunk) {
@@ -89,6 +103,6 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
         dailyIncompleteDigestRepository.updatePushStatusByNotificationId(
                 notification.getId(),
                 pushStatus,
-                pushStatus == PushStatus.SENT ? Instant.now() : null);
+                pushStatus == PushStatus.SENT ? clock.instant() : null);
     }
 }
