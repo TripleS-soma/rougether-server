@@ -39,7 +39,9 @@ public class MemberController {
         return memberService.getMe(authUser.id());
     }
 
-    @Operation(summary = "회원정보 수정", description = "로그인한 회원의 닉네임을 수정하고 갱신된 내 정보를 반환합니다.")
+    @Operation(summary = "회원정보 수정", description = "로그인한 회원의 닉네임을 수정하고 갱신된 내 정보를 반환합니다. "
+            + "내가 소유한 집 중 이름이 아직 기본값(나의 집)인 집은 이때 '{닉네임}의 집'으로 함께 바뀝니다. "
+            + "직접 지은 집 이름은 바뀌지 않으며, 한 번 바뀐 뒤에는 닉네임을 다시 바꿔도 집 이름은 따라가지 않습니다.")
     @PutMapping
     public MeResponse updateMe(@CurrentUser AuthUser authUser,
                                @Valid @RequestBody MemberUpdateRequest request) {

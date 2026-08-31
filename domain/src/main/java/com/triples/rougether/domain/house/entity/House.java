@@ -102,7 +102,8 @@ public class House extends BaseEntity {
     }
 
     // 설정 부분 수정 - null 필드는 변경하지 않는다. maxMembers 하향 검증은 서비스가 담당.
-    public void updateSettings(String name, String description, String coverImageKey, Integer maxMembers) {
+    public void updateSettings(String name, String description, String coverImageKey, Integer maxMembers,
+                               Boolean isPublic) {
         if (name != null) {
             this.name = name;
         }
@@ -114,6 +115,11 @@ public class House extends BaseEntity {
         }
         if (maxMembers != null) {
             this.maxMembers = maxMembers;
+        }
+        // 공개 전환(#350) - 탐색 노출 여부. false 로 바꾸면 탐색·비구성원 미리보기에서 즉시 제외된다
+        // (isPublic=true 필터 쿼리들이 걸러냄). 초대코드 흐름은 공개 여부와 무관하게 유지.
+        if (isPublic != null) {
+            this.isPublic = isPublic;
         }
     }
 

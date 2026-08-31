@@ -161,9 +161,23 @@ public class HouseCommandService {
             throw new BusinessException(HouseErrorCode.HOUSE_NAME_BANNED);
         }
         houseCoverImageCatalog.validatePublished(request.coverImageKey());
-        house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers());
+        house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers(),
+                request.isPublic());
         return new HouseUpdateResponse(house.getId(), house.getName(), house.getDescription(),
-                house.getCoverImageKey(), house.getMaxMembers());
+                house.getCoverImageKey(), house.getMaxMembers(), house.isPublic());
+    }
+
+    // 닉네임 확정 시 기본 이름 그대로인 소유 집을 "{닉네임}의 집"으로 개명(#350) - MemberService 가
+    // 닉네임 저장과 같은 트랜잭션에서 호출한다. 사용자가 직접 지은 이름은 건드리지 않고, 한 번 개명되면
+    // 기본 이름이 아니게 되어 이후 닉네임 변경엔 따라가지 않는다. 금칙어는 닉네임 검사가 선행 커버.
+    @Transactional
+    public void renameDefaultNamedHouses(Long userId, String nickname) {
+        houseMemberRepository.findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE).stream()
+                .filter(HouseMember::isOwner)
+                .map(HouseMember::getHouse)
+                .filter(house -> !house.isDeleted())
+                .filter(house -> ONBOARDING_STARTER_HOUSE_NAME.equals(house.getName()))
+                .forEach(house -> house.updateSettings(nickname + "의 집", null, null, null, null));
     }
 
     // 초대코드 재발급 - 활성 구성원 전용. 새 코드로 교체돼 기존 코드는 즉시 무효.

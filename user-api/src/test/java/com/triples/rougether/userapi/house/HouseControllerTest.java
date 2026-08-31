@@ -547,15 +547,16 @@ class HouseControllerTest {
     void 집_설정_수정_응답_계약() throws Exception {
         authAsUser7();
         when(houseCommandService.updateSettings(eq(7L), eq(1L), any())).thenReturn(
-                new HouseUpdateResponse(1L, "새 이름", "새 소개", "house/new.png", 6));
+                new HouseUpdateResponse(1L, "새 이름", "새 소개", "house/new.png", 6, true));
 
         mockMvc.perform(put("/api/v1/houses/1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"새 이름\", \"maxMembers\": 6}"))
+                        .content("{\"name\": \"새 이름\", \"maxMembers\": 6, \"isPublic\": true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.name").value("새 이름"))
-                .andExpect(jsonPath("$.maxMembers").value(6));
+                .andExpect(jsonPath("$.maxMembers").value(6))
+                .andExpect(jsonPath("$.isPublic").value(true));
     }
 
     @Test

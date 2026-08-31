@@ -15,5 +15,8 @@ public record HouseUpdateRequest(
                 example = "house/cloud-balloon/house-unified-cloud-balloon-frame.png")
         String coverImageKey,
         @Schema(description = "최대 구성원 수 (1~10, 현재 인원 미만 불가, 미지정 시 유지)", example = "6")
-        @Min(1) @Max(10) Integer maxMembers) {
+        @Min(1) @Max(10) Integer maxMembers,
+        @Schema(description = "공개 여부 (미지정 시 유지). true면 집 탐색·비구성원 미리보기에 노출, false면 초대코드로만 참여 가능. "
+                + "가입 시 지급되는 기본 집은 비공개로 시작하며 여기서 공개로 전환할 수 있음", example = "true")
+        Boolean isPublic) {
 }

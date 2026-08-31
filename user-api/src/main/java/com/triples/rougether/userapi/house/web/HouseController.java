@@ -189,9 +189,11 @@ public class HouseController {
     }
 
     @Operation(summary = "집 설정 수정",
-            description = "집 이름·소개글·대표 이미지·최대 인원을 수정합니다. 집 소유자만 호출할 수 있습니다. "
+            description = "집 이름·소개글·대표 이미지·최대 인원·공개 여부를 수정합니다. 집 소유자만 호출할 수 있습니다. "
                     + "부분 수정으로 보내지 않은(null) 필드는 기존 값이 그대로 유지됩니다. "
-                    + "maxMembers 는 현재 구성원 수 이상의 값으로만 변경할 수 있습니다.")
+                    + "maxMembers 는 현재 구성원 수 이상의 값으로만 변경할 수 있습니다. "
+                    + "isPublic=false 로 바꾸면 집 탐색·비구성원 미리보기에서 즉시 제외되고 초대코드로만 참여할 수 있으며, "
+                    + "이미 접수된 입주 신청은 그대로 남아 방장이 수락·거절할 수 있습니다. 비공개로 시작하는 기본 집도 여기서 공개로 전환합니다.")
     @PutMapping("/{houseId}")
     public HouseUpdateResponse updateSettings(@CurrentUser AuthUser user,
                                               @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId,
