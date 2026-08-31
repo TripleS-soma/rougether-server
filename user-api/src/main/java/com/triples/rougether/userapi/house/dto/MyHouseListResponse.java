@@ -18,7 +18,7 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             String coverImageKey,
             @Schema(description = "집 레벨", example = "0")
             int level,
-            @Schema(description = "현재 구성원 수", example = "3")
+            @Schema(description = "현재 실사용자 수(동거 봇 제외 - 봇은 사람이 참여하면 자리를 비켜주므로 정원 표기에서 뺌)", example = "1")
             int currentMemberCount,
             @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
             Integer maxMembers,
@@ -27,13 +27,13 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             @Schema(description = "내 가입 시각. 직접 순서를 정하지 않은 집끼리의 정렬 기준")
             Instant joinedAt) {
 
-        public static MyHouseSummary of(HouseMember member) {
+        public static MyHouseSummary of(HouseMember member, int currentMemberCount) {
             return new MyHouseSummary(
                     member.getHouse().getId(),
                     member.getHouse().getName(),
                     member.getHouse().getCoverImageKey(),
                     member.getHouse().getLevel(),
-                    member.getHouse().getCurrentMemberCount(),
+                    currentMemberCount,
                     member.getHouse().getMaxMembers(),
                     member.getRole(),
                     member.getJoinedAt());

@@ -24,7 +24,7 @@ public record HousePreviewDetailResponse(
         String coverImageKey,
         @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
         Integer maxMembers,
-        @Schema(description = "현재 구성원 수", example = "3")
+        @Schema(description = "현재 실사용자 수(동거 봇 제외 - 봇은 사람이 참여하면 자리를 비켜주므로 정원 표기에서 뺌)", example = "1")
         int currentMemberCount,
         @Schema(description = "집 레벨 (생성 시 0에서 시작)", example = "2")
         int level,
@@ -41,7 +41,8 @@ public record HousePreviewDetailResponse(
         List<MemberRoomSummary> memberRooms) {
 
     // isFull 은 "사람이 더 들어갈 수 없음" — 정원이 찼어도 비켜줄 동거 봇(#309)이 있으면 false 로 내려 참여 버튼을 살린다.
-    public static HousePreviewDetailResponse of(House house, List<GoalSummary> goals, boolean isMember,
+    public static HousePreviewDetailResponse of(House house, int currentMemberCount,
+                                                List<GoalSummary> goals, boolean isMember,
                                                 HouseJoinRequestStatus myJoinRequestStatus,
                                                 List<MissionSummary> missions,
                                                 List<MemberRoomSummary> memberRooms,
@@ -52,7 +53,7 @@ public record HousePreviewDetailResponse(
                 house.getDescription(),
                 house.getCoverImageKey(),
                 house.getMaxMembers(),
-                house.getCurrentMemberCount(),
+                currentMemberCount,
                 house.getLevel(),
                 goals,
                 isMember,

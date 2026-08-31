@@ -73,7 +73,8 @@ public class HouseQueryService {
         List<GoalSummary> goals = houseGoalRepository.findByHouseIdWithGoal(houseId).stream()
                 .map(HouseQueryService::toGoalSummary)
                 .toList();
-        return HouseDetailResponse.of(house, me.getRole(), goals);
+        int humanCount = (int) houseMemberRepository.countActiveHumans(houseId, HouseMemberStatus.ACTIVE);
+        return HouseDetailResponse.of(house, humanCount, me.getRole(), goals);
     }
 
     // 미리보기 - 공개 집은 비구성원 포함 로그인 회원 누구나(#169), 비공개 집은 ACTIVE 구성원만 조회한다.
@@ -111,8 +112,11 @@ public class HouseQueryService {
         // 동거 봇(#309)이 있으면 만석이라도 사람이 참여할 때 봇이 비켜주므로 "참여 불가"로 내리지 않는다.
         boolean noSeatForHuman = house.isFull()
                 && activeMembers.stream().noneMatch(member -> member.getUser().isBot());
+        int humanCount = (int) activeMembers.stream()
+                .filter(member -> !member.getUser().isBot())
+                .count();
         return HousePreviewDetailResponse.of(
-                house, goals, isMember, requestStatus,
+                house, humanCount, goals, isMember, requestStatus,
                 houseMissionService.getPreviewMissions(house), memberRooms, noSeatForHuman);
     }
 
@@ -140,9 +144,13 @@ public class HouseQueryService {
     // 내가 속한(ACTIVE) 집 목록 - 사용자 지정 순서, 미정렬 집은 가입순. 삭제된 집 제외.
     @Transactional(readOnly = true)
     public MyHouseListResponse getMyHouses(Long userId) {
-        List<MyHouseSummary> items = houseMemberRepository
-                .findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE).stream()
-                .map(MyHouseSummary::of)
+        List<HouseMember> memberships = houseMemberRepository
+                .findByUserIdAndStatusWithHouse(userId, HouseMemberStatus.ACTIVE);
+        Map<Long, Long> humanCounts = loadHumanCounts(
+                memberships.stream().map(HouseMember::getHouse).toList());
+        List<MyHouseSummary> items = memberships.stream()
+                .map(member -> MyHouseSummary.of(member,
+                        humanCounts.getOrDefault(member.getHouse().getId(), 0L).intValue()))
                 .toList();
         return new MyHouseListResponse(items);
     }
@@ -185,9 +193,11 @@ public class HouseQueryService {
         Map<Long, List<GoalSummary>> goalsByHouseId = loadGoals(houses.getContent());
         Map<Long, HouseJoinRequestStatus> requestStatusByHouseId = loadJoinRequestStatuses(
                 userId, houses.getContent());
+        Map<Long, Long> humanCounts = loadHumanCounts(houses.getContent());
         List<HouseSummary> items = houses.getContent().stream()
                 .map(house -> HouseSummary.of(
                         house,
+                        humanCounts.getOrDefault(house.getId(), 0L).intValue(),
                         goalsByHouseId.getOrDefault(house.getId(), List.of()),
                         requestStatusByHouseId.get(house.getId())))
                 .toList();
@@ -209,6 +219,18 @@ public class HouseQueryService {
     private static boolean isVisibleJoinRequestStatus(HouseJoinRequestStatus status) {
         return status == HouseJoinRequestStatus.PENDING
                 || status == HouseJoinRequestStatus.REJECTED;
+    }
+
+    // 표기용 실사용자 수(#352) - 동거 봇은 사람이 오면 비켜주므로 정원 표기에서 제외. 페이지 단위 일괄 조회.
+    private Map<Long, Long> loadHumanCounts(List<House> houses) {
+        if (houses.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> houseIds = houses.stream().map(House::getId).distinct().toList();
+        return houseMemberRepository.countActiveHumansByHouseIds(houseIds, HouseMemberStatus.ACTIVE).stream()
+                .collect(Collectors.toMap(
+                        HouseMemberRepository.HouseHumanCount::getHouseId,
+                        HouseMemberRepository.HouseHumanCount::getHumanCount));
     }
 
     // 페이지의 goals 를 한 번에 조회해 N+1 을 피한다.

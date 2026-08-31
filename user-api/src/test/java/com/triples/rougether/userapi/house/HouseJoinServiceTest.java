@@ -606,7 +606,7 @@ class HouseJoinServiceTest {
         House house = mock(House.class);
         when(house.getId()).thenReturn(1L);
         when(house.getName()).thenReturn("아침 루틴 하우스");
-        when(house.getCurrentMemberCount()).thenReturn(3);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
         when(house.getMaxMembers()).thenReturn(4);
         when(house.isDeleted()).thenReturn(false);
         HouseMember inviter = mock(HouseMember.class);
@@ -629,7 +629,7 @@ class HouseJoinServiceTest {
         House house = mock(House.class);
         when(house.getId()).thenReturn(1L);
         when(house.getName()).thenReturn("아침 루틴 하우스");
-        when(house.getCurrentMemberCount()).thenReturn(3);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
         when(house.getMaxMembers()).thenReturn(4);
         when(house.isDeleted()).thenReturn(false);
         when(house.isInviteExpired()).thenReturn(true);
@@ -655,7 +655,7 @@ class HouseJoinServiceTest {
         House house = mock(House.class);
         when(house.getId()).thenReturn(1L);
         when(house.getName()).thenReturn("아침 루틴 하우스");
-        when(house.getCurrentMemberCount()).thenReturn(3);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
         when(house.getMaxMembers()).thenReturn(4);
         when(house.isDeleted()).thenReturn(false);
         when(house.isInviteExpired()).thenReturn(false);

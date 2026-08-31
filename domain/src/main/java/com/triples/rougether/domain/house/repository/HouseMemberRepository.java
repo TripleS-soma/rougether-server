@@ -97,6 +97,19 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
             + "where hm.house.id = :houseId and hm.status = :status and u.bot = false")
     long countActiveHumans(@Param("houseId") Long houseId, @Param("status") HouseMemberStatus status);
 
+    // 표기용 실사용자 수 일괄 조회(#352). 동거 봇은 사람이 오면 비켜주므로(#309) 정원 표기에서 제외한다.
+    @Query("select hm.house.id as houseId, count(hm) as humanCount from HouseMember hm join hm.user u "
+            + "where hm.house.id in :houseIds and hm.status = :status and u.bot = false "
+            + "group by hm.house.id")
+    List<HouseHumanCount> countActiveHumansByHouseIds(@Param("houseIds") Collection<Long> houseIds,
+                                                      @Param("status") HouseMemberStatus status);
+
+    interface HouseHumanCount {
+        Long getHouseId();
+
+        long getHumanCount();
+    }
+
     // ACTIVE 봇 멤버를 가입 늦은 순으로 — 양보(가장 나중에 들어온 봇부터)·해체(전원)에 쓴다.
     @Query("select hm from HouseMember hm join fetch hm.user u "
             + "where hm.house.id = :houseId and hm.status = :status and u.bot = true "

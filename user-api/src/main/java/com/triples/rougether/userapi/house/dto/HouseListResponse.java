@@ -22,7 +22,7 @@ public record HouseListResponse(
             String name,
             @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/1f9d1c2e.png")
             String coverImageKey,
-            @Schema(description = "현재 구성원 수", example = "3")
+            @Schema(description = "현재 실사용자 수(동거 봇 제외 - 봇은 사람이 참여하면 자리를 비켜주므로 정원 표기에서 뺌)", example = "1")
             int currentMemberCount,
             @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
             Integer maxMembers,
@@ -38,13 +38,13 @@ public record HouseListResponse(
             this(houseId, name, coverImageKey, currentMemberCount, maxMembers, level, goals, null);
         }
 
-        public static HouseSummary of(House house, List<GoalSummary> goals,
+        public static HouseSummary of(House house, int currentMemberCount, List<GoalSummary> goals,
                                       HouseJoinRequestStatus myJoinRequestStatus) {
             return new HouseSummary(
                     house.getId(),
                     house.getName(),
                     house.getCoverImageKey(),
-                    house.getCurrentMemberCount(),
+                    currentMemberCount,
                     house.getMaxMembers(),
                     house.getLevel(),
                     goals,
