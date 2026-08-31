@@ -13,5 +13,7 @@ public record HouseUpdateResponse(
         @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/2a8e3f1b.png")
         String coverImageKey,
         @Schema(description = "최대 구성원 수", example = "6")
-        Integer maxMembers) {
+        Integer maxMembers,
+        @Schema(description = "공개 여부. true면 집 탐색에 노출", example = "true")
+        boolean isPublic) {
 }

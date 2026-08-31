@@ -12,6 +12,7 @@
 
 - 최초 소셜 로그인·dev-login 신규 가입 트랜잭션에서 지갑과 기본 공동집을 함께 생성합니다. 기본 집 생성 실패 시 가입 전체가 롤백됩니다.
 - 기본 집은 `is_public=false`, 이름 `나의 집`, 정원 4명, 게시 승인 커버 manifest의 첫 항목으로 시작합니다. 탐색·비구성원 미리보기·탐색형 입주 신청에서는 제외하지만 초대코드 조회·참여와 ACTIVE 구성원 기능은 유지합니다. 집 목표는 비워 두고 첫 온보딩 목표 저장에서 최대 3개를 한 번만 연결합니다.
+- 공개 여부는 집 설정(`PUT /api/v1/houses/{houseId}`)의 `isPublic`으로 소유자가 양방향 전환합니다(#350). 기본 집 이름은 닉네임 저장(`PUT /api/v1/me`) 시 아직 `나의 집`이면 `{닉네임}의 집`으로 개명되며(`HouseCommandService.renameDefaultNamedHouses`), 직접 지은 이름은 건드리지 않고 이후 닉네임 변경에도 따라가지 않습니다. V62는 혼자 있는 집(봇 제외 실사용자 1명 이하)을 일괄 비공개+개명 백필했습니다.
 - `GET /api/v1/houses/cover-images`는 게시 승인된 집 커버 manifest를 `code` 오름차순으로 반환합니다.
 - manifest는 `house.cover-images.items` 설정으로 관리하며, S3 `house/`의 초안·중복 파일은 자동 노출하지 않습니다.
 - 응답은 프론트 식별·표시용 `code`, `name`과 이미지 로딩용 `coverImageKey`를 제공합니다. 전체 URL이나 S3 운영 메타데이터는 노출하지 않습니다.

@@ -11,6 +11,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.storage.AssetStorageService;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
+import com.triples.rougether.userapi.house.service.HouseCommandService;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
 import java.io.IOException;
 import java.util.Set;
@@ -32,6 +33,7 @@ public class MemberService {
     private final OnboardingQueryService onboardingQueryService;
     private final AssetStorageService assetStorageService;
     private final BannedWordChecker bannedWordChecker;
+    private final HouseCommandService houseCommandService;
 
     @Transactional(readOnly = true)
     public MeResponse getMe(Long userId) {
@@ -52,6 +54,8 @@ public class MemberService {
         if (request.bio() != null) {
             user.changeBio(request.bio().trim());
         }
+        // 기본 이름("나의 집") 그대로인 소유 집을 "{닉네임}의 집"으로 개명(#350) - 같은 트랜잭션에서 함께 커밋
+        houseCommandService.renameDefaultNamedHouses(userId, user.getNickname());
         return toMeResponse(user);
     }
 

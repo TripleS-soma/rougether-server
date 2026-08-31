@@ -65,7 +65,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         HouseUpdateResponse response = houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest("새 이름", null, null, 6));
+                new HouseUpdateRequest("새 이름", null, null, 6, null));
 
         assertThat(house.getName()).isEqualTo("새 이름");
         assertThat(house.getMaxMembers()).isEqualTo(6);
@@ -83,7 +83,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest("새 이름", "새 소개", "house/new.png", 8));
+                new HouseUpdateRequest("새 이름", "새 소개", "house/new.png", 8, null));
 
         assertThat(house.getName()).isEqualTo("새 이름");
         assertThat(house.getDescription()).isEqualTo("새 소개");
@@ -101,7 +101,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest(null, null, null, 2)))
+                new HouseUpdateRequest(null, null, null, 2, null)))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_MAX_MEMBERS_BELOW_CURRENT));
         assertThat(house.getMaxMembers()).isEqualTo(4); // 변경 안 됨
@@ -115,7 +115,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
-        houseCommandService.updateSettings(7L, 1L, new HouseUpdateRequest(null, null, null, 2));
+        houseCommandService.updateSettings(7L, 1L, new HouseUpdateRequest(null, null, null, 2, null));
 
         assertThat(house.getMaxMembers()).isEqualTo(2);
     }
@@ -128,11 +128,31 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         HouseUpdateResponse response = houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest(null, null, null, null));
+                new HouseUpdateRequest(null, null, null, null, null));
 
         assertThat(house.getName()).isEqualTo("원래 이름");
         assertThat(house.getMaxMembers()).isEqualTo(4);
+        assertThat(house.isPublic()).isTrue(); // 미지정 유지
         assertThat(response.name()).isEqualTo("원래 이름"); // no-op 이어도 현재 설정을 반환
+    }
+
+    @Test
+    void 공개_여부를_양방향으로_전환할_수_있다() {
+        House house = realHouse(); // 일반 생성 집은 공개로 시작
+        HouseMember owner = ownerMember();
+        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
+
+        HouseUpdateResponse hidden = houseCommandService.updateSettings(7L, 1L,
+                new HouseUpdateRequest(null, null, null, null, false));
+        // 탐색·비구성원 미리보기 쿼리는 isPublic=true 필터라 여기서 바로 제외된다(#350)
+        assertThat(house.isPublic()).isFalse();
+        assertThat(hidden.isPublic()).isFalse();
+
+        HouseUpdateResponse shown = houseCommandService.updateSettings(7L, 1L,
+                new HouseUpdateRequest(null, null, null, null, true));
+        assertThat(house.isPublic()).isTrue();
+        assertThat(shown.isPublic()).isTrue();
     }
 
     @Test
@@ -145,7 +165,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(member));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest("새 이름", null, null, null)))
+                new HouseUpdateRequest("새 이름", null, null, null, null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_OWNER));
         assertThat(house.getName()).isEqualTo("원래 이름");
     }
@@ -157,7 +177,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest("새 이름", null, null, null)))
+                new HouseUpdateRequest("새 이름", null, null, null, null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_OWNER));
     }
 
@@ -166,7 +186,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 99L,
-                new HouseUpdateRequest("새 이름", null, null, null)))
+                new HouseUpdateRequest("새 이름", null, null, null, null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
     }
 
@@ -177,7 +197,7 @@ class HouseUpdateSettingsServiceTest {
         when(houseRepository.findById(1L)).thenReturn(Optional.of(deleted));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
-                new HouseUpdateRequest("새 이름", null, null, null)))
+                new HouseUpdateRequest("새 이름", null, null, null, null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(HouseErrorCode.HOUSE_NOT_FOUND));
     }
 }

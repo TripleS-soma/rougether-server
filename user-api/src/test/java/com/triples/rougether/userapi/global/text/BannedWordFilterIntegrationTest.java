@@ -104,7 +104,7 @@ class BannedWordFilterIntegrationTest {
     void 금칙어_집_이름_수정은_400_이다() {
         House house = createHouseWithOwner();
         assertThatThrownBy(() -> houseCommandService.updateSettings(user.getId(), house.getId(),
-                new HouseUpdateRequest("시발하우스", null, null, null)))
+                new HouseUpdateRequest("시발하우스", null, null, null, null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_NAME_BANNED));
     }
