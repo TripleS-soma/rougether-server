@@ -4,7 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.admin.entity.AdminRole;
+import com.triples.rougether.domain.admin.entity.AdminUser;
+import com.triples.rougether.domain.admin.repository.AdminUserRepository;
+import com.triples.rougether.domain.bugreport.entity.BugReport;
+import com.triples.rougether.domain.bugreport.entity.BugReportReply;
 import com.triples.rougether.domain.bugreport.entity.BugReportStatus;
+import com.triples.rougether.domain.bugreport.repository.BugReportReplyRepository;
 import com.triples.rougether.domain.bugreport.repository.BugReportRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -59,6 +65,8 @@ class BugReportServiceTest {
 
     @Autowired private BugReportService bugReportService;
     @Autowired private BugReportRepository bugReportRepository;
+    @Autowired private BugReportReplyRepository bugReportReplyRepository;
+    @Autowired private AdminUserRepository adminUserRepository;
     @Autowired private UserRepository userRepository;
 
     private User user;
@@ -146,5 +154,24 @@ class BugReportServiceTest {
         assertThatThrownBy(() -> bugReportService.getMyScreenshot(other.getId(), key))
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(BugReportErrorCode.BUG_REPORT_SCREENSHOT_NOT_FOUND));
+    }
+
+    @Test
+    void 내_목록에_운영자_답장이_오래된_순으로_포함된다() {
+        BugReportResponse submitted = bugReportService.submit(user.getId(), "답장 제보", "내용", null, null, null);
+        assertThat(submitted.replies()).isEmpty();
+
+        BugReport report = bugReportRepository.findById(submitted.bugReportId()).orElseThrow();
+        AdminUser admin = adminUserRepository.save(new AdminUser("reply-admin", "hash", AdminRole.ADMIN));
+        bugReportReplyRepository.save(BugReportReply.of(report, admin, "첫 답장"));
+        bugReportReplyRepository.save(BugReportReply.of(report, admin, "두 번째 답장"));
+
+        BugReportResponse item = bugReportService.getMyReports(user.getId()).items().stream()
+                .filter(response -> response.bugReportId().equals(report.getId()))
+                .findFirst().orElseThrow();
+        assertThat(item.replies())
+                .extracting(BugReportResponse.BugReportReplyItem::content)
+                .containsExactly("첫 답장", "두 번째 답장");
+        assertThat(item.replies().getFirst().createdAt()).isNotNull();
     }
 }

@@ -22,7 +22,8 @@ public record NotificationListResponse(
                     + "HOUSE_MISSION_ACHIEVED(단체 미션 목표 달성), HOUSE_MEMBER_JOINED(집에 새 멤버 입주), "
                     + "HOUSE_MEMBER_LEFT(집 멤버 퇴거), HOUSE_JOIN_REQUEST_CREATED(방장에게 입주 신청 도착, refId=신청 ID), "
                     + "HOUSE_JOIN_REQUEST_REJECTED(입주 신청 거절됨), HOUSE_JOIN_REQUEST_ACCEPTED(입주 신청 승인됨), "
-                    + "ROOM_COBWEB_CLEANED(방 거미줄 청소됨)", example = "ROUTINE_REMINDER")
+                    + "ROOM_COBWEB_CLEANED(방 거미줄 청소됨), "
+                    + "BUG_REPORT_REPLY(버그 제보 답장 도착, refId=제보 ID)", example = "ROUTINE_REMINDER")
             NotificationType type,
             @Schema(description = "알림 제목", example = "루틴 리마인드")
             String title,
