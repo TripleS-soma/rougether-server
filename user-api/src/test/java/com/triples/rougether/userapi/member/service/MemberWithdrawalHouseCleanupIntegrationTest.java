@@ -142,14 +142,17 @@ class MemberWithdrawalHouseCleanupIntegrationTest {
     void 탈퇴_트랜잭션_중간_실패_시_집_정리와_soft_delete_가_전부_롤백된다() {
         User owner = signUp("rollback-owner");
         User withdrawing = signUp("rollback-user");
+        // 스터빙은 mock 트래픽을 만드는 연산보다 먼저 끝내 둔다 - join·requestJoin 의 알림 push 가
+        // 커밋 후 비동기로 같은 mock(findAllByUserId)을 호출하는데, 스터빙 진행 중에 겹치면 Mockito
+        // 스터빙이 유실돼 탈퇴가 예외 없이 성공하는 플레이크가 된다(CI 재현, 로컬 통과).
+        doThrow(new RuntimeException("device token delete down"))
+                .when(userDeviceTokenRepository).deleteAllByUserId(withdrawing.getId());
         House house = createHouseWithOwner(owner);
         houseJoinService.join(withdrawing.getId(), house.getId());
         User otherOwner = signUp("rollback-other-owner");
         House appliedHouse = createHouseWithOwner(otherOwner);
         Long requestId = houseJoinService.requestJoin(withdrawing.getId(), appliedHouse.getId())
                 .requestId();
-        doThrow(new RuntimeException("device token delete down"))
-                .when(userDeviceTokenRepository).deleteAllByUserId(withdrawing.getId());
 
         assertThatThrownBy(() -> memberWithdrawalService.withdraw(withdrawing.getId()))
                 .isInstanceOf(RuntimeException.class);
