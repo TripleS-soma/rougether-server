@@ -67,10 +67,16 @@ public class RecommendationCommandService {
 
     public void dismiss(Long userId, Long recommendationId) {
         RoutineRecommendation recommendation = findOwned(userId, recommendationId);
+        Instant now = Instant.now(clock);
         if (recommendation.getStatus() != RecommendationStatus.ACTIVE) {
             throw new BusinessException(RecommendationErrorCode.RECOMMENDATION_ALREADY_HANDLED);
         }
-        recommendation.dismiss(Instant.now(clock));
+        // 만료된 추천은 무시도 거부(#355) - accept 와 대칭. 만료는 상태 전이 없는 lazy 판정이라 여기서 막지
+        // 않으면 기한 지난 추천이 DISMISSED 로 남아 admin 퍼널의 만료 집계·클라이언트 카드 동작과 어긋난다.
+        if (recommendation.isExpired(now)) {
+            throw new BusinessException(RecommendationErrorCode.RECOMMENDATION_EXPIRED);
+        }
+        recommendation.dismiss(now);
     }
 
     // 소유권 guard(타인 추천은 존재 여부와 무관하게 404) + 상태 전이 직렬화를 위한 locking read —

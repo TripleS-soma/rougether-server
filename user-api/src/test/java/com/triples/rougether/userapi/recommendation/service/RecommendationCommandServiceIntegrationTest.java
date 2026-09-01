@@ -173,6 +173,22 @@ class RecommendationCommandServiceIntegrationTest {
     }
 
     @Test
+    void 만료된_추천의_무시도_거부한다() {
+        Routine routine = persistWeekly("아침 러닝", null, null, null);
+        backdateCreatedAt(routine.getId(), 21);
+        RoutineRecommendation recommendation = persistRecommendation(routine, now.minus(Duration.ofHours(1)));
+
+        // accept 와 대칭(#355) - 만료 카드는 두 버튼 모두 같은 409 를 받아 재조회로 수렴한다
+        assertThatThrownBy(() -> service.dismiss(userId, recommendation.getId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(RecommendationErrorCode.RECOMMENDATION_EXPIRED);
+        // 상태는 ACTIVE 그대로 - 만료는 lazy 종결이라 DISMISSED 로 덮지 않는다(admin 퍼널 만료 집계 유지)
+        assertThat(recommendationRepository.findById(recommendation.getId()).orElseThrow().getStatus())
+                .isEqualTo(RecommendationStatus.ACTIVE);
+    }
+
+    @Test
     void 대상_루틴이_삭제된_추천의_수락은_거부한다() {
         Routine routine = persistWeekly("아침 러닝", null, null, null);
         backdateCreatedAt(routine.getId(), 21);
