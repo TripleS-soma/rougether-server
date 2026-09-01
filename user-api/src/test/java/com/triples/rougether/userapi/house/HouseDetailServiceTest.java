@@ -11,6 +11,7 @@ import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseGoal;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.house.repository.HouseGoalRepository;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
@@ -41,7 +42,7 @@ class HouseDetailServiceTest {
         when(house.getName()).thenReturn("아침 루틴 하우스");
         when(house.getDescription()).thenReturn("같이 아침 루틴");
         when(house.getMaxMembers()).thenReturn(4);
-        when(house.getCurrentMemberCount()).thenReturn(3);
+        when(houseMemberRepository.countActiveHumans(1L, HouseMemberStatus.ACTIVE)).thenReturn(3L);
         when(house.getLevel()).thenReturn(2);
         when(house.getGrowthPoints()).thenReturn(120);
         return house;

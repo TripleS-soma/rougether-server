@@ -332,12 +332,19 @@ public class HouseJoinService {
                 .filter(found -> !found.isDeleted())
                 .orElse(null);
         if (byHouseCode != null) {
-            return Optional.of(HousePreviewResponse.of(byHouseCode, byHouseCode.isInviteExpired(), false));
+            return Optional.of(HousePreviewResponse.of(byHouseCode,
+                    activeHumanCount(byHouseCode), byHouseCode.isInviteExpired(), false));
         }
         return houseMemberRepository.findByInviteCodeWithHouse(inviteCode)
                 .filter(HouseMember::isActive)
                 .filter(found -> !found.getHouse().isDeleted())
                 .map(inviter -> HousePreviewResponse.of(
-                        inviter.getHouse(), inviter.isInviteExpired(), !inviter.isOwner()));
+                        inviter.getHouse(), activeHumanCount(inviter.getHouse()),
+                        inviter.isInviteExpired(), !inviter.isOwner()));
+    }
+
+    // 표기용 실사용자 수(#352) - 동거 봇 제외. 미리보기 화면의 정원 표기가 실제 가용 자리와 맞게.
+    private int activeHumanCount(House house) {
+        return (int) houseMemberRepository.countActiveHumans(house.getId(), HouseMemberStatus.ACTIVE);
     }
 }

@@ -257,9 +257,11 @@ class EveningDigestJobIntegrationTest {
                 root, TARGET_DATE, Instant.parse("2026-08-31T09:00:00Z"), CurrencyType.COIN, 10));
         root.softDelete(Instant.parse("2026-08-31T10:00:00Z"));
         routineRepository.save(root);
-        routineRepository.save(root.copyAsNewVersion(
+        Routine newVersion = routineRepository.save(root.copyAsNewVersion(
                 null, "수정 루틴", AuthType.CHECK, "DAILY", null, null,
                 TARGET_DATE.minusDays(1), null));
+        // 새 버전이 createdAt 가드가 아니라 계보 완료 판정으로 제외되는지를 보는 테스트라 후보 자격은 유지시킨다
+        backdateCreatedAt(newVersion.getId());
 
         runJob();
 
@@ -386,7 +388,18 @@ class EveningDigestJobIntegrationTest {
         Routine routine = routineRepository.save(Routine.create(
                 user, null, "루틴", AuthType.CHECK, repeatType, repeatDays, null, TARGET_DATE.minusDays(1), null));
         routine.assignOriginToSelf();
-        return routineRepository.save(routine);
+        routine = routineRepository.save(routine);
+        backdateCreatedAt(routine.getId());
+        return routine;
+    }
+
+    // 후보 쿼리는 소급 생성 제외를 위해 r.createdAt < 대상일 종료(KST) 를 요구하는데, auditing 은 실제 now 를
+    // 채우므로 고정 TARGET_DATE 가 과거가 된 뒤에는 모든 루틴이 걸러져 테스트가 만료된다(2026-09-01 KST 부터
+    // 재현). 생성 시각을 대상일 안으로 되돌려 언제 실행해도 결정적이게 한다.
+    private void backdateCreatedAt(Long routineId) {
+        jdbcTemplate.update("UPDATE routines SET created_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(TARGET_DATE.atTime(9, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant()),
+                routineId);
     }
 
     private Todo todo(User user, LocalDate dueDate) {

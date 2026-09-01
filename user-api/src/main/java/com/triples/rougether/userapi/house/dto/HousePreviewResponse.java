@@ -12,7 +12,7 @@ public record HousePreviewResponse(
         String name,
         @Schema(description = "커버 이미지 asset key. CDN base URL 과 조합해 이미지 URL 로 사용", example = "house/1f9d1c2e.png")
         String coverImageKey,
-        @Schema(description = "현재 구성원 수", example = "3")
+        @Schema(description = "현재 실사용자 수(동거 봇 제외 - 봇은 사람이 참여하면 자리를 비켜주므로 정원 표기에서 뺌)", example = "1")
         int currentMemberCount,
         @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
         Integer maxMembers,
@@ -21,12 +21,13 @@ public record HousePreviewResponse(
         @Schema(description = "방장 승인 대기 여부. 집 공용 코드(소유자 공유)는 false(즉시가입), 구성원 개인 코드는 true(참여 시 입주 신청이 생성되고 방장 수락 후 입주 확정)", example = "false")
         boolean requiresApproval) {
 
-    public static HousePreviewResponse of(House house, boolean inviteExpired, boolean requiresApproval) {
+    public static HousePreviewResponse of(House house, int currentMemberCount,
+                                          boolean inviteExpired, boolean requiresApproval) {
         return new HousePreviewResponse(
                 house.getId(),
                 house.getName(),
                 house.getCoverImageKey(),
-                house.getCurrentMemberCount(),
+                currentMemberCount,
                 house.getMaxMembers(),
                 inviteExpired,
                 requiresApproval);

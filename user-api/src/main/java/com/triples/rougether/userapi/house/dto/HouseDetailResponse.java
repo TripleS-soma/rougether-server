@@ -19,7 +19,7 @@ public record HouseDetailResponse(
         String coverImageKey,
         @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
         Integer maxMembers,
-        @Schema(description = "현재 구성원 수", example = "3")
+        @Schema(description = "현재 실사용자 수(동거 봇 제외 - 봇은 사람이 참여하면 자리를 비켜주므로 정원 표기에서 뺌)", example = "1")
         int currentMemberCount,
         @Schema(description = "집 레벨 (생성 시 0에서 시작)", example = "0")
         int level,
@@ -33,7 +33,8 @@ public record HouseDetailResponse(
         @Schema(description = "초대코드 만료 시각 (소유자에게만 값, 그 외 null)")
         Instant inviteExpiresAt) {
 
-    public static HouseDetailResponse of(House house, HouseMemberRole myRole, List<GoalSummary> goals) {
+    public static HouseDetailResponse of(House house, int currentMemberCount,
+                                         HouseMemberRole myRole, List<GoalSummary> goals) {
         boolean owner = myRole == HouseMemberRole.OWNER;
         return new HouseDetailResponse(
                 house.getId(),
@@ -41,7 +42,7 @@ public record HouseDetailResponse(
                 house.getDescription(),
                 house.getCoverImageKey(),
                 house.getMaxMembers(),
-                house.getCurrentMemberCount(),
+                currentMemberCount,
                 house.getLevel(),
                 house.getGrowthPoints(),
                 goals,
