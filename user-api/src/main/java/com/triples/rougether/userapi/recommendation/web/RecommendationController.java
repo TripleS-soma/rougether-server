@@ -53,7 +53,10 @@ public class RecommendationController {
 
     @Operation(summary = "조정 추천 무시",
             description = "추천을 무시 처리합니다. 루틴은 변경되지 않으며, 아직 처리하지 않은 활성 추천만 무시할 수 있습니다. "
-                    + "무시한 계보의 루틴은 14일 동안 다시 추천되지 않습니다.")
+                    + "무시한 계보의 루틴은 14일 동안 다시 추천되지 않습니다. "
+                    + "만료된 추천은 수락과 동일하게 409 RECOMMENDATION_EXPIRED 로 거부됩니다 — "
+                    + "수락/무시의 409 응답(ALREADY_HANDLED·EXPIRED·ROUTINE_DELETED·STALE)은 모두 "
+                    + "해당 카드가 더 이상 유효하지 않다는 신호이므로 카드를 제거하고 목록을 재조회하면 됩니다.")
     @PostMapping("/{recommendationId}/dismiss")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void dismiss(
