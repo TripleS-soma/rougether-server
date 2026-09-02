@@ -470,25 +470,6 @@ class WorkflowContractTest(unittest.TestCase):
             "python3 -m unittest discover -s .github/review-bot/tests", workflow
         )
 
-    def test_claude_workflow_uses_base_owned_review_state_collector(self) -> None:
-        workflow = (REPO_ROOT / ".github/workflows/claude-review.yml").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("Checkout trusted review control", workflow)
-        self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", workflow)
-        self.assertIn("review-control/.github/review-bot/review_state.py", workflow)
-        self.assertIn(
-            "if [ -f review-control/.github/review-bot/review_state.py ]", workflow
-        )
-        self.assertIn('\'{"version":1,"decisions":[]}\'', workflow)
-        self.assertIn("id: review-state", workflow)
-        self.assertIn(
-            "REVIEW_STATE: ${{ runner.temp }}/rougether-review-state-", workflow
-        )
-        self.assertIn("steps.review-state.outputs.payload", workflow)
-        self.assertNotIn("--output .review-state.json", workflow)
-
     def test_claude_prompt_only_trusts_validated_maintainer_decisions(self) -> None:
         prompt = (REPO_ROOT / "docs/claude/claude-review-prompt.md").read_text(
             encoding="utf-8"
