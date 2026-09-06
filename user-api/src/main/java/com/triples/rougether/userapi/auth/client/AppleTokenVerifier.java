@@ -65,7 +65,10 @@ public class AppleTokenVerifier {
         }
 
         // email은 애플이 안 줄 수도 있고, private relay(@privaterelay.appleid.com) 주소일 수도 있음. 그대로 저장함.
-        return new AppleUser(jwt.getSubject(), jwt.getClaimAsString("email"));
+        // email_verified 는 애플이 문자열("true")로 주기도 함 — getClaimAsBoolean 이 둘 다 변환함.
+        String email = jwt.getClaimAsString("email");
+        boolean emailVerified = email != null && Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"));
+        return new AppleUser(jwt.getSubject(), email, emailVerified);
     }
 
     // JWK 조회 실패(원격 키 소스 오류)가 원인 체인에 있으면 인증서버 장애로 판정함.

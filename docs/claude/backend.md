@@ -79,7 +79,7 @@ userapi/<도메인>/
 - 트랜잭션 경계(`@Transactional` 위치)는 「앱 내부 패키지·서비스 구조 > 트랜잭션 경계」를 따릅니다.
 - DB 변경은 Flyway migration으로 관리합니다 (`domain` 모듈).
 - 응답 DTO는 frontend가 쓰기 좋은 형태로 설계하고, DB table을 그대로 노출하지 않습니다.
-- 에러 응답은 spec `api.md` 형식 `{ code, message, fieldErrors }`를 따릅니다 (`common.error.ErrorResponse` / `BusinessException` + `ErrorCode`).
+- 에러 응답은 spec `api.md` 형식 `{ code, message, fieldErrors, details }`를 따릅니다 (`common.error.ErrorResponse` / `BusinessException` + `ErrorCode`). `details`는 code·message만으로 클라이언트가 분기할 수 없을 때만 싣는 구조화 부가정보(예: 409 `AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER`의 `providers`)이고 평소엔 null입니다.
 
 ## Flyway migration 규칙
 

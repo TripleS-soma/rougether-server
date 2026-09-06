@@ -51,7 +51,36 @@ class KakaoApiClientTest {
 
         assertThat(user.id()).isEqualTo("123456789");
         assertThat(user.email()).isEqualTo("a@b.com");
+        // 유효·인증 플래그가 없으면 미인증으로 취급함.
+        assertThat(user.emailVerified()).isFalse();
         server.verify();
+    }
+
+    @Test
+    void 카카오가_유효_인증된_이메일이라고_주면_emailVerified_가_true_다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess("{\"app_id\":1501738}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USER_ME_URL))
+                .andRespond(withSuccess("{\"id\":123456789,\"kakao_account\":{\"email\":\"a@b.com\","
+                        + "\"is_email_valid\":true,\"is_email_verified\":true}}", MediaType.APPLICATION_JSON));
+
+        KakaoUser user = client.fetchUser("tok");
+
+        assertThat(user.emailVerified()).isTrue();
+    }
+
+    @Test
+    void 인증되지_않은_이메일은_emailVerified_가_false_다() {
+        server.expect(requestTo(TOKEN_INFO_URL))
+                .andRespond(withSuccess("{\"app_id\":1501738}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USER_ME_URL))
+                .andRespond(withSuccess("{\"id\":123456789,\"kakao_account\":{\"email\":\"a@b.com\","
+                        + "\"is_email_valid\":true,\"is_email_verified\":false}}", MediaType.APPLICATION_JSON));
+
+        KakaoUser user = client.fetchUser("tok");
+
+        assertThat(user.email()).isEqualTo("a@b.com");
+        assertThat(user.emailVerified()).isFalse();
     }
 
     @Test

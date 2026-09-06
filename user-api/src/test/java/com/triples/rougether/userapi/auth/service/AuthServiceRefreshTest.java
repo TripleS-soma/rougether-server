@@ -57,6 +57,8 @@ class AuthServiceRefreshTest {
 
     @Mock
     private SignupService signupService;
+    @Mock
+    private EmailProviderConflictGuard emailProviderConflictGuard;
 
     private AuthService authService;
 
@@ -66,7 +68,7 @@ class AuthServiceRefreshTest {
                 userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
     private User userWithId(long id) {

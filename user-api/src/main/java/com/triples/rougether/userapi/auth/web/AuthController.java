@@ -37,25 +37,25 @@ public class AuthController {
         return authService.devLogin(request.userId());
     }
 
-    @Operation(summary = "카카오 로그인", description = "카카오 access token으로 로그인합니다. 서버가 카카오에 토큰을 검증한 뒤 카카오 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 카카오 계정을 연동하며, 카카오가 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "카카오 로그인", description = "카카오 access token으로 로그인합니다. 서버가 카카오에 토큰을 검증한 뒤 카카오 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 카카오 계정을 연동하며, 카카오가 이메일을 제공한 경우 함께 저장합니다. 같은 이메일(provider가 인증한 이메일)로 가입된 활성 계정이 다른 소셜 provider에 있으면 새 계정을 만들지 않고 409 AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER를 반환합니다(details.providers에 기존 provider 목록, message에 안내 문구). 그 계정으로 이어가려면 해당 provider로 로그인하고, 새 계정을 원하면 같은 자격증명으로 allowNewAccount=true를 붙여 다시 요청합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/kakao")
     public LoginResponse kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
-        return authService.kakaoLogin(request.accessToken());
+        return authService.kakaoLogin(request.accessToken(), request.allowsNewAccount());
     }
 
-    @Operation(summary = "구글 로그인", description = "구글 id token으로 로그인합니다. 서버가 토큰의 서명·발급자·대상·만료를 검증한 뒤 구글 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 구글 계정을 연동하며, 구글이 이메일을 제공한 경우 함께 저장합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "구글 로그인", description = "구글 id token으로 로그인합니다. 서버가 토큰의 서명·발급자·대상·만료를 검증한 뒤 구글 계정 기준으로 회원을 찾습니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 구글 계정을 연동하며, 구글이 이메일을 제공한 경우 함께 저장합니다. 같은 이메일(provider가 인증한 이메일)로 가입된 활성 계정이 다른 소셜 provider에 있으면 새 계정을 만들지 않고 409 AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER를 반환합니다(details.providers에 기존 provider 목록, message에 안내 문구). 그 계정으로 이어가려면 해당 provider로 로그인하고, 새 계정을 원하면 같은 자격증명으로 allowNewAccount=true를 붙여 다시 요청합니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/google")
     public LoginResponse googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
-        return authService.googleLogin(request.idToken());
+        return authService.googleLogin(request.idToken(), request.allowsNewAccount());
     }
 
-    @Operation(summary = "애플 로그인", description = "Sign in with Apple의 identityToken과 authorizationCode로 로그인합니다. 두 값 모두 네이티브 Sign in with Apple 응답이 함께 반환합니다. 서버가 identityToken의 서명·발급자·대상·만료를 검증한 뒤 애플 계정 기준으로 회원을 찾고, authorizationCode는 refresh token으로 교환해 회원탈퇴 시 연동 해제(revoke)에 사용합니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 애플 계정을 연동하며, 애플이 이메일을 제공한 경우 함께 저장합니다. 애플은 최초 로그인에만 이메일을 제공하고 이메일 가리기를 선택하면 relay 주소를 주므로, 이메일이 없거나 relay 주소일 수 있습니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
+    @Operation(summary = "애플 로그인", description = "Sign in with Apple의 identityToken과 authorizationCode로 로그인합니다. 두 값 모두 네이티브 Sign in with Apple 응답이 함께 반환합니다. 서버가 identityToken의 서명·발급자·대상·만료를 검증한 뒤 애플 계정 기준으로 회원을 찾고, authorizationCode는 refresh token으로 교환해 회원탈퇴 시 연동 해제(revoke)에 사용합니다. 최초 로그인이면 회원과 통화별 지갑(COIN·DIAMOND)·기본 집(나의 집, 정원 4, 동거 봇 2명 입주, 집 목표는 온보딩 목표 저장 시 채움)을 자동 생성하고 애플 계정을 연동하며, 애플이 이메일을 제공한 경우 함께 저장합니다. 애플은 최초 로그인에만 이메일을 제공하고 이메일 가리기를 선택하면 relay 주소를 주므로, 이메일이 없거나 relay 주소일 수 있습니다. 같은 이메일(provider가 인증한 이메일)로 가입된 활성 계정이 다른 소셜 provider에 있으면 새 계정을 만들지 않고 409 AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER를 반환합니다(details.providers에 기존 provider 목록, message에 안내 문구). 그 계정으로 이어가려면 해당 provider로 로그인하고, 새 계정을 원하면 같은 자격증명으로 allowNewAccount=true를 붙여 다시 요청합니다. 애플은 409 시 authorizationCode를 교환하지 않으므로 재요청은 반드시 직전과 같은 identityToken·authorizationCode를 5분 안에 다시 보내야 합니다 — Sign in with Apple을 새로 태우면 이메일 클레임이 빠져 새 계정의 이메일이 비게 됩니다. 신규 가입 여부는 응답의 isNewUser로 구분합니다. 로그인 성공 시 마지막 로그인 시각이 갱신됩니다.")
     @SecurityRequirements
     @PostMapping("/apple")
     public LoginResponse appleLogin(@Valid @RequestBody AppleLoginRequest request) {
-        return authService.appleLogin(request.idToken(), request.authorizationCode());
+        return authService.appleLogin(request.idToken(), request.authorizationCode(), request.allowsNewAccount());
     }
 
     @Operation(summary = "토큰 재발급", description = "refresh token으로 access/refresh token을 재발급합니다. refresh token은 1회용으로, 재발급에 사용한 토큰은 즉시 폐기되고 새 refresh token으로 교체됩니다(rotation). 이후 요청에는 응답으로 받은 새 토큰 쌍을 사용합니다. access token 유효기간은 30분, refresh token 유효기간은 14일입니다.")

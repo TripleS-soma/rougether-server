@@ -21,6 +21,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import java.util.List;
+import java.util.Map;
 
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -53,7 +55,7 @@ class AuthControllerTest {
 
     @Test
     void kakao_login_성공_응답_계약() throws Exception {
-        when(authService.kakaoLogin("kakao-access")).thenReturn(new LoginResponse(3L, "acc", "ref", true));
+        when(authService.kakaoLogin("kakao-access", false)).thenReturn(new LoginResponse(3L, "acc", "ref", true));
 
         mockMvc.perform(post("/api/v1/auth/kakao")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +77,7 @@ class AuthControllerTest {
 
     @Test
     void kakao_login_은_카카오_토큰이_무효면_401_과_code_를_준다() throws Exception {
-        when(authService.kakaoLogin("bad"))
+        when(authService.kakaoLogin("bad", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_KAKAO_TOKEN_INVALID));
 
         mockMvc.perform(post("/api/v1/auth/kakao")
@@ -87,7 +89,7 @@ class AuthControllerTest {
 
     @Test
     void kakao_login_은_카카오_서버_오류면_502_와_code_를_준다() throws Exception {
-        when(authService.kakaoLogin("tok"))
+        when(authService.kakaoLogin("tok", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_KAKAO_UNAVAILABLE));
 
         mockMvc.perform(post("/api/v1/auth/kakao")
@@ -98,8 +100,54 @@ class AuthControllerTest {
     }
 
     @Test
+    void kakao_login_은_같은_이메일_타_provider_계정이_있으면_409_와_providers_를_준다() throws Exception {
+        when(authService.kakaoLogin("kakao-access", false))
+                .thenThrow(new BusinessException(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER,
+                        "이 이메일은 애플 로그인으로 가입되어 있어요.", Map.of("providers", List.of("APPLE"))));
+
+        mockMvc.perform(post("/api/v1/auth/kakao")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accessToken\":\"kakao-access\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER"))
+                .andExpect(jsonPath("$.message").value("이 이메일은 애플 로그인으로 가입되어 있어요."))
+                .andExpect(jsonPath("$.details.providers[0]").value("APPLE"));
+    }
+
+    @Test
+    void kakao_login_의_allowNewAccount_는_서비스에_전달된다() throws Exception {
+        when(authService.kakaoLogin("kakao-access", true)).thenReturn(new LoginResponse(3L, "acc", "ref", true));
+
+        mockMvc.perform(post("/api/v1/auth/kakao")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accessToken\":\"kakao-access\",\"allowNewAccount\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isNewUser").value(true));
+
+        verify(authService).kakaoLogin("kakao-access", true);
+    }
+
+    @Test
+    void google_apple_login_의_allowNewAccount_도_서비스에_전달된다() throws Exception {
+        when(authService.googleLogin("google-id", true)).thenReturn(new LoginResponse(5L, "acc", "ref", true));
+        when(authService.appleLogin("apple-id", "authcode", true)).thenReturn(new LoginResponse(7L, "acc", "ref", true));
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"google-id\",\"allowNewAccount\":true}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/auth/apple")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"apple-id\",\"authorizationCode\":\"authcode\",\"allowNewAccount\":true}"))
+                .andExpect(status().isOk());
+
+        verify(authService).googleLogin("google-id", true);
+        verify(authService).appleLogin("apple-id", "authcode", true);
+    }
+
+    @Test
     void google_login_성공_응답_계약() throws Exception {
-        when(authService.googleLogin("google-id")).thenReturn(new LoginResponse(5L, "acc", "ref", true));
+        when(authService.googleLogin("google-id", false)).thenReturn(new LoginResponse(5L, "acc", "ref", true));
 
         mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -121,7 +169,7 @@ class AuthControllerTest {
 
     @Test
     void google_login_은_구글_토큰이_무효면_401_과_code_를_준다() throws Exception {
-        when(authService.googleLogin("bad"))
+        when(authService.googleLogin("bad", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID));
 
         mockMvc.perform(post("/api/v1/auth/google")
@@ -133,7 +181,7 @@ class AuthControllerTest {
 
     @Test
     void google_login_은_구글_서버_오류면_502_와_code_를_준다() throws Exception {
-        when(authService.googleLogin("tok"))
+        when(authService.googleLogin("tok", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_UNAVAILABLE));
 
         mockMvc.perform(post("/api/v1/auth/google")
@@ -145,7 +193,7 @@ class AuthControllerTest {
 
     @Test
     void apple_login_성공_응답_계약() throws Exception {
-        when(authService.appleLogin("apple-id", "authcode")).thenReturn(new LoginResponse(7L, "acc", "ref", true));
+        when(authService.appleLogin("apple-id", "authcode", false)).thenReturn(new LoginResponse(7L, "acc", "ref", true));
 
         mockMvc.perform(post("/api/v1/auth/apple")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -183,7 +231,7 @@ class AuthControllerTest {
 
     @Test
     void apple_login_은_애플_토큰이_무효면_401_과_code_를_준다() throws Exception {
-        when(authService.appleLogin("bad", "authcode"))
+        when(authService.appleLogin("bad", "authcode", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_TOKEN_INVALID));
 
         mockMvc.perform(post("/api/v1/auth/apple")
@@ -195,7 +243,7 @@ class AuthControllerTest {
 
     @Test
     void apple_login_은_애플_서버_오류면_502_와_code_를_준다() throws Exception {
-        when(authService.appleLogin("tok", "authcode"))
+        when(authService.appleLogin("tok", "authcode", false))
                 .thenThrow(new BusinessException(AuthErrorCode.OAUTH_APPLE_UNAVAILABLE));
 
         mockMvc.perform(post("/api/v1/auth/apple")

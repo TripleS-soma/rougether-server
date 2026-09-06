@@ -131,7 +131,8 @@ class MemberWithdrawalIntegrationTest {
 
     private String kakaoLoginAs(String kakaoId) {
         String token = "tok-" + kakaoId;
-        when(kakaoApiClient.fetchUser(token)).thenReturn(new KakaoUser(kakaoId, "a@b.com"));
+        // 로그인 통합 테스트들과 같은 DB 를 공유하므로 이메일은 유일하게(타 provider 계정 안내 409 회피).
+        when(kakaoApiClient.fetchUser(token)).thenReturn(new KakaoUser(kakaoId, "w-" + UUID.randomUUID() + "@example.com"));
         return token;
     }
 

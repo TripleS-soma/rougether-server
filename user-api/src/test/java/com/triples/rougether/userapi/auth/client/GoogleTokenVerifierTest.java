@@ -51,6 +51,18 @@ class GoogleTokenVerifierTest {
 
         assertThat(user.id()).isEqualTo("google-sub-1");
         assertThat(user.email()).isEqualTo("a@b.com");
+        // email_verified 클레임이 없으면 미인증으로 취급함.
+        assertThat(user.emailVerified()).isFalse();
+    }
+
+    @Test
+    void email_verified_가_true_면_emailVerified_다() {
+        String token = token(builder -> builder
+                .issuer(ISS).audience().add(CLIENT_ID).and()
+                .subject("google-sub-1").claim("email", "a@b.com").claim("email_verified", true),
+                keyPair);
+
+        assertThat(verifier.verify(token).emailVerified()).isTrue();
     }
 
     @Test
