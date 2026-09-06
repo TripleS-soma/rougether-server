@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
@@ -21,6 +22,8 @@ import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -47,17 +50,41 @@ class GachaControllerTest {
     @Test
     void 뽑기_머신_목록_응답_계약() throws Exception {
         when(gachaService.getGachaList()).thenReturn(new GachaListResponse(List.of(
-                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", null, 5L,
                         "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
                         CurrencyType.COIN, 25, 1, true))));
 
-        mockMvc.perform(get("/api/v1/gacha"))
+        mockMvc.perform(get("/api/v1/gacha").param("ignoredLegacyParameter", "anything"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].code").value("calm_hanok"))
+                .andExpect(jsonPath("$.items[0].themeId").value(5))
+                .andExpect(jsonPath("$.items[0].category").doesNotExist());
+    }
+
+    @Test
+    void category를_명시한_새_앱만_카테고리_목록을_받는다() throws Exception {
+        when(gachaService.getCategoryGachaList()).thenReturn(new GachaListResponse(List.of(
+                new GachaResponse(1L, "wallpaper_gacha", "벽지 뽑기", GachaCategory.WALLPAPER, null,
+                        "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+                        CurrencyType.COIN, 25, 1, true))));
+
+        mockMvc.perform(get("/api/v1/gacha").param("catalog", "category"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].gachaId").value(1))
-                .andExpect(jsonPath("$.items[0].code").value("calm_hanok"))
+                .andExpect(jsonPath("$.items[0].code").value("wallpaper_gacha"))
+                .andExpect(jsonPath("$.items[0].category").value("WALLPAPER"))
+                .andExpect(jsonPath("$.items[0].themeId").doesNotExist())
                 .andExpect(jsonPath("$.items[0].giftBoxAssetKey")
                         .value("items/643162b1-276e-4c93-98cb-9a5c706f677f.png"))
                 .andExpect(jsonPath("$.items[0].costAmount").value(25));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "legacy", "CATEGORY", "unknown"})
+    void 지원하지_않는_catalog는_결정적인_400을_반환한다(String catalog) throws Exception {
+        mockMvc.perform(get("/api/v1/gacha").param("catalog", catalog))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
@@ -70,7 +97,7 @@ class GachaControllerTest {
     @Test
     void 뽑기_머신_상세도_선물상자_key를_내려준다() throws Exception {
         when(gachaService.getGacha(1L)).thenReturn(
-                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", 5L,
+                new GachaResponse(1L, "calm_hanok", "한옥 뽑기", null, 5L,
                         "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
                         CurrencyType.COIN, 25, 1, true));
 

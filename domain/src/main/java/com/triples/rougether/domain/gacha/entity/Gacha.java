@@ -54,7 +54,7 @@ public class Gacha extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
-    // 가구 뽑기는 테마별, 캐릭터 뽑기는 테마 무관(null).
+    // 이전 테마 머신의 이력을 유지함. 카테고리/캐릭터 머신은 테마 무관(null).
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "theme_id")
     private Theme theme;
@@ -77,5 +77,9 @@ public class Gacha extends BaseEntity {
             return false;
         }
         return endsAt == null || !now.isAfter(endsAt);
+    }
+
+    public GachaCategory getCategory() {
+        return GachaCategory.fromCode(code);
     }
 }

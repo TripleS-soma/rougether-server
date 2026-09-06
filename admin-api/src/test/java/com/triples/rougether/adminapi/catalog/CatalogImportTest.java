@@ -49,6 +49,8 @@ class CatalogImportTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void 카탈로그_적재_및_멱등() throws Exception {
+        // 신규 가구 자동 등록을 검증하는 이 테스트 트랜잭션에서만 시드를 활성화한다.
+        jdbcTemplate.update("UPDATE gacha SET is_active = TRUE WHERE code = 'furniture_gacha'");
         // 1차 적재 — 새로 생성
         mockMvc.perform(post("/admin/catalog/import")
                         .contentType(MediaType.APPLICATION_JSON).content(JSON).with(csrf()))

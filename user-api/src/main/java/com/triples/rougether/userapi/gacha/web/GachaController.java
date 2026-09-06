@@ -12,14 +12,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// 뽑기 조회 + 실행. 테마별 머신 목록/상세, 단챠·5+1회 뽑기.
+// 뽑기 조회 + 실행. 벽지·바닥·가구 머신 목록/상세, 단챠·5+1회 뽑기.
 @Tag(name = "Gacha", description = "뽑기 관련 API")
 @RestController
 @RequestMapping("/api/v1/gacha")
@@ -32,11 +34,16 @@ public class GachaController {
     }
 
     @Operation(summary = "뽑기 머신 목록 조회",
-            description = "운영 중(active)인 뽑기 머신 목록을 반환합니다. "
-                    + "themeId 가 있는 머신은 해당 테마의 가구 뽑기, null 이면 캐릭터 뽑기입니다.")
+            description = "catalog=category를 명시하면 운영 기간 안인 장식 머신을 "
+                    + "벽지(WALLPAPER), 바닥(FLOOR), 가구(FURNITURE) 순서로 반환합니다. "
+                    + "각 머신은 모든 테마를 포함하며 themeId는 null입니다. "
+                    + "catalog를 생략하면 기존 테마·캐릭터 머신 목록을 유지하고 신규 카테고리 머신은 제외합니다.")
     @GetMapping
-    public GachaListResponse list() {
-        return gachaService.getGachaList();
+    public GachaListResponse list(
+            @Parameter(description = "신규 세 카테고리 목록은 category. 생략하면 기존 앱 목록 유지")
+            @RequestParam(required = false)
+            @Pattern(regexp = "category", message = "catalog는 category만 허용됩니다.") String catalog) {
+        return catalog == null ? gachaService.getGachaList() : gachaService.getCategoryGachaList();
     }
 
     @Operation(summary = "뽑기 머신 상세 조회",

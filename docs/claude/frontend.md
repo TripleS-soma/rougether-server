@@ -21,6 +21,31 @@
 프론트는 `poses[].assetKey`를 CDN base URL과 조합해 재생합니다. `poses[]`에는 활성
 포즈만 포함되며 `sortOrder` 오름차순입니다. 포즈가 없는 캐릭터는 빈 배열을 반환합니다.
 
+## 뽑기 카테고리
+
+`GET /api/v1/gacha?catalog=category`는 운영 중인 `WALLPAPER`, `FLOOR`, `FURNITURE` 순으로 장식
+머신을 반환합니다. 코드는 각각 `wallpaper_gacha`, `floor_gacha`, `furniture_gacha`이며,
+새 `category` 필드로 화면을 분류합니다. 세 머신 모두 `themeId=null`이고 여러 테마의
+보상을 포함합니다. 미리보기와 실행에는 선택한 응답의 실제 `gachaId`를 사용합니다.
+
+`catalog`를 생략한 기존 `GET /api/v1/gacha`는 테마·캐릭터 목록을 유지하며 신규
+카테고리 머신을 제외합니다. 지원하는 명시값은 `category`뿐이며 다른 값은
+`400 VALIDATION_FAILED`입니다. 기존 머신의 `category`는 null일 수 있습니다.
+`themeId=null`을 캐릭터로 해석하는 구버전 앱에 신규 머신이 노출되지 않으며,
+V66은 기존 머신을 중지하지 않아 캐시된 ID로 상세·미리보기·추첨을 계속 호출할 수 있습니다.
+구머신 종료는 이후 별도 이행에서 결정합니다.
+
+V66 직후 세 머신은 비활성 준비 상태여서 새 목록이 비어 있습니다. 서버 전체 배포의
+SHA·공용 health·구슬롯 drain 확인 후 별도 guarded activation을 완료해야 세 개가
+공개됩니다. 모바일은 빈 목록을 임의 머신/ID로 대체하지 않습니다. 구서버 이미지로
+롤백하기 전에는 세 개 비활성화 검증이 필수입니다. 상세 절차는
+[카테고리 이행 문서](../gacha-category-rollout.md)를 따릅니다.
+
+바닥은 `placementType=surface_slot`과 `surfaceSlotType=floor`를 모두 만족하는 보상이며,
+벽지도 같은 방식으로 `wallpaper` 슬롯을 사용합니다. `positioned` 러그는 가구에 속합니다.
+배경과 캐릭터 악세사리는 세 장식 풀에서 제외합니다. 신규 카탈로그 적재의 활성 장식은
+해당 전역 풀에 등록되며 재적재가 기존 등급이나 회수된 보상을 변경하지 않습니다.
+
 ## 방 화면
 
 방 화면은 다음 정보가 필요합니다.

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.gacha.entity.Gacha;
+import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
 import com.triples.rougether.domain.gacha.entity.RewardType;
 import com.triples.rougether.domain.gacha.repository.GachaPoolEntryRepository;
@@ -83,17 +84,84 @@ class GachaServiceTest {
     }
 
     @Test
-    void 뽑기_목록은_활성이고_운영_기간_안인_머신만_조회한다() {
+    void 뽑기_목록은_운영_기간_안인_카테고리_머신만_정해진_순서로_조회한다() {
         Instant now = Instant.now();
-        Gacha available = gacha("available", true, null, null);
+        Gacha wallpaper = gacha("wallpaper_gacha", true, null, null);
+        Gacha floor = gacha("floor_gacha", true, null, null);
+        Gacha furniture = gacha("furniture_gacha", true, null, null);
+        Gacha legacyTheme = gacha("forest_sage", true, null, null);
+        Gacha character = gacha("characters", true, null, null);
         Gacha notStarted = gacha("not_started", true, now.plusSeconds(60), null);
         Gacha expired = gacha("expired", true, null, now.minusSeconds(60));
         Gacha inactive = gacha("inactive", false, null, null);
-        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(available, notStarted, expired, inactive));
+        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(
+                furniture, legacyTheme, floor, character, wallpaper, notStarted, expired, inactive));
 
-        assertThat(gachaService.getGachaList().items())
-                .extracting(response -> response.name())
-                .containsExactly("available");
+        assertThat(gachaService.getCategoryGachaList().items())
+                .extracting(response -> response.category())
+                .containsExactly(GachaCategory.WALLPAPER, GachaCategory.FLOOR, GachaCategory.FURNITURE);
+    }
+
+    @Test
+    void 카테고리_머신의_운영기간과_비활성_설정을_존중한다() {
+        Instant now = Instant.now();
+        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(
+                gacha("wallpaper_gacha", true, now.plusSeconds(60), null),
+                gacha("floor_gacha", true, null, now.minusSeconds(60)),
+                gacha("furniture_gacha", false, null, null)));
+
+        assertThat(gachaService.getCategoryGachaList().items()).isEmpty();
+    }
+
+    @Test
+    void 기존_앱_목록은_신규_카테고리를_제외하고_기존_테마와_캐릭터_순서를_유지한다() {
+        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(
+                gacha("floor_gacha", true, null, null),
+                gacha("forest_sage", true, null, null),
+                gacha("retired", false, null, null),
+                gacha("characters", true, null, null),
+                gacha("wallpaper_gacha", true, null, null),
+                gacha("furniture_gacha", true, null, null)));
+
+        assertThat(gachaService.getGachaList().items()).extracting(response -> response.code())
+                .containsExactly("forest_sage", "characters");
+    }
+
+    @Test
+    void 바닥_미리보기는_잘못_등록된_가구와_악세사리를_제외한다() {
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha("floor_gacha", true, null, null)));
+        Item floor = new Item(null, "floor", "surface_slot", "floor", null,
+                "바닥", null, null, "items/floor.png", false, true);
+        ReflectionTestUtils.setField(floor, "id", 1L);
+        Item rug = new Item(null, "rug", "positioned", null, null,
+                "러그", null, null, "items/rug.png", false, true);
+        Item accessory = new Item(null, "character_accessory", "surface_slot", "floor", null,
+                "잘못 등록된 악세사리", null, null, "items/accessory.png", false, true);
+        when(poolRepository.findActiveRewardsByGachaId(10L)).thenReturn(List.of(
+                GachaPoolEntry.itemEntry(null, floor, "일반"),
+                GachaPoolEntry.itemEntry(null, rug, "희귀"),
+                GachaPoolEntry.itemEntry(null, accessory, "전설")));
+
+        assertThat(gachaService.getRewards(1L, 10L).items())
+                .extracting(reward -> reward.assetKey()).containsExactly("items/floor.png");
+    }
+
+    @Test
+    void 카테고리와_다른_보상만_있으면_추첨_전에_거부한다() {
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha("wallpaper_gacha", true, null, null)));
+        Item wrongItem = new Item(null, "furniture", "positioned", null, null,
+                "의자", null, null, "items/chair.png", false, true);
+        when(poolRepository.findByGachaIdAndActiveIsTrue(10L))
+                .thenReturn(List.of(GachaPoolEntry.itemEntry(null, wrongItem, "전설")));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(100);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN))
+                .thenReturn(Optional.of(wallet));
+
+        assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.EMPTY_POOL));
+        verify(wallet, never()).spend(anyInt());
+        verify(userItemRepository, never()).save(any());
     }
 
     // pool 을 1개 아이템(rarity 일반)으로 만들어 추첨 결과를 결정적으로 고정.

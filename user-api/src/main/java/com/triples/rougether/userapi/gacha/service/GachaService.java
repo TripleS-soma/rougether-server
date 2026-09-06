@@ -5,6 +5,7 @@ import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.gacha.entity.Gacha;
+import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
 import com.triples.rougether.domain.gacha.entity.GachaRarity;
 import com.triples.rougether.domain.gacha.entity.RewardType;
@@ -33,6 +34,7 @@ import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +89,20 @@ public class GachaService {
     public GachaListResponse getGachaList() {
         Instant now = Instant.now();
         List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
+                .filter(gacha -> gacha.getCategory() == null)
                 .filter(gacha -> gacha.isAvailableAt(now))
+                .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
+                .toList();
+        return new GachaListResponse(items);
+    }
+
+    @Transactional(readOnly = true)
+    public GachaListResponse getCategoryGachaList() {
+        Instant now = Instant.now();
+        List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
+                .filter(gacha -> gacha.getCategory() != null)
+                .filter(gacha -> gacha.isAvailableAt(now))
+                .sorted(Comparator.comparing(Gacha::getCategory))
                 .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
                 .toList();
         return new GachaListResponse(items);
@@ -113,7 +128,7 @@ public class GachaService {
                 new HashSet<>(userCharacterRepository.findOwnedCharacterIdsByUserId(userId));
 
         List<GachaRewardResponse> rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
-                .filter(this::hasReward)
+                .filter(entry -> isEligibleReward(gacha, entry))
                 .map(entry -> toRewardResponse(entry, ownedItemIds, ownedCharacterIds))
                 .toList();
         return new GachaRewardListResponse(rewards);
@@ -137,6 +152,7 @@ public class GachaService {
         int cost = bonusDraw
                 ? gacha.getCostAmount() * BONUS_DRAW_COST_MULTIPLIER
                 : gacha.getCostAmount();
+
         // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
         // 전부 같은 user 행 락을 잡으므로 동시 지급이 같은 캐릭터를 2행 만들 수 없다. 락 순서: user → wallet.
         userRepository.findByIdForUpdate(userId)
@@ -147,16 +163,17 @@ public class GachaService {
         if (wallet.getBalance() < cost) {
             throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
         }
-        wallet.spend(cost);
-        walletHistoryRecorder.record(wallet, -cost, WalletHistoryReason.GACHA_DRAW,
-                WalletHistory.SOURCE_GACHA, gachaId);
 
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
-                .filter(this::hasReward)
+                .filter(entry -> isEligibleReward(gacha, entry))
                 .toList();
         if (pool.isEmpty()) {
             throw new BusinessException(GachaErrorCode.EMPTY_POOL);
         }
+        wallet.spend(cost);
+        walletHistoryRecorder.record(wallet, -cost, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, gachaId);
+
         Map<String, List<GachaPoolEntry>> byRarity = pool.stream()
                 .collect(Collectors.groupingBy(
                         entry -> entry.getRarity() == null ? GachaRarity.NORMAL : entry.getRarity()));
@@ -207,6 +224,15 @@ public class GachaService {
     private boolean hasReward(GachaPoolEntry e) {
         return (e.getRewardType() == RewardType.ITEM && e.getItem() != null)
                 || (e.getRewardType() == RewardType.CHARACTER && e.getCharacter() != null);
+    }
+
+    private boolean isEligibleReward(Gacha gacha, GachaPoolEntry entry) {
+        if (!hasReward(entry)) {
+            return false;
+        }
+        GachaCategory category = gacha.getCategory();
+        return category == null || (entry.getRewardType() == RewardType.ITEM
+                && category == GachaCategory.fromItem(entry.getItem()));
     }
 
     private GachaRewardResponse toRewardResponse(GachaPoolEntry entry,

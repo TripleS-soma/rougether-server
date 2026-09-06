@@ -14,6 +14,18 @@ class GachaGiftBoxCatalogTest {
 
     @ParameterizedTest
     @CsvSource({
+            "wallpaper_gacha,items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+            "floor_gacha,items/0c213078-69ce-4a77-a729-9144905dfc22.png",
+            "furniture_gacha,items/7ae25d25-e15b-413b-ba97-650a1645514f.png"
+    })
+    void 테마가_없는_카테고리마다_서로_다른_투명_선물상자를_내려준다(String code, String expected) {
+        Gacha gacha = new Gacha(code, code, CurrencyType.COIN, 25, 1, null, true);
+
+        assertThat(GachaGiftBoxCatalog.assetKeyFor(gacha)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
             "forest_sage, items/0c213078-69ce-4a77-a729-9144905dfc22.png",
             "calm_hanok, items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
             "bakery_morning, items/7ae25d25-e15b-413b-ba97-650a1645514f.png",

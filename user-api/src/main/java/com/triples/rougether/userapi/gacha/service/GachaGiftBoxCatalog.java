@@ -1,13 +1,19 @@
 package com.triples.rougether.userapi.gacha.service;
 
 import com.triples.rougether.domain.gacha.entity.Gacha;
+import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import java.util.Map;
 
-// 뽑기 화면에서 바로 사용할 투명 선물상자 에셋을 테마 코드에 연결함.
+// 공개 카테고리별 투명 선물상자를 내려주며 이전 머신 상세 에셋도 유지함.
 public final class GachaGiftBoxCatalog {
 
     private static final String DEFAULT_ASSET_KEY =
             "items/0c213078-69ce-4a77-a729-9144905dfc22.png";
+
+    private static final Map<GachaCategory, String> ASSET_KEY_BY_CATEGORY = Map.of(
+            GachaCategory.WALLPAPER, "items/643162b1-276e-4c93-98cb-9a5c706f677f.png",
+            GachaCategory.FLOOR, DEFAULT_ASSET_KEY,
+            GachaCategory.FURNITURE, "items/7ae25d25-e15b-413b-ba97-650a1645514f.png");
 
     private static final Map<String, String> ASSET_KEY_BY_THEME_CODE = Map.ofEntries(
             Map.entry("forest_sage", "items/0c213078-69ce-4a77-a729-9144905dfc22.png"),
@@ -31,6 +37,9 @@ public final class GachaGiftBoxCatalog {
     }
 
     public static String assetKeyFor(Gacha gacha) {
+        if (gacha.getCategory() != null) {
+            return ASSET_KEY_BY_CATEGORY.get(gacha.getCategory());
+        }
         if (gacha.getTheme() == null) {
             return DEFAULT_ASSET_KEY;
         }
