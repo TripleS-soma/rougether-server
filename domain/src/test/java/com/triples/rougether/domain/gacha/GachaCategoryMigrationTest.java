@@ -42,7 +42,7 @@ class GachaCategoryMigrationTest {
     }
 
     @Test
-    void 비어있는_DB에도_테마_공통_25코인_3종을_한번씩_생성한다() {
+    void 비어있는_DB에도_테마_공통_25코인_3종을_비활성으로_한번씩_준비한다() {
         migrate();
         migrate();
 
@@ -59,7 +59,7 @@ class GachaCategoryMigrationTest {
                     assertThat(row.get("theme_id")).isNull();
                     assertThat(row.get("starts_at")).isNull();
                     assertThat(row.get("ends_at")).isNull();
-                    assertThat(row.get("is_active")).isEqualTo(true);
+                    assertThat(row.get("is_active")).isEqualTo(false);
                 })
                 .extracting(row -> row.get("code"))
                 .containsExactly("floor_gacha", "furniture_gacha", "wallpaper_gacha");
@@ -88,8 +88,8 @@ class GachaCategoryMigrationTest {
                 new Reward("furniture_gacha", 103, "일반", 1, true),
                 new Reward("furniture_gacha", 104, "전설", 1, true),
                 new Reward("wallpaper_gacha", 101, "희귀", 1, true));
-        assertThat(machineActive(10)).isFalse();
-        assertThat(machineActive(20)).isFalse();
+        assertThat(machineActive(10)).isTrue();
+        assertThat(machineActive(20)).isTrue();
     }
 
     @Test
@@ -191,21 +191,24 @@ class GachaCategoryMigrationTest {
                 VALUES (1005, 30, 'CHARACTER', 1, 1, TRUE)
                 """);
         List<Map<String, Object>> originalRows = jdbc.queryForList("SELECT * FROM gacha_pool_entries ORDER BY id");
+        List<Map<String, Object>> originalMachines = jdbc.queryForList("SELECT * FROM gacha ORDER BY id");
 
         migrate();
 
-        assertThat(machineActive(10)).isFalse();
+        assertThat(machineActive(10)).isTrue();
         assertThat(machineActive(20)).isTrue();
         assertThat(machineActive(30)).isTrue();
         assertThat(machineActive(40)).isTrue();
         assertThat(categoryRewards()).containsExactly(new Reward("furniture_gacha", 101, "전설", 1, true));
         assertThat(jdbc.queryForList("SELECT * FROM gacha_pool_entries WHERE id <= 1005 ORDER BY id"))
                 .isEqualTo(originalRows);
+        assertThat(jdbc.queryForList("SELECT * FROM gacha WHERE id <= 40 ORDER BY id"))
+                .isEqualTo(originalMachines);
     }
 
     @Test
-    void 사전_등록된_정식_머신과_보상_ID는_재사용하고_머신_계약을_정규화한다() {
-        machine(10, "wallpaper_gacha", 1L, false);
+    void 사전_활성화된_정식_머신도_ID를_보존하며_비활성_준비_상태로_맞춘다() {
+        machine(10, "wallpaper_gacha", 1L, true);
         jdbc.update("UPDATE gacha SET cost_currency_type = 'DIAMOND', cost_amount = 100, draw_count = 6 WHERE id = 10");
         machine(20, "legacy", 1L, true);
         item(101, 1, "wallpaper", "surface_slot", "wallpaper", null, true);
@@ -224,7 +227,7 @@ class GachaCategoryMigrationTest {
                 .containsEntry("cost_amount", 25)
                 .containsEntry("draw_count", 1)
                 .containsEntry("theme_id", null)
-                .containsEntry("is_active", true);
+                .containsEntry("is_active", false);
     }
 
     private void theme(long id, boolean active) {
@@ -272,7 +275,7 @@ class GachaCategoryMigrationTest {
     }
 
     private void migrate() {
-        script("V63__consolidate_decor_gacha_categories.sql");
+        script("V66__consolidate_decor_gacha_categories.sql");
     }
 
     private void script(String filename) {

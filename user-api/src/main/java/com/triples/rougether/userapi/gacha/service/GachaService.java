@@ -89,6 +89,17 @@ public class GachaService {
     public GachaListResponse getGachaList() {
         Instant now = Instant.now();
         List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
+                .filter(gacha -> gacha.getCategory() == null)
+                .filter(gacha -> gacha.isAvailableAt(now))
+                .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
+                .toList();
+        return new GachaListResponse(items);
+    }
+
+    @Transactional(readOnly = true)
+    public GachaListResponse getCategoryGachaList() {
+        Instant now = Instant.now();
+        List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.getCategory() != null)
                 .filter(gacha -> gacha.isAvailableAt(now))
                 .sorted(Comparator.comparing(Gacha::getCategory))

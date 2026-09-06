@@ -97,7 +97,7 @@ class GachaServiceTest {
         when(gachaRepository.findAllWithTheme()).thenReturn(List.of(
                 furniture, legacyTheme, floor, character, wallpaper, notStarted, expired, inactive));
 
-        assertThat(gachaService.getGachaList().items())
+        assertThat(gachaService.getCategoryGachaList().items())
                 .extracting(response -> response.category())
                 .containsExactly(GachaCategory.WALLPAPER, GachaCategory.FLOOR, GachaCategory.FURNITURE);
     }
@@ -110,7 +110,21 @@ class GachaServiceTest {
                 gacha("floor_gacha", true, null, now.minusSeconds(60)),
                 gacha("furniture_gacha", false, null, null)));
 
-        assertThat(gachaService.getGachaList().items()).isEmpty();
+        assertThat(gachaService.getCategoryGachaList().items()).isEmpty();
+    }
+
+    @Test
+    void 기존_앱_목록은_신규_카테고리를_제외하고_기존_테마와_캐릭터_순서를_유지한다() {
+        when(gachaRepository.findAllWithTheme()).thenReturn(List.of(
+                gacha("floor_gacha", true, null, null),
+                gacha("forest_sage", true, null, null),
+                gacha("retired", false, null, null),
+                gacha("characters", true, null, null),
+                gacha("wallpaper_gacha", true, null, null),
+                gacha("furniture_gacha", true, null, null)));
+
+        assertThat(gachaService.getGachaList().items()).extracting(response -> response.code())
+                .containsExactly("forest_sage", "characters");
     }
 
     @Test

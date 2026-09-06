@@ -57,6 +57,11 @@ class ItemSlotTest {
 
     @BeforeEach
     void setUp() {
+        // V65의 비활성 기본값은 테스트 종료 시 트랜잭션 롤백으로 복원된다.
+        jdbcTemplate.update("""
+                UPDATE gacha SET is_active = TRUE
+                WHERE code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
+                """);
         Theme theme = themeRepository.save(new Theme("slot_test_theme", "슬롯 테스트 테마", null, true));
         positionedItem = itemRepository.save(new Item(
                 theme, "furniture", "positioned", null, null,

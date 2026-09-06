@@ -15,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,15 +33,34 @@ class ItemSlotRegisterConcurrencyTest {
 
     private List<Long> themeIds = List.of();
     private List<Long> itemIds = List.of();
+    private Long categoryGachaId;
+    private Boolean originalCategoryActive;
+
+    @BeforeEach
+    void activateCategoryFixture() {
+        categoryGachaId = jdbcTemplate.queryForObject(
+                "SELECT id FROM gacha WHERE code = 'furniture_gacha'", Long.class);
+        originalCategoryActive = jdbcTemplate.queryForObject(
+                "SELECT is_active FROM gacha WHERE id = ?", Boolean.class, categoryGachaId);
+        jdbcTemplate.update("UPDATE gacha SET is_active = TRUE WHERE id = ?", categoryGachaId);
+    }
 
     @AfterEach
     void cleanup() {
-        for (Long itemId : itemIds) {
-            jdbcTemplate.update("DELETE FROM gacha_pool_entries WHERE item_id = ?", itemId);
-        }
-        itemIds.forEach(itemRepository::deleteById);
-        for (Long themeId : themeIds) {
-            themeRepository.deleteById(themeId);
+        try {
+            for (Long itemId : itemIds) {
+                jdbcTemplate.update("DELETE FROM gacha_pool_entries WHERE item_id = ?", itemId);
+            }
+            itemIds.forEach(itemRepository::deleteById);
+            for (Long themeId : themeIds) {
+                themeRepository.deleteById(themeId);
+            }
+        } finally {
+            // 실제 커밋을 사용하는 테스트이므로 정리 실패 여부와 관계없이 원래 상태를 복원한다.
+            if (originalCategoryActive != null) {
+                assertThat(jdbcTemplate.update("UPDATE gacha SET is_active = ? WHERE id = ?",
+                        originalCategoryActive, categoryGachaId)).isEqualTo(1);
+            }
         }
     }
 

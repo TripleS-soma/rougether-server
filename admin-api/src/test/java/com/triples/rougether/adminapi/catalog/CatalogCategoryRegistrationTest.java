@@ -13,6 +13,7 @@ import com.triples.rougether.domain.shop.repository.ItemRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,6 +29,15 @@ class CatalogCategoryRegistrationTest {
     @Autowired ItemRepository itemRepository;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired EntityManager entityManager;
+
+    @BeforeEach
+    void activateCategoryFixtures() {
+        // V65 시드는 비활성이다. 운영 중인 풀을 검증하는 테스트 트랜잭션에서만 활성화한다.
+        jdbcTemplate.update("""
+                UPDATE gacha SET is_active = TRUE
+                WHERE code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
+                """);
+    }
 
     @Test
     void 다른_테마의_벽지_바닥_가구는_세_전역_머신에_자동_등록된다() {

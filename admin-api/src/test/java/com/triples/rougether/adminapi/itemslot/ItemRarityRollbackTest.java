@@ -10,6 +10,8 @@ import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +34,27 @@ class ItemRarityRollbackTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    private Long categoryGachaId;
+    private Boolean originalCategoryActive;
+
+    @BeforeEach
+    void activateCategoryFixture() {
+        categoryGachaId = jdbcTemplate.queryForObject(
+                "SELECT id FROM gacha WHERE code = 'furniture_gacha'", Long.class);
+        originalCategoryActive = jdbcTemplate.queryForObject(
+                "SELECT is_active FROM gacha WHERE id = ?", Boolean.class, categoryGachaId);
+        jdbcTemplate.update("UPDATE gacha SET is_active = TRUE WHERE id = ?", categoryGachaId);
+    }
+
+    @AfterEach
+    void restoreCategoryFixture() {
+        // 테스트 본문과 데이터 정리에서 예외가 발생해도 원래 운영 상태를 복원한다.
+        if (originalCategoryActive != null) {
+            assertThat(jdbcTemplate.update("UPDATE gacha SET is_active = ? WHERE id = ?",
+                    originalCategoryActive, categoryGachaId)).isEqualTo(1);
+        }
+    }
 
     @Test
     void 카테고리_풀_갱신이_실패하면_기존_등급과_테마_풀이_유지된다() {

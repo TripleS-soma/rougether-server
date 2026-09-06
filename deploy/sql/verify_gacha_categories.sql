@@ -1,12 +1,21 @@
--- V63 전후에 실행하는 읽기 전용 진단임. 운영 데이터는 변경하지 않음.
--- 1. 머신: 각 코드가 한 행이며 COIN 25/1회/테마 없음/기간 없음/활성인지 확인함.
+-- V66 전후에 실행하는 읽기 전용 진단임. 운영 데이터는 변경하지 않음.
+-- 신규 목록 검증은 GET /api/v1/gacha?catalog=category, 기존 목록 검증은 catalog 생략임.
+-- 1. 머신: 각 코드가 한 행이며 COIN 25/1회/테마 없음/기간 없음인지 확인함.
+-- V66 직후 3개 모두 비활성, 별도 guarded activation 후 3개 모두 활성이어야 함.
 SELECT code, id, name, cost_currency_type, cost_amount, draw_count,
        theme_id, starts_at, ends_at, is_active
 FROM gacha
 WHERE code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
 ORDER BY FIELD(code, 'wallpaper_gacha', 'floor_gacha', 'furniture_gacha'), id;
 
--- 2. 전체 활성 카탈로그 대비 현재 공개 풀에 포함된 distinct 아이템 수와 차이를 집계함.
+-- 기존 앱이 보는 머신의 ID/활성 상태를 이행 전후 대조함. V66은 기존 머신을 중지하지 않음.
+SELECT id, code, theme_id, starts_at, ends_at, is_active
+FROM gacha
+WHERE code NOT IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
+ORDER BY id;
+
+-- 2. 전체 활성 카탈로그 대비 준비된 풀의 유효 distinct 아이템 수와 차이를 집계함.
+-- 머신 is_active와 무관하게 준비된 등록을 셈. 실제 공개 여부는 위 1번과 함께 확인함.
 -- gap은 오류 확정값이 아님: 기존 미등록 상품과 운영자가 중지한 풀도 포함됨.
 WITH categories AS (
     SELECT 'wallpaper_gacha' AS code
@@ -29,7 +38,7 @@ WITH categories AS (
     SELECT DISTINCT g.code, e.item_id
     FROM gacha g JOIN gacha_pool_entries e ON e.gacha_id = g.id
     WHERE g.code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
-      AND g.is_active = TRUE AND e.is_active = TRUE AND e.reward_type = 'ITEM'
+      AND e.is_active = TRUE AND e.reward_type = 'ITEM'
       AND (g.starts_at IS NULL OR g.starts_at <= CURRENT_TIMESTAMP)
       AND (g.ends_at IS NULL OR g.ends_at >= CURRENT_TIMESTAMP)
 )
@@ -66,7 +75,7 @@ FROM eligible_items i
 WHERE NOT EXISTS (
     SELECT 1 FROM gacha_pool_entries e JOIN gacha g ON g.id = e.gacha_id
     WHERE g.code = i.code AND e.item_id = i.id AND e.reward_type = 'ITEM'
-      AND e.is_active = TRUE AND g.is_active = TRUE
+      AND e.is_active = TRUE
       AND (g.starts_at IS NULL OR g.starts_at <= CURRENT_TIMESTAMP)
       AND (g.ends_at IS NULL OR g.ends_at >= CURRENT_TIMESTAMP)
 )
@@ -87,6 +96,13 @@ WHERE g.code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
   AND e.reward_type = 'ITEM' AND e.is_active = TRUE AND i.is_active = TRUE AND t.is_active = TRUE
 GROUP BY g.code, e.rarity
 ORDER BY g.code, e.rarity;
+
+-- 활성화 CALL에는 distinct가 아닌 활성 엔트리 행 수를 전달함. 중복/자격은 별도 guard도 확인함.
+SELECT g.code, g.id, COUNT(e.id) AS registered_active_entry_count
+FROM gacha g LEFT JOIN gacha_pool_entries e ON e.gacha_id = g.id AND e.is_active = TRUE
+WHERE g.code IN ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
+GROUP BY g.code, g.id
+ORDER BY FIELD(g.code, 'wallpaper_gacha', 'floor_gacha', 'furniture_gacha');
 
 -- 5. 장식 머신에 잘못 등록한 활성 보상은 0행이어야 함(서비스는 이 보상을 별도로 차단함).
 SELECT g.code, e.id AS entry_id, e.reward_type, e.item_id,

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
+import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.domain.gacha.entity.GachaPoolEntry;
@@ -28,6 +29,7 @@ import com.triples.rougether.domain.shop.repository.ThemeRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
+import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
@@ -68,12 +70,21 @@ class GachaCategoryTransactionTest {
     private final List<Long> themeIds = new ArrayList<>();
     private final List<Long> itemIds = new ArrayList<>();
     private final List<Long> entryIds = new ArrayList<>();
+    private final List<Long> legacyMachineIds = new ArrayList<>();
     private List<Long> activeSeedEntryIds = List.of();
+    private List<CanonicalMachineState> canonicalMachineStates = List.of();
     private Gacha furnitureGacha;
     private Random originalRandom;
 
     @BeforeEach
     void isolateCanonicalPool() {
+        canonicalMachineStates = jdbcTemplate.query("""
+                select id, is_active from gacha
+                where code in ('wallpaper_gacha', 'floor_gacha', 'furniture_gacha')
+                order by id
+                """, (resultSet, rowNum) -> new CanonicalMachineState(
+                resultSet.getLong("id"), resultSet.getBoolean("is_active")));
+        assertThat(canonicalMachineStates).hasSize(3);
         furnitureGacha = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.getCategory() == GachaCategory.FURNITURE)
                 .findFirst().orElseThrow();
@@ -104,14 +115,70 @@ class GachaCategoryTransactionTest {
             jdbcTemplate.update("delete from users where id = ?", userId);
         }
         entryIds.forEach(id -> jdbcTemplate.update("delete from gacha_pool_entries where id = ?", id));
+        legacyMachineIds.forEach(id -> jdbcTemplate.update("delete from gacha where id = ?", id));
         itemIds.forEach(id -> jdbcTemplate.update("delete from items where id = ?", id));
         themeIds.forEach(id -> jdbcTemplate.update("delete from themes where id = ?", id));
         activeSeedEntryIds.forEach(id -> jdbcTemplate.update(
                 "update gacha_pool_entries set is_active = true where id = ?", id));
+        canonicalMachineStates.forEach(state -> jdbcTemplate.update(
+                "update gacha set is_active = ? where id = ?", state.active(), state.id()));
+    }
+
+    @Test
+    void 구버전_앱의_기존_목록과_캐시된_머신_ID로_보상조회와_뽑기가_계속_가능하다() {
+        User user = fundedUser();
+        Theme theme = theme("기존 테마");
+        Gacha legacy = gachaRepository.save(new Gacha("legacy_" + UUID.randomUUID(), "기존 테마 뽑기",
+                CurrencyType.COIN, 25, 1, theme, true));
+        legacyMachineIds.add(legacy.getId());
+        Item chair = item(theme, "furniture", "positioned", null, "기존 의자");
+        GachaPoolEntry oldEntry = poolRepository.save(GachaPoolEntry.itemEntry(legacy, chair, GachaRarity.NORMAL));
+        entryIds.add(oldEntry.getId());
+
+        assertThat(gachaService.getGachaList().items()).extracting(response -> response.gachaId())
+                .contains(legacy.getId()).doesNotContain(furnitureGacha.getId());
+        assertThat(gachaService.getRewards(user.getId(), legacy.getId()).items())
+                .extracting(reward -> reward.itemId()).containsExactly(chair.getId());
+        assertThat(gachaService.draw(user.getId(), legacy.getId(), new GachaDrawRequest(1)).results())
+                .extracting(result -> result.itemId()).containsExactly(chair.getId());
+        assertThat(balance(user, CurrencyType.COIN)).isEqualTo(975);
+        assertThat(userItemRepository.findOwnedItemIdsByUserId(user.getId())).containsExactly(chair.getId());
+    }
+
+    @Test
+    void 비활성_카테고리는_차감없이_거부되고_명시적으로_활성화한_뒤_조회와_뽑기가_가능하다() {
+        User user = fundedUser();
+        Item chair = item(theme("활성화"), "furniture", "positioned", null, "의자");
+        entry(chair, GachaRarity.NORMAL);
+
+        assertThat(canonicalMachineStates).allSatisfy(state -> assertThat(state.active()).isFalse());
+        assertThat(gachaService.getCategoryGachaList().items()).isEmpty();
+        for (CanonicalMachineState state : canonicalMachineStates) {
+            assertThatThrownBy(() -> gachaService.draw(user.getId(), state.id(), new GachaDrawRequest(1)))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                            .isEqualTo(GachaErrorCode.GACHA_INACTIVE));
+        }
+        assertThat(balance(user, CurrencyType.COIN)).isEqualTo(1000);
+        assertThat(balance(user, CurrencyType.DIAMOND)).isZero();
+        assertThat(rowCount("wallet_histories", user)).isZero();
+        assertThat(rowCount("user_items", user)).isZero();
+
+        activateCategoryMachines();
+
+        assertThat(gachaService.getCategoryGachaList().items()).extracting(response -> response.category())
+                .containsExactly(GachaCategory.WALLPAPER, GachaCategory.FLOOR, GachaCategory.FURNITURE);
+        assertThat(draw(user, 1).results()).singleElement().satisfies(result -> {
+            assertThat(result.itemId()).isEqualTo(chair.getId());
+            assertThat(result.rewardType()).isEqualTo("ITEM");
+        });
+        assertThat(balance(user, CurrencyType.COIN)).isEqualTo(975);
+        assertThat(rowCount("wallet_histories", user)).isEqualTo(1);
     }
 
     @Test
     void 가구_박스는_여러_테마를_통합하고_잘못_섞인_벽지_바닥_악세사리를_노출하거나_지급하지_않는다() {
+        activateCategoryMachines();
         User user = fundedUser();
         Theme forest = theme("숲");
         Theme ocean = theme("바다");
@@ -124,7 +191,7 @@ class GachaCategoryTransactionTest {
         entry(item(ocean, "character_accessory", "positioned", null, "잘못 등록한 안경"),
                 GachaRarity.LEGENDARY);
 
-        assertThat(gachaService.getGachaList().items()).extracting(response -> response.category())
+        assertThat(gachaService.getCategoryGachaList().items()).extracting(response -> response.category())
                 .containsExactly(GachaCategory.WALLPAPER, GachaCategory.FLOOR, GachaCategory.FURNITURE);
         assertThat(gachaService.getRewards(user.getId(), furnitureGacha.getId()).items())
                 .extracting(reward -> reward.itemId()).containsExactly(chair.getId(), rug.getId());
@@ -150,6 +217,7 @@ class GachaCategoryTransactionTest {
     @CsvSource({"1,false,1,25,0", "1,true,1,25,3", "6,false,6,125,15", "10,false,6,125,15"})
     void 단챠와_신구_연속뽑기의_비용_중복환급_원장이_커밋된다(
             int requestCount, boolean alreadyOwned, int resultCount, int cost, int refund) {
+        activateCategoryMachines();
         User user = fundedUser();
         Item chair = item(theme("가구"), "furniture", "positioned", null, "의자");
         entry(chair, GachaRarity.NORMAL);
@@ -195,6 +263,7 @@ class GachaCategoryTransactionTest {
 
     @Test
     void 코인과_원장_인벤토리가_DB에_반영된_뒤_지급이_실패하면_전체가_롤백된다() {
+        activateCategoryMachines();
         User user = fundedUser();
         entry(item(theme("롤백"), "furniture", "positioned", null, "의자"), GachaRarity.NORMAL);
         doAnswer(invocation -> {
@@ -216,6 +285,12 @@ class GachaCategoryTransactionTest {
         assertThat(balance(user, CurrencyType.DIAMOND)).isZero();
         assertThat(rowCount("wallet_histories", user)).isZero();
         assertThat(rowCount("user_items", user)).isZero();
+    }
+
+    // 운영 동작을 검증하는 fixture 만 세 canonical ID 를 명시적으로 활성화한다.
+    private void activateCategoryMachines() {
+        canonicalMachineStates.forEach(state -> jdbcTemplate.update(
+                "update gacha set is_active = true where id = ?", state.id()));
     }
 
     private User fundedUser() {
@@ -262,5 +337,8 @@ class GachaCategoryTransactionTest {
     private int rowCount(String table, User user) {
         return jdbcTemplate.queryForObject("select count(*) from " + table + " where user_id = ?",
                 Integer.class, user.getId());
+    }
+
+    private record CanonicalMachineState(long id, boolean active) {
     }
 }
