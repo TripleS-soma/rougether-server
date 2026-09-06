@@ -21,6 +21,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
+    // 예정일과 무관하게 오늘 실제 실천한 투두를 판정함. 완료 취소는 status로 즉시 제외됨.
+    boolean existsByUserIdAndStatusAndCompletedAtGreaterThanEqualAndCompletedAtLessThan(
+            Long userId, TodoStatus status, Instant from, Instant to);
+
     // 소유권 guard 단건: 타인 소유·미존재·삭제됨 모두 empty
     Optional<Todo> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
