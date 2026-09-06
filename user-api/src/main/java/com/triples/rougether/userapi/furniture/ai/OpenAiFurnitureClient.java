@@ -178,16 +178,26 @@ public class OpenAiFurnitureClient implements FurnitureAiClient {
                 proportions, relative contour weight, palette saturation/warmth, material/shadow treatment,
                 perspective/detail density and presentation must form one coherent asset collection.
                 Technical validity and resemblance to the photo are necessary but do not establish style fit.
+                The six criteria are art-direction targets, not a requirement for identical rendering.
+                Judge practical room-asset usability at a small display size, not perfection at full resolution.
                 A realistic product illustration with a brown outline is insufficient. Strong saturation,
-                elongated photographic proportions, visible mesh/weave or glossy highlights that differ from
-                the references are style defects even if the furniture is attractive and structurally correct.
+                elongated photographic proportions, dominant realistic texture or strong glossy reflections
+                are blocking style defects when they visibly break the collection's overall visual language.
+                Subtle fabric/paper grain, soft highlight bands and small shading or line variations are
+                acceptable when identity, rounded forms, warm outlines and muted colors remain coherent.
+                Do not request another image solely to remove these minor surface differences.
                 Consider the user's feedback, but verify it against the actual candidate.
-                Choose ACCEPT only if identity and ALL six criteria fit the references unchanged. Choose EDIT
-                for a localized defect; REGENERATE for a wrong object, widespread geometry defect, or a style
-                mismatch across multiple criteria; REJECT if input is unsuitable or needs a new photo.
-                In reason describe concrete visual matches or the weakest failed criterion relative to the
-                reference. For EDIT/REGENERATE, correction must identify what to change and what identifying
-                features to keep; vague instructions such as 'make it cuter' or 'more Rougether' are insufficient.
+                Choose ACCEPT when identity is preserved, hard checks pass and the candidate is a usable,
+                visually coherent member of the collection, even with minor surface differences. For ACCEPT,
+                mention any optional polish briefly in reason and leave correction empty. Choose EDIT only
+                for a localized defect that materially harms identity, geometry, readability or style fit;
+                REGENERATE for a wrong object, widespread geometry defect or a clear overall style mismatch;
+                REJECT if input is unsuitable or needs a new photo. Never accept a blocking defect merely
+                because a retry budget is exhausted.
+                In reason describe concrete visual matches or the blocking defect relative to the reference
+                and its effect on use as a small room item. For EDIT/REGENERATE, correction must identify
+                what to change and what identifying features to keep; vague instructions such as 'make it
+                cuter' or 'more Rougether' are insufficient.
                 A hard-check failure prohibits ACCEPT. Return a concise Korean reason and Korean furniture
                 name, and a precise correction prompt for EDIT/REGENERATE. No tools, no image generation.
                 """ + "\nServer hard-check failures: " + json.writeValueAsString(hardFailures));
