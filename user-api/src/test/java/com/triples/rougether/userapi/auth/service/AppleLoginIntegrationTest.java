@@ -67,8 +67,9 @@ class AppleLoginIntegrationTest {
 
     @Test
     void 최초_로그인이면_회원_지갑_연동_이메일을_생성한다() {
+        String email = uniqueEmail();
         String appleId = uniqueAppleId();
-        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, "a@b.com"));
+        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, email));
 
         LoginResponse response = authService.appleLogin("idtok", "authcode");
 
@@ -77,7 +78,7 @@ class AppleLoginIntegrationTest {
         assertThat(response.refreshToken()).isNotBlank();
 
         User user = userRepository.findById(response.userId()).orElseThrow();
-        assertThat(user.getEmail()).isEqualTo("a@b.com");
+        assertThat(user.getEmail()).isEqualTo(email);
         // 닉네임은 가입 시 비우고 온보딩에서 채움.
         assertThat(user.getNickname()).isNull();
 
@@ -105,8 +106,9 @@ class AppleLoginIntegrationTest {
 
     @Test
     void 이미_가입된_애플_회원은_중복_생성_없이_로그인한다() {
+        String email = uniqueEmail();
         String appleId = uniqueAppleId();
-        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, "a@b.com"));
+        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, email));
 
         LoginResponse first = authService.appleLogin("idtok", "authcode");
         LoginResponse second = authService.appleLogin("idtok", "authcode");
@@ -143,23 +145,26 @@ class AppleLoginIntegrationTest {
 
     @Test
     void 재로그인_시_애플_이메일이_바뀌어도_저장된_이메일은_갱신하지_않는다() {
+        String firstEmail = uniqueEmail();
+        String changedEmail = uniqueEmail();
         String appleId = uniqueAppleId();
         when(appleTokenVerifier.verify("idtok"))
-                .thenReturn(new AppleUser(appleId, "first@b.com"))
-                .thenReturn(new AppleUser(appleId, "changed@b.com"));
+                .thenReturn(new AppleUser(appleId, firstEmail))
+                .thenReturn(new AppleUser(appleId, changedEmail));
 
         LoginResponse first = authService.appleLogin("idtok", "authcode");
         authService.appleLogin("idtok", "authcode");
 
         User user = userRepository.findById(first.userId()).orElseThrow();
-        assertThat(user.getEmail()).isEqualTo("first@b.com");
+        assertThat(user.getEmail()).isEqualTo(firstEmail);
     }
 
     @Test
     void 동시_최초가입_경쟁에서도_회원은_하나만_생기고_양쪽_로그인에_성공한다() throws Exception {
+        String email = uniqueEmail();
         // 재시도 경로의 최종 계약: 경쟁 패자는 예외로 새지 않고 승자 회원으로 로그인됨.
         String appleId = uniqueAppleId();
-        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, "a@b.com"));
+        when(appleTokenVerifier.verify("idtok")).thenReturn(new AppleUser(appleId, email));
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -203,5 +208,10 @@ class AppleLoginIntegrationTest {
         assertThatThrownBy(() ->
                 oauthAccountRepository.saveAndFlush(OauthAccount.link(user, OauthProvider.APPLE, appleId)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    // 다른 provider 통합 테스트와 같은 DB 를 공유하므로 이메일이 겹치면 타 provider 계정 안내(409)에 걸린다 — 테스트마다 유일하게.
+    private String uniqueEmail() {
+        return "u-" + UUID.randomUUID() + "@example.com";
     }
 }

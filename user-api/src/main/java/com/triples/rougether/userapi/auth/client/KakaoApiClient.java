@@ -38,8 +38,13 @@ public class KakaoApiClient {
             throw new BusinessException(AuthErrorCode.OAUTH_KAKAO_TOKEN_INVALID);
         }
         UserMe me = get("/v2/user/me", accessToken, UserMe.class);
-        String email = me.kakaoAccount() == null ? null : me.kakaoAccount().email();
-        return new KakaoUser(String.valueOf(me.id()), email);
+        UserMe.KakaoAccount account = me.kakaoAccount();
+        String email = account == null ? null : account.email();
+        // 카카오는 이메일과 별도로 유효·인증 여부를 줌 — 둘 다 true 일 때만 인증된 이메일로 취급함(플래그 누락은 미인증).
+        boolean emailVerified = email != null
+                && Boolean.TRUE.equals(account.isEmailValid())
+                && Boolean.TRUE.equals(account.isEmailVerified());
+        return new KakaoUser(String.valueOf(me.id()), email, emailVerified);
     }
 
     private <T> T get(String uri, String accessToken, Class<T> type) {
@@ -67,7 +72,9 @@ public class KakaoApiClient {
     }
 
     private record UserMe(Long id, @JsonProperty("kakao_account") KakaoAccount kakaoAccount) {
-        private record KakaoAccount(String email) {
+        private record KakaoAccount(String email,
+                                    @JsonProperty("is_email_valid") Boolean isEmailValid,
+                                    @JsonProperty("is_email_verified") Boolean isEmailVerified) {
         }
     }
 }
