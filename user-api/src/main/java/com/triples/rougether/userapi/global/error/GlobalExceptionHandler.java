@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
         }
         notifySafely(() -> operationalAlertNotifier.notifyBusiness(endpoint(request), errorCode));
         return ResponseEntity.status(errorCode.status())
-                .body(ErrorResponse.of(errorCode.code(), exception.getMessage()));
+                .body(ErrorResponse.withDetails(errorCode.code(), exception.getMessage(), exception.getDetails()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

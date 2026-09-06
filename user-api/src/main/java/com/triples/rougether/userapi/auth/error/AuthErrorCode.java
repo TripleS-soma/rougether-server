@@ -14,7 +14,10 @@ public enum AuthErrorCode implements ErrorCode {
     OAUTH_APPLE_TOKEN_INVALID("AUTH_OAUTH_APPLE_TOKEN_INVALID", "애플 토큰이 유효하지 않습니다.", 401),
     OAUTH_APPLE_UNAVAILABLE("AUTH_OAUTH_APPLE_UNAVAILABLE", "애플 인증 서버 응답에 실패했습니다.", 502),
     FORBIDDEN("AUTH_FORBIDDEN", "접근 권한이 없습니다.", 403),
-    BOT_LOGIN_NOT_ALLOWED("AUTH_BOT_LOGIN_NOT_ALLOWED", "봇 계정으로는 로그인할 수 없습니다.", 401);
+    BOT_LOGIN_NOT_ALLOWED("AUTH_BOT_LOGIN_NOT_ALLOWED", "봇 계정으로는 로그인할 수 없습니다.", 401),
+    // 소셜 최초 가입인데 같은 이메일의 활성 계정이 다른 provider 로 있음 — details.providers 에 그 provider 목록,
+    // message 에 안내 문구. allowNewAccount=true 재요청으로 새 계정 생성을 강행할 수 있음.
+    EMAIL_LINKED_TO_OTHER_PROVIDER("AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER", "이 이메일로 가입된 계정이 있습니다.", 409);
 
     private final String code;
     private final String message;

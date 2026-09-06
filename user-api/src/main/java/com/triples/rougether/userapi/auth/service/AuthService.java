@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.auth.service;
 import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
@@ -40,6 +41,7 @@ public class AuthService {
     private final AppleTokenExchangeClient appleTokenExchangeClient;
     private final AppleRefreshTokenCipher appleRefreshTokenCipher;
     private final SignupService signupService;
+    private final EmailProviderConflictGuard emailProviderConflictGuard;
 
     @Transactional
     public LoginResponse devLogin(Long userId) {
@@ -69,8 +71,16 @@ public class AuthService {
 
     // 카카오 로그인 오케스트레이션. 트랜잭션은 KakaoLoginHandler.login이 소유함(HTTP 호출을 트랜잭션 밖에 둠).
     public LoginResponse kakaoLogin(String accessToken) {
+        return kakaoLogin(accessToken, false);
+    }
+
+    // allowNewAccount: 같은 이메일의 타 provider 활성 계정이 있어도 새 계정 생성을 허용함(409 안내 뒤 사용자가 고른 재요청).
+    public LoginResponse kakaoLogin(String accessToken, boolean allowNewAccount) {
         // 토큰 검증(app_id 대조) 후 카카오 회원번호·email 조회. 실패는 KakaoApiClient가 401/502로 변환함.
         KakaoUser kakaoUser = kakaoApiClient.fetchUser(accessToken);
+        // 최초 가입이면 같은 이메일의 타 provider 계정 안내(409) — 가입 트랜잭션 앞에서 막아 빈 계정을 만들지 않음.
+        emailProviderConflictGuard.ensureNewAccountAllowed(OauthProvider.KAKAO, kakaoUser.id(),
+                kakaoUser.email(), kakaoUser.emailVerified(), allowNewAccount);
         try {
             return kakaoLoginHandler.login(kakaoUser);
         } catch (DataIntegrityViolationException race) {
@@ -82,8 +92,14 @@ public class AuthService {
 
     // 구글 로그인 오케스트레이션. 트랜잭션은 GoogleLoginHandler.login이 소유함(JWK 검증을 트랜잭션 밖에 둠).
     public LoginResponse googleLogin(String idToken) {
+        return googleLogin(idToken, false);
+    }
+
+    public LoginResponse googleLogin(String idToken, boolean allowNewAccount) {
         // idToken 서명·iss·aud·exp 검증 후 sub·email 추출. 실패는 GoogleTokenVerifier가 401/502로 변환함.
         GoogleUser googleUser = googleTokenVerifier.verify(idToken);
+        emailProviderConflictGuard.ensureNewAccountAllowed(OauthProvider.GOOGLE, googleUser.id(),
+                googleUser.email(), googleUser.emailVerified(), allowNewAccount);
         try {
             return googleLoginHandler.login(googleUser);
         } catch (DataIntegrityViolationException race) {
@@ -94,8 +110,15 @@ public class AuthService {
 
     // 애플 로그인 오케스트레이션. 트랜잭션은 AppleLoginHandler.login이 소유함(JWK 검증·코드 교환 HTTP를 트랜잭션 밖에 둠).
     public LoginResponse appleLogin(String idToken, String authorizationCode) {
+        return appleLogin(idToken, authorizationCode, false);
+    }
+
+    public LoginResponse appleLogin(String idToken, String authorizationCode, boolean allowNewAccount) {
         // identityToken 서명·iss·aud·exp 검증 후 sub·email 추출. 실패는 AppleTokenVerifier가 401/502로 변환함.
         AppleUser appleUser = appleTokenVerifier.verify(idToken);
+        // authorizationCode 는 1회용이라 교환 **앞**에서 검사함 — 409 뒤 같은 코드로 allowNewAccount 재요청이 가능해야 함.
+        emailProviderConflictGuard.ensureNewAccountAllowed(OauthProvider.APPLE, appleUser.id(),
+                appleUser.email(), appleUser.emailVerified(), allowNewAccount);
         // 탈퇴 시 revoke 호출용 refresh token을 교환·암호화해 연동에 저장함. 교환 실패는 로그인 실패(401/502).
         String encryptedRefreshToken = appleRefreshTokenCipher.encrypt(
                 appleTokenExchangeClient.exchangeRefreshToken(authorizationCode));
