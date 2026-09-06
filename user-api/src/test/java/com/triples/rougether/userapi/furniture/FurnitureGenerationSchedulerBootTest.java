@@ -9,12 +9,14 @@ import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
         "furniture.generation.worker-enabled=true",
         "furniture.generation.poll-delay=1h"
 })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class FurnitureGenerationSchedulerBootTest {
     @Autowired EntityManagerFactory entityManagerFactory;
     @Autowired FurnitureGenerationScheduler scheduler;
