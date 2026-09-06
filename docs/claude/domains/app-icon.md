@@ -28,7 +28,7 @@
 - `batch.appicon.AppIconReminderTrigger`: KST 30분 주기와 서버 시작 시 확인. 09:00 이상 21:00 미만에만 적재·발송한다.
 - `batch.appicon.AppIconReminderService`: 사용자별 알림 내역·최고 단계를 한 트랜잭션으로 적재하고, 별도 트랜잭션에서 발송 조건을 재검증한다. 사용자 ID/알림 ID 커서로 순회하므로 처리 중 대상이 줄어도 누락하지 않는다.
 - 기존 `ReminderPushWriter`·`NotificationPushPolicy`·`FcmSender`를 재사용한다. `APP_INACTIVITY_REMINDER`는 `REMINDER` 그룹이고, `ALL` 또는 `REMINDER` off면 푸시는 차단한다. 알림함 내역은 유지한다.
-- 신규 Flyway `V63__add_app_icon_activity.sql`: 사용자당 활동 1행과 마지막 알림 단계·ID. 기존 접속 시각으로 backfill하지 않는다. 회원탈퇴 즉시 삭제하고 purge도 잔존 데이터를 정리한다.
+- 신규 Flyway `V65__add_app_icon_activity.sql`: 사용자당 활동 1행과 마지막 알림 단계·ID. 기존 접속 시각으로 backfill하지 않는다. 회원탈퇴 즉시 삭제하고 purge도 잔존 데이터를 정리한다.
 
 ## 발송·중복 처리
 
