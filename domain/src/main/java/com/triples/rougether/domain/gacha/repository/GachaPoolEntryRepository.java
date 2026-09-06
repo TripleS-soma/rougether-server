@@ -11,6 +11,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, Long> {
 
+    // 비활성 엔트리도 포함해 재적재가 운영자가 회수한 보상을 되살리지 않도록 확인함.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select entry from GachaPoolEntry entry
+            where entry.rewardType = com.triples.rougether.domain.gacha.entity.RewardType.ITEM
+              and entry.gacha.id = :gachaId and entry.item.id = :itemId
+            """)
+    List<GachaPoolEntry> findItemEntriesByGachaIdAndItemIdForUpdate(
+            @Param("gachaId") Long gachaId, @Param("itemId") Long itemId);
+
     // 비활성 아이템/테마·비활성 캐릭터는 추첨 대상에서 제외 — admin 사용/미사용 토글이 뽑기에도 즉시 반영된다.
     @Query("""
             select entry

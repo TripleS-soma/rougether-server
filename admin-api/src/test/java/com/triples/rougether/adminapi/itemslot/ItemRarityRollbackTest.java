@@ -34,7 +34,7 @@ class ItemRarityRollbackTest {
     JdbcTemplate jdbcTemplate;
 
     @Test
-    void 두번째_풀_갱신이_실패하면_첫번째_풀도_원래_등급으로_롤백된다() {
+    void 카테고리_풀_갱신이_실패하면_기존_등급과_테마_풀이_유지된다() {
         Theme theme = themeRepository.save(
                 new Theme("rarity_rollback_theme", "등급 롤백 테마", null, true));
         Item item = itemRepository.save(new Item(
@@ -42,7 +42,8 @@ class ItemRarityRollbackTest {
                 "롤백 테스트 가구", CurrencyType.COIN, 100,
                 "items/rarity-rollback/furniture.png", false, true));
 
-        Long firstGachaId = insertGacha(theme.getId(), "rarity_rollback_gacha_1");
+        Long firstGachaId = jdbcTemplate.queryForObject(
+                "SELECT id FROM gacha WHERE code = 'furniture_gacha'", Long.class);
         Long secondGachaId = insertGacha(theme.getId(), "rarity_rollback_gacha_2");
         insertItemPoolEntry(firstGachaId, item.getId());
         insertItemPoolEntry(secondGachaId, item.getId());
@@ -51,7 +52,7 @@ class ItemRarityRollbackTest {
                 SELECT id FROM gacha_pool_entries
                 WHERE item_id = ? ORDER BY id
                 """, Long.class, item.getId());
-        Long blockedEntryId = entryIds.getLast();
+        Long blockedEntryId = entryIds.getFirst();
         String constraintName = "ck_rarity_rollback_entry";
         jdbcTemplate.execute("""
                 ALTER TABLE gacha_pool_entries
@@ -69,6 +70,10 @@ class ItemRarityRollbackTest {
             assertThat(rarities).containsExactly("일반", "일반");
         } finally {
             jdbcTemplate.execute("ALTER TABLE gacha_pool_entries DROP CONSTRAINT " + constraintName);
+            jdbcTemplate.update("DELETE FROM gacha_pool_entries WHERE item_id = ?", item.getId());
+            jdbcTemplate.update("DELETE FROM gacha WHERE id = ?", secondGachaId);
+            itemRepository.deleteById(item.getId());
+            themeRepository.deleteById(theme.getId());
         }
     }
 

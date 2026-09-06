@@ -78,7 +78,8 @@ class ItemSlotTest {
                 "뽑기 미등록 의자", CurrencyType.COIN, 100,
                 "items/slot-test/no-pool-chair.png", false, true));
 
-        Long gachaId = insertGacha(theme.getId(), "slot_test_gacha", "슬롯 테스트 뽑기");
+        Long gachaId = jdbcTemplate.queryForObject(
+                "SELECT id FROM gacha WHERE code = 'furniture_gacha'", Long.class);
         insertItemPoolEntry(gachaId, positionedItem.getId(), "일반");
         insertItemPoolEntry(gachaId, animatedItem.getId(), "희귀");
     }
@@ -512,7 +513,7 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 등급_변경은_아이템의_모든_활성_ITEM_풀을_한_트랜잭션에서_통일한다() throws Exception {
+    void 등급_변경은_카테고리_풀에만_적용하고_기존_테마_풀을_보존한다() throws Exception {
         Long secondGachaId = insertGacha(
                 positionedItem.getTheme().getId(), "slot_test_gacha_2", "두 번째 슬롯 테스트 뽑기");
         insertItemPoolEntry(secondGachaId, positionedItem.getId(), "희귀");
@@ -532,7 +533,10 @@ class ItemSlotTest {
                 SELECT COUNT(*) FROM gacha_pool_entries
                 WHERE item_id = ? AND reward_type = 'ITEM' AND is_active = TRUE AND rarity = '전설'
                 """, Integer.class, positionedItem.getId());
-        assertThat(legendaryCount).isEqualTo(2);
+        assertThat(legendaryCount).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT rarity FROM gacha_pool_entries WHERE gacha_id = ? AND is_active = TRUE",
+                String.class, secondGachaId)).isEqualTo("희귀");
 
         String inactiveRarity = jdbcTemplate.queryForObject("""
                 SELECT rarity FROM gacha_pool_entries
@@ -543,7 +547,7 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 서로_다른_활성_풀_등급은_목록에서_혼합으로_표시한다() throws Exception {
+    void 기존_테마_풀의_등급이_달라도_카테고리_풀의_등급을_표시한다() throws Exception {
         Long secondGachaId = insertGacha(
                 positionedItem.getTheme().getId(), "slot_test_gacha_2", "두 번째 슬롯 테스트 뽑기");
         insertItemPoolEntry(secondGachaId, positionedItem.getId(), "희귀");
@@ -551,9 +555,9 @@ class ItemSlotTest {
         mockMvc.perform(get("/admin/items/slots"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarity")
-                        .doesNotExist())
+                        .value("일반"))
                 .andExpect(jsonPath("$.items[?(@.assetKey == 'items/slot-test/chair.png')].rarityConflict")
-                        .value(true));
+                        .value(false));
     }
 
     @Test
@@ -586,12 +590,16 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void surface_아이템은_등급을_지정할_수_없다() throws Exception {
+    void 벽지_아이템은_벽지_전용_카테고리_풀에_등급을_지정한다() throws Exception {
         mockMvc.perform(put("/admin/items/{itemId}/rarity", surfaceItem.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rarity\": \"희귀\"}").with(csrf()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rarity").value("희귀"));
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT g.code FROM gacha g JOIN gacha_pool_entries e ON e.gacha_id = g.id
+                WHERE e.item_id = ?
+                """, String.class, surfaceItem.getId())).isEqualTo("wallpaper_gacha");
     }
 
     @Test
@@ -611,7 +619,64 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 미등록_아이템에_등급을_지정하면_테마_활성_뽑기_풀에_등록된다() throws Exception {
+    void positioned으로_잘못_등록된_악세사리와_배경도_등급_관리에서_제외한다() throws Exception {
+        for (String category : new String[]{"character_accessory", "background"}) {
+            Item invalidItem = itemRepository.save(new Item(
+                    positionedItem.getTheme(), category, "positioned", null, null,
+                    "잘못 분류된 아이템", CurrencyType.COIN, 100,
+                    "items/slot-test/misclassified-" + category + ".png", false, true));
+            mockMvc.perform(put("/admin/items/{itemId}/rarity", invalidItem.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ITEM_RARITY_INVALID"));
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 중지된_카테고리_풀의_등급_변경은_등록을_되살리지_않는다() throws Exception {
+        jdbcTemplate.update("UPDATE gacha_pool_entries SET is_active = FALSE WHERE item_id = ?",
+                positionedItem.getId());
+
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItem.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"전설\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("중지된 뽑기 풀")));
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT is_active FROM gacha_pool_entries WHERE item_id = ?",
+                Boolean.class, positionedItem.getId())).containsExactly(false);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 중지된_카테고리_머신은_운영_상태_확인을_안내한다() throws Exception {
+        jdbcTemplate.update("UPDATE gacha SET is_active = FALSE WHERE code = 'furniture_gacha'");
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("운영 상태")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 카테고리_머신이_없으면_마이그레이션을_안내하고_테마_머신을_만들지_않는다() throws Exception {
+        jdbcTemplate.update("UPDATE gacha SET code = 'missing_furniture_category' WHERE code = 'furniture_gacha'");
+        mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rarity\": \"희귀\"}").with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("마이그레이션")));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM gacha WHERE theme_id = ?", Integer.class,
+                positionedItemWithoutPool.getTheme().getId())).isZero();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void 미등록_아이템에_등급을_지정하면_전역_가구_뽑기_풀에_등록된다() throws Exception {
         mockMvc.perform(put("/admin/items/{itemId}/rarity", positionedItemWithoutPool.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rarity\": \"희귀\"}").with(csrf()))
@@ -620,11 +685,15 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.rarityEditable").value(true))
                 .andExpect(jsonPath("$.rarityConflict").value(false));
 
-        // 기존 테마 머신(slot_test_gacha)에 엔트리를 추가하고, 새 머신은 만들지 않는다
+        // 테마별 머신은 만들지 않고 사전 적재된 가구 머신을 사용한다.
         Integer gachaCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM gacha WHERE theme_id = ?", Integer.class,
                 positionedItemWithoutPool.getTheme().getId());
-        assertThat(gachaCount).isEqualTo(1);
+        assertThat(gachaCount).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT g.code FROM gacha g JOIN gacha_pool_entries e ON e.gacha_id = g.id
+                WHERE e.item_id = ?
+                """, String.class, positionedItemWithoutPool.getId())).isEqualTo("furniture_gacha");
 
         String rarity = jdbcTemplate.queryForObject("""
                 SELECT rarity FROM gacha_pool_entries
@@ -641,7 +710,7 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 테마에_활성_뽑기가_없으면_머신을_만들어_등록한다() throws Exception {
+    void 새_테마도_동일한_전역_가구_머신을_사용한다() throws Exception {
         Theme newTheme = themeRepository.save(new Theme("no_gacha_theme", "뽑기 없는 테마", null, true));
         Item newItem = itemRepository.save(new Item(
                 newTheme, "furniture", "positioned", null, null,
@@ -654,14 +723,18 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.rarity").value("전설"))
                 .andExpect(jsonPath("$.rarityEditable").value(true));
 
-        // 스펙 기준 가구 뽑기 머신: 테마 코드 승계, COIN 25, 1회 뽑기, 즉시 활성
+        // 새 테마를 추가해도 전역 카테고리 머신 수는 늘어나지 않는다.
         Integer gachaCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM gacha
                 WHERE theme_id = ? AND code = 'no_gacha_theme'
                   AND cost_currency_type = 'COIN' AND cost_amount = 25
                   AND draw_count = 1 AND is_active = TRUE
                 """, Integer.class, newTheme.getId());
-        assertThat(gachaCount).isEqualTo(1);
+        assertThat(gachaCount).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT g.code FROM gacha g JOIN gacha_pool_entries e ON e.gacha_id = g.id
+                WHERE e.item_id = ?
+                """, String.class, newItem.getId())).isEqualTo("furniture_gacha");
 
         String rarity = jdbcTemplate.queryForObject("""
                 SELECT rarity FROM gacha_pool_entries
@@ -672,7 +745,7 @@ class ItemSlotTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void 비활성_머신의_엔트리는_미등록으로_취급되어_활성_머신에_새로_등록된다() throws Exception {
+    void 비활성_테마_머신의_엔트리는_보존하고_전역_카테고리에_등록한다() throws Exception {
         Theme retiredTheme = themeRepository.save(new Theme("retired_gacha_theme", "비활성 머신 테마", null, true));
         Item item = itemRepository.save(new Item(
                 retiredTheme, "furniture", "positioned", null, null,
@@ -693,7 +766,7 @@ class ItemSlotTest {
                 .andExpect(jsonPath("$.rarity").value("희귀"))
                 .andExpect(jsonPath("$.rarityEditable").value(true));
 
-        // 비활성 머신의 엔트리는 건드리지 않고, 새 활성 머신에 등록된다
+        // 비활성 머신의 엔트리는 건드리지 않고, 전역 카테고리에 등록된다.
         String retiredRarity = jdbcTemplate.queryForObject(
                 "SELECT rarity FROM gacha_pool_entries WHERE gacha_id = ?", String.class, retiredGachaId);
         assertThat(retiredRarity).isEqualTo("일반");
@@ -701,7 +774,7 @@ class ItemSlotTest {
         Integer activeGachaCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM gacha WHERE theme_id = ? AND is_active = TRUE", Integer.class,
                 retiredTheme.getId());
-        assertThat(activeGachaCount).isEqualTo(1);
+        assertThat(activeGachaCount).isZero();
     }
 
     @Test

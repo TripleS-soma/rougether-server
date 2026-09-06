@@ -18,6 +18,11 @@ public interface GachaRepository extends JpaRepository<Gacha, Long> {
 
     List<Gacha> findByThemeIdAndActiveIsTrue(Long themeId);
 
+    // 미리 생성한 전역 카테고리 머신을 잠가 서로 다른 테마의 풀 등록도 직렬화함.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select g from Gacha g where g.code = :code")
+    Optional<Gacha> findByCodeForUpdate(@Param("code") String code);
+
     // 뽑기 풀 등록 경로 전용 — REPEATABLE READ 스냅샷 대신 최신 커밋을 읽도록 locking read 로 조회한다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from Gacha g where g.theme.id = :themeId and g.active = true")

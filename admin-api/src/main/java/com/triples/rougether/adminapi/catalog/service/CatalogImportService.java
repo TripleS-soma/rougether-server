@@ -6,20 +6,26 @@ import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest.ItemDto;
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportRequest.ThemeDto;
 import com.triples.rougether.adminapi.catalog.dto.CatalogImportResult;
 import com.triples.rougether.adminapi.catalog.error.CatalogImportInvalidException;
+import com.triples.rougether.adminapi.itemslot.error.ItemRarityInvalidException;
 import com.triples.rougether.adminapi.itemslot.service.ItemSlotService;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
+import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 카탈로그를 themes/characters/items 에 적재. 멱등 — 이미 있는 일반 항목은 skip하고,
+// 카탈로그를 themes/characters/items 에 적재. 멱등 — 기존 일반 항목의 정보와 등급을 유지하고,
+// 신규 활성 꾸미기 아이템은 벽지·바닥·가구 카테고리 풀에 등록한다.
 // 캐릭터 악세사리는 기존 행도 뽑기 전용·균등 풀 상태로 정규화한다.
 // DB 비밀번호를 코드/사람이 만질 일 없이, 앱이 가진 연결로 적재한다.
 @Service
@@ -84,10 +90,13 @@ public class CatalogImportService {
         }
 
         int itemsCreated = 0;
+        List<Item> importedItems = new ArrayList<>();
         for (ItemDto i : request.items()) {
             Item existingItem = itemRepository.findByAssetKey(i.assetKey()).orElse(null);
             if (existingItem != null) {
-                normalizeCharacterAccessory(existingItem);
+                if (PLACEMENT_CHARACTER.equals(existingItem.getPlacementType())) {
+                    importedItems.add(existingItem);
+                }
                 continue;
             }
             Theme theme = themeByCode.get(i.themeCode());
@@ -104,9 +113,14 @@ public class CatalogImportService {
                     i.name(), gachaOnly ? null : CurrencyType.DIAMOND,
                     gachaOnly ? null : i.priceAmount(), i.assetKey(),
                     i.limited(), i.active()));
-            normalizeCharacterAccessory(item);
+            importedItems.add(item);
             itemsCreated++;
         }
+
+        // 여러 카테고리가 포함된 적재도 항상 같은 순서로 머신 락을 잡아 교착을 피한다.
+        importedItems.stream()
+                .sorted(Comparator.comparing(CatalogImportService::gachaRegistrationOrder))
+                .forEach(this::registerGachaItem);
 
         return new CatalogImportResult(themesCreated, charactersCreated, itemsCreated);
     }
@@ -115,8 +129,18 @@ public class CatalogImportService {
         return (value == null || value.isBlank()) ? null : value;
     }
 
-    private void normalizeCharacterAccessory(Item item) {
+    private static String gachaRegistrationOrder(Item item) {
+        GachaCategory category = GachaCategory.fromItem(item);
+        return category == null ? item.getTheme().getCode() : category.getCode();
+    }
+
+    private void registerGachaItem(Item item) {
         if (!PLACEMENT_CHARACTER.equals(item.getPlacementType())) {
+            try {
+                itemSlotService.registerCategoryItem(item);
+            } catch (ItemRarityInvalidException exception) {
+                throw new CatalogImportInvalidException(exception.getMessage());
+            }
             return;
         }
         item.makeGachaOnly();

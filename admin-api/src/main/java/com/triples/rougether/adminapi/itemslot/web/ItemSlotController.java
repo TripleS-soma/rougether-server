@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // 어드민 가구 관리. 화면(/item-slots)에서 기본 슬롯과 뽑기 등급을 변경하고,
+// 등급 API는 벽지·바닥·가구의 전역 카테고리 풀에만 적용한다.
 // 기본 슬롯 벌크 적재는 seed 스크립트(curl)가 호출한다.
 @RestController
 @RequestMapping("/admin/items")

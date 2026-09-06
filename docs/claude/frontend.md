@@ -21,6 +21,23 @@
 프론트는 `poses[].assetKey`를 CDN base URL과 조합해 재생합니다. `poses[]`에는 활성
 포즈만 포함되며 `sortOrder` 오름차순입니다. 포즈가 없는 캐릭터는 빈 배열을 반환합니다.
 
+## 뽑기 카테고리
+
+`GET /api/v1/gacha`는 운영 중인 `WALLPAPER`, `FLOOR`, `FURNITURE` 순으로 공개 장식
+머신을 반환합니다. 코드는 각각 `wallpaper_gacha`, `floor_gacha`, `furniture_gacha`이며,
+새 `category` 필드로 화면을 분류합니다. 세 머신 모두 `themeId=null`이고 여러 테마의
+보상을 포함합니다. 미리보기와 실행에는 선택한 응답의 실제 `gachaId`를 사용합니다.
+
+이전 캐릭터·테마 머신 직접 상세 응답은 `category=null`일 수 있습니다. 기존 캐릭터
+획득 경로는 유지되며 공개 장식 목록에는 포함하지 않습니다. `themeId=null`을 캐릭터로
+해석하는 구버전 앱은 새 목록과 호환되지 않으므로 앱 업데이트와 V63 적용을 함께
+조율해야 합니다.
+
+바닥은 `placementType=surface_slot`과 `surfaceSlotType=floor`를 모두 만족하는 보상이며,
+벽지도 같은 방식으로 `wallpaper` 슬롯을 사용합니다. `positioned` 러그는 가구에 속합니다.
+배경과 캐릭터 악세사리는 세 장식 풀에서 제외합니다. 신규 카탈로그 적재의 활성 장식은
+해당 전역 풀에 등록되며 재적재가 기존 등급이나 회수된 보상을 변경하지 않습니다.
+
 ## 방 화면
 
 방 화면은 다음 정보가 필요합니다.
