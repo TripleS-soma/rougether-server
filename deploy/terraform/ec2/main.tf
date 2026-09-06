@@ -538,6 +538,24 @@ resource "aws_iam_role_policy" "app" {
         ]
       },
       {
+        # 사진 가구 원본/후보는 공개 prefix에 넣지 않음. 모델 검수에 필요한 입력만 서버가 읽음.
+        Effect = "Allow"
+        Action = ["s3:GetObject"]
+        Resource = [
+          "arn:aws:s3:::${local.asset_bucket_name_value}/private/furniture-generation/*",
+          "arn:aws:s3:::${local.asset_bucket_name_value}/items/*"
+        ]
+      },
+      {
+        # 만료 원본 및 커밋되지 않은 생성 결과 정리용. 기존 공용 가구 삭제 권한은 부여하지 않음.
+        Effect = "Allow"
+        Action = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
+        Resource = [
+          "arn:aws:s3:::${local.asset_bucket_name_value}/private/furniture-generation/*",
+          "arn:aws:s3:::${local.asset_bucket_name_value}/items/photo-furniture/*"
+        ]
+      },
+      {
         # 회원 탈퇴 후 프로필 원본 파기용. user-api 구현의 profile/ 경계와 맞춤.
         Effect = "Allow"
         Action = [

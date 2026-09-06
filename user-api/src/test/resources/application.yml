@@ -56,6 +56,10 @@ rougether:
   bots:
     enabled: false
 
+furniture:
+  generation:
+    worker-enabled: false
+
 # 초대 링크 통합테스트용 연결값. 미설정(빈 값) 동작은 InviteLinkUnconfiguredTest 가 property 재정의로 검증한다.
 invite:
   link:

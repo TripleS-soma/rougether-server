@@ -88,6 +88,20 @@ llm:
   embedding-model: ${LLM_EMBEDDING_MODEL:text-embedding-3-large}
   embedding-dimensions: ${LLM_EMBEDDING_DIMENSIONS:1024}
 
+# 기존 LLM_API_KEY/LLM_BASE_URL을 재사용함. S3 권한 반영 및 모델 접근 확인 뒤 활성화함.
+furniture:
+  generation:
+    enabled: ${FURNITURE_GENERATION_ENABLED:false}
+    worker-enabled: ${FURNITURE_GENERATION_WORKER_ENABLED:true}
+    model: ${FURNITURE_GENERATION_MODEL:gpt-6-astra}
+    image-model: ${FURNITURE_GENERATION_IMAGE_MODEL:gpt-image-2}
+    timeout: ${FURNITURE_GENERATION_TIMEOUT:180s}
+    max-image-attempts: ${FURNITURE_GENERATION_MAX_IMAGE_ATTEMPTS:3}
+    max-review-attempts: ${FURNITURE_GENERATION_MAX_REVIEW_ATTEMPTS:6}
+    daily-limit: ${FURNITURE_GENERATION_DAILY_LIMIT:2}
+    retention: 24h
+    style-reference-keys: ${FURNITURE_GENERATION_STYLE_REFERENCE_KEYS:items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png}
+
 # 사용자에게 노출할 게시 승인 집 커버 manifest. S3 house/ 전체 목록과 분리함.
 house:
   cover-images:

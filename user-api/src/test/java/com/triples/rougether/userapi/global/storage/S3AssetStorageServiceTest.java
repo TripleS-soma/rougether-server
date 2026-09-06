@@ -93,6 +93,20 @@ class S3AssetStorageServiceTest {
         return ObjectVersion.builder().key(key).versionId(versionId).build();
     }
 
+    @Test
+    void temporaryFurniturePhotosAlwaysPurgeVersionsEvenWhenProfilePurgeIsDisabled() {
+        String key = "private/furniture-generation/job/source/photo.png";
+        var photos = new S3AssetStorageService(s3Client,
+                new AssetProperties(new AssetProperties.S3(BUCKET, "ap-northeast-2", false)));
+        when(s3Client.listObjectVersions(any(ListObjectVersionsRequest.class))).thenReturn(
+                ListObjectVersionsResponse.builder().versions(objectVersion(key, "v1"))
+                        .deleteMarkers(deleteMarker(key, "marker")).isTruncated(false).build());
+        photos.delete(key);
+        var captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+        verify(s3Client, times(2)).deleteObject(captor.capture());
+        assertThat(captor.getAllValues()).extracting(DeleteObjectRequest::versionId).containsExactlyInAnyOrder("v1", "marker");
+    }
+
     private DeleteMarkerEntry deleteMarker(String key, String versionId) {
         return DeleteMarkerEntry.builder().key(key).versionId(versionId).build();
     }

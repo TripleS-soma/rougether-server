@@ -40,6 +40,12 @@ if grep -Fq 'bug-reports/*' <<< "$PUBLIC_PREFIX_BLOCK"; then
   echo "not ok - bug report screenshots must not be in the default public CDN prefixes" >&2
   exit 1
 fi
+if grep -Fq 'private/furniture-generation' <<< "$PUBLIC_PREFIX_BLOCK"; then
+  echo "not ok - furniture source photos must never be public CDN prefixes" >&2
+  exit 1
+fi
+assert_contains "$ASSETS_TF" 'prefix = "private/furniture-generation/"' \
+  "unlinked private furniture photos must have lifecycle cleanup"
 assert_contains "$ASSETS_TF" 'for prefix in var.asset_public_read_prefixes' \
   "CloudFront bucket policy must allow only explicit public prefixes"
 assert_contains "$ASSETS_TF" 'path_pattern           = "profile/*"' \

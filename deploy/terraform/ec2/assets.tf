@@ -48,6 +48,23 @@ resource "aws_s3_bucket_versioning" "assets" {
   }
 }
 
+# 프로세스 중단으로 DB에 연결하지 못한 임시 사진도 수명주기로 회수함.
+# 정상 경로는 서버가 24시간 후 모든 버전을 직접 삭제하며, lifecycle은 지연 정리 보완책임.
+resource "aws_s3_bucket_lifecycle_configuration" "furniture_photos" {
+  count      = var.create_asset_bucket ? 1 : 0
+  bucket     = aws_s3_bucket.assets[0].id
+  depends_on = [aws_s3_bucket_versioning.assets]
+
+  rule {
+    id     = "expire-private-furniture-photos"
+    status = "Enabled"
+    filter { prefix = "private/furniture-generation/" }
+    expiration { days = 1 }
+    noncurrent_version_expiration { noncurrent_days = 1 }
+    abort_incomplete_multipart_upload { days_after_initiation = 1 }
+  }
+}
+
 resource "aws_cloudfront_origin_access_control" "assets" {
   count = var.create_asset_bucket ? 1 : 0
 
