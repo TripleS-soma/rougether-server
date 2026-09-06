@@ -55,6 +55,8 @@ class AppIconPolicyTest {
                 .isEqualTo(NOW.plus(Duration.ofDays(7)));
         assertThat(AppIconPolicy.nextEvaluationAt(AppIconState.SOBBING, NOW, NOW)).isNull();
         assertThat(AppIconPolicy.nextEvaluationAt(AppIconState.NORMAL, null, NOW)).isNull();
+        assertThat(AppIconPolicy.nextEvaluationAt(AppIconState.MISSING_YOU, null, NOW)).isNull();
+        assertThat(AppIconPolicy.nextEvaluationAt(AppIconState.TEARY, null, NOW)).isNull();
     }
 
     @Test

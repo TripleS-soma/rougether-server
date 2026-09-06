@@ -38,6 +38,8 @@
 
 FCM 발송은 기존 경로와 같은 best-effort이다. 사용자 잠금은 동시 실행의 중복 호출을 막지만, FCM 수락 후 DB 상태 커밋 전 프로세스 종료까지 포함한 exactly-once는 보장하지 않는다. 네트워크 발송 동안 사용자 행 잠금을 유지하므로 같은 사용자의 foreground 요청은 발송 완료까지 대기할 수 있다.
 
+FCM `data`에는 `type=APP_INACTIVITY_REMINDER`, `screen=myRoom`, `notificationId`(문자열)를 전달한다. 모바일은 알림 type을 확인해 탭 시 내 방을 연다. 푸시 수신 자체는 실제 foreground 활동으로 기록하지 않는다.
+
 ## 배포·검증
 
 - 서버 migration 및 user-api·batch를 먼저 배포하고 모바일에서 foreground API와 상태별 아이콘을 연결한다. 신규 API를 호출한 기록이 생겨야 미접속 알림 대상이 된다.

@@ -2,6 +2,7 @@ package com.triples.rougether.batch.appicon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -88,7 +89,7 @@ class AppIconReminderIntegrationTest {
     void setup() {
         when(clock.instant()).thenReturn(NOW);
         when(clock.getZone()).thenReturn(AppIconPolicy.KST);
-        when(fcm.send(anyList(), anyString(), anyString())).thenReturn(new FcmSendResult(1, List.of()));
+        when(fcm.send(anyList(), anyString(), anyString(), anyMap())).thenReturn(new FcmSendResult(1, List.of()));
     }
 
     @AfterEach
@@ -122,7 +123,7 @@ class AppIconReminderIntegrationTest {
         assertThat(latest(user).getTitle()).isEqualTo("언제 돌아오냥…");
         service.stage(user.getId());
         assertThat(notificationCount(user)).isEqualTo(3);
-        verify(fcm, times(1)).send(anyList(), anyString(), anyString());
+        verify(fcm, times(1)).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @Test
@@ -142,7 +143,7 @@ class AppIconReminderIntegrationTest {
         foreground(user, NOW);
         service.sendPending(user.getId(), oldId);
         assertThat(notifications.findById(oldId).orElseThrow().getPushStatus()).isEqualTo(PushStatus.BLOCKED);
-        verify(fcm, never()).send(anyList(), anyString(), anyString());
+        verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());
 
         when(clock.instant()).thenReturn(NOW.plus(Duration.ofDays(2)));
         service.stage(user.getId());
@@ -163,7 +164,7 @@ class AppIconReminderIntegrationTest {
         service.sendPending(user.getId(), oldId);
         assertThat(notifications.findById(oldId).orElseThrow().getPushStatus()).isEqualTo(PushStatus.BLOCKED);
         service.sendPending(user.getId(), latest(user).getId());
-        verify(fcm, times(1)).send(anyList(), anyString(), anyString());
+        verify(fcm, times(1)).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @ParameterizedTest
@@ -177,7 +178,7 @@ class AppIconReminderIntegrationTest {
         assertThat(notificationCount(user)).isEqualTo(1);
         assertThat(notifications.findById(notification.getId()).orElseThrow().getPushStatus())
                 .isEqualTo(PushStatus.BLOCKED);
-        verify(fcm, never()).send(anyList(), anyString(), anyString());
+        verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @Test
@@ -193,7 +194,7 @@ class AppIconReminderIntegrationTest {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-06T12:00:00Z")); // 21:00
         service.sendPending(user.getId(), id);
         assertThat(notifications.findById(id).orElseThrow().getPushStatus()).isEqualTo(PushStatus.PENDING);
-        verify(fcm, never()).send(anyList(), anyString(), anyString());
+        verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @Test
@@ -225,7 +226,7 @@ class AppIconReminderIntegrationTest {
         service.stage(user.getId());
         assertThat(notificationCount(user)).isEqualTo(1);
         assertThat(notifications.findById(id).orElseThrow().getPushStatus()).isEqualTo(PushStatus.BLOCKED);
-        verify(fcm, never()).send(anyList(), anyString(), anyString());
+        verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @Test
@@ -248,13 +249,13 @@ class AppIconReminderIntegrationTest {
         assertThat(notificationCount(user)).isEqualTo(1);
         Long id = latest(user).getId();
         parallel(() -> service.sendPending(user.getId(), id));
-        verify(fcm, times(1)).send(anyList(), anyString(), anyString());
+        verify(fcm, times(1)).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     @Test
     void 발송_실패도_내역과_실패상태를_남기며_같은_단계를_재적재하지_않는다() {
         User user = inactive(Duration.ofDays(3));
-        when(fcm.send(anyList(), anyString(), anyString())).thenThrow(new IllegalStateException("FCM test"));
+        when(fcm.send(anyList(), anyString(), anyString(), anyMap())).thenThrow(new IllegalStateException("FCM test"));
         service.stage(user.getId());
         Long id = latest(user).getId();
         service.sendPending(user.getId(), id);
@@ -284,7 +285,7 @@ class AppIconReminderIntegrationTest {
         trigger.run();
         assertThat(notificationCount(user)).isEqualTo(1);
         assertThat(latest(user).getPushStatus()).isEqualTo(PushStatus.SENT);
-        verify(fcm, times(1)).send(anyList(), anyString(), anyString());
+        verify(fcm, times(1)).send(anyList(), anyString(), anyString(), anyMap());
     }
 
     private List<Long> candidates(long after, int size) {

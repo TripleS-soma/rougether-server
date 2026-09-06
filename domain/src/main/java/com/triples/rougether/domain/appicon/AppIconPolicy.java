@@ -47,8 +47,8 @@ public final class AppIconPolicy {
             case STREAK_CHAMPION, DAILY_SUCCESS ->
                     now.atZone(KST).toLocalDate().plusDays(1).atStartOfDay(KST).toInstant();
             case NORMAL -> lastForegroundAt == null ? null : lastForegroundAt.plus(Duration.ofDays(2));
-            case MISSING_YOU -> lastForegroundAt.plus(Duration.ofDays(4));
-            case TEARY -> lastForegroundAt.plus(Duration.ofDays(7));
+            case MISSING_YOU -> lastForegroundAt == null ? null : lastForegroundAt.plus(Duration.ofDays(4));
+            case TEARY -> lastForegroundAt == null ? null : lastForegroundAt.plus(Duration.ofDays(7));
             case SOBBING -> null;
         };
     }
