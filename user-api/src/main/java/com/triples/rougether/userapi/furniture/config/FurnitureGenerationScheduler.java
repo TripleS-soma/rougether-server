@@ -18,9 +18,10 @@ public class FurnitureGenerationScheduler {
     private final FurnitureGenerationWorker worker;
 
     // 전용 scheduler 등록으로 Boot 기본 scheduler가 사라져 기존 작업이 같은 pool을 쓰지 않도록 함.
+    // JPA가 초기화 중 executor를 조회할 때 worker → repository를 먼저 생성하지 않도록 static으로 분리한다.
     @Bean(name = "taskScheduler")
     @ConditionalOnMissingBean(name = "taskScheduler")
-    ThreadPoolTaskScheduler applicationTaskScheduler() {
+    static ThreadPoolTaskScheduler applicationTaskScheduler() {
         var scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("scheduling-");
@@ -28,7 +29,7 @@ public class FurnitureGenerationScheduler {
     }
 
     @Bean
-    ThreadPoolTaskScheduler furnitureTaskScheduler() {
+    static ThreadPoolTaskScheduler furnitureTaskScheduler() {
         var scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(2);
         scheduler.setThreadNamePrefix("furniture-");
