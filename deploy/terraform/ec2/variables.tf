@@ -234,7 +234,7 @@ variable "asset_public_read_prefixes" {
 variable "asset_allowed_prefixes" {
   description = "S3 key prefixes the EC2 instance role may write to."
   type        = list(string)
-  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*", "bug-reports/*"]
+  default     = ["items/*", "characters/*", "categories/*", "themes/*", "house/*", "profile/*", "bug-reports/*", "private/furniture-generation/*"]
 }
 
 variable "admin_seed_enabled" {

@@ -5,9 +5,16 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 public interface ItemRepository extends JpaRepository<Item, Long> {
+
+    // 사진 가구 수정본 연결은 DB CAS로 수행해 관리자 변경을 오래된 결과로 덮어쓰지 않음.
+    @Modifying(flushAutomatically = true)
+    @Query("update Item i set i.assetKey = :newKey where i.id = :id and i.assetKey = :expectedKey")
+    int replaceAssetKeyIfUnchanged(@Param("id") Long id, @Param("expectedKey") String expectedKey,
+                                  @Param("newKey") String newKey);
 
     List<Item> findByThemeId(Long themeId);
 

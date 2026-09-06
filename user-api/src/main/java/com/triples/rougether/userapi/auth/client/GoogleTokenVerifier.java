@@ -60,7 +60,10 @@ public class GoogleTokenVerifier {
             throw new BusinessException(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID);
         }
 
-        return new GoogleUser(jwt.getSubject(), jwt.getClaimAsString("email"));
+        // email_verified 는 구글이 이메일 소유를 확인했는지 — 같은 이메일 타 provider 계정 안내(409)는 인증된 이메일에만 적용함.
+        String email = jwt.getClaimAsString("email");
+        boolean emailVerified = email != null && Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"));
+        return new GoogleUser(jwt.getSubject(), email, emailVerified);
     }
 
     // JWK 조회 실패(원격 키 소스 오류)가 원인 체인에 있으면 인증서버 장애로 판정함.

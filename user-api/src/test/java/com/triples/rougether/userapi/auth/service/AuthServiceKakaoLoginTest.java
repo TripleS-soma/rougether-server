@@ -16,6 +16,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.member.entity.OauthProvider;
+import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 
 // kakaoLogin 오케스트레이션(카카오 조회 → 핸들러 위임 → 경쟁 충돌 시 재시도)만 검증함.
 // find-or-create·영속 결과는 KakaoLoginIntegrationTest가 실제 DB로 검증함.
@@ -47,6 +54,8 @@ class AuthServiceKakaoLoginTest {
 
     @Mock
     private SignupService signupService;
+    @Mock
+    private EmailProviderConflictGuard emailProviderConflictGuard;
 
     private AuthService authService;
 
@@ -56,7 +65,7 @@ class AuthServiceKakaoLoginTest {
                 userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
     @Test
@@ -87,5 +96,33 @@ class AuthServiceKakaoLoginTest {
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
         verify(kakaoLoginHandler, times(2)).login(kakaoUser);
+    }
+
+    @Test
+    void 같은_이메일의_타_provider_계정_안내_409면_핸들러를_호출하지_않는다() {
+        KakaoUser kakaoUser = new KakaoUser("kakao-3", "a@b.com", true);
+        when(kakaoApiClient.fetchUser("tok")).thenReturn(kakaoUser);
+        doThrow(new BusinessException(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER))
+                .when(emailProviderConflictGuard)
+                .ensureNewAccountAllowed(OauthProvider.KAKAO, "kakao-3", "a@b.com", true, false);
+
+        assertThatThrownBy(() -> authService.kakaoLogin("tok"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER);
+        verify(kakaoLoginHandler, never()).login(any());
+    }
+
+    @Test
+    void allowNewAccount_는_가드에_그대로_전달되고_가입이_진행된다() {
+        KakaoUser kakaoUser = new KakaoUser("kakao-4", "a@b.com", true);
+        LoginResponse created = new LoginResponse(12L, "acc", "ref", true);
+        when(kakaoApiClient.fetchUser("tok")).thenReturn(kakaoUser);
+        when(kakaoLoginHandler.login(kakaoUser)).thenReturn(created);
+
+        LoginResponse response = authService.kakaoLogin("tok", true);
+
+        assertThat(response).isEqualTo(created);
+        verify(emailProviderConflictGuard).ensureNewAccountAllowed(OauthProvider.KAKAO, "kakao-4", "a@b.com", true, true);
     }
 }

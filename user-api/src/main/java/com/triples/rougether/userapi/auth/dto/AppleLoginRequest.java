@@ -9,6 +9,11 @@ public record AppleLoginRequest(
         String idToken,
         @Schema(description = "Sign in with Apple이 identityToken과 함께 반환하는 authorizationCode — 서버가 refresh token으로 교환해 회원탈퇴 시 연동 해제(revoke)에 사용")
         @NotBlank
-        String authorizationCode
+        String authorizationCode,
+        @Schema(description = "같은 이메일로 가입된 다른 소셜 계정이 있어도 새 계정 생성을 허용할지 — 409 AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER 안내 뒤 사용자가 '새 계정으로 계속'을 고른 재요청에서만 true. 생략 시 false", example = "false")
+        Boolean allowNewAccount
 ) {
+    public boolean allowsNewAccount() {
+        return Boolean.TRUE.equals(allowNewAccount);
+    }
 }

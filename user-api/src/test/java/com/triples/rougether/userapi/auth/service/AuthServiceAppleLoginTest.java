@@ -18,6 +18,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.member.entity.OauthProvider;
+import com.triples.rougether.userapi.auth.error.AuthErrorCode;
 
 // appleLogin 오케스트레이션(identityToken 검증 → 핸들러 위임 → 경쟁 충돌 시 재시도)만 검증함.
 // find-or-create·영속 결과는 AppleLoginIntegrationTest가 실제 DB로 검증함.
@@ -49,6 +56,8 @@ class AuthServiceAppleLoginTest {
 
     @Mock
     private SignupService signupService;
+    @Mock
+    private EmailProviderConflictGuard emailProviderConflictGuard;
 
     private AuthService authService;
 
@@ -58,7 +67,7 @@ class AuthServiceAppleLoginTest {
                 userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
     @Test
@@ -108,5 +117,22 @@ class AuthServiceAppleLoginTest {
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
         verify(appleLoginHandler, times(2)).login(appleUser, "enc-rt");
+    }
+
+    @Test
+    void 같은_이메일_타_provider_안내_409는_authorizationCode_교환_앞에서_난다() {
+        AppleUser appleUser = new AppleUser("apple-9", "a@b.com", true);
+        when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
+        doThrow(new BusinessException(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER))
+                .when(emailProviderConflictGuard)
+                .ensureNewAccountAllowed(OauthProvider.APPLE, "apple-9", "a@b.com", true, false);
+
+        assertThatThrownBy(() -> authService.appleLogin("idtok", "authcode"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER);
+        // 1회용 코드가 소모되지 않아야 앱이 같은 코드로 allowNewAccount 재요청을 할 수 있음.
+        verify(appleTokenExchangeClient, never()).exchangeRefreshToken(any());
+        verify(appleLoginHandler, never()).login(any(), any());
     }
 }

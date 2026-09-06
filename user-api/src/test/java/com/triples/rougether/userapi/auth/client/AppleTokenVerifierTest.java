@@ -51,6 +51,17 @@ class AppleTokenVerifierTest {
 
         assertThat(user.id()).isEqualTo("apple-sub-1");
         assertThat(user.email()).isEqualTo("a@b.com");
+        assertThat(user.emailVerified()).isFalse();
+    }
+
+    @Test
+    void 애플이_문자열로_주는_email_verified_도_인정한다() {
+        String token = token(builder -> builder
+                .issuer(ISS).audience().add(CLIENT_ID).and()
+                .subject("apple-sub-1").claim("email", "a@b.com").claim("email_verified", "true"),
+                keyPair);
+
+        assertThat(verifier.verify(token).emailVerified()).isTrue();
     }
 
     @Test

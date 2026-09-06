@@ -4,7 +4,7 @@
 #
 # 사용법:
 #   ADMIN_PASSWORD='<비밀번호>' ./deploy/scripts/seed-item-slots.sh <admin-base-url>
-#   예) ADMIN_PASSWORD=... ./deploy/scripts/seed-item-slots.sh http://3.35.167.122:8081
+#   예) ADMIN_PASSWORD=... ./deploy/scripts/seed-item-slots.sh https://<admin_url>   # docs/operations/dev-credentials.md 의 Admin URL
 #   base-url 생략 시 http://localhost:8081 (로컬 H2).
 #
 # 비밀번호 원문은 저장소/채팅에 남기지 않는다 — dev 는 SSM 에서 조회:

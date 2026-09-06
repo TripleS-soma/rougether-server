@@ -58,6 +58,8 @@ class AuthServiceTest {
 
     @Mock
     private SignupService signupService;
+    @Mock
+    private EmailProviderConflictGuard emailProviderConflictGuard;
 
     private AuthService authService;
 
@@ -67,7 +69,7 @@ class AuthServiceTest {
                 userRepository, refreshTokenRepository, tokenService,
                 new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
-                appleTokenExchangeClient, appleRefreshTokenCipher, signupService);
+                appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
     @Test
