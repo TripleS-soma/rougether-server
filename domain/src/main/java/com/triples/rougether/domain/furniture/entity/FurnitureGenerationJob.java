@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FurnitureGenerationJob {
     public enum Status { UPLOADING, QUEUED, PROCESSING, SUCCEEDED, FAILED }
-    public enum Action { GENERATE, EDIT, REGENERATE, REVIEW }
+    public enum Action { EXTRACT, GENERATE, EDIT, REGENERATE, REVIEW }
 
     @Id @Column(length = 36) private String id;
     @Column(nullable = false) private Long userId;
@@ -31,6 +31,8 @@ public class FurnitureGenerationJob {
     @Column(length = 30) private String lastDecision;
     @Column(length = 1000) private String lastReason;
     @Column(length = 50) private String failureCode;
+    @Column(length = 2500) private String subjectJson;
+    @Column(nullable = false) private int extractionAttempts;
     @Column(nullable = false) private int imageAttempts;
     @Column(nullable = false) private int reviewAttempts;
     @Column(nullable = false) private long inputTokens;
@@ -51,7 +53,7 @@ public class FurnitureGenerationJob {
         job.inputDigest = digest;
         job.targetHint = hint;
         job.status = Status.UPLOADING;
-        job.action = Action.GENERATE;
+        job.action = Action.EXTRACT;
         job.createdAt = now;
         job.updatedAt = now;
         job.nextRunAt = now;
@@ -63,7 +65,7 @@ public class FurnitureGenerationJob {
 
     public void uploaded(String key, Instant now) {
         sourceKey = key;
-        enqueue(Action.GENERATE, now);
+        enqueue(Action.EXTRACT, now);
     }
 
     public boolean claimable(Instant now) {
@@ -76,7 +78,9 @@ public class FurnitureGenerationJob {
         leaseToken = UUID.randomUUID().toString();
         leaseUntil = leaseEnd;
         updatedAt = now;
-        if (action == Action.REVIEW) reviewAttempts++; else imageAttempts++;
+        if (action == Action.EXTRACT) extractionAttempts++;
+        else if (action == Action.REVIEW) reviewAttempts++;
+        else imageAttempts++;
         return leaseToken;
     }
 
@@ -87,6 +91,11 @@ public class FurnitureGenerationJob {
     public void generated(String key, Instant now) {
         candidateKey = key;
         enqueue(Action.REVIEW, now);
+    }
+
+    public void extracted(String json, Instant now) {
+        subjectJson = json;
+        enqueue(Action.GENERATE, now);
     }
 
     public void reviewed(String decision, String reason, String correction) {
@@ -139,5 +148,6 @@ public class FurnitureGenerationJob {
         feedback = "";
         correctionPrompt = "";
         targetHint = "";
+        subjectJson = null;
     }
 }

@@ -8,7 +8,8 @@
 flowchart TD
     P[카메라 사진 + 대상 힌트] --> U[인증 · 사진 검증 · 중복/일일 한도]
     U --> J[DB 작업 접수 · 비공개 원본 저장]
-    J --> G[Astra → 이미지 생성 도구]
+    J --> E[Astra → 식별 특징 추출 · 저장]
+    E --> G[특징 설명 + 스타일 참고 이미지 → 생성]
     G --> Q[PNG · 투명도 · 여백 검사]
     Q --> R[Astra가 원본·스타일 기준·후보를 비교]
     R -->|ACCEPT + 서버 검사 통과| I[완성 PNG · 개인 보관함]
@@ -23,6 +24,8 @@ flowchart TD
 - 입력: 실제로 디코딩 가능한 JPEG/PNG, 최대 10MiB, 가로·세로 32~8192px, 총 3,200만 픽셀 이하. HEIC는 모바일에서 JPEG/PNG로 변환해 전송해야 합니다.
 - 카메라 JPEG의 EXIF 회전/반전을 적용하고 최대 변 1536px 이하로 축소합니다. PNG로 재인코딩해 EXIF·GPS·텍스트 metadata를 제거한 사본만 보관하고 모델로 전송합니다.
 - 한 사진당 가구 하나를 만듭니다. `targetHint`가 없으면 가장 두드러진 앞쪽 가구를 선택하도록 요청합니다. 원본에 가구가 없거나 구분할 수 없으면 검수에서 거절할 수 있습니다.
+- 업로드 후 `EXTRACT` 단계에서 Astra가 원본 사진을 보고 종류·특징적인 부품·부품별 색상 계열을 엄격한 JSON으로 한 번 추출합니다. 수치 비율·카메라 각도·광택·직물 조직·배경·개인정보는 추출하지 않도록 요청합니다. 부적합한 사진이나 잘못된 구조의 응답은 이미지 생성 전에 중단합니다.
+- 생성·재생성 요청에는 원본 사진을 넣지 않습니다. 저장한 식별 특징과 스타일 참고 이미지만 전달하며, 부분 수정에는 현재 후보를 추가합니다. 원본은 검수에서 식별 특징을 확인할 때 다시 사용합니다. 반복 재생성이나 사용자 피드백 때문에 특징을 재추출하지 않습니다.
 - 스타일 기준은 서버가 설정한 기존 가구 PNG 1~3개입니다. 기본값은 `items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png`입니다. 사용자가 임의 URL·S3 key·모델·프롬프트 정책을 지정할 수 없습니다.
 - 최종 출력은 1024×1024 PNG입니다. 서버는 알파 채널, 투명 픽셀 10% 이상, 가시 픽셀 1% 이상, 모든 테두리 8px 여백을 검사합니다. 이 검사는 최소 기술 조건이며 형태·색·스타일 품질은 Astra가 비교합니다. Astra의 ACCEPT가 서버 검사를 무효화할 수 없습니다.
 - 검수에는 후보를 밝은/어두운 배경에 합성한 미리보기 2장을 보냅니다. 실제 사진 실험에서 비전 모델이 투명 픽셀의 숨겨진 RGB를 배경 번짐으로 오판한 사례를 확인해, 사람이 앱에서 보는 합성 결과와 검수 입력을 맞췄습니다. 저장되는 투명 PNG는 변경하지 않습니다.
@@ -30,7 +33,7 @@ flowchart TD
 
 ## 생성 전 스타일 지침
 
-사진에서는 가구 종류·특징적인 부품·색상 계열을 가져옵니다. 비율·선·채색·명암·원근·세부 묘사는 첫 번째 스타일 참고 에셋을 우선하고 나머지 참고 에셋으로 보완합니다. 실물의 정확한 비율과 재질을 그대로 보존하도록 요청하지 않습니다.
+사진에서는 별도 추출 요청으로 가구 종류·특징적인 부품·색상 계열을 가져옵니다. 생성 요청은 원본 이미지와 분리하며, 비율·선·채색·명암·원근·세부 묘사는 첫 번째 스타일 참고 에셋을 우선하고 나머지 참고 에셋으로 보완합니다. 스타일 참고 이미지도 실제 알파를 밝은 배경에 합성한 미리보기를 사용해 숨겨진 RGB의 영향을 피합니다. 완성 출력은 계속 투명 PNG입니다.
 
 생성·부분 수정·재생성·검수는 `OpenAiFurnitureClient.STYLE`의 동일한 6개 기준을 사용합니다.
 
@@ -88,7 +91,7 @@ curl -X POST "$API_BASE/api/v1/me/furniture-generations" \
 }
 ```
 
-`status`: `UPLOADING` → `QUEUED` ↔ `PROCESSING` → `SUCCEEDED` 또는 `FAILED`. `action`은 현재/다음 단계 `GENERATE`, `REVIEW`, `EDIT`, `REGENERATE`입니다. 프론트는 2~3초 간격으로 상태를 조회하고 terminal 상태에서 멈춥니다. 완료되면 보관함을 다시 조회합니다.
+`status`: `UPLOADING` → `QUEUED` ↔ `PROCESSING` → `SUCCEEDED` 또는 `FAILED`. `action`은 현재/다음 단계 `EXTRACT`, `GENERATE`, `REVIEW`, `EDIT`, `REGENERATE`입니다. 프론트는 2~3초 간격으로 상태를 조회하고 terminal 상태에서 멈춥니다. 완료되면 보관함을 다시 조회합니다.
 
 같은 사용자·`requestId`·사진·대상 힌트는 하나의 작업을 반환합니다. 같은 ID에 다른 내용을 보내면 `FURNITURE_REQUEST_CONFLICT`(409)입니다. 사진의 파일명·Content-Type 표기는 중복 판정에 쓰지 않습니다. 새 작업 UUID는 재전송할 때 유지해야 합니다.
 
@@ -100,7 +103,7 @@ curl -X POST "$API_BASE/api/v1/me/furniture-generations" \
 
 ## 호출 한도와 정합성
 
-- 기본 한도: 사용자당 KST 하루 새 작업 2개, 동시 진행 1개, 작업 전체 이미지 호출 3회·검수 6회. 사용자 피드백도 같은 한도를 소비하며 횟수를 초기화하지 않습니다. 초기 업로드/외부 장애 실패도 새 작업 한도에 포함합니다.
+- 기본 한도: 사용자당 KST 하루 새 작업 2개, 동시 진행 1개, 작업 전체 특징 추출 1회·이미지 호출 3회·검수 6회. 사용자 피드백도 같은 한도를 소비하며 횟수를 초기화하지 않습니다. 추출도 별도 lease와 호출 횟수를 선예약하고 재시작 시 불확실한 요청을 다시 보내지 않습니다. 초기 업로드/외부 장애 실패도 새 작업 한도에 포함합니다.
 - 생성은 Astra `gpt-6-astra`의 Responses API에서 `gpt-image-2` 이미지 도구를 최대 1회 호출하도록 요청합니다. 1024×1024·medium·투명 PNG이며 생성/검수의 mainline `max_output_tokens`는 각각 2048입니다. 검수 요청에는 도구를 넣지 않고 엄격한 JSON schema를 사용합니다.
 - 이미지당 실제 요금은 모델·입출력에 따라 달라집니다. DB의 호출 횟수와 공급자가 보고한 최상위 입력/출력 토큰은 운영 진단용이며 확정 청구액이 아닙니다.
 - 호출 수와 lease를 먼저 짧은 트랜잭션에서 예약합니다. 모델·S3 호출 중 DB 연결/행 잠금을 유지하지 않습니다. 사용자 행 → 작업 행 순서로 잠그며 `leaseToken`과 기한을 확인한 결과만 적용합니다.
@@ -112,9 +115,10 @@ curl -X POST "$API_BASE/api/v1/me/furniture-generations" \
 
 - 원본/후보: `private/furniture-generation/{jobId}/{source|candidate}/{uuid}.png`. 공개 CDN의 허용 prefix에 추가하지 않습니다.
 - 성공 결과: `items/photo-furniture/furniture/{uuid}.png`. 기존 key를 덮어쓰지 않습니다. 피드백 수정 후에도 이전 공개 결과 파일은 캐시/과거 참조를 위해 보존합니다.
-- 사진 보관 기한은 접수 후 24시간입니다. 기한 이후 피드백을 받지 않고 원본·후보·피드백 원문·대상 힌트를 정리합니다. 탈퇴 감지 시에도 다음 정리 주기(기본 60초)에 원본을 정리합니다. S3 버전 관리가 켜져 있어도 임시 사진의 모든 버전과 delete marker를 제거합니다.
+- 사진 보관 기한은 접수 후 24시간입니다. 기한 이후 피드백을 받지 않고 원본·후보·추출한 특징 JSON·피드백 원문·대상 힌트를 정리합니다. 탈퇴 감지 시에도 다음 정리 주기(기본 60초)에 원본을 정리합니다. S3 버전 관리가 켜져 있어도 임시 사진의 모든 버전과 delete marker를 제거합니다. 특징 JSON은 사용자 API 응답에 노출하지 않습니다.
 - DB와 연결되지 않은 임시 사진은 S3 lifecycle로 추가 회수합니다. lifecycle은 날짜 단위로 지연될 수 있어 정상 삭제 경로를 대체하지 않습니다. 공개 결과 연결 실패 시에는 DB 참조를 다시 확인한 뒤 best-effort로 삭제하고, DB 확인도 실패하면 보존합니다.
 - `V63__add_furniture_generation_jobs.sql`은 작업/피드백 테이블과 전용 테마를 추가합니다. 머지 전에 최신 main의 Flyway 버전 충돌을 확인해야 합니다.
+- `V64__add_furniture_subject_extraction.sql`은 `subject_json`과 `extraction_attempts`를 추가합니다. 이전 버전에서 접수되어 특징이 없는 생성 대기 작업도 선점 시 특징 추출을 먼저 실행합니다. 신규 실패 코드는 `INVALID_SUBJECT_OUTPUT`, `SUBJECT_FEATURES_UNAVAILABLE`입니다.
 
 기존 `LLM_API_KEY`와 `LLM_BASE_URL`을 재사용합니다. 키를 새로 발급하거나 프론트에 전달하지 않습니다.
 
@@ -157,7 +161,7 @@ FURNITURE_LIVE_OUTPUT=/absolute/path/local-results \
 ./gradlew :user-api:test --tests '*FurnitureGenerationLiveSmokeTest'
 ```
 
-파일은 실제 OpenAI API로 전송되고 생성 최대 3회와 검수 비용이 발생합니다. 결과는 `result.json`, 시도별 `candidate-*.png`, 성공 시 `furniture.png`입니다. 공급자 실패나 검수 미통과를 테스트 성공으로 보고하지 않습니다.
+파일은 실제 OpenAI API로 전송되고 특징 추출 1회, 생성 최대 3회와 검수 비용이 발생합니다. 결과는 `subject.json`, `result.json`, 시도별 `candidate-*.png`와 밝은/어두운 미리보기, 성공 시 `furniture.png`입니다. 공급자 실패나 검수 미통과를 테스트 성공으로 보고하지 않습니다.
 
 기존 실제 생성물로 검수 변경만 확인하려면 `FURNITURE_LIVE_CANDIDATE=/absolute/path/candidate.png`도 설정합니다. 이 모드에서는 이미지 생성 호출을 하지 않고 저장된 후보 1개를 재생한 뒤 실제 검수와 DB 지급 경로를 실행합니다. 추가 이미지가 필요하다는 판정이면 실패로 종료합니다. `mode.txt`에 검증 모드를 구분하며 `stages.jsonl`에 단계별 결과, 성공 시 밝은/어두운 배경 미리보기도 저장합니다.
 

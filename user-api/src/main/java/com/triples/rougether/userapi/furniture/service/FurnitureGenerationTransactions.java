@@ -40,7 +40,7 @@ public class FurnitureGenerationTransactions {
     public record Reservation(FurnitureGenerationResponse job, boolean created) { }
     public record Claim(String id, Long userId, String token, Action action, String sourceKey,
                         String candidateKey, String resultAssetKey, String targetHint, String feedback,
-                        String correction) { }
+                        String correction, String subjectJson) { }
     public record Cleanup(String id, String sourceKey, String candidateKey) { }
 
     public Reservation reserve(Long userId, String requestId, String digest, String hint) {
@@ -122,21 +122,37 @@ public class FurnitureGenerationTransactions {
             job.fail(user.getDeletedAt() != null ? "OWNER_WITHDRAWN" : "SOURCE_EXPIRED", now);
             return null;
         }
+        // 이전 버전에서 접수된 작업도 생성 전에 특징 추출을 거치도록 함.
+        if (job.getAction() != Action.REVIEW && job.getSubjectJson() == null && job.getExtractionAttempts() == 0) {
+            job.enqueue(Action.EXTRACT, now);
+        }
+        boolean extract = job.getAction() == Action.EXTRACT;
         boolean review = job.getAction() == Action.REVIEW;
-        if ((review && job.getReviewAttempts() >= config.maxReviewAttempts())
-                || (!review && (job.getImageAttempts() >= config.maxImageAttempts()
+        if ((extract && job.getExtractionAttempts() >= 1)
+                || (review && job.getReviewAttempts() >= config.maxReviewAttempts())
+                || (!review && !extract && (job.getImageAttempts() >= config.maxImageAttempts()
                     || job.getReviewAttempts() >= config.maxReviewAttempts()))) {
             job.fail("GENERATION_BUDGET_EXHAUSTED", now);
             return null;
         }
         String token = job.claim(now, now.plus(config.timeout()).plusSeconds(60));
         return new Claim(job.getId(), job.getUserId(), token, job.getAction(), job.getSourceKey(),
-                job.getCandidateKey(), job.getResultAssetKey(), job.getTargetHint(), job.getFeedback(), job.getCorrectionPrompt());
+                job.getCandidateKey(), job.getResultAssetKey(), job.getTargetHint(), job.getFeedback(),
+                job.getCorrectionPrompt(), job.getSubjectJson());
+    }
+
+    public boolean extracted(Claim claim, FurnitureAiClient.Extracted extracted) {
+        var job = leased(claim);
+        if (job == null || job.getAction() != Action.EXTRACT) return false;
+        job.recordUsage(extracted.inputTokens(), extracted.outputTokens());
+        if (!extracted.furniture()) job.fail("PHOTO_REJECTED", clock.instant());
+        else job.extracted(extracted.subjectJson(), clock.instant());
+        return true;
     }
 
     public boolean generated(Claim claim, String key, long input, long output) {
         var job = leased(claim);
-        if (job == null) return false;
+        if (job == null || job.getAction() == Action.EXTRACT || job.getAction() == Action.REVIEW) return false;
         job.recordUsage(input, output);
         job.generated(key, clock.instant());
         return true;
@@ -144,7 +160,7 @@ public class FurnitureGenerationTransactions {
 
     public boolean reviewed(Claim claim, FurnitureAiClient.Review review, boolean hardPass, String finalKey) {
         var job = leased(claim);
-        if (job == null) return false;
+        if (job == null || job.getAction() != Action.REVIEW) return false;
         job.recordUsage(review.inputTokens(), review.outputTokens());
         job.reviewed(review.decision().name(), review.reason(), review.correction());
         Instant now = clock.instant();

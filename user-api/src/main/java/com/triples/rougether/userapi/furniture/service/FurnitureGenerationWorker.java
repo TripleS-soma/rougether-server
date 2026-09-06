@@ -34,11 +34,16 @@ public class FurnitureGenerationWorker {
         String uploaded = null;
         boolean linked = false;
         try {
-            byte[] source = read(claim.sourceKey());
+            if (claim.action() == Action.EXTRACT) {
+                transactions.extracted(claim, ai.extract(read(claim.sourceKey()), claim.targetHint()));
+                return;
+            }
+            // 원본 사진은 특징 추출·검수에만 사용함. 생성 컨텍스트에는 넣지 않음.
+            byte[] source = claim.action() == Action.REVIEW ? read(claim.sourceKey()) : null;
             List<byte[]> references = config.styleReferenceKeys().stream().map(this::read).toList();
             byte[] candidate = claim.candidateKey() == null ? null : read(claim.candidateKey());
             var context = new FurnitureAiClient.Context(source, references, candidate,
-                    claim.targetHint(), claim.feedback(), claim.correction());
+                    claim.targetHint(), claim.feedback(), claim.correction(), claim.subjectJson());
             if (claim.action() != Action.REVIEW) {
                 var generated = ai.generate(context, claim.action());
                 var checked = images.candidate(generated.image());

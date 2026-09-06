@@ -39,6 +39,11 @@ class FurnitureGenerationLiveSmokeTest {
     @Test void 실제_사진을_Astra로_생성_검수하고_보관함에_연결() throws Exception {
         Path output = Path.of(System.getenv("FURNITURE_LIVE_OUTPUT"));
         Files.createDirectories(output);
+        doAnswer(i -> {
+            var extracted = (FurnitureAiClient.Extracted) i.callRealMethod();
+            Files.writeString(output.resolve("subject.json"), extracted.subjectJson());
+            return extracted;
+        }).when(ai).extract(any(), anyString());
         byte[] photo = Files.readAllBytes(Path.of(System.getenv("FURNITURE_LIVE_PHOTO")));
         byte[] reference = Files.readAllBytes(Path.of(System.getenv("FURNITURE_LIVE_REFERENCE")));
         String recordedPath = System.getenv("FURNITURE_LIVE_CANDIDATE");
@@ -58,7 +63,13 @@ class FurnitureGenerationLiveSmokeTest {
             String key = i.getArgument(2) + "/" + UUID.randomUUID() + ".png";
             byte[] bytes = i.getArgument(0);
             objects.put(key, bytes);
-            if (key.contains("/candidate/")) Files.write(output.resolve("candidate-" + UUID.randomUUID() + ".png"), bytes);
+            if (key.contains("/candidate/")) {
+                String name = "candidate-" + UUID.randomUUID();
+                Files.write(output.resolve(name + ".png"), bytes);
+                var images = new FurnitureImages();
+                Files.write(output.resolve(name + "-on-light.png"), images.preview(bytes, 0xFAF7F1));
+                Files.write(output.resolve(name + "-on-dark.png"), images.preview(bytes, 0x30343B));
+            }
             return key;
         });
         when(storage.read(anyString())).thenAnswer(i -> new StoredAsset(objects.get(i.getArgument(0)), "image/png"));
@@ -66,7 +77,7 @@ class FurnitureGenerationLiveSmokeTest {
         User user = users.save(User.signUp("furniture-live-smoke@example.test"));
         var result = service.submit(user.getId(), UUID.randomUUID(), "사진 맨 앞의 파란 좌석 사무용 의자",
                 new MockMultipartFile("photo", "chair.jpg", "image/jpeg", photo));
-        for (int i = 0; i < properties.maxImageAttempts() + properties.maxReviewAttempts(); i++) {
+        for (int i = 0; i < 1 + properties.maxImageAttempts() + properties.maxReviewAttempts(); i++) {
             if (result.status() == Status.SUCCEEDED || result.status() == Status.FAILED) break;
             worker.runNext();
             result = service.get(user.getId(), result.id());
