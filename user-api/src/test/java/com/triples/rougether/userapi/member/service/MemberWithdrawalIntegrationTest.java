@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.appicon.repository.UserAppActivityRepository;
 import com.triples.rougether.domain.goal.entity.Goal;
 import com.triples.rougether.domain.goal.entity.UserGoal;
 import com.triples.rougether.domain.goal.repository.GoalRepository;
@@ -47,6 +48,7 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.auth.client.AppleRevokeClient;
+import com.triples.rougether.userapi.appicon.service.AppIconService;
 import com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient;
 import com.triples.rougether.userapi.auth.client.AppleTokenVerifier;
 import com.triples.rougether.userapi.auth.client.AppleUser;
@@ -127,6 +129,10 @@ class MemberWithdrawalIntegrationTest {
     @Autowired
     private MemberService memberService;
     @Autowired
+    private AppIconService appIconService;
+    @Autowired
+    private UserAppActivityRepository userAppActivityRepository;
+    @Autowired
     private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private String kakaoLoginAs(String kakaoId) {
@@ -143,6 +149,8 @@ class MemberWithdrawalIntegrationTest {
         LoginResponse first = authService.kakaoLogin(token);
         authService.kakaoLogin(token); // 두 기기 로그인 상황: active refresh token 2개
         Long userId = first.userId();
+        appIconService.recordForeground(userId);
+        assertThat(userAppActivityRepository.existsById(userId)).isTrue();
         // 리마인더 push 대상이 되는 FCM 토큰 등록 상황 재현.
         userDeviceTokenRepository.save(UserDeviceToken.register(
                 userRepository.findById(userId).orElseThrow(),
@@ -156,6 +164,10 @@ class MemberWithdrawalIntegrationTest {
         assertThat(oauthAccountRepository.findAllByUser(user)).isEmpty();
         // 루틴은 soft delete 하지 않으므로, push 차단은 FCM 토큰 삭제가 담당함.
         assertThat(userDeviceTokenRepository.findAllByUserId(userId)).isEmpty();
+        assertThat(userAppActivityRepository.existsById(userId)).isFalse();
+        assertThatThrownBy(() -> appIconService.recordForeground(userId))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(MemberErrorCode.USER_NOT_FOUND);
         // 커밋 후 카카오 회원번호로 unlink 호출됨.
         verify(kakaoUnlinkClient).unlink(kakaoId);
     }

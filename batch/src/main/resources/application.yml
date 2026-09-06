@@ -19,10 +19,15 @@ spring:
   task:
     scheduling:
       pool:
-        size: 9 # @Scheduled 트리거 수(day-end·house-mission·reminder·weekly-report·weekly-report-push·routine-recommendation·withdrawal-purge·cobweb·evening-digest)만큼 확보 — 오래 도는 트리거(day-end catch-up, 주간 회고 LLM 순차 호출)가 겹쳐도 reminder 5분 발화가 큐잉(=그 분 영구 누락)되지 않게
+        size: 10 # 기존 9개 트리거 + 고양이 복귀 알림. 긴 작업이 reminder 발화를 막지 않게 확보함.
 
 server:
   port: 8082
+
+# 명시적 foreground 활동을 기록한 사용자만 대상임. false로 복귀 알림 적재·발송을 함께 중지함.
+app-icon:
+  reminder:
+    enabled: ${APP_ICON_REMINDER_ENABLED:true}
 
 management:
   endpoints:

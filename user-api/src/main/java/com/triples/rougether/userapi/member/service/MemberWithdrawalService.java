@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.member.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.appicon.repository.UserAppActivityRepository;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseJoinRequest;
 import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
@@ -60,6 +61,7 @@ public class MemberWithdrawalService {
     private final DailyIncompleteDigestTargetRepository dailyIncompleteDigestTargetRepository;
     private final DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
     private final NotificationRepository notificationRepository;
+    private final UserAppActivityRepository userAppActivityRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final UserGoalRepository userGoalRepository;
     private final RoutineRepository routineRepository;
@@ -113,6 +115,7 @@ public class MemberWithdrawalService {
         // 대량 데이터(로그·인증사진 row 등)는 purge 배치(batch 모듈)가 하드 삭제함.
         dailyIncompleteDigestTargetRepository.deleteAllByDigestUserId(userId);
         dailyIncompleteDigestRepository.deleteAllByUserId(userId);
+        userAppActivityRepository.deleteAllByUserId(userId);
         notificationRepository.deleteAllByUserId(userId);
         notificationSettingRepository.deleteAllByUserId(userId);
         userGoalRepository.deleteAllByUserId(userId);

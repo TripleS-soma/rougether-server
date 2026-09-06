@@ -14,6 +14,7 @@ import com.triples.rougether.infra.fcm.FcmSender;
 import java.time.Clock;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.infrastructure.item.Chunk;
@@ -81,7 +82,13 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
 
         FcmSendResult result;
         try {
-            result = fcmSender.send(tokens, notification.getTitle(), notification.getBody());
+            if (notification.getType() == NotificationType.APP_INACTIVITY_REMINDER) {
+                result = fcmSender.send(tokens, notification.getTitle(), notification.getBody(), Map.of(
+                        "type", notification.getType().name(),
+                        "screen", "myRoom", "notificationId", notificationId.toString()));
+            } else {
+                result = fcmSender.send(tokens, notification.getTitle(), notification.getBody());
+            }
         } catch (Exception e) {
             // 리마인드 외 타입(주간 회고 등)도 이 writer 를 지나므로 타입을 함께 남김
             log.warn("알림 FCM 발송 실패 - notificationId={}, type={}", notificationId, notification.getType(), e);

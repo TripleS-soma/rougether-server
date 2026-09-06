@@ -12,6 +12,7 @@ import com.google.firebase.messaging.Notification;
 import com.google.firebase.messaging.SendResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -30,6 +31,11 @@ public class FirebaseFcmSender implements FcmSender {
 
     @Override
     public FcmSendResult send(List<String> tokens, String title, String body) {
+        return send(tokens, title, body, Map.of());
+    }
+
+    @Override
+    public FcmSendResult send(List<String> tokens, String title, String body, Map<String, String> data) {
         if (tokens.isEmpty()) {
             return FcmSendResult.empty();
         }
@@ -37,15 +43,15 @@ public class FirebaseFcmSender implements FcmSender {
         int successCount = 0;
         List<String> invalidTokens = new ArrayList<>();
         for (List<String> chunk : partition(tokens, MULTICAST_MAX_TOKENS)) {
-            FcmSendResult chunkResult = sendChunk(chunk, title, body);
+            FcmSendResult chunkResult = sendChunk(chunk, title, body, data);
             successCount += chunkResult.successCount();
             invalidTokens.addAll(chunkResult.invalidTokens());
         }
         return new FcmSendResult(successCount, invalidTokens);
     }
 
-    private FcmSendResult sendChunk(List<String> tokens, String title, String body) {
-        MulticastMessage message = buildMessage(tokens, title, body);
+    private FcmSendResult sendChunk(List<String> tokens, String title, String body, Map<String, String> data) {
+        MulticastMessage message = buildMessage(tokens, title, body, data);
 
         BatchResponse batchResponse;
         try {
@@ -78,8 +84,13 @@ public class FirebaseFcmSender implements FcmSender {
 
     // iOS는 aps.sound를 명시하지 않으면 알림이 무음으로 도착함 — APNs 릴레이용 기본 사운드를 지정함.
     static MulticastMessage buildMessage(List<String> tokens, String title, String body) {
+        return buildMessage(tokens, title, body, Map.of());
+    }
+
+    static MulticastMessage buildMessage(List<String> tokens, String title, String body, Map<String, String> data) {
         return MulticastMessage.builder()
                 .addAllTokens(tokens)
+                .putAllData(data)
                 .setNotification(Notification.builder().setTitle(title).setBody(body).build())
                 .setApnsConfig(ApnsConfig.builder()
                         .setAps(Aps.builder().setSound("default").build())

@@ -58,6 +58,17 @@ class FirebaseFcmSenderTest {
         assertThat(aps).containsEntry("sound", "default");
     }
 
+    @Test
+    void 고양이_알림의_화면_이동_메타데이터를_전달한다() throws Exception {
+        Map<String, String> data = Map.of("type", "APP_INACTIVITY_REMINDER",
+                "screen", "myRoom", "notificationId", "42");
+        MulticastMessage message = FirebaseFcmSender.buildMessage(tokens(1), "보고 싶다냥", "내 방에서 기다릴게", data);
+
+        assertThat(readField(message, MulticastMessage.class, "data")).isEqualTo(data);
+        assertThat(readField(FirebaseFcmSender.buildMessage(tokens(1), "제목", "본문"),
+                MulticastMessage.class, "data")).isNull();
+    }
+
     private static Object readField(Object target, Class<?> type, String name) throws Exception {
         Field field = type.getDeclaredField(name);
         field.setAccessible(true);
