@@ -37,6 +37,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // 각 컨트롤러에서 Apple 서명 또는 Google Pub/Sub OIDC를 검증함.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/billing/notifications/apple", "/api/v1/billing/notifications/google").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
                                 "/api/v1/auth/**",

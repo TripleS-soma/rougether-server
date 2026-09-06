@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.furniture.service;
 import static com.triples.rougether.userapi.furniture.error.FurnitureGenerationErrorCode.*;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.userapi.billing.service.FurnitureCreditTransactions;
 import com.triples.rougether.domain.furniture.entity.*;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Action;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status;
@@ -36,6 +37,7 @@ public class FurnitureGenerationTransactions {
     private final UserItemRepository inventory;
     private final FurnitureGenerationProperties config;
     private final Clock clock;
+    private final FurnitureCreditTransactions credits;
 
     public record Reservation(FurnitureGenerationResponse job, boolean created) { }
     public record Claim(String id, Long userId, String token, Action action, String sourceKey,
@@ -59,6 +61,7 @@ public class FurnitureGenerationTransactions {
             throw new BusinessException(FURNITURE_DAILY_LIMIT);
         }
         var job = jobs.save(FurnitureGenerationJob.create(userId, requestId, digest, hint, now, now.plus(config.retention())));
+        credits.reserve(userId, job.getId());
         return new Reservation(FurnitureGenerationResponse.from(job), true);
     }
 
@@ -66,7 +69,7 @@ public class FurnitureGenerationTransactions {
         User user = lockedUser(userId);
         var job = ownedForUpdate(userId, id);
         if (user.getDeletedAt() != null || job.getStatus() != Status.UPLOADING || expired(job)) {
-            job.fail("UPLOAD_INTERRUPTED", clock.instant());
+            fail(job, "UPLOAD_INTERRUPTED", clock.instant());
             return false;
         }
         job.uploaded(sourceKey, clock.instant());
@@ -76,7 +79,7 @@ public class FurnitureGenerationTransactions {
     public void uploadFailed(Long userId, String id) {
         lockedUser(userId);
         var job = ownedForUpdate(userId, id);
-        if (job.getStatus() == Status.UPLOADING) job.fail("SOURCE_UPLOAD_FAILED", clock.instant());
+        if (job.getStatus() == Status.UPLOADING) fail(job, "SOURCE_UPLOAD_FAILED", clock.instant());
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +122,7 @@ public class FurnitureGenerationTransactions {
         Instant now = clock.instant();
         if (!job.claimable(now)) return null;
         if (user.getDeletedAt() != null || expired(job)) {
-            job.fail(user.getDeletedAt() != null ? "OWNER_WITHDRAWN" : "SOURCE_EXPIRED", now);
+            fail(job, user.getDeletedAt() != null ? "OWNER_WITHDRAWN" : "SOURCE_EXPIRED", now);
             return null;
         }
         // 이전 버전에서 접수된 작업도 생성 전에 특징 추출을 거치도록 함.
@@ -132,7 +135,7 @@ public class FurnitureGenerationTransactions {
                 || (review && job.getReviewAttempts() >= config.maxReviewAttempts())
                 || (!review && !extract && (job.getImageAttempts() >= config.maxImageAttempts()
                     || job.getReviewAttempts() >= config.maxReviewAttempts()))) {
-            job.fail("GENERATION_BUDGET_EXHAUSTED", now);
+            fail(job, "GENERATION_BUDGET_EXHAUSTED", now);
             return null;
         }
         String token = job.claim(now, now.plus(config.timeout()).plusSeconds(60));
@@ -145,7 +148,7 @@ public class FurnitureGenerationTransactions {
         var job = leased(claim);
         if (job == null || job.getAction() != Action.EXTRACT) return false;
         job.recordUsage(extracted.inputTokens(), extracted.outputTokens());
-        if (!extracted.furniture()) job.fail("PHOTO_REJECTED", clock.instant());
+        if (!extracted.furniture()) fail(job, "PHOTO_REJECTED", clock.instant());
         else job.extracted(extracted.subjectJson(), clock.instant());
         return true;
     }
@@ -167,7 +170,7 @@ public class FurnitureGenerationTransactions {
         switch (review.decision()) {
             case ACCEPT -> {
                 if (!hardPass || finalKey == null) {
-                    job.fail("HARD_QA_REJECTED", now);
+                    fail(job, "HARD_QA_REJECTED", now);
                     return false;
                 }
                 Long inventoryId = job.getUserItemId();
@@ -180,26 +183,27 @@ public class FurnitureGenerationTransactions {
                 } else {
                     UserItem owned = inventory.findOwnedWithItem(job.getUserId(), inventoryId).orElseThrow();
                     if (items.replaceAssetKeyIfUnchanged(owned.getItem().getId(), job.getResultAssetKey(), finalKey) != 1) {
-                        job.fail("RESULT_CHANGED_EXTERNALLY", now);
+                        fail(job, "RESULT_CHANGED_EXTERNALLY", now);
                         return false;
                     }
                 }
+                credits.settle(job.getUserId(), job.getId(), true);
                 job.succeed(finalKey, inventoryId, now);
                 return true;
             }
             case EDIT, REGENERATE -> {
                 if (job.getImageAttempts() >= config.maxImageAttempts()
-                        || job.getReviewAttempts() >= config.maxReviewAttempts()) job.fail("GENERATION_BUDGET_EXHAUSTED", now);
+                        || job.getReviewAttempts() >= config.maxReviewAttempts()) fail(job, "GENERATION_BUDGET_EXHAUSTED", now);
                 else job.enqueue(review.decision() == FurnitureAiClient.Decision.EDIT ? Action.EDIT : Action.REGENERATE, now);
             }
-            case REJECT -> job.fail("PHOTO_REJECTED", now);
+            case REJECT -> fail(job, "PHOTO_REJECTED", now);
         }
         return false;
     }
 
     public void failed(Claim claim, String code) {
         var job = leased(claim);
-        if (job != null) job.fail(code, clock.instant());
+        if (job != null) fail(job, code, clock.instant());
     }
 
     @Transactional(readOnly = true)
@@ -212,13 +216,13 @@ public class FurnitureGenerationTransactions {
         User user = lockedUser(jobs.findOwnerId(id).orElseThrow());
         var job = jobs.findForUpdate(id).orElseThrow();
         Instant now = clock.instant();
-        if (user.getDeletedAt() != null) job.fail("OWNER_WITHDRAWN", now);
-        else if (!job.terminal() && expired(job)) job.fail("SOURCE_EXPIRED", now);
+        if (user.getDeletedAt() != null) fail(job, "OWNER_WITHDRAWN", now);
+        else if (!job.terminal() && expired(job)) fail(job, "SOURCE_EXPIRED", now);
         else if (job.getStatus() == Status.PROCESSING && !job.getLeaseUntil().isAfter(now)) {
             // 결과를 모르는 외부 호출은 자동 재전송하지 않음. 늦게 도착한 응답은 lease fencing으로 무시함.
-            job.fail("WORKER_INTERRUPTED", now);
+            fail(job, "WORKER_INTERRUPTED", now);
         } else if (job.getStatus() == Status.UPLOADING && job.getCreatedAt().plusSeconds(300).isBefore(now)) {
-            job.fail("UPLOAD_INTERRUPTED", now);
+            fail(job, "UPLOAD_INTERRUPTED", now);
         }
         if (user.getDeletedAt() != null || expired(job)) {
             return new Cleanup(id, job.getSourceKey(), job.getCandidateKey());
@@ -243,7 +247,7 @@ public class FurnitureGenerationTransactions {
         var job = ownedForUpdate(claim.userId(), claim.id());
         if (!job.ownsLease(claim.token(), clock.instant())) return null;
         if (user.getDeletedAt() != null || expired(job)) {
-            job.fail(user.getDeletedAt() != null ? "OWNER_WITHDRAWN" : "SOURCE_EXPIRED", clock.instant());
+            fail(job, user.getDeletedAt() != null ? "OWNER_WITHDRAWN" : "SOURCE_EXPIRED", clock.instant());
             return null;
         }
         return job;
@@ -261,6 +265,10 @@ public class FurnitureGenerationTransactions {
     }
     private void requireActiveUser(Long userId) {
         users.findByIdAndDeletedAtIsNull(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
+    }
+    private void fail(FurnitureGenerationJob job, String code, Instant now) {
+        credits.settle(job.getUserId(), job.getId(), false);
+        job.fail(code, now);
     }
     private boolean expired(FurnitureGenerationJob job) { return !job.getExpiresAt().isAfter(clock.instant()); }
     private void requireNoActiveJob(Long userId) {
