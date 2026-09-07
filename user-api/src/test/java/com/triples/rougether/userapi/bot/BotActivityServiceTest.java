@@ -349,9 +349,9 @@ class BotActivityServiceTest {
     }
 
     @Test
-    void 거미줄은_같은_집_사람_방의_활성_거미줄을_확률_판정_틱에_청소하고_보상_3코인은_봇_지갑에_들어간다() {
+    void 봇이_활동해도_사람_방의_거미줄과_청소_보상은_건드리지_않는다() {
         LocalDate today = LocalDate.now(KST);
-        User bot = bot("bot-latte"); // SPREAD 08–22
+        User bot = bot("bot-latte");
         User owner = human("web-owner");
         House house = house(owner, 4);
         join(house, bot);
@@ -361,42 +361,16 @@ class BotActivityServiceTest {
                 INSERT INTO room_cobwebs (room_user_id, appeared_at, cleaned_at, cleaned_by_user_id, updated_at)
                 VALUES (?, ?, NULL, NULL, ?)
                 """, owner.getId(), Timestamp.from(appearedAt), Timestamp.from(appearedAt));
-        long walletBefore = coinBalance(bot.getId());
-
-        int noCleanTick = BotDecision.activeTicks(BotActivityProfile.SPREAD).stream()
-                .filter(t -> !BotDecision.shouldCleanCobweb(bot.getId(), today, t, owner.getId()))
-                .findFirst().orElseThrow();
-        assertThat(botActivityService.runTick(today.atTime(timeOfTick(noCleanTick)).atZone(KST)).cobwebsCleaned()).isZero();
-
-        // 틱당 1%라 특정 날에는 청소 틱이 없을 수 있다 → 과거 날짜까지 훑어 청소로 판정되는 (날짜, 틱)을 잡는다.
-        // 청소 자체는 날짜와 무관하게 실제 거미줄·지갑에 반영된다.
-        ZonedDateTime cleanAt = cobwebCleanTick(bot.getId(), owner.getId(), today);
-        BotTickReport report = botActivityService.runTick(cleanAt);
-
-        assertThat(report.failures()).isZero();
-        assertThat(report.cobwebsCleaned()).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT cleaned_by_user_id FROM room_cobwebs WHERE room_user_id = ? AND cleaned_at IS NOT NULL",
-                Long.class, owner.getId())).isEqualTo(bot.getId());
-        assertThat(coinBalance(bot.getId()) - walletBefore).isEqualTo(3);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM wallet_histories WHERE user_id = ? AND reason = 'COBWEB_CLEAN'", Long.class, bot.getId()))
-                .isEqualTo(1L);
-        // 청소된 뒤에는 더 청소하지 않는다
-        assertThat(botActivityService.runTick(cleanAt).cobwebsCleaned()).isZero();
-    }
-
-    // 봇 활동 창(SPREAD) 안에서 shouldCleanCobweb 이 true 인 가장 최근 (날짜, 틱). 1%/틱이라 하루 84틱에 없을 수 있어 과거로 거슬러 간다.
-    static ZonedDateTime cobwebCleanTick(long botId, long roomUserId, LocalDate from) {
-        for (int d = 0; d < 400; d++) {
-            LocalDate date = from.minusDays(d);
-            for (int tick : BotDecision.activeTicks(BotActivityProfile.SPREAD)) {
-                if (BotDecision.shouldCleanCobweb(botId, date, tick, roomUserId)) {
-                    return date.atTime(timeOfTick(tick)).atZone(KST);
-                }
-            }
+        for (int tick : BotDecision.activeTicks(BotActivityProfile.SPREAD)) {
+            assertThat(botActivityService.runTick(today.atTime(timeOfTick(tick)).atZone(KST))
+                    .cobwebsCleaned()).isZero();
         }
-        throw new AssertionError("거미줄 청소 틱을 찾지 못함");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM room_cobwebs WHERE room_user_id = ? AND cleaned_at IS NULL",
+                Long.class, owner.getId())).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM wallet_histories WHERE user_id = ? AND reason = 'COBWEB_CLEAN'",
+                Long.class, bot.getId())).isZero();
     }
 
     @Test

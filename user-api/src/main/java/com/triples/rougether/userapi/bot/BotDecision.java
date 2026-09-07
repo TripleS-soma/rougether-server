@@ -19,7 +19,6 @@ public final class BotDecision {
     public static final double REST_DAY_RATE = 0.15;
     public static final double ROUTINE_COMPLETION_RATE = 0.70;
     public static final double MISSION_CONTRIBUTION_RATE = 0.70;
-    public static final double COBWEB_CLEAN_RATE_PER_TICK = 0.01;
     public static final double THURSDAY_GUESTBOOK_RATE = 0.50;
     public static final int CHEER_DELAY_MIN_MINUTES = 30;
     public static final int CHEER_DELAY_MAX_MINUTES = 80;
@@ -100,11 +99,6 @@ public final class BotDecision {
         return targetTick.isPresent() && currentTick >= targetTick.getAsInt();
     }
 
-    // 거미줄 청소: 같은 집 사람 방에 활성 거미줄이 있으면 활동 창 틱마다 1%(2026-08-19 결정 — 10%면 사람이 복귀해
-    // 스스로 청소할 기회(3코인)를 봇이 사실상 항상 선점하므로 낮춤. SPREAD 84틱 기준 하루 약 57%).
-    public static boolean shouldCleanCobweb(long botId, LocalDate date, int tick, long roomUserId) {
-        return random(botId, date.toEpochDay(), 4L, tick, roomUserId).nextDouble() < COBWEB_CLEAN_RATE_PER_TICK;
-    }
 
     // 응원 지연(분): 완료 후 30~80분 사이 결정론적 지연. 10분 틱이므로 실제 발송은 완료 후 30~90분 창 안.
     public static int cheerDelayMinutes(long botId, LocalDate date, long targetUserId, long completedEpochSecond) {

@@ -85,18 +85,16 @@ class BotActivityPlanningFailureTest {
                 INSERT INTO room_cobwebs (room_user_id, appeared_at, cleaned_at, cleaned_by_user_id, updated_at)
                 VALUES (?, ?, NULL, NULL, ?)
                 """, owner.getId(), Timestamp.from(appearedAt), Timestamp.from(appearedAt));
-        // 첫 봇이 그 틱에 거미줄을 치우기로 판정되는 틱을 고른다 → 같은 봇의 앞선 응원 판정이 던져도 청소는 진행돼야 한다
-        ZonedDateTime cleanAt = BotActivityServiceTest.cobwebCleanTick(first.getId(), owner.getId(), today);
+        ZonedDateTime cleanAt = today.atTime(12, 0).atZone(KST);
         doThrow(new IllegalStateException("판정 조회 장애 시뮬레이션"))
                 .when(botSocialActions).cheersDue(argThat(context -> context != null && context.botId() == first.getId()), any());
 
         BotTickReport report = botActivityService.runTick(cleanAt);
 
         assertThat(report.failures()).isEqualTo(1);           // 첫 봇의 응원 판정 1건만 실패로 집계
-        assertThat(report.cobwebsCleaned()).isEqualTo(1);     // 같은 봇의 뒤 행동(거미줄 청소)은 진행
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT cleaned_by_user_id FROM room_cobwebs WHERE room_user_id = ?", Long.class, owner.getId()))
-                .isEqualTo(first.getId());
+        assertThat(report.cobwebsCleaned()).isZero();
+        verify(botSocialActions).guestbookDue(
+                argThat(context -> context != null && context.botId() == first.getId()), any());
         assertThat(report.botsActed()).isEqualTo(2);          // 다음 봇도 처리
         verify(botSocialActions).cheersDue(argThat(context -> context != null && context.botId() == second.getId()), any());
     }

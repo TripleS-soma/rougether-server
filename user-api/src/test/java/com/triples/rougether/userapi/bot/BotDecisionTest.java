@@ -26,8 +26,6 @@ class BotDecisionTest {
                     .isEqualTo(BotDecision.routineCompletionTick(botId, date, 7L, BotActivityProfile.MORNING));
             assertThat(BotDecision.missionContributionTick(botId, date, 9L, BotActivityProfile.EVENING))
                     .isEqualTo(BotDecision.missionContributionTick(botId, date, 9L, BotActivityProfile.EVENING));
-            assertThat(BotDecision.shouldCleanCobweb(botId, date, 60, 5L))
-                    .isEqualTo(BotDecision.shouldCleanCobweb(botId, date, 60, 5L));
             assertThat(BotDecision.cheerDelayMinutes(botId, date, 5L, 1_000L))
                     .isEqualTo(BotDecision.cheerDelayMinutes(botId, date, 5L, 1_000L));
             assertThat(BotDecision.cheerType(botId, date, 5L, 1_000L))

@@ -141,10 +141,6 @@ public class BotActivityService {
             plan(report, "guestbook", context, () -> socialActions.guestbookDue(context, house).stream().toList())
                     .forEach(plan -> run(report, "guestbook", context, plan.target().getId(),
                             () -> socialActions.writeGuestbook(context, house, plan), report::guestbookWritten));
-            for (HouseMember room : plan(report, "cobweb-clean", context, () -> socialActions.cobwebRoomsDue(context, house))) {
-                run(report, "cobweb-clean", context, room.getId(),
-                        () -> socialActions.cleanCobweb(context, house, room), report::cobwebCleaned);
-            }
         }
         plan(report, "layout-rotate", context, () -> socialActions.layoutRotationDue(context).stream().toList())
                 .forEach(plan -> run(report, "layout-rotate", context, plan.preset().ordinal(),

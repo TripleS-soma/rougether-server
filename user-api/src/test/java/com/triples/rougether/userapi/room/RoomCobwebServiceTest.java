@@ -73,7 +73,10 @@ class RoomCobwebServiceTest {
         verify(walletHistoryRecorder).record(wallet, 3, com.triples.rougether.domain.shared.WalletHistoryReason.COBWEB_CLEAN,
                 "ROOM_COBWEB", OWNER_ID);
         verify(notificationService).send(org.mockito.ArgumentMatchers.eq(OWNER_ID),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(OWNER_ID));
+                org.mockito.ArgumentMatchers.argThat(content ->
+                        content.type() == com.triples.rougether.domain.notification.entity.NotificationType.ROOM_COBWEB_CLEANED
+                        && content.title().equals("친구가 거미줄을 청소해줬다냥!")),
+                org.mockito.ArgumentMatchers.eq(OWNER_ID));
     }
 
     @Test

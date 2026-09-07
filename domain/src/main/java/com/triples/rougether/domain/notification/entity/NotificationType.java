@@ -15,6 +15,7 @@ public enum NotificationType {
     HOUSE_JOIN_REQUEST_CREATED(NotificationSettingType.HOUSE),
     HOUSE_JOIN_REQUEST_REJECTED(NotificationSettingType.HOUSE),
     HOUSE_JOIN_REQUEST_ACCEPTED(NotificationSettingType.HOUSE),
+    ROOM_COBWEB_APPEARED(NotificationSettingType.REMINDER),
     ROOM_COBWEB_CLEANED(NotificationSettingType.HOUSE),
     // 버그 제보 답장 도착(#348). refId=제보 id. admin-api 가 발송하는 첫 타입.
     BUG_REPORT_REPLY(NotificationSettingType.SERVICE);
