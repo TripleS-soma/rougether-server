@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties("billing")
-public record BillingProperties(@DefaultValue("false") boolean enabled, @DefaultValue("false") boolean requireCredits,
+public record BillingProperties(@DefaultValue("false") boolean enabled, @DefaultValue("true") boolean requireCredits,
         @DefaultValue("PRODUCTION") Environment environment, @DefaultValue("") String encryptionKey,
         @DefaultValue Apple apple, @DefaultValue Google google) {
     public BillingProperties {

@@ -42,6 +42,16 @@ public class AttendanceEventAdminService {
                     "ATTENDANCE_EVENT_PERIOD_OVERLAPPED", "진행 기간이 겹치는 활성 출석 이벤트가 있습니다.", 409);
         }
 
+        if (request.rewardItemId() == null) {
+            if (request.targetDays() != 7) {
+                throw new AttendanceEventAdminException("ATTENDANCE_GENERATION_TARGET_INVALID",
+                        "가구 생성권 출석 이벤트는 7일 연속 출석으로 운영합니다.", 400);
+            }
+            return AttendanceEventCreateResponse.of(attendanceEventRepository.save(
+                    AttendanceEvent.createGenerationEvent(request.code(), request.title(), request.startsOn(),
+                            request.endsOn(), request.dailyCoinAmount(), request.bonusDay(), request.bonusCoinAmount())));
+        }
+
         Item rewardItem = itemRepository.findById(request.rewardItemId())
                 .orElseThrow(() -> new AttendanceEventAdminException(
                         "ATTENDANCE_REWARD_ITEM_NOT_FOUND", "보상 아이템을 찾을 수 없습니다.", 404));

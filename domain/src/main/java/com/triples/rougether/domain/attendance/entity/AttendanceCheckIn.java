@@ -51,6 +51,9 @@ public class AttendanceCheckIn {
     @Column(name = "reward_newly_granted")
     private Boolean rewardNewlyGranted;
 
+    @Column(nullable = false)
+    private int generationCreditAmount;
+
     @Column(name = "reward_processed_at")
     private Instant rewardProcessedAt;
 
@@ -75,6 +78,12 @@ public class AttendanceCheckIn {
     public void processReward(UserItem userItem, boolean newlyGranted, Instant processedAt) {
         this.rewardUserItem = userItem;
         this.rewardNewlyGranted = newlyGranted;
+        this.rewardProcessedAt = processedAt;
+    }
+
+    public void processGenerationCreditReward(Instant processedAt) {
+        this.generationCreditAmount = 1;
+        this.rewardNewlyGranted = true;
         this.rewardProcessedAt = processedAt;
     }
 

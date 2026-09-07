@@ -9,7 +9,7 @@ public record AttendanceCheckInResponse(
         int coinRewardAmount,
         @Schema(description = "지급 처리 후 현재 코인 잔액", example = "190")
         int coinBalance,
-        @Schema(description = "이번 호출에서 보상 가구가 새로 지급됐는지", example = "false")
+        @Schema(description = "이번 호출에서 완료 보상(가구 또는 생성권)이 새로 지급됐는지", example = "false")
         boolean rewardGrantedNow,
         AttendanceEventStatusResponse status) {
 }

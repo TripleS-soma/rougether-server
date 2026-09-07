@@ -39,6 +39,16 @@ public class FurnitureCreditTransactions {
 
     public Balance balance(Long userId) { activeUser(userId); return response(account(userId)); }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void grantAttendance(Long userId, Long eventId) {
+        activeUser(userId);
+        String reference = "attendance:" + eventId;
+        if (entries.existsByUserIdAndReferenceIdAndReason(userId, reference, Reason.ATTENDANCE_REWARD)) return;
+        var account = account(userId);
+        account.adjust(1);
+        record(account, reference, Reason.ATTENDANCE_REWARD, 1);
+    }
+
     public Receipt prepare(Long userId, Store store, String hash) {
         activeUser(userId);
         var account = account(userId);
