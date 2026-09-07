@@ -4,9 +4,7 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberCheer;
 import com.triples.rougether.domain.house.repository.HouseMemberCheerRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
-import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
-import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomGuestbookRepository;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
@@ -21,7 +19,6 @@ import com.triples.rougether.userapi.guestbook.dto.GuestbookCreateRequest;
 import com.triples.rougether.userapi.guestbook.service.GuestbookService;
 import com.triples.rougether.userapi.house.service.HouseCheerService;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
-import com.triples.rougether.userapi.room.service.RoomCobwebService;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
 import java.time.Duration;
 import java.time.Instant;
@@ -49,35 +46,29 @@ public class BotSocialActions {
     private final TodoRepository todoRepository;
     private final HouseMemberCheerRepository houseMemberCheerRepository;
     private final RoomGuestbookRepository roomGuestbookRepository;
-    private final RoomCobwebRepository roomCobwebRepository;
     private final PersonalRoomRepository personalRoomRepository;
     private final UserItemRepository userItemRepository;
     private final HouseCheerService houseCheerService;
     private final GuestbookService guestbookService;
-    private final RoomCobwebService roomCobwebService;
     private final RoomCommandService roomCommandService;
 
     public BotSocialActions(RoutineLogRepository routineLogRepository,
                             TodoRepository todoRepository,
                             HouseMemberCheerRepository houseMemberCheerRepository,
                             RoomGuestbookRepository roomGuestbookRepository,
-                            RoomCobwebRepository roomCobwebRepository,
                             PersonalRoomRepository personalRoomRepository,
                             UserItemRepository userItemRepository,
                             HouseCheerService houseCheerService,
                             GuestbookService guestbookService,
-                            RoomCobwebService roomCobwebService,
                             RoomCommandService roomCommandService) {
         this.routineLogRepository = routineLogRepository;
         this.todoRepository = todoRepository;
         this.houseMemberCheerRepository = houseMemberCheerRepository;
         this.roomGuestbookRepository = roomGuestbookRepository;
-        this.roomCobwebRepository = roomCobwebRepository;
         this.personalRoomRepository = personalRoomRepository;
         this.userItemRepository = userItemRepository;
         this.houseCheerService = houseCheerService;
         this.guestbookService = guestbookService;
-        this.roomCobwebService = roomCobwebService;
         this.roomCommandService = roomCommandService;
     }
 
@@ -193,25 +184,6 @@ public class BotSocialActions {
     public void writeGuestbook(BotTickContext context, HouseSnapshot house, GuestbookPlan plan) {
         guestbookService.write(context.botId(), plan.target().getUser().getId(),
                 new GuestbookCreateRequest(house.houseId(), plan.content()));
-    }
-
-    // ---- 거미줄: 같은 집 사람 방의 활성 거미줄을 활동 창 틱마다 10% 확률로 청소(보상 3코인은 봇 지갑) ----
-
-    public List<HouseMember> cobwebRoomsDue(BotTickContext context, HouseSnapshot house) {
-        Map<Long, HouseMember> humansByUserId = house.humans().stream()
-                .collect(Collectors.toMap(m -> m.getUser().getId(), m -> m));
-        if (humansByUserId.isEmpty()) {
-            return List.of();
-        }
-        return roomCobwebRepository.findVisibleActiveByRoomUserIdIn(humansByUserId.keySet()).stream()
-                .map(RoomCobweb::getRoomUserId)
-                .filter(roomUserId -> BotDecision.shouldCleanCobweb(context.botId(), context.date(), context.tick(), roomUserId))
-                .map(humansByUserId::get)
-                .toList();
-    }
-
-    public void cleanCobweb(BotTickContext context, HouseSnapshot house, HouseMember target) {
-        roomCobwebService.cleanHouseMemberRoom(context.botId(), house.houseId(), target.getId());
     }
 
     // ---- 레이아웃: 매주 월요일 활동 창 첫 틱(=그날 아직 방을 안 바꿨을 때) 프리셋 순환 ----

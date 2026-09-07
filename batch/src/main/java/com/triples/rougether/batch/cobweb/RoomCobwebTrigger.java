@@ -1,62 +1,82 @@
 package com.triples.rougether.batch.cobweb;
 
+import com.triples.rougether.domain.notification.entity.Notification;
+import com.triples.rougether.domain.notification.entity.NotificationType;
+import com.triples.rougether.domain.notification.entity.PushStatus;
+import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-// 마지막 접속 또는 마지막 청소 이후 유예기간이 지난 방에 거미줄을 활성화한다.
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RoomCobwebTrigger {
-
-    // MVP 정책값. 추후 운영 설정으로 분리 가능함.
-    private static final Duration INACTIVITY_GRACE = Duration.ofDays(2);
-
+    private static final int PAGE_SIZE = 100;
     private final JdbcTemplate jdbcTemplate;
+    private final RoomCobwebActivationService activationService;
+    private final NotificationRepository notificationRepository;
 
-    @Transactional
     @Scheduled(cron = "0 30 12 * * *", zone = "Asia/Seoul")
-    // 동거 봇(#308)은 로그인하지 않아 last_accessed_at 이 오르지 않으므로 대상에서 제외한다 — 봇 방엔 거미줄이 안 생긴다.
     public void activateDueCobwebs() {
         Instant now = Instant.now();
-        Timestamp cutoff = Timestamp.from(now.minus(INACTIVITY_GRACE));
-        int inserted = jdbcTemplate.update("""
-                INSERT INTO room_cobwebs (room_user_id, appeared_at, cleaned_at, cleaned_by_user_id, updated_at)
-                SELECT r.user_id, ?, NULL, NULL, ?
-                FROM personal_rooms r
-                JOIN users u ON u.id = r.user_id
-                WHERE u.deleted_at IS NULL
-                  AND u.is_bot = FALSE
-                  AND COALESCE(u.last_accessed_at, u.created_at) <= ?
-                  AND NOT EXISTS (SELECT 1 FROM room_cobwebs c WHERE c.room_user_id = r.user_id)
-                """, Timestamp.from(now), Timestamp.from(now), cutoff);
+        long cursor = 0;
+        while (true) {
+            List<Long> userIds = jdbcTemplate.queryForList("""
+                    SELECT r.user_id FROM personal_rooms r JOIN users u ON u.id = r.user_id
+                    LEFT JOIN room_cobwebs c ON c.room_user_id = r.user_id
+                    WHERE r.user_id > ? AND u.deleted_at IS NULL AND u.is_bot = FALSE
+                      AND COALESCE(u.last_accessed_at, u.created_at) <= ?
+                      AND (c.room_user_id IS NULL OR c.cleaned_at <= ?)
+                    ORDER BY r.user_id LIMIT ?
+                    """, Long.class, cursor, Timestamp.from(now.minus(Duration.ofDays(2))),
+                    Timestamp.from(now.minus(Duration.ofDays(2))), PAGE_SIZE);
+            if (userIds.isEmpty()) {
+                break;
+            }
+            for (Long userId : userIds) {
+                try {
+                    activationService.activate(userId, now);
+                } catch (RuntimeException e) {
+                    log.warn("거미줄 발생 및 알림 적재 실패 - userId={}", userId, e);
+                }
+            }
+            cursor = userIds.getLast();
+        }
+        sendPending();
+    }
 
-        int reactivated = jdbcTemplate.update("""
-                UPDATE room_cobwebs c
-                JOIN users u ON u.id = c.room_user_id
-                SET c.appeared_at = ?, c.cleaned_at = NULL, c.cleaned_by_user_id = NULL, c.updated_at = ?
-                WHERE u.deleted_at IS NULL
-                  AND u.is_bot = FALSE
-                  AND c.cleaned_at IS NOT NULL
-                  AND GREATEST(COALESCE(u.last_accessed_at, u.created_at), c.cleaned_at) <= ?
-                """, Timestamp.from(now), Timestamp.from(now), cutoff);
-
-        if (inserted + reactivated > 0) {
-            log.info("방 거미줄 활성화 - inserted={}, reactivated={}", inserted, reactivated);
+    @Scheduled(cron = "0 */5 * * * *", zone = "Asia/Seoul")
+    public void sendPending() {
+        long cursor = 0;
+        while (true) {
+            List<Notification> notifications = notificationRepository
+                    .findByTypeInAndPushStatusAndIdGreaterThanOrderByIdAsc(
+                            List.of(NotificationType.ROOM_COBWEB_APPEARED), PushStatus.PENDING,
+                            cursor, PageRequest.of(0, PAGE_SIZE));
+            if (notifications.isEmpty()) {
+                return;
+            }
+            for (Notification notification : notifications) {
+                try {
+                    activationService.sendPending(notification.getUser().getId(), notification.getId());
+                } catch (RuntimeException e) {
+                    log.warn("거미줄 발생 알림 발송 실패 - notificationId={}", notification.getId(), e);
+                }
+            }
+            cursor = notifications.getLast().getId();
         }
     }
 
-    // 12:30에 서버가 내려가 있었던 날도 다음 기동 시 누락 없이 보정한다. 쿼리는 방별 멱등이다.
-    @Transactional
     @EventListener(ApplicationReadyEvent.class)
     public void activateOnStartup() {
         activateDueCobwebs();

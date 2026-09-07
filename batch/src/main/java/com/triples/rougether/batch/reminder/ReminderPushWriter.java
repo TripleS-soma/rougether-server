@@ -82,7 +82,8 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
 
         FcmSendResult result;
         try {
-            if (notification.getType() == NotificationType.APP_INACTIVITY_REMINDER) {
+            if (notification.getType() == NotificationType.APP_INACTIVITY_REMINDER
+                    || notification.getType() == NotificationType.ROOM_COBWEB_APPEARED) {
                 result = fcmSender.send(tokens, notification.getTitle(), notification.getBody(), Map.of(
                         "type", notification.getType().name(),
                         "screen", "myRoom", "notificationId", notificationId.toString()));
