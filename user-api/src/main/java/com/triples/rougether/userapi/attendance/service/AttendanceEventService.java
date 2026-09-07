@@ -42,6 +42,7 @@ public class AttendanceEventService {
     private final UserItemRepository userItemRepository;
     private final WalletHistoryRecorder walletHistoryRecorder;
     private final Clock kstClock;
+    private final com.triples.rougether.userapi.billing.service.FurnitureCreditTransactions credits;
 
     public AttendanceEventStatusResponse getStatus(Long userId) {
         LocalDate today = today();
@@ -103,6 +104,12 @@ public class AttendanceEventService {
             return false;
         }
 
+        if (event.getGenerationCreditAmount() > 0) {
+            credits.grantAttendance(user.getId(), event.getId());
+            checkIn.processGenerationCreditReward(now);
+            return true;
+        }
+
         UserItem rewardUserItem = userItemRepository
                 .findByUserIdAndItemIdAndDeletedAtIsNull(user.getId(), event.getRewardItem().getId())
                 .orElse(null);
@@ -131,7 +138,7 @@ public class AttendanceEventService {
 
         int currentStreak = currentStreak(event, latest, completed, today);
         Item rewardItem = event.getRewardItem();
-        Long rewardUserItemId = completed == null ? null : completed.getRewardUserItem().getId();
+        Long rewardUserItemId = completed == null || completed.getRewardUserItem() == null ? null : completed.getRewardUserItem().getId();
 
         return new AttendanceEventStatusResponse(
                 event.getId(), event.getCode(), event.getTitle(), event.getStartsOn(), event.getEndsOn(),
@@ -140,15 +147,19 @@ public class AttendanceEventService {
                 completed != null,
                 checkIns.stream().map(AttendanceCheckIn::getAttendanceDate).toList(),
                 dailyRewards(event, currentStreak),
-                new Reward(rewardItem.getId(), rewardItem.getName(), rewardItem.getAssetKey(),
-                        rewardUserItemId, completed != null));
+                event.getGenerationCreditAmount() > 0
+                        ? new Reward(null, "AI 가구 생성권", null, null, completed != null,
+                                "GENERATION_CREDIT", event.getGenerationCreditAmount())
+                        : new Reward(rewardItem.getId(), rewardItem.getName(), rewardItem.getAssetKey(),
+                                rewardUserItemId, completed != null));
     }
 
     private List<AttendanceEventStatusResponse.DailyReward> dailyRewards(
             AttendanceEvent event, int currentStreak) {
         return IntStream.rangeClosed(1, event.getTargetDays())
                 .mapToObj(day -> new AttendanceEventStatusResponse.DailyReward(
-                        day, event.coinRewardFor(day), day == event.getTargetDays(), day <= currentStreak))
+                        day, event.coinRewardFor(day), day == event.getTargetDays() && event.getRewardItem() != null,
+                        day <= currentStreak, day == event.getTargetDays() ? event.getGenerationCreditAmount() : 0))
                 .toList();
     }
 

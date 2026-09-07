@@ -23,7 +23,11 @@ public record AttendanceEventStatusResponse(
             int day,
             int coinAmount,
             boolean furnitureReward,
-            boolean claimed) {
+            boolean claimed,
+            int generationCreditAmount) {
+        public DailyReward(int day, int coinAmount, boolean furnitureReward, boolean claimed) {
+            this(day, coinAmount, furnitureReward, claimed, 0);
+        }
     }
 
     public record Reward(
@@ -31,6 +35,11 @@ public record AttendanceEventStatusResponse(
             String name,
             String assetKey,
             Long userItemId,
-            boolean received) {
+            boolean received,
+            String type,
+            int generationCreditAmount) {
+        public Reward(Long itemId, String name, String assetKey, Long userItemId, boolean received) {
+            this(itemId, name, assetKey, userItemId, received, "FURNITURE", 0);
+        }
     }
 }

@@ -11,7 +11,7 @@ public interface AttendanceEventRepository extends JpaRepository<AttendanceEvent
 
     boolean existsByCode(String code);
 
-    @Query("select event from AttendanceEvent event join fetch event.rewardItem "
+    @Query("select event from AttendanceEvent event left join fetch event.rewardItem "
             + "where event.active = true and event.startsOn <= :date and event.endsOn >= :date "
             + "order by event.startsOn desc, event.id desc")
     List<AttendanceEvent> findActiveOn(@Param("date") LocalDate date);

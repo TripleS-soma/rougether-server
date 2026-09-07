@@ -18,5 +18,5 @@ public record AttendanceEventCreateRequest(
         @NotNull @Min(0) @Max(1000000) Integer dailyCoinAmount,
         @NotNull @Min(1) @Max(365) Integer bonusDay,
         @NotNull @Min(0) @Max(1000000) Integer bonusCoinAmount,
-        @NotNull @Positive Long rewardItemId) {
+        @Positive Long rewardItemId) {
 }

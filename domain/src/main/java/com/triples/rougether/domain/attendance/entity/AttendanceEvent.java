@@ -50,9 +50,12 @@ public class AttendanceEvent {
     @Column(name = "bonus_coin_amount", nullable = false)
     private int bonusCoinAmount;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "reward_item_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reward_item_id")
     private Item rewardItem;
+
+    @Column(nullable = false)
+    private int generationCreditAmount;
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
@@ -81,6 +84,14 @@ public class AttendanceEvent {
                                          int bonusCoinAmount, Item rewardItem) {
         return new AttendanceEvent(code, title, startsOn, endsOn, targetDays,
                 dailyCoinAmount, bonusDay, bonusCoinAmount, rewardItem);
+    }
+
+    public static AttendanceEvent createGenerationEvent(String code, String title, LocalDate startsOn,
+            LocalDate endsOn, int dailyCoinAmount, int bonusDay, int bonusCoinAmount) {
+        AttendanceEvent event = create(code, title, startsOn, endsOn, 7,
+                dailyCoinAmount, bonusDay, bonusCoinAmount, null);
+        event.generationCreditAmount = 1;
+        return event;
     }
 
     public int coinRewardFor(int streakDay) {
