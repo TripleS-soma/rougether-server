@@ -7,6 +7,7 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
@@ -59,7 +60,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
                 todoRepository);
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository), TestClocks.KST_SYSTEM);
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);

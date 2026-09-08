@@ -13,6 +13,7 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.PrivacyScope;
@@ -69,7 +70,7 @@ class TodoServiceIntegrationTest {
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository), TestClocks.KST_SYSTEM);
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -320,7 +321,7 @@ class TodoServiceIntegrationTest {
         doReturn(false).when(racing).existsByUserIdAndExternalSourceAndExternalId(any(), anyString(), anyString());
         TodoService racingService = new TodoService(racing, categoryRepository, userRepository,
                 userWalletRepository, new DailyRewardService(routineLogRepository, todoRepository),
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository), TestClocks.KST_SYSTEM);
 
         assertThatThrownBy(() -> racingService.create(userId, imported("팀 회의(재동기화)", "evt-1")))
                 .isInstanceOf(BusinessException.class)

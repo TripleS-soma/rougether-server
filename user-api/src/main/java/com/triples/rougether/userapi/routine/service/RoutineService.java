@@ -17,11 +17,10 @@ import com.triples.rougether.userapi.routine.dto.RoutineListResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
+import java.time.Clock;
 import java.time.DateTimeException;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.MonthDay;
-import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,12 +42,12 @@ public class RoutineService {
     // V49 uk_routines_user_external — 임포트 경로에서 unique 위반을 다른 무결성 오류와 구분하는 기준
     private static final String EXTERNAL_REF_CONSTRAINT = "uk_routines_user_external";
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
     private final RoutineRepository routineRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final HouseLinkValidator houseLinkValidator;
+    // KST Clock(kstClock 빈). startsOn 기본값·과거 판정·버전 분기 판정의 "오늘"이 이 시계에서 나옴(테스트 고정용)
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public RoutineListResponse list(Long userId, Long categoryId, RoutineStatus status) {
@@ -205,7 +204,7 @@ public class RoutineService {
             if (request.houseMissionId() != null) {
                 newVersion.linkHouseMission(request.houseMissionId());
             }
-            routine.softDelete(Instant.now());
+            routine.softDelete(clock.instant());
             return toResponse(routineRepository.save(newVersion));
         }
 
@@ -242,7 +241,7 @@ public class RoutineService {
     }
 
     private LocalDate resolveStartsOn(LocalDate startsOn) {
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = LocalDate.now(clock);
         if (startsOn == null) {
             return today;
         }
@@ -255,7 +254,7 @@ public class RoutineService {
     private void validateStartsOn(Routine routine, LocalDate startsOn) {
         if (startsOn != null
                 && !startsOn.equals(routine.getStartsOn())
-                && startsOn.isBefore(LocalDate.now(KST))) {
+                && startsOn.isBefore(LocalDate.now(clock))) {
             throw new BusinessException(RoutineErrorCode.ROUTINE_STARTS_ON_BEFORE_TODAY);
         }
     }
@@ -312,8 +311,8 @@ public class RoutineService {
 
     // 이 버전이 오늘 이전에 생성됐는지
     private boolean hasElapsedDay(Routine routine) {
-        LocalDate createdDate = LocalDate.ofInstant(routine.getCreatedAt(), KST);
-        return createdDate.isBefore(LocalDate.now(KST));
+        LocalDate createdDate = LocalDate.ofInstant(routine.getCreatedAt(), clock.getZone());
+        return createdDate.isBefore(LocalDate.now(clock));
     }
 
     // 단체미션 연동 해제 - 수정 API 는 null=기존 유지 규칙이라 해제 수단을 별도 API 로 둔다.
@@ -325,7 +324,7 @@ public class RoutineService {
 
     @Transactional
     public void delete(Long userId, Long routineId) {
-        findOwned(userId, routineId).softDelete(Instant.now());
+        findOwned(userId, routineId).softDelete(clock.instant());
     }
 
     private Routine findOwned(Long userId, Long routineId) {

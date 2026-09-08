@@ -46,4 +46,10 @@ tasks.named('test') {
 	environment 'FIREBASE_CREDENTIALS_PATH', ''
 	// CI의 대규모 Spring 컨텍스트 테스트가 기본 512MiB heap에서 OOM/GC 정체되지 않도록 제한을 명시함.
 	maxHeapSize = '1g'
+	// 교차 계약 테스트(DateBoundaryContractTest): spec fixture·모바일 기록 요청을 classpath 복사본 대신
+	// 외부 디렉터리에서 읽게 함 — CI 워크플로가 spec/모바일 HEAD에서 만든 파일을 -Pcontracts.dir=... 로 넘김
+	if (project.hasProperty('contracts.dir')) {
+		systemProperty 'contracts.dir', project.property('contracts.dir')
+		inputs.dir(project.property('contracts.dir')) // 파일 내용이 바뀌면 재실행(빌드 캐시 대비)
+	}
 }

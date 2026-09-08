@@ -19,6 +19,7 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Category;
@@ -103,7 +104,7 @@ class RoutineMissionAutoContributeIntegrationTest {
                 userWalletRepository, streakRepository,
                 new DailyRewardService(routineLogRepository, todoRepository),
                 new TransactionTemplate(transactionManager), houseMissionService,
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository), TestClocks.KST_SYSTEM);
 
         user = userRepository.save(User.signUp());
         userId = user.getId();

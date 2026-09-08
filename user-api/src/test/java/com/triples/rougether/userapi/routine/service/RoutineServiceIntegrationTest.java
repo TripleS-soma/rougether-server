@@ -33,6 +33,7 @@ import java.util.List;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
@@ -74,7 +75,7 @@ class RoutineServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         routineService = new RoutineService(routineRepository, categoryRepository, userRepository,
-                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository));
+                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository), TestClocks.KST_SYSTEM);
         userId = userRepository.save(User.signUp()).getId();
     }
 

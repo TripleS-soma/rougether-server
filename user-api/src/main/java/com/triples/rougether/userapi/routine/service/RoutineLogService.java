@@ -23,9 +23,8 @@ import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,8 +36,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class RoutineLogService {
 
-    // KST 고정 — "당일" 판정과 routineDate 기본값 모두 이 기준임
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
     private static final int REWARD_AMOUNT = 10;
 
@@ -50,6 +47,9 @@ public class RoutineLogService {
     private final TransactionTemplate transactionTemplate;
     private final HouseMissionService houseMissionService;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    // KST Clock(kstClock 빈). "당일" 판정·routineDate 기본값·completedAt을 모두 이 시계에서 읽음 —
+    // 테스트가 경계 시각(KST 자정 직후 등)으로 고정할 수 있게 주입받음. LocalDate.now(ZoneId)·Instant.now() 직접 호출 금지
+    private final Clock clock;
 
     // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함.
     // @Transactional 대신 template인 이유: unique 충돌 재시도가 롤백된 첫 트랜잭션 밖에서 새로 시작돼야 함
@@ -68,7 +68,7 @@ public class RoutineLogService {
         // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
         UserWallet wallet = findWalletForUpdate(userId);
 
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = LocalDate.now(clock);
         LocalDate routineDate = request.routineDate() != null ? request.routineDate() : today;
         Routine routine = findActionableRoutine(userId, routineId, routineDate, today);
         // 과거 완료는 허용, 미래만 거부. 단 코인·스트릭은 당일 완료에만 반응함
@@ -85,7 +85,7 @@ public class RoutineLogService {
 
         RoutineLog failedLog = findFailedLogInLineage(routine, routineDate);
         if (failedLog != null) {
-            failedLog.completeFromFailed(Instant.now(), REWARD_CURRENCY);
+            failedLog.completeFromFailed(clock.instant(), REWARD_CURRENCY);
             Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
             return RoutineLogResponse.from(failedLog, currentStreak,
                     contributeLinkedMission(userId, routine, isToday), today);
@@ -102,7 +102,7 @@ public class RoutineLogService {
                 : 0;
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
-                routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
+                routine, routineDate, clock.instant(), REWARD_CURRENCY, reward));
 
         if (reward > 0) {
             wallet.add(reward);
@@ -133,7 +133,7 @@ public class RoutineLogService {
     // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
     @Transactional
     public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = LocalDate.now(clock);
         Routine routine = findActionableRoutine(userId, routineId, date, today); // 소유권 guard
         // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
         if (date.isAfter(today)) {

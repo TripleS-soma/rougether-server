@@ -1,0 +1,12 @@
+{
+  "date-boundary-cases.json": {
+    "repo": "TripleS-soma/rougether-spec",
+    "path": "contracts/date-boundary-cases.json",
+    "sha": "1de8dde4e42828ae0a214a033d46712d4ad73596"
+  },
+  "date-boundary-requests.json": {
+    "repo": "TripleS-soma/rougether-mobile",
+    "generatedBy": "npm run test:date-boundary",
+    "sha": "4458f99667527114dd147ec085c9a3bd51a2f1d8"
+  }
+}

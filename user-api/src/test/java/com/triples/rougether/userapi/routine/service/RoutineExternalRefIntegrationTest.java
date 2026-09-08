@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
@@ -74,7 +75,7 @@ class RoutineExternalRefIntegrationTest {
 
     private RoutineService serviceWith(RoutineRepository repository) {
         return new RoutineService(repository, categoryRepository, userRepository,
-                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository));
+                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository), TestClocks.KST_SYSTEM);
     }
 
     @Test

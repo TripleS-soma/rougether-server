@@ -20,6 +20,7 @@ import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -47,7 +48,7 @@ class RoutineLogServiceCompleteRetryTest {
     private final RoutineLogService service = new RoutineLogService(routineRepository,
             routineLogRepository, userWalletRepository, streakRepository, dailyRewardService,
             new TransactionTemplate(transactionManager), mock(HouseMissionService.class),
-            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
+            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class), TestClocks.KST_SYSTEM);
 
     @Test
     void 배치가_먼저_FAILED를_커밋해_unique_충돌이_나면_재시도에서_전이로_흡수한다() {
