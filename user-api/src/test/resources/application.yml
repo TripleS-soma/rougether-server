@@ -20,6 +20,12 @@ jwt:
   access-ttl: 30m
   refresh-ttl: 14d
 
+cors:
+  allowed-origins:
+    - https://app.rougether.com
+    - http://localhost:8081
+    - http://127.0.0.1:8081
+
 # 통합테스트는 GoogleTokenVerifier를 mock 하므로 실제 JWK 조회는 없음. certs-url은 빈 생성용(지연 조회).
 google:
   allowed-client-ids:
