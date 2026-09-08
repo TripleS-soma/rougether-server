@@ -9,7 +9,7 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FurnitureCreditEntry {
-    public enum Reason { ATTENDANCE_REWARD, PURCHASE, STORE_REFUND, STORE_REFUND_REVERSED, RESERVE, SPEND, RELEASE }
+    public enum Reason { ATTENDANCE_REWARD, PROMOTION_GRANT, OPERATIONS_ADJUSTMENT, PURCHASE, STORE_REFUND, STORE_REFUND_REVERSED, RESERVE, SPEND, RELEASE }
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(nullable = false) private Long userId;
     @Column(nullable = false, length = 36) private String referenceId;

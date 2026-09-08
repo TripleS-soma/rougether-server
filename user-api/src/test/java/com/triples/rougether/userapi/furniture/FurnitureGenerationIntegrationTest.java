@@ -294,6 +294,49 @@ class FurnitureGenerationIntegrationTest {
         assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
     }
 
+    @Test void 업로드_실패_기록을_보존하면서_일일_생성_횟수는_복원() {
+        doThrow(new IllegalStateException("storage failed")).when(storage)
+                .upload(any(), anyString(), contains("/source"));
+        for (int i = 0; i < 3; i++) {
+            var failed = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
+            assertThat(failed.failureCode()).isEqualTo("SOURCE_UPLOAD_FAILED");
+        }
+        assertThat(jobs.count()).isEqualTo(3);
+        verify(ai, never()).extract(any(), anyString());
+        doReturn("private/recovered.png").when(storage).upload(any(), anyString(), contains("/source"));
+        var recovered = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
+        assertThat(recovered.status()).isEqualTo(Status.QUEUED);
+        assertCode(this::submitAndExtract, "FURNITURE_JOB_IN_PROGRESS");
+    }
+
+    @Test void 업로드중_서버가_중단된_작업은_정리후_일일_횟수에서_제외() {
+        for (int i = 0; i < 2; i++) {
+            var uploading = transactions.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "앞 의자");
+            now = now.plusSeconds(301);
+            worker.maintain();
+            assertThat(service.get(user.getId(), uploading.job().id()).failureCode()).isEqualTo("UPLOAD_INTERRUPTED");
+        }
+        assertThat(submitAndExtract().action()).isEqualTo(Action.GENERATE);
+        assertThat(jobs.count()).isEqualTo(3);
+    }
+
+    @Test void AI_호출을_시도한_실패는_일일_한도를_계속_소모() {
+        doThrow(new FurnitureAiFailure("PROVIDER_AUTH_FAILED")).when(ai).extract(any(), anyString());
+        for (int i = 0; i < 2; i++) {
+            assertThat(submitAndExtract().failureCode()).isEqualTo("PROVIDER_AUTH_FAILED");
+        }
+        assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
+        verify(ai, times(2)).extract(any(), anyString());
+    }
+
+    @Test void 일일_횟수는_한국시간_자정에_초기화() {
+        now = Instant.parse("2026-09-06T14:59:59Z");
+        complete(); complete();
+        assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
+        now = now.plusSeconds(1);
+        assertThat(submitAndExtract().action()).isEqualTo(Action.GENERATE);
+    }
+
     @Test void 공급자_장애에는_가짜_가구나_무한_재시도가_없음() {
         doThrow(new FurnitureAiFailure("PROVIDER_AUTH_FAILED")).when(ai).generate(any(), any());
         var job = submitAndExtract();

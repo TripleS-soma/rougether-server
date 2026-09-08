@@ -835,7 +835,7 @@ test_blue_green_units_bind_internal_ports_and_cap_memory() {
   assert_contains '127.0.0.1:${ROUGETHER_HOST_PORT}:8080' \
     "$SYSTEMD_DIR/rougether-user-api@.service" \
     "user slots must bind only their loopback candidate port"
-  assert_contains '--memory 768m --memory-swap 768m' \
+  assert_contains '--memory 1280m --memory-swap 1280m' \
     "$SYSTEMD_DIR/rougether-user-api@.service" \
     "user candidate must have a hard Docker memory cap without swap allowance"
   assert_contains 'JAVA_TOOL_OPTIONS=-Xmx512m' \
@@ -858,7 +858,7 @@ test_memory_preflight_failure_does_not_start_candidate() {
   local meminfo="$ENV_DIR/meminfo"
   local calls="$ENV_DIR/calls.log"
   cat > "$meminfo" <<'EOF'
-MemAvailable:     500000 kB
+MemAvailable:    1310720 kB
 SwapTotal:       2097148 kB
 SwapFree:        2097148 kB
 EOF
