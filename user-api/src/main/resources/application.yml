@@ -36,6 +36,10 @@ jwt:
   access-ttl: 30m
   refresh-ttl: 14d
 
+# 브라우저 클라이언트 허용 출처(CORS). 웹앱(app.rougether.com)과 로컬 expo 웹(8081). 네이티브 앱은 무관함.
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.rougether.com,http://localhost:8081,http://127.0.0.1:8081}
+
 kakao:
   api-base-url: ${KAKAO_API_BASE_URL:https://kapi.kakao.com}
   app-id: ${KAKAO_APP_ID:1501738}
