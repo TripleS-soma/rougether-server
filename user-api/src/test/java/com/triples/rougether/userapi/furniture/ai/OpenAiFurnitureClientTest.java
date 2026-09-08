@@ -32,7 +32,7 @@ class OpenAiFurnitureClientTest {
         var llm = new LlmProperties("https://openai.test/v1", "other-model", "test-only-key", Duration.ofSeconds(30),
                 null, 800, true, "low", 2, Duration.ofSeconds(1), "embedding", 1024);
         var config = new FurnitureGenerationProperties(true, "gpt-6-astra", "gpt-image-2", Duration.ofSeconds(180),
-                3, 6, 2, Duration.ofHours(24), List.of("items/ref.png"));
+                3, 6, Duration.ofHours(24), List.of("items/ref.png"));
         client = new OpenAiFurnitureClient(builder.build(), llm, config);
         byte[] sprite = FurnitureFixtures.png(true, false);
         context = new FurnitureAiClient.Context(FurnitureFixtures.png(false, true), List.of(sprite), sprite,
@@ -89,6 +89,26 @@ class OpenAiFurnitureClientTest {
         var rejected = new FurnitureAiClient.Context(null, context.references(), null, "", "", "",
                 "{\"furniture\":false,\"category\":\"\",\"features\":[],\"colors\":[]}");
         assertThatThrownBy(() -> client.generate(rejected, Action.GENERATE)).hasMessage("PHOTO_REJECTED");
+    }
+
+    @Test void 케이크도_단일_주대상이면_추출_생성_검수에_동일한_허용범위를_전달() {
+        String cake = "{\"furniture\":true,\"category\":\"bear cake\",\"features\":[\"round bear ears\"],\"colors\":[\"ivory face\"]}";
+        for (String response : List.of(message(cake), generated(), review("ACCEPT", ""))) {
+            server.expect(requestTo("https://openai.test/v1/responses"))
+                    .andExpect(request -> {
+                        var body = json.readTree(((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString());
+                        assertThat(body.path("instructions").asString())
+                                .contains("cakes", "multiple independent main subjects", "supporting plates/stands")
+                                .doesNotContain("Refuse inappropriate/non-furniture content", "ONE furniture object");
+                    })
+                    .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+        }
+        var extracted = client.extract(context.source(), "");
+        assertThat(extracted.furniture()).isTrue();
+        var selected = new FurnitureAiClient.Context(context.source(), context.references(), context.candidate(),
+                "", "", "", extracted.subjectJson());
+        assertThat(client.generate(selected, Action.GENERATE).image()).isNotEmpty();
+        assertThat(client.review(selected, List.of()).decision()).isEqualTo(FurnitureAiClient.Decision.ACCEPT);
     }
 
     @Test void 비정상_특징_응답은_생성에_전달하지_않음() {

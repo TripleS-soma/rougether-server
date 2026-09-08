@@ -1,12 +1,12 @@
 # 사진으로 내 가구 만들기 — 서버 구현 계약
 
-카메라 사진에서 가구 하나를 골라 Rougether 스타일의 투명 PNG로 만들고 개인 보관함에 지급합니다. Astra가 생성 도구를 호출하고 별도의 이미지 검수에서 유지·부분 수정·전체 재생성·거절을 판단합니다. 사용자 피드백도 먼저 검수에 전달합니다.
+카메라 사진에서 주대상 하나를 골라 Rougether 스타일의 투명 PNG 방 아이템으로 만들고 개인 보관함에 지급합니다. 가구뿐 아니라 음식·장난감·인형·식물 등 대상의 종류와 관계없이 허용합니다. Astra가 생성 도구를 호출하고 별도의 이미지 검수에서 유지·부분 수정·전체 재생성·거절을 판단합니다. 사용자 피드백도 먼저 검수에 전달합니다.
 
 신규 API의 구현 계약이며 `rougether-spec` 동기화 대상입니다. 기존 상점·보관함·방 배치 계약은 유지합니다. 관리자 Asset Foundry의 수동 승인 상태와 별개로 동작합니다. 기본 설정은 비활성이며 이 변경 자체로 운영 기능이 켜지지 않습니다.
 
 ```mermaid
 flowchart TD
-    P[카메라 사진 + 대상 힌트] --> U[인증 · 사진 검증 · 중복/일일 한도]
+    P[카메라 사진 + 대상 힌트] --> U[인증 · 사진 검증 · 중복/생성권 확인]
     U --> J[DB 작업 접수 · 비공개 원본 저장]
     J --> E[Astra → 식별 특징 추출 · 저장]
     E --> G[특징 설명 + 스타일 참고 이미지 → 생성]
@@ -23,7 +23,7 @@ flowchart TD
 
 - 입력: 실제로 디코딩 가능한 JPEG/PNG, 최대 10MiB, 가로·세로 32~8192px, 총 3,200만 픽셀 이하. HEIC는 모바일에서 JPEG/PNG로 변환해 전송해야 합니다.
 - 카메라 JPEG의 EXIF 회전/반전을 적용하고 최대 변 1536px 이하로 축소합니다. PNG로 재인코딩해 EXIF·GPS·텍스트 metadata를 제거한 사본만 보관하고 모델로 전송합니다.
-- 한 사진당 가구 하나를 만듭니다. `targetHint`가 없으면 가장 두드러진 앞쪽 가구를 선택하도록 요청합니다. 원본에 가구가 없거나 구분할 수 없으면 검수에서 거절할 수 있습니다.
+- 한 사진당 주대상 하나를 만듭니다. `targetHint`가 없으면 명확하게 두드러진 앞쪽 대상을 선택합니다. 대상의 종류만으로 거절하지 않으며 여러 주대상 중 하나를 구분할 수 없는 사진은 거절합니다. 배경이나 받침 접시, 한 대상에 붙어 있는 부품은 추가 대상으로 세지 않습니다. 기존 AI JSON의 `furniture` 필드는 호환성을 유지하되 의미는 '변환 가능한 단일 주대상'으로 확장합니다.
 - 업로드 후 `EXTRACT` 단계에서 Astra가 원본 사진을 보고 종류·특징적인 부품·부품별 색상 계열을 엄격한 JSON으로 한 번 추출합니다. 수치 비율·카메라 각도·광택·직물 조직·배경·개인정보는 추출하지 않도록 요청합니다. 부적합한 사진이나 잘못된 구조의 응답은 이미지 생성 전에 중단합니다.
 - 생성·재생성 요청에는 원본 사진을 넣지 않습니다. 저장한 식별 특징과 스타일 참고 이미지만 전달하며, 부분 수정에는 현재 후보를 추가합니다. 원본은 검수에서 식별 특징을 확인할 때 다시 사용합니다. 반복 재생성이나 사용자 피드백 때문에 특징을 재추출하지 않습니다.
 - 스타일 기준은 서버가 설정한 기존 가구 PNG 1~3개입니다. 기본값은 `items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png`입니다. 사용자가 임의 URL·S3 key·모델·프롬프트 정책을 지정할 수 없습니다.
@@ -99,13 +99,13 @@ curl -X POST "$API_BASE/api/v1/me/furniture-generations" \
 
 피드백은 성공한 작업에만 허용됩니다. 먼저 `REVIEW`를 실행하고 Astra가 유지할지 수정할지 결정합니다. 수정본이 다시 통과하면 기존 `userItemId`의 에셋을 원자적으로 교체합니다. 아이템을 중복 지급하지 않으며 기존 방 배치 위치도 바뀌지 않습니다. 피드백 처리 중이거나 수정에 실패하면 직전 성공 결과를 유지하므로 `FAILED` 응답에도 기존 `assetKey`/`userItemId`가 있을 수 있습니다. 피드백 ID도 작업 내에서 멱등입니다.
 
-주요 접수 오류는 `FURNITURE_GENERATION_UNAVAILABLE`(503), `FURNITURE_PHOTO_INVALID`(400), `FURNITURE_JOB_IN_PROGRESS`(409), `FURNITURE_DAILY_LIMIT`(429), `FURNITURE_SOURCE_EXPIRED`(410), `FURNITURE_BUDGET_EXHAUSTED`(409)입니다.
+주요 접수 오류는 `FURNITURE_GENERATION_UNAVAILABLE`(503), `FURNITURE_PHOTO_INVALID`(400), `FURNITURE_JOB_IN_PROGRESS`(409), `FURNITURE_CREDITS_REQUIRED`(402), `FURNITURE_SOURCE_EXPIRED`(410), `FURNITURE_BUDGET_EXHAUSTED`(409)입니다. 일일 생성 한도와 `FURNITURE_DAILY_LIMIT` 응답은 폐지했습니다.
 
 작업의 `failureCode`는 `PHOTO_REJECTED`, `HARD_QA_REJECTED`, `GENERATION_BUDGET_EXHAUSTED`, `PROVIDER_AUTH_FAILED`, `PROVIDER_RATE_LIMITED`, `PROVIDER_REQUEST_FAILED`, `PROVIDER_RESPONSE_INCOMPLETE`, `INVALID_IMAGE_OUTPUT`, `INVALID_REVIEW_OUTPUT`, `IMAGE_GENERATION_REFUSED`, `SOURCE_UPLOAD_FAILED`, `STORAGE_OR_PROCESSING_FAILED`, `WORKER_INTERRUPTED`, `UPLOAD_INTERRUPTED`, `SOURCE_EXPIRED`, `OWNER_WITHDRAWN`, `RESULT_CHANGED_EXTERNALLY` 등 안전한 분류 코드입니다. 공급자의 원본 오류 본문은 노출하지 않습니다.
 
 ## 호출 한도와 정합성
 
-- 기본 한도: 사용자당 KST 하루 새 작업 2개, 동시 진행 1개, 작업 전체 특징 추출 1회·이미지 호출 3회·검수 6회. 사용자 피드백도 같은 한도를 소비하며 횟수를 초기화하지 않습니다. 추출도 별도 lease와 호출 횟수를 선예약하고 재시작 시 불확실한 요청을 다시 보내지 않습니다. 초기 업로드/외부 장애 실패도 새 작업 한도에 포함합니다.
+- 하루 새 작업 개수에는 제한이 없습니다. 생성권 잔액과 동시 진행 1개 제한을 적용합니다. 작업 전체 특징 추출 1회·이미지 호출 3회·검수 6회 한도는 유지하며, 사용자 피드백도 같은 작업 한도를 소비하고 횟수를 초기화하지 않습니다. 추출도 별도 lease와 호출 횟수를 선예약하고 재시작 시 불확실한 요청을 다시 보내지 않습니다. 실패한 작업은 예약 생성권을 반환하며 과거 실패 횟수가 새 접수를 막지 않습니다.
 - 생성은 Astra `gpt-6-astra`의 Responses API에서 `gpt-image-2` 이미지 도구를 최대 1회 호출하도록 요청합니다. 1024×1024·medium·투명 PNG이며 생성/검수의 mainline `max_output_tokens`는 각각 2048입니다. 검수 요청에는 도구를 넣지 않고 엄격한 JSON schema를 사용합니다.
 - 이미지당 실제 요금은 모델·입출력에 따라 달라집니다. DB의 호출 횟수와 공급자가 보고한 최상위 입력/출력 토큰은 운영 진단용이며 확정 청구액이 아닙니다.
 - 호출 수와 lease를 먼저 짧은 트랜잭션에서 예약합니다. 모델·S3 호출 중 DB 연결/행 잠금을 유지하지 않습니다. 사용자 행 → 작업 행 순서로 잠그며 `leaseToken`과 기한을 확인한 결과만 적용합니다.

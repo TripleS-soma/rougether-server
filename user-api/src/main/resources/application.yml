@@ -98,7 +98,6 @@ furniture:
     timeout: ${FURNITURE_GENERATION_TIMEOUT:180s}
     max-image-attempts: ${FURNITURE_GENERATION_MAX_IMAGE_ATTEMPTS:3}
     max-review-attempts: ${FURNITURE_GENERATION_MAX_REVIEW_ATTEMPTS:6}
-    daily-limit: ${FURNITURE_GENERATION_DAILY_LIMIT:2}
     retention: 24h
     style-reference-keys: ${FURNITURE_GENERATION_STYLE_REFERENCE_KEYS:items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png}
 

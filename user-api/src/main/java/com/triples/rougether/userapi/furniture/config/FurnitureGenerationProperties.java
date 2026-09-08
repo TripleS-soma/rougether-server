@@ -13,14 +13,13 @@ public record FurnitureGenerationProperties(
         @DefaultValue("180s") Duration timeout,
         @DefaultValue("3") int maxImageAttempts,
         @DefaultValue("6") int maxReviewAttempts,
-        @DefaultValue("2") int dailyLimit,
         @DefaultValue("24h") Duration retention,
         @DefaultValue("items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png")
         List<String> styleReferenceKeys) {
 
     public FurnitureGenerationProperties {
         if (maxImageAttempts < 1 || maxImageAttempts > 5 || maxReviewAttempts < 1 || maxReviewAttempts > 10
-                || dailyLimit < 1 || dailyLimit > 20 || timeout.compareTo(Duration.ofSeconds(10)) < 0
+                || timeout.compareTo(Duration.ofSeconds(10)) < 0
                 || timeout.compareTo(Duration.ofMinutes(5)) > 0
                 || retention.compareTo(Duration.ofHours(1)) < 0 || retention.compareTo(Duration.ofDays(1)) > 0) {
             throw new IllegalArgumentException("가구 생성 한도 설정이 허용 범위를 벗어남");
