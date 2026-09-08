@@ -18,6 +18,8 @@ import com.triples.rougether.userapi.global.security.MemberRole;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -57,14 +59,35 @@ class AuthSecurityIntegrationTest {
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
     }
 
-    @Test
-    void localhost_8081_preflight_요청은_CORS_허용된다() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost:8081", "http://127.0.0.1:8081", "https://app.rougether.com"})
+    void 허용된_origin의_preflight_요청은_CORS_허용된다(String origin) throws Exception {
         mockMvc.perform(options("/api/v1/me")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:8081")
+                        .header(HttpHeaders.ORIGIN, origin)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type"))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:8081"));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, origin))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://app.rougether.com", "https://app.rougether.com.example.com"})
+    void 허용되지_않은_origin의_preflight_요청은_거부된다(String origin) throws Exception {
+        mockMvc.perform(options("/api/v1/me")
+                        .header(HttpHeaders.ORIGIN, origin)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void 웹앱에서_토큰_없이_보호자원에_접근하면_CORS_헤더와_401을_준다() throws Exception {
+        mockMvc.perform(get("/api/v1/me")
+                        .header(HttpHeaders.ORIGIN, "https://app.rougether.com"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.rougether.com"))
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
     }
 
     @Test
