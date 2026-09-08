@@ -45,7 +45,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
         "billing.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "billing.apple.products.pack3=3", "billing.apple.products.pack7=7", "billing.google.products.pack3=3",
         "furniture.generation.enabled=true", "furniture.generation.worker-enabled=false",
-        "furniture.generation.daily-limit=2", "furniture.generation.style-reference-keys=items/ref.png"})
+        "furniture.generation.style-reference-keys=items/ref.png"})
 @AutoConfigureMockMvc
 class FurnitureBillingIntegrationTest {
     @Autowired FurnitureCreditTransactions credits;
@@ -136,6 +136,19 @@ class FurnitureBillingIntegrationTest {
         assertThat(jobs.count()).isZero();
         verify(storage, never()).upload(any(), anyString(), anyString());
         verify(ai, never()).extract(any(), anyString());
+    }
+
+    @Test void 같은_날에도_생성권이_있으면_계속_생성하고_소진하면_접수를_막음() {
+        grant("1");
+        for (int i = 0; i < 3; i++) {
+            var job = submit();
+            worker.runNext(); worker.runNext(); worker.runNext();
+            assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        }
+        assertThat(credits.balance(user.getId()).available()).isZero();
+        assertThat(credits.balance(user.getId()).reserved()).isZero();
+        assertCode(this::submit, "FURNITURE_CREDITS_REQUIRED");
+        assertThat(jobs.count()).isEqualTo(3);
     }
 
     @Test void 작업_접수시_예약하고_중복요청은_추가예약_없이_성공시_확정() {

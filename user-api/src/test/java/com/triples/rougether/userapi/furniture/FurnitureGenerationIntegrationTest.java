@@ -112,7 +112,7 @@ class FurnitureGenerationIntegrationTest {
         assertThat(jobs.findById(job.id()).orElseThrow().getInputTokens()).isEqualTo(250);
     }
 
-    @Test void 가구가_아닌_사진은_특징추출에서_거절하고_이미지를_생성하지_않음() {
+    @Test void 단일_주대상을_식별하지_못한_사진은_이미지를_생성하지_않음() {
         when(ai.extract(any(), anyString())).thenReturn(new Extracted(false, "", 50, 10));
         var job = submitAndExtract();
         assertThat(job.failureCode()).isEqualTo("PHOTO_REJECTED");
@@ -286,15 +286,15 @@ class FurnitureGenerationIntegrationTest {
         assertThat(jobs.findById(job.id()).orElseThrow().getSourceKey()).isNull();
     }
 
-    @Test void 일일_한도와_사용자별_동시작업_한도() {
+    @Test void 같은_날에도_여러번_생성할_수_있고_동시작업만_제한() {
         var first = submitAndExtract();
         assertCode(this::submitAndExtract, "FURNITURE_JOB_IN_PROGRESS");
         worker.runNext(); worker.runNext();
-        complete();
-        assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
+        complete(); complete();
+        assertThat(jobs.count()).isEqualTo(3);
     }
 
-    @Test void 업로드_실패_기록을_보존하면서_일일_생성_횟수는_복원() {
+    @Test void 업로드_실패_기록을_보존하면서_다시_접수할_수_있음() {
         doThrow(new IllegalStateException("storage failed")).when(storage)
                 .upload(any(), anyString(), contains("/source"));
         for (int i = 0; i < 3; i++) {
@@ -309,7 +309,7 @@ class FurnitureGenerationIntegrationTest {
         assertCode(this::submitAndExtract, "FURNITURE_JOB_IN_PROGRESS");
     }
 
-    @Test void 업로드중_서버가_중단된_작업은_정리후_일일_횟수에서_제외() {
+    @Test void 업로드중_서버가_중단된_작업도_정리후_다시_접수할_수_있음() {
         for (int i = 0; i < 2; i++) {
             var uploading = transactions.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "앞 의자");
             now = now.plusSeconds(301);
@@ -320,21 +320,12 @@ class FurnitureGenerationIntegrationTest {
         assertThat(jobs.count()).isEqualTo(3);
     }
 
-    @Test void AI_호출을_시도한_실패는_일일_한도를_계속_소모() {
+    @Test void AI_호출이_실패해도_같은_날_다시_접수할_수_있음() {
         doThrow(new FurnitureAiFailure("PROVIDER_AUTH_FAILED")).when(ai).extract(any(), anyString());
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             assertThat(submitAndExtract().failureCode()).isEqualTo("PROVIDER_AUTH_FAILED");
         }
-        assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
-        verify(ai, times(2)).extract(any(), anyString());
-    }
-
-    @Test void 일일_횟수는_한국시간_자정에_초기화() {
-        now = Instant.parse("2026-09-06T14:59:59Z");
-        complete(); complete();
-        assertCode(this::submitAndExtract, "FURNITURE_DAILY_LIMIT");
-        now = now.plusSeconds(1);
-        assertThat(submitAndExtract().action()).isEqualTo(Action.GENERATE);
+        verify(ai, times(3)).extract(any(), anyString());
     }
 
     @Test void 공급자_장애에는_가짜_가구나_무한_재시도가_없음() {
