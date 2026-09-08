@@ -1,0 +1,182 @@
+name: Date boundary contract
+
+# 날짜·시각 경계 계약을 저장소 경계를 가로질러 검증한다 — spec fixture(정본) × 모바일이 실제 요청 생성
+# 코드로 만든 본문 × 서버의 고정 시각 판정. 각 저장소 CI가 자기 절반만 검증하는 사이로 빠지는
+# 불일치(KST 자정 직후 UTC 절단으로 전날 전송)를 잡는다.
+#
+# 트리거:
+#  - 서버 PR: 날짜 판정 코드·계약 파일·이 워크플로가 바뀌면
+#  - repository_dispatch(date-boundary-contract): 모바일 main의 날짜 관련 변경(모바일 date-boundary-dispatch.yml)
+#  - workflow_dispatch: 임의 모바일/spec ref 조합
+#  - schedule: 매주 월요일 06:30 KST — 트리거 토큰이 없어도 최소 주 1회는 최신 조합을 검증
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'user-api/src/main/java/com/triples/rougether/userapi/routine/**'
+      - 'user-api/src/main/java/com/triples/rougether/userapi/todo/**'
+      - 'user-api/src/main/java/com/triples/rougether/userapi/today/**'
+      - 'user-api/src/test/java/com/triples/rougether/userapi/contract/**'
+      - 'user-api/src/test/resources/contracts/**'
+      - 'user-api/src/test/java/com/triples/rougether/userapi/testsupport/**'
+      - 'user-api/build.gradle'
+      - '.github/workflows/date-boundary-contract.yml'
+  repository_dispatch:
+    types: [date-boundary-contract]
+  workflow_dispatch:
+    inputs:
+      mobile_ref:
+        description: 'rougether-mobile ref (branch/tag/SHA)'
+        default: main
+      spec_ref:
+        description: 'rougether-spec ref (branch/tag/SHA)'
+        default: main
+  schedule:
+    - cron: '30 21 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: date-boundary-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  MOBILE_REF: ${{ github.event.client_payload.mobile_ref || inputs.mobile_ref || 'main' }}
+  SPEC_REF: ${{ github.event.client_payload.spec_ref || inputs.spec_ref || 'main' }}
+
+jobs:
+  contract:
+    name: spec × mobile × server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout server
+        uses: actions/checkout@v5
+
+      # 세 저장소가 모두 public 이라 기본 GITHUB_TOKEN 으로 checkout 된다. private 으로 바뀌면
+      # codex-review.yml 처럼 actions/create-github-app-token 으로 토큰을 만들어 token: 에 넘겨야 한다
+      - name: Checkout mobile
+        uses: actions/checkout@v5
+        with:
+          repository: TripleS-soma/rougether-mobile
+          ref: ${{ env.MOBILE_REF }}
+          path: mobile
+
+      - name: Checkout spec
+        uses: actions/checkout@v5
+        with:
+          repository: TripleS-soma/rougether-spec
+          ref: ${{ env.SPEC_REF }}
+          path: spec
+
+      - name: Resolve SHAs
+        id: shas
+        run: |
+          echo "mobile=$(git -C mobile rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "spec=$(git -C spec rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # spec·mobile 쪽 계약 산출물이 아직 그 ref 에 없으면(머지 순서상 서버 PR 이 먼저 열린 경우 등)
+      # 실패 대신 경고로 건너뛴다 — 머지된 뒤부터 실제 검증이 된다
+      - name: Check contract artifacts exist in spec and mobile
+        id: ready
+        run: |
+          if [ -f spec/contracts/date-boundary-cases.json ] \
+             && [ -f spec/contracts/validate-date-boundary.js ] \
+             && [ -f mobile/contracts/date-boundary-cases.json ] \
+             && [ -f mobile/scripts/run-date-boundary.js ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::spec($SPEC_REF) 또는 mobile($MOBILE_REF)에 날짜 경계 계약 파일이 아직 없어 교차 검증을 건너뜁니다."
+          fi
+
+      # spec fixture 자체 검증 + 양쪽 복사본이 spec 정본과 바이트 단위로 같은지
+      - name: Validate spec fixture
+        if: steps.ready.outputs.ready == 'true'
+        run: node spec/contracts/validate-date-boundary.js
+
+      - name: Vendored fixture copies match spec
+        if: steps.ready.outputs.ready == 'true'
+        run: |
+          set -e
+          for copy in mobile/contracts/date-boundary-cases.json user-api/src/test/resources/contracts/date-boundary-cases.json; do
+            if ! diff -q spec/contracts/date-boundary-cases.json "$copy" >/dev/null; then
+              echo "::error file=$copy::spec contracts/date-boundary-cases.json 과 다릅니다 (spec ${{ steps.shas.outputs.spec }}). 복사본과 contracts/sources.json 을 갱신하세요."
+              diff spec/contracts/date-boundary-cases.json "$copy" || true
+              exit 1
+            fi
+          done
+          echo "vendored copies == spec ${{ steps.shas.outputs.spec }}"
+
+      # 모바일 절반: 시계를 fixture 순간으로 고정하고 실제 요청 생성 코드가 만든 본문을 기록(TZ 매트릭스)
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Mobile — generate requests at boundary instants
+        if: steps.ready.outputs.ready == 'true'
+        working-directory: mobile
+        run: |
+          npm ci
+          npm run test:date-boundary
+
+      - name: Assemble contract inputs (spec HEAD fixture + mobile HEAD requests)
+        if: steps.ready.outputs.ready == 'true'
+        run: |
+          mkdir -p contracts-run
+          cp spec/contracts/date-boundary-cases.json contracts-run/
+          cp mobile/output/contracts/date-boundary-requests.json contracts-run/
+
+      # 서버 절반: 같은 순간으로 Clock 을 고정하고 기록된 요청을 실제 스택에 재생
+      - name: Set up JDK 25
+        if: steps.ready.outputs.ready == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Server — replay against fixed clock
+        if: steps.ready.outputs.ready == 'true'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :user-api:test \
+            --tests 'com.triples.rougether.userapi.contract.DateBoundaryContractTest' \
+            -Pcontracts.dir="$GITHUB_WORKSPACE/contracts-run"
+
+      - name: Summary
+        if: always()
+        env:
+          MOBILE_SHA: ${{ steps.shas.outputs.mobile }}
+          SPEC_SHA: ${{ steps.shas.outputs.spec }}
+          READY: ${{ steps.ready.outputs.ready }}
+        run: |
+          {
+            echo "## Date boundary contract"
+            echo
+            echo "- server: \`$GITHUB_SHA\`"
+            echo "- mobile: \`$MOBILE_SHA\` (ref \`$MOBILE_REF\`)"
+            echo "- spec: \`$SPEC_SHA\` (ref \`$SPEC_REF\`)"
+            if [ "$READY" != "true" ]; then
+              echo "- skipped: spec/mobile 에 계약 산출물이 아직 없음"
+            fi
+            if [ -f spec/contracts/date-boundary-cases.json ]; then
+              echo "- fixture cases: $(node -e 'console.log(require("./spec/contracts/date-boundary-cases.json").cases.length)')"
+            fi
+            if [ -f contracts-run/date-boundary-requests.json ]; then
+              echo "- recorded runs: $(node -e 'const r=require("./contracts-run/date-boundary-requests.json"); console.log(r.runs.map(x=>x.tz+"×"+x.records.length).join(", "))')"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload contract inputs and test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-boundary-contract-${{ github.run_id }}
+          path: |
+            contracts-run/
+            user-api/build/reports/tests/test/
+          if-no-files-found: ignore

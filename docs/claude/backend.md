@@ -125,6 +125,15 @@ DB 변경은 `domain` 모듈의 `src/main/resources/db/migration/V{n}__*.sql`로
 - 위험영역은 트랜잭션·롤백·정합성까지 꼼꼼히 테스트합니다 (필수): 재화 지급/차감(`user_wallets`), 루틴/투두 완료·취소(코인+스트릭), 뽑기(`gacha` 확률·중복→다이아), 인증/인가(소유권 guard·admin 세션), 집 미션 정산(기여도·중복 수령).
 - 스펙 미정값(enum 등)에 의존하는 부분은 테스트도 미루거나 최소화합니다 (값이 바뀌면 깨지므로).
 
+## 날짜·시각 계약과 Clock 주입
+
+- 계약 정본은 spec `api.md` "날짜와 시각" 항목과 실행 가능한 경계 예제 `contracts/date-boundary-cases.json`이다. `YYYY-MM-DD` 필드는 Asia/Seoul 달력 날짜이고, 시각(ISO-8601 offset)은 절대 순간이다. 클라이언트가 보낸 과거 날짜를 서버가 오늘로 고쳐 쓰지 않는다(사용자가 실제 과거 기록을 입력했을 수 있다).
+- 날짜를 판정하는 서비스(`RoutineLogService`·`RoutineService`·`TodoService`·`TodayService`)는 `Clock`(`SchedulingConfig.kstClock`)을 주입받아 `LocalDate.now(clock)`·`clock.instant()`로 읽는다. `LocalDate.now(ZoneId)`·`Instant.now()`를 서비스에서 직접 부르면 테스트가 경계 시각을 고정할 수 없어 "오늘"을 서비스와 같은 방식으로 구하는 동어반복 테스트만 남는다 — 이것이 커버리지 93%에서도 KST 자정 직후 UTC 절단 사고를 못 잡은 이유다. 새로 날짜를 판정하는 서비스를 만들면 같은 방식으로 `Clock`을 받는다.
+- 아직 `static ZoneId KST`로 판정하는 서비스가 남아 있다(2026-09-08 기준): `HouseMissionService`(루틴 완료 트랜잭션 안에서 자동 기여 판정 — 시계를 고정한 테스트에서는 이 부분만 실제 오늘로 판정됨), `CalendarService`, `CategoryService`, `HouseCheerService`, `HouseMemberActivityService`, `RoomCommandService`, `RoomQueryService`, `BotActivityService`, `DailyRewardService`(오늘을 인자로 받으므로 무해). 손댈 때 같은 방식으로 `Clock` 주입으로 옮긴다. `Clock`을 `@MockitoBean`으로 stub하는 @SpringBootTest 컨텍스트(attendance·furniture·appicon·billing)에서는 루틴·투두·today 경로가 stub 안 된 `clock.instant()` 때문에 NPE가 나므로, 그 컨텍스트에 루틴 요청을 추가하려면 stub을 채운다.
+- 교차 계약 테스트 `user-api/src/test/java/.../contract/DateBoundaryContractTest`는 전체 스택에서 `@Primary MutableClock`으로 순간을 case마다 옮기며 (1) fixture의 `expectedDate`가 당일로, `naive.*`가 적힌 verdict대로 판정되는지 (2) 모바일이 같은 순간에 실제 요청 생성 코드로 기록한 본문(`date-boundary-requests.json`)을 재생해 저장 날짜·보상을 확인한다. `./gradlew test`는 `src/test/resources/contracts/`의 복사본으로 돌고, 워크플로 `date-boundary-contract.yml`은 spec·모바일 HEAD에서 새로 만든 파일을 `-Pcontracts.dir`로 넘겨 돌린다(서버 PR의 날짜 코드 변경·모바일 dispatch·주 1회 스케줄·수동).
+- 복사본 갱신 절차: spec fixture가 바뀌면 `src/test/resources/contracts/date-boundary-cases.json`을 바이트 단위로 같게 복사하고 `sources.json`의 sha를 적는다. 기록 요청은 모바일에서 `npm run test:date-boundary`를 돌려 `output/contracts/date-boundary-requests.json`을 복사한다. 워크플로가 복사본과 spec 정본이 다르면 실패시킨다.
+- 모바일 main → 서버 워크플로 트리거(`repository_dispatch`)는 모바일 저장소 시크릿 `CONTRACT_DISPATCH_TOKEN`(서버 저장소 `actions: write`)이 있어야 동작한다. 없으면 모바일 쪽은 건너뛰고 서버의 주간 스케줄·수동 실행이 대신한다.
+
 ## 코드 주석 스타일
 
 - 코드 주석(Java/Gradle/JavaDoc)은 한국어 음슴체(~함/~음)로 작성합니다.
