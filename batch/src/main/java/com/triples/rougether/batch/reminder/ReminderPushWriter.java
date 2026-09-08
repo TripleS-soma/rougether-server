@@ -53,7 +53,9 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
     public void write(Chunk<? extends Notification> chunk) {
         NotificationPushPolicy pushPolicy = loadPushPolicy(chunk);
         for (Notification notification : chunk) {
-            if (!pushPolicy.isPushAllowed(notification.getUser().getId(), notification.getType())) {
+            // 사용자가 알림함에서 지운 PENDING(발송 실패 뒤 재시도 회차 등)은 발송하지 않고 종결해 잔존 PENDING 을 남기지 않음.
+            if (notification.isDeleted()
+                    || !pushPolicy.isPushAllowed(notification.getUser().getId(), notification.getType())) {
                 updatePushStatus(notification, PushStatus.BLOCKED);
                 continue;
             }
