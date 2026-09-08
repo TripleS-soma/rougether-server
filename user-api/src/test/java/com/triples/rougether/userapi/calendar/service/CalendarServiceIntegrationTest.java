@@ -29,6 +29,7 @@ import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -304,7 +305,7 @@ class CalendarServiceIntegrationTest {
 
         // 제목·스케줄을 함께 변경 → 새 버전으로 분기(옛 제목은 닫힌 옛 버전 row에 남음)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository, linkValidator());
+                userRepository, linkValidator(), TestClocks.KST_SYSTEM);
         routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
                 "WEEKLY", new RepeatDays(List.of("TUE")), null, null, null));
         em.flush();
@@ -325,7 +326,7 @@ class CalendarServiceIntegrationTest {
 
         // 스케줄을 DAILY로 변경 → 분기(옛 WEEKLY 버전 닫힘, 새 DAILY 버전 생성)
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository, linkValidator());
+                userRepository, linkValidator(), TestClocks.KST_SYSTEM);
         RoutineResponse neo = routineService.update(userId, routineId,
                 new RoutineUpdateRequest(null, null, null, "DAILY", null, null, null, null));
         em.flush();
@@ -501,7 +502,7 @@ class CalendarServiceIntegrationTest {
         // 완료 log 는 옛 버전을, findEffectiveOnDay 는 새 버전을 가리키게 만듦.
         // 계보로 dedup 하지 않으면 완료본·재계산본이 각각 잡혀 2건이 되고 summary 도 틀어짐
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository, linkValidator());
+                userRepository, linkValidator(), TestClocks.KST_SYSTEM);
         routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
                 "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY))), null, null, null));
         em.flush();
@@ -528,7 +529,7 @@ class CalendarServiceIntegrationTest {
 
         // 자정이 지난 뒤(=오늘) 제목·스케줄 변경 → 새 버전으로 분기, 옛 버전은 오늘 닫힘
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
-                userRepository, linkValidator());
+                userRepository, linkValidator(), TestClocks.KST_SYSTEM);
         routineService.update(userId, routineId, new RoutineUpdateRequest("바뀐 제목", null, null,
                 "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY.plusDays(3)))),
                 null, null, null));

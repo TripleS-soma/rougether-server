@@ -17,6 +17,7 @@ import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.error.TodoErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
@@ -38,7 +39,7 @@ class TodoServiceImportRaceTest {
 
     private final TodoService service = new TodoService(todoRepository, mock(CategoryRepository.class),
             userRepository, mock(UserWalletRepository.class), mock(DailyRewardService.class),
-            mock(WalletHistoryRecorder.class));
+            mock(WalletHistoryRecorder.class), TestClocks.KST_SYSTEM);
 
     @Test
     void 사전_조회를_통과했어도_unique_위반이_나면_TODO_EXTERNAL_DUPLICATE로_변환한다() {

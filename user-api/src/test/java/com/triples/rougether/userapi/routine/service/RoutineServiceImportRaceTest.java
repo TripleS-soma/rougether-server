@@ -19,6 +19,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RoutineCreateRequest;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -37,7 +38,7 @@ class RoutineServiceImportRaceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
 
     private final RoutineService service = new RoutineService(routineRepository, mock(CategoryRepository.class),
-            userRepository, mock(HouseLinkValidator.class));
+            userRepository, mock(HouseLinkValidator.class), TestClocks.KST_SYSTEM);
 
     @Test
     void 사전_조회를_통과했어도_unique_위반이면_ROUTINE_EXTERNAL_DUPLICATE로_변환한다() {

@@ -13,8 +13,8 @@ import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodayResponse;
 import com.triples.rougether.userapi.today.dto.TodayStreak;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,18 +26,17 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TodayService {
 
-    // KST 고정 — "오늘"·요일 판정 모두 이 기준임
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final TodoRepository todoRepository;
     private final StreakRepository streakRepository;
     private final DailyAgendaAssembler agendaAssembler;
+    // KST Clock(kstClock 빈). "오늘" 기준일이 이 시계에서 나옴(테스트 고정용)
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public TodayResponse today(Long userId) {
-        return today(userId, LocalDate.now(KST));
+        return today(userId, LocalDate.now(clock));
     }
 
     // 기준일을 받는 조회 — 요일·기간 판정을 결정적으로 검증하는 테스트에서만 직접 호출함

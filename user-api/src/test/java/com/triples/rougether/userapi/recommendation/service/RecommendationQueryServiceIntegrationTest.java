@@ -21,6 +21,7 @@ import com.triples.rougether.userapi.recommendation.dto.RecommendationListRespon
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -75,7 +76,7 @@ class RecommendationQueryServiceIntegrationTest {
         // TIMESTAMP 컬럼은 초 단위라 DB 왕복 후 값 비교를 위해 나노초를 버림
         now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
         routineService = new RoutineService(routineRepository, categoryRepository, userRepository,
-                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository));
+                new HouseLinkValidator(houseRepository, houseMissionRepository, houseMemberRepository), TestClocks.KST_SYSTEM);
         service = new RecommendationQueryService(recommendationRepository, routineRepository,
                 JsonMapper.builder().build(), Clock.fixed(now, KST));
         user = userRepository.save(User.signUp());

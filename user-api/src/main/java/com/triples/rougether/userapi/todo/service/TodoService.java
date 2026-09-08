@@ -23,9 +23,8 @@ import com.triples.rougether.userapi.todo.dto.TodoListResponse;
 import com.triples.rougether.userapi.todo.dto.TodoResponse;
 import com.triples.rougether.userapi.todo.dto.TodoUpdateRequest;
 import com.triples.rougether.userapi.todo.error.TodoErrorCode;
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +40,6 @@ public class TodoService {
     // V48 uk_todos_user_external — 임포트 경로에서 unique 위반을 다른 무결성 오류와 구분하는 기준
     private static final String EXTERNAL_REF_CONSTRAINT = "uk_todos_user_external";
 
-    // KST 고정 — 완료 가능 여부(마감일) 판정 기준
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     // 투두 보상: 루틴과 같은 10코인 고정
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
     private static final int REWARD_AMOUNT = 10;
@@ -53,6 +50,8 @@ public class TodoService {
     private final UserWalletRepository userWalletRepository;
     private final DailyRewardService dailyRewardService;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    // KST Clock(kstClock 빈). 마감일 당일/미래 판정·completedAt이 이 시계에서 나옴(테스트 고정용)
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
@@ -122,7 +121,7 @@ public class TodoService {
 
     @Transactional
     public void delete(Long userId, Long todoId) {
-        findOwned(userId, todoId).softDelete(Instant.now());
+        findOwned(userId, todoId).softDelete(clock.instant());
     }
 
     // 완료: todos + user_wallets 2개 테이블을 한 트랜잭션으로 변경함(재화 정합성)
@@ -136,7 +135,7 @@ public class TodoService {
             throw new BusinessException(TodoErrorCode.TODO_ALREADY_COMPLETED);
         }
 
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = LocalDate.now(clock);
         LocalDate dueDate = todo.getDueDate();
         // 마감일이 미래인 투두는 완료 불가. dueDate null은 없는 전제이나 방어적으로 미래 아님으로 취급함
         if (dueDate != null && dueDate.isAfter(today)) {
@@ -148,7 +147,7 @@ public class TodoService {
                 ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
                 : 0;
 
-        todo.complete(REWARD_CURRENCY, reward, Instant.now());
+        todo.complete(REWARD_CURRENCY, reward, clock.instant());
 
         if (reward > 0) {
             wallet.add(reward);

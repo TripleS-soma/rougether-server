@@ -25,6 +25,7 @@ import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.testsupport.TestClocks;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
@@ -198,7 +199,7 @@ class CalendarMonthIntegrationTest {
 
         RoutineService routineService = new RoutineService(routineRepository, categoryRepository,
                 userRepository, new HouseLinkValidator(houseRepository, houseMissionRepository,
-                houseMemberRepository));
+                houseMemberRepository), TestClocks.KST_SYSTEM);
         routineService.update(userId, routineId, new RoutineUpdateRequest(null, null, null,
                 "WEEKLY", new RepeatDays(List.of(weekdayToken(YESTERDAY))), null, null, null));
         em.flush();
