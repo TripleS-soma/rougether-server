@@ -45,7 +45,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
         "billing.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "billing.apple.products.pack3=3", "billing.apple.products.pack7=7", "billing.google.products.pack3=3",
         "furniture.generation.enabled=true", "furniture.generation.worker-enabled=false",
-        "furniture.generation.daily-limit=20", "furniture.generation.style-reference-keys=items/ref.png"})
+        "furniture.generation.daily-limit=2", "furniture.generation.style-reference-keys=items/ref.png"})
 @AutoConfigureMockMvc
 class FurnitureBillingIntegrationTest {
     @Autowired FurnitureCreditTransactions credits;
@@ -157,6 +157,21 @@ class FurnitureBillingIntegrationTest {
         assertThat(submit().status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
+    }
+
+    @Test void 업로드가_두번_실패해도_반환된_생성권으로_다시_접수할_수_있음() {
+        grant("1");
+        doThrow(new IllegalStateException("storage failed")).when(storage).upload(any(), anyString(), anyString());
+        assertThat(submit().failureCode()).isEqualTo("SOURCE_UPLOAD_FAILED");
+        assertThat(submit().failureCode()).isEqualTo("SOURCE_UPLOAD_FAILED");
+        assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
+        assertThat(credits.balance(user.getId()).reserved()).isZero();
+
+        doReturn("private/recovered.png").when(storage).upload(any(), anyString(), anyString());
+        assertThat(submit().status()).isEqualTo(Status.QUEUED);
+        assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
+        assertThat(credits.balance(user.getId()).reserved()).isEqualTo(1);
+        assertThat(jobs.count()).isEqualTo(3);
     }
 
     @Test void 공급자실패는_반복정리해도_한번만_반환() {

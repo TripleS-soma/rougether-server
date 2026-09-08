@@ -77,7 +77,7 @@ Restart=always
 RestartSec=10
 EnvironmentFile=/etc/rougether/user-api-%i.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api-%i
-ExecStart=/usr/bin/docker run --rm --name rougether-user-api-%i --memory 768m --memory-swap 768m --env JAVA_TOOL_OPTIONS=-Xmx512m --env-file /etc/rougether/user-api.env $firebase_mount_option -p 127.0.0.1:\${ROUGETHER_HOST_PORT}:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-user-api-%i --memory 1280m --memory-swap 1280m --env JAVA_TOOL_OPTIONS=-Xmx512m --env-file /etc/rougether/user-api.env $firebase_mount_option -p 127.0.0.1:\${ROUGETHER_HOST_PORT}:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
 ExecStop=/usr/bin/docker stop --time 30 rougether-user-api-%i
 TimeoutStopSec=45
 
@@ -143,7 +143,7 @@ probe_candidate() {
 }
 
 # Prove that each candidate can cold-start while the corresponding legacy API stays active.
-probe_candidate user-api 1048576 http://127.0.0.1:18080/api/v1/health
+probe_candidate user-api 1572864 http://127.0.0.1:18080/api/v1/health
 probe_candidate admin-api 917504 http://127.0.0.1:18081/admin/health
 
 if [ "$ACTIVATE" = false ]; then
@@ -287,7 +287,7 @@ rollback_activation() {
 # END_NGINX_FUNCTIONS
 trap rollback_activation ERR
 
-memory_preflight 1048576
+memory_preflight 1572864
 systemctl start rougether-user-api@blue
 wait_stable user-api-blue http://127.0.0.1:18080/api/v1/health
 systemctl stop rougether-user-api

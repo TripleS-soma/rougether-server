@@ -15,7 +15,12 @@ public interface FurnitureGenerationJobRepository extends JpaRepository<Furnitur
     Optional<FurnitureGenerationJob> findByUserIdAndRequestId(Long userId, String requestId);
     Optional<FurnitureGenerationJob> findByIdAndUserId(String id, Long userId);
     List<FurnitureGenerationJob> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable page);
-    long countByUserIdAndCreatedAtGreaterThanEqual(Long userId, Instant since);
+    // AI 호출 전 업로드 실패는 일일 생성 횟수에서 제외함. 처리 시도가 있는 실패는 계속 집계함.
+    @Query("select count(j) from FurnitureGenerationJob j where j.userId = :userId and j.createdAt >= :since "
+            + "and (j.status <> 'FAILED' "
+            + "or coalesce(j.failureCode, '') not in ('SOURCE_UPLOAD_FAILED', 'UPLOAD_INTERRUPTED') "
+            + "or j.extractionAttempts > 0 or j.imageAttempts > 0 or j.reviewAttempts > 0)")
+    long countDailyAttempts(@Param("userId") Long userId, @Param("since") Instant since);
     boolean existsByUserIdAndStatusIn(Long userId, Collection<Status> statuses);
 
     @Query("select j.userId from FurnitureGenerationJob j where j.id = :id")

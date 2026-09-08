@@ -57,7 +57,7 @@ public class FurnitureGenerationTransactions {
         Instant now = clock.instant();
         Instant dayStart = now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
                 .atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant();
-        if (jobs.countByUserIdAndCreatedAtGreaterThanEqual(userId, dayStart) >= config.dailyLimit()) {
+        if (jobs.countDailyAttempts(userId, dayStart) >= config.dailyLimit()) {
             throw new BusinessException(FURNITURE_DAILY_LIMIT);
         }
         var job = jobs.save(FurnitureGenerationJob.create(userId, requestId, digest, hint, now, now.plus(config.retention())));
