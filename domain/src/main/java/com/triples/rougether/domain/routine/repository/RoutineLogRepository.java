@@ -54,6 +54,16 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     List<RoutineLog> findByRoutine_UserIdAndRoutineDateAndStatus(
             Long userId, LocalDate routineDate, RoutineLogStatus status);
 
+    // 월 캘린더용: 완료 기록의 날짜와 버전 id만 읽음. 대상 여부는 일별 조회와 같은 반복 규칙으로 판정함
+    @Query("select l.routine.id as routineId, l.routineDate as routineDate from RoutineLog l "
+            + "where l.routine.user.id = :userId "
+            + "and l.routineDate between :fromDate and :toDate and l.status = :status")
+    List<RoutineCompletionDate> findCompletionDatesBetween(
+            @Param("userId") Long userId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("status") RoutineLogStatus status);
+
     // 과거 캘린더용: 그날 log 전체(COMPLETED+FAILED)를 루틴·카테고리까지 fetch.
     @Query("select l from RoutineLog l "
             + "join fetch l.routine r "
@@ -65,14 +75,16 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
 
     // 월 캘린더(그제 이전)용: 기간 내 날짜별 log 건수(COMPLETED+FAILED). 소싱 규칙은 findAllWithRoutineForDay와 동일
     // — soft-deleted 루틴의 log도 포함하고, 로그가 없는 날은 행이 없다(0건 처리는 호출자 몫)
-    @Query("select l.routineDate as targetDate, count(l.id) as itemCount from RoutineLog l "
+    @Query("select l.routineDate as targetDate, count(l.id) as itemCount, "
+            + "sum(case when l.status = :completedStatus then 1 else 0 end) as completedCount from RoutineLog l "
             + "join l.routine r "
             + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
             + "group by l.routineDate")
     List<DailyCount> countByUserIdAndRoutineDateBetween(
             @Param("userId") Long userId,
             @Param("fromDate") LocalDate fromDate,
-            @Param("toDate") LocalDate toDate);
+            @Param("toDate") LocalDate toDate,
+            @Param("completedStatus") RoutineLogStatus completedStatus);
 
     // 타인(집 멤버) 열람용: 기간 내 완료 log 중 카테고리 공개 범위가 허용된 것만.
     // 미분류 루틴의 log 는 inner join 으로 자연 제외됨(비공개 취급).

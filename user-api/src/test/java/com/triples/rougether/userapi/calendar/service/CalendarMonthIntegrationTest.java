@@ -11,6 +11,7 @@ import com.triples.rougether.domain.routine.entity.AuthType;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
@@ -25,13 +26,17 @@ import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
+import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,7 +55,8 @@ class CalendarMonthIntegrationTest {
     private static final YearMonth PAST_MONTH = YearMonth.of(2026, 6);
     // 2026-06-29는 월요일
     private static final LocalDate PAST = LocalDate.of(2026, 6, 29);
-    private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    private static final Clock CLOCK = Clock.fixed(Instant.now(), ZoneId.of("Asia/Seoul"));
+    private static final LocalDate TODAY = LocalDate.now(CLOCK);
     private static final LocalDate YESTERDAY = TODAY.minusDays(1);
 
     @Autowired
@@ -80,7 +86,7 @@ class CalendarMonthIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
-                new DailyAgendaAssembler());
+                new DailyAgendaAssembler(), CLOCK);
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }
@@ -99,6 +105,8 @@ class CalendarMonthIntegrationTest {
         assertThat(response.days()).allSatisfy(day -> {
             assertThat(day.routineCount()).isZero();
             assertThat(day.todoCount()).isZero();
+            assertThat(day.routineCompletedCount()).isZero();
+            assertThat(day.todoCompletedCount()).isZero();
         });
     }
 
@@ -140,6 +148,7 @@ class CalendarMonthIntegrationTest {
 
         assertThat(response.days()).hasSize(nextMonth.lengthOfMonth());
         assertThat(response.days()).extracting(CalendarDayCount::routineCount).containsOnly(1);
+        assertThat(response.days()).extracting(CalendarDayCount::routineCompletedCount).containsOnly(0);
     }
 
     // --- 그제 이전: 로그 단독 집계 ---
@@ -160,7 +169,9 @@ class CalendarMonthIntegrationTest {
 
         // COMPLETED + FAILED 합산, 로그 없는 루틴은 제외
         assertThat(countOn(response, PAST).routineCount()).isEqualTo(2);
+        assertThat(countOn(response, PAST).routineCompletedCount()).isEqualTo(1);
         assertThat(countOn(response, PAST.minusDays(1)).routineCount()).isEqualTo(1);
+        assertThat(countOn(response, PAST.minusDays(1)).routineCompletedCount()).isZero();
         assertThat(countOn(response, PAST.minusDays(2)).routineCount()).isZero();
     }
 
@@ -188,6 +199,7 @@ class CalendarMonthIntegrationTest {
         CalendarMonthResponse response = service.month(userId, YearMonth.from(YESTERDAY));
 
         assertThat(countOn(response, YESTERDAY).routineCount()).isEqualTo(1);
+        assertThat(countOn(response, YESTERDAY).routineCompletedCount()).isZero();
     }
 
     @Test
@@ -208,6 +220,8 @@ class CalendarMonthIntegrationTest {
         CalendarMonthResponse response = service.month(userId, YearMonth.from(YESTERDAY));
 
         assertThat(countOn(response, YESTERDAY).routineCount()).isEqualTo(1);
+        assertThat(countOn(response, YESTERDAY).routineCompletedCount()).isEqualTo(1);
+        assertMatchesDay(YESTERDAY);
     }
 
     // --- 투두 ---
@@ -227,6 +241,7 @@ class CalendarMonthIntegrationTest {
 
         // 완료·미완료 합산 3, 삭제 제외
         assertThat(countOn(response, TODAY).todoCount()).isEqualTo(3);
+        assertThat(countOn(response, TODAY).todoCompletedCount()).isEqualTo(1);
         if (YearMonth.from(TODAY.plusDays(1)).equals(YearMonth.from(TODAY))) {
             assertThat(countOn(response, TODAY.plusDays(1)).todoCount()).isEqualTo(1);
         }
@@ -268,14 +283,157 @@ class CalendarMonthIntegrationTest {
         persistTodo("내일 투두", TODAY.plusDays(1));
 
         for (LocalDate date : List.of(dayBeforeYesterday, YESTERDAY, TODAY, TODAY.plusDays(1))) {
-            CalendarDayResponse day = service.day(userId, date);
-            CalendarDayCount count = countOn(service.month(userId, YearMonth.from(date)), date);
-
-            assertThat(count.routineCount()).as("routine on %s", date)
-                    .isEqualTo(day.categories().stream().mapToInt(g -> g.routines().size()).sum());
-            assertThat(count.todoCount()).as("todo on %s", date)
-                    .isEqualTo(day.categories().stream().mapToInt(g -> g.todos().size()).sum());
+            assertMatchesDay(date);
         }
+    }
+
+    @Test
+    void 오늘_완료_로그가_있어도_일별_표시_대상에서_빠진_루틴은_완료수에_포함하지_않는다() {
+        Long visible = persistRoutine("오늘 완료", "DAILY", null, null, null);
+        Long notScheduled = persistRoutine("내일 시작", "DAILY", null, TODAY.plusDays(1), null);
+        Long deleted = persistRoutine("삭제된 완료", "DAILY", null, null, null);
+        persistCompletedLog(visible, TODAY);
+        persistCompletedLog(notScheduled, TODAY);
+        persistCompletedLog(deleted, TODAY);
+        routineRepository.findById(deleted).orElseThrow().softDelete(Instant.now());
+
+        CalendarDayCount count = countOn(service.month(userId, YearMonth.from(TODAY)), TODAY);
+
+        assertThat(count.routineCount()).isEqualTo(1);
+        assertThat(count.routineCompletedCount()).isEqualTo(1);
+        assertMatchesDay(TODAY);
+    }
+
+    @Test
+    void 과거_삭제된_루틴의_완료_로그는_남고_타인_로그는_제외한다() {
+        Long ownRoutine = persistRoutine("삭제된 내 루틴", "DAILY", null, null, null);
+        persistCompletedLog(ownRoutine, PAST);
+        routineRepository.findById(ownRoutine).orElseThrow().softDelete(Instant.now());
+        User other = userRepository.save(User.signUp());
+        Routine otherRoutine = routineRepository.save(Routine.create(other, null, "타인 루틴",
+                AuthType.CHECK, "DAILY", null, null, null, null));
+        routineLogRepository.save(RoutineLog.complete(otherRoutine, PAST, Instant.now(), CurrencyType.COIN, 0));
+        routineLogRepository.save(RoutineLog.complete(otherRoutine, YESTERDAY, Instant.now(), CurrencyType.COIN, 0));
+        routineLogRepository.save(RoutineLog.complete(otherRoutine, TODAY, Instant.now(), CurrencyType.COIN, 0));
+        Todo otherTodo = todoRepository.save(Todo.create(other, null, "타인 투두", null, PAST, null));
+        otherTodo.complete(CurrencyType.COIN, 0, Instant.now());
+
+        CalendarDayCount count = countOn(service.month(userId, PAST_MONTH), PAST);
+
+        assertThat(count.routineCount()).isEqualTo(1);
+        assertThat(count.routineCompletedCount()).isEqualTo(1);
+        assertThat(count.todoCount()).isZero();
+        assertThat(count.todoCompletedCount()).isZero();
+        assertMatchesDay(PAST);
+        for (LocalDate date : List.of(YESTERDAY, TODAY)) {
+            CalendarDayCount recent = countOn(service.month(userId, YearMonth.from(date)), date);
+            assertThat(recent.routineCount()).isZero();
+            assertThat(recent.routineCompletedCount()).isZero();
+        }
+    }
+
+    @Test
+    void 완료한_투두도_마감일이_없거나_삭제됐으면_집계에서_제외한다() {
+        persistCompletedTodo("유효한 완료", TODAY);
+        persistCompletedTodo("마감일 없는 완료", null);
+        Todo deleted = todoRepository.save(Todo.create(user, null, "삭제된 완료", null, TODAY, null));
+        deleted.complete(CurrencyType.COIN, 0, Instant.now());
+        deleted.softDelete(Instant.now());
+
+        CalendarDayCount count = countOn(service.month(userId, YearMonth.from(TODAY)), TODAY);
+
+        assertThat(count.todoCount()).isEqualTo(1);
+        assertThat(count.todoCompletedCount()).isEqualTo(1);
+        assertMatchesDay(TODAY);
+    }
+
+    @Test
+    void 완료와_취소를_반복해도_전체수는_유지되고_완료수만_변한다() {
+        Long routineId = persistRoutine("기록 보존", "DAILY", null, null, null);
+        Routine routine = routineRepository.findById(routineId).orElseThrow();
+        RoutineLog log = routineLogRepository.save(RoutineLog.fail(routine, PAST));
+        Todo todo = todoRepository.save(Todo.create(user, null, "과거 투두", null, PAST, null));
+
+        assertCompletionCounts(PAST, 0, 0);
+        log.completeFromFailed(Instant.now(), CurrencyType.COIN);
+        todo.complete(CurrencyType.COIN, 0, Instant.now());
+        assertCompletionCounts(PAST, 1, 1);
+        log.revertToFailed();
+        todo.cancelComplete();
+        assertCompletionCounts(PAST, 0, 0);
+        log.completeFromFailed(Instant.now(), CurrencyType.COIN);
+        todo.complete(CurrencyType.COIN, 0, Instant.now());
+        assertCompletionCounts(PAST, 1, 1);
+    }
+
+    @Test
+    void 월말_KST_자정_전후에도_일별과_월별의_완료수와_대상수가_같다() {
+        LocalDate nextMonth = YearMonth.from(TODAY).plusMonths(1).atDay(1);
+        LocalDate target = nextMonth.minusDays(1);
+        Instant midnight = nextMonth.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant();
+        Long done = persistRoutine("월말 완료", "DAILY", null, null, null);
+        persistRoutine("월말 미완료", "DAILY", null, null, null);
+        persistCompletedLog(done, target);
+        persistCompletedTodo("월말 투두", target);
+
+        // UTC Clock을 주입해도 KST 기준 오늘·어제 구간을 판정해야 함
+        for (Instant instant : List.of(midnight.minusSeconds(1), midnight)) {
+            service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
+                    new DailyAgendaAssembler(), Clock.fixed(instant, ZoneOffset.UTC));
+            CalendarDayCount count = countOn(service.month(userId, YearMonth.from(target)), target);
+            assertThat(count.routineCount()).isEqualTo(2);
+            assertThat(count.routineCompletedCount()).isEqualTo(1);
+            assertThat(count.todoCompletedCount()).isEqualTo(1);
+            assertMatchesDay(target);
+        }
+    }
+
+    @Test
+    void 월_조회는_날짜마다_상세를_반복_조회하지_않고_최대_6번의_쿼리로_집계한다() {
+        Long routineId = persistRoutine("매일", "DAILY", null, null, null);
+        backdateCreatedAt(routineId, 20);
+        persistCompletedLog(routineId, TODAY);
+        em.flush();
+        em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            CalendarMonthResponse response = service.month(userId, YearMonth.from(TODAY));
+
+            assertThat(response.days()).hasSize(YearMonth.from(TODAY).lengthOfMonth());
+            assertThat(countOn(response, TODAY).routineCompletedCount()).isEqualTo(1);
+            assertThat(statistics.getPrepareStatementCount()).isBetween(1L, 6L);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
+    }
+
+    private void assertCompletionCounts(LocalDate date, int routines, int todos) {
+        CalendarDayCount count = countOn(service.month(userId, YearMonth.from(date)), date);
+        assertThat(count.routineCount()).isEqualTo(1);
+        assertThat(count.todoCount()).isEqualTo(1);
+        assertThat(count.routineCompletedCount()).isEqualTo(routines);
+        assertThat(count.todoCompletedCount()).isEqualTo(todos);
+        assertMatchesDay(date);
+    }
+
+    private void assertMatchesDay(LocalDate date) {
+        CalendarDayResponse day = service.day(userId, date);
+        CalendarDayCount count = countOn(service.month(userId, YearMonth.from(date)), date);
+        assertThat(count.routineCount()).as("routine on %s", date)
+                .isEqualTo(day.categories().stream().mapToInt(g -> g.routines().size()).sum());
+        assertThat(count.todoCount()).as("todo on %s", date)
+                .isEqualTo(day.categories().stream().mapToInt(g -> g.todos().size()).sum());
+        assertThat(count.routineCompletedCount()).as("completed routine on %s", date)
+                .isEqualTo(day.categories().stream().flatMap(g -> g.routines().stream())
+                        .filter(TodayRoutineItem::completed).count());
+        assertThat(count.todoCompletedCount()).as("completed todo on %s", date)
+                .isEqualTo(day.categories().stream().flatMap(g -> g.todos().stream())
+                        .filter(todo -> todo.status() == TodoStatus.COMPLETED).count());
+        assertThat(count.routineCompletedCount() + count.todoCompletedCount())
+                .isEqualTo(day.summary().completedCount());
     }
 
     private CalendarDayCount countOn(CalendarMonthResponse response, LocalDate date) {

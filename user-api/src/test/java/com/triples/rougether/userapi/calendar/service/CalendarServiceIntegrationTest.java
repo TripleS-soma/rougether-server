@@ -32,6 +32,7 @@ import com.triples.rougether.userapi.routine.service.RoutineService;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -89,7 +90,7 @@ class CalendarServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
-                new DailyAgendaAssembler());
+                new DailyAgendaAssembler(), Clock.system(ZoneId.of("Asia/Seoul")));
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }

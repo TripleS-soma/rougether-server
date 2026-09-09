@@ -32,12 +32,21 @@
 - `GET /admin/notification-digests/metrics?days=N`은 digest 생성 수와 `PENDING`/`SENT`/`BLOCKED`/`FAILED` 상태를 날짜별로 집계한다. 완료 전환 분모는 `SENT`만 사용하며, 실제 발송 시각(`sent_at`)부터 120분 미만에 당시 target 중 하나 이상 완료한 digest만 전환으로 센다. 아직 120분 창이 닫히지 않은 건은 별도로 분리한다.
 - 운영 WATCH: 현재 관리자 지표는 최대 90일 digest와 연결 알림을 메모리에 읽어 일별로 묶는다. 사용자 규모가 커지기 전에 상태 수는 DB `group by` 집계로 전환하고, 전환 target 조회의 실행 계획과 인덱스를 함께 점검한다.
 
-### 월 캘린더 개수 조회
+### 월 캘린더 전체·완료 개수 조회
 
-- `GET /api/v1/calendar/month?yearMonth=YYYY-MM`(`CalendarController.month` → `CalendarService.month`)은 그 달 1일~말일 모든 날짜에 대해 `{date, routineCount, todoCount}`만 내려준다(목록·완료 여부 없음, 대상 없는 날도 0 포함). 달력 화면의 날짜별 표시(개수·점) 용도이며 날짜를 눌렀을 때의 상세는 기존 `GET /api/v1/calendar?date=`를 쓴다.
-- 날짜별 소싱 규칙은 일별 캘린더(`day()`)와 동일하게 오늘(KST) 기준 세 구간으로 갈린다 — 그제 이전은 그날 `routine_logs`(COMPLETED+FAILED) 건수, 어제는 그날 유효했던 버전으로 재계산(`recalculateRoutines`, 일별과 공유), 오늘·미래는 현재 ACTIVE 루틴의 반복 대상 판정. 투두는 마감일이 그날인 살아있는 것만 센다. 따라서 월별 개수는 그 날짜의 일별 응답 건수와 항상 일치한다(`CalendarMonthIntegrationTest`가 검증).
-- 날짜마다 조회하지 않고 구간별로 묶어 집계한다: 투두는 `TodoRepository.countOwnedByDueDateBetween`(GROUP BY due_date) 1회, 과거 로그는 `RoutineLogRepository.countByUserIdAndRoutineDateBetween`(GROUP BY routine_date) 1회, 어제는 재계산 2회, 오늘·미래는 ACTIVE 목록 1회를 읽고 날짜마다 `RoutineRecurrence.isTargetOn`으로 인메모리 판정한다(한 달 최대 5쿼리). 날짜별 건수 projection은 `domain.support.DailyCount`(`targetDate`/`itemCount`)를 쓴다.
-- 이 엔드포인트는 프론트 요청 기반 추가(2026-08-16)다. spec 정본(rougether-spec `domains/routine-todo/api.md` 캘린더 절)에 반영이 필요하다.
+- `GET /api/v1/calendar/month?yearMonth=YYYY-MM`은 그 달 1일~말일 모든 날짜에 대해 `{date, routineCount, todoCount, routineCompletedCount, todoCompletedCount}`를 반환한다. 기존 전체 개수 필드는 유지하고 완료 개수 2개를 추가한다. 대상 없는 날은 모두 0이며, 개별 목록은 기존 `GET /api/v1/calendar?date=`를 사용한다. DB migration은 없다.
+- 완료 개수는 **일별 조회에 실제 표시되는 항목 안에서만** 센다. 루틴은 해당 `routineDate`의 `COMPLETED` 로그, 투두는 해당 `dueDate` 항목의 `COMPLETED` 상태가 기준이다. 완료 시각의 날짜로 집계하지 않는다. 두 완료 개수의 합은 같은 날짜의 일별 `summary.completedCount`와 일치한다.
+- 날짜별 소싱은 일별 조회와 동일한 세 구간을 유지한다. 그제 이전은 로그의 전체·완료 건수를 함께 집계하고, 어제는 `recalculateRoutines`가 반환하는 표시 대상과 완료 id를 사용한다. 오늘·미래는 ACTIVE 루틴의 반복 대상을 판정한 뒤 그 버전 id와 완료 기록을 교차 확인한다. 삭제됐거나 반복 대상에서 빠진 루틴의 완료 로그만 따로 더하지 않는다.
+- 요청 시작 시 `Clock`에서 KST 날짜를 한 번 구해 구간을 고정한다. 투두 집계 1회, 과거 로그 집계 1회, 어제 재계산 2회, ACTIVE 목록 1회, 오늘·미래 완료 날짜/id 조회 1회로 **최대 6쿼리**다. 완료 로그는 `RoutineCompletionDate` projection으로 필요한 값만 읽는다. `DailyCount`는 `targetDate`·`itemCount`·`completedCount`를 제공한다.
+- `CalendarMonthIntegrationTest`는 일별 목록과 월별 전체·완료 개수의 일치, 어제 버전 분기, 소유권·삭제 필터, 완료→취소→재완료, KST 월말 자정 전후, 월 조회 쿼리 수를 검증한다.
+- 정본 계약은 rougether-spec `domains/routine-todo/api.md`의 캘린더 절을 함께 변경한다. 두 저장소의 변경이 함께 반영되어야 한다.
+
+프론트 연동 기준:
+
+- 루틴과 투두 달성도는 각각 `완료 개수 / 전체 개수`로 계산한다. 전체 0은 0% 또는 100%로 바꾸지 않는다. 미래는 예정 개수를 표시하고, 오늘의 미완료는 남음, 과거의 미완료는 미완료로 표시한다.
+- 과거 전체 0은 **기록 없음**으로 표시한다. 과거 로그 기반 조회는 실제 일정 없음과 배치 기록 누락을 구분하지 못한다. 오늘·미래 전체 0은 일정 없음으로 표시할 수 있다.
+- 날짜는 KST 기준 `YYYY-MM-DD`, 월은 `YYYY-MM` 문자열로 처리한다. date-only 값을 `toISOString().slice(0, 10)`으로 바꾸지 않는다.
+- 완료·취소뿐 아니라 루틴·투두 등록, 수정, 삭제가 성공하면 영향받은 월과 선택 날짜 상세를 함께 갱신한다. KST 자정에도 오늘·어제 구간과 진행 중/과거 표시를 갱신한다. 신·구 서버 전환 중 완료 필드가 빠져 있으면 0으로 간주하지 말고 완료 표시를 보류한다.
 
 ### 집 단체미션 연동 표시 (V35)
 

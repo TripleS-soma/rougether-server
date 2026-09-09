@@ -110,11 +110,11 @@ class CalendarControllerTest {
     // --- 월별 개수 ---
 
     @Test
-    void 월별_응답은_yearMonth와_날짜별_routineCount_todoCount_구조로_반환한다() throws Exception {
+    void 월별_응답은_기존_전체수와_추가된_완료수를_함께_반환한다() throws Exception {
         YearMonth yearMonth = YearMonth.of(2026, 8);
         CalendarMonthResponse response = new CalendarMonthResponse(yearMonth, List.of(
-                new CalendarDayCount(LocalDate.of(2026, 8, 1), 3, 1),
-                new CalendarDayCount(LocalDate.of(2026, 8, 2), 0, 0)));
+                new CalendarDayCount(LocalDate.of(2026, 8, 1), 3, 1, 2, 1),
+                new CalendarDayCount(LocalDate.of(2026, 8, 2), 0, 0, 0, 0)));
         when(calendarService.month(eq(1L), eq(yearMonth))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/calendar/month").param("yearMonth", "2026-08"))
@@ -124,8 +124,12 @@ class CalendarControllerTest {
                 .andExpect(jsonPath("$.days[0].date").value("2026-08-01"))
                 .andExpect(jsonPath("$.days[0].routineCount").value(3))
                 .andExpect(jsonPath("$.days[0].todoCount").value(1))
+                .andExpect(jsonPath("$.days[0].routineCompletedCount").value(2))
+                .andExpect(jsonPath("$.days[0].todoCompletedCount").value(1))
                 .andExpect(jsonPath("$.days[1].routineCount").value(0))
-                .andExpect(jsonPath("$.days[1].todoCount").value(0));
+                .andExpect(jsonPath("$.days[1].todoCount").value(0))
+                .andExpect(jsonPath("$.days[1].routineCompletedCount").value(0))
+                .andExpect(jsonPath("$.days[1].todoCompletedCount").value(0));
     }
 
     @Test

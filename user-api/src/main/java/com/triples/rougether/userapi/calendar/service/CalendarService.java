@@ -5,6 +5,8 @@ import com.triples.rougether.domain.routine.entity.RoutineLog;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
+import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.routine.repository.RoutineCompletionDate;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
@@ -15,6 +17,7 @@ import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.calendar.dto.CalendarMonthResponse;
 import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -39,10 +42,11 @@ public class CalendarService {
     private final RoutineLogRepository routineLogRepository;
     private final TodoRepository todoRepository;
     private final DailyAgendaAssembler agendaAssembler;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public CalendarDayResponse day(Long userId, LocalDate date) {
-        LocalDate yesterday = LocalDate.now(KST).minusDays(1);
+        LocalDate yesterday = LocalDate.now(clock.withZone(KST)).minusDays(1);
         if (date.isBefore(yesterday)) {
             return pastDay(userId, date);
         }
@@ -120,40 +124,47 @@ public class CalendarService {
     private record RecalculatedRoutines(List<Routine> routines, Set<Long> completedRoutineIds) {
     }
 
-    // 월 캘린더: 그 달 모든 날짜의 대상 루틴·마감 투두 개수. 날짜별 소싱 규칙은 day()와 동일해
-    // 달력에서 날짜를 눌러 본 목록의 건수와 일치한다. 날짜마다 조회하지 않고 구간별로 묶어 집계함
+    // 월 캘린더: 전체·완료 개수를 day()와 같은 표시 대상에서 집계함.
+    // 날짜마다 조회하지 않고 구간별로 묶으며 요청 시작 시점의 KST 날짜로 구간을 고정함
     @Transactional(readOnly = true)
     public CalendarMonthResponse month(Long userId, YearMonth yearMonth) {
+        LocalDate today = LocalDate.now(clock.withZone(KST));
         LocalDate first = yearMonth.atDay(1);
         LocalDate last = yearMonth.atEndOfMonth();
 
-        Map<LocalDate, Integer> todoCounts = toCountMap(
-                todoRepository.countOwnedByDueDateBetween(userId, first, last));
-        Map<LocalDate, Integer> routineCounts = routineCountsBetween(userId, first, last);
+        Map<LocalDate, Counts> todoCounts = toCountMap(
+                todoRepository.countOwnedByDueDateBetween(userId, first, last, TodoStatus.COMPLETED));
+        Map<LocalDate, Counts> routineCounts = routineCountsBetween(userId, first, last, today);
 
         List<CalendarDayCount> days = first.datesUntil(last.plusDays(1))
-                .map(date -> new CalendarDayCount(date,
-                        routineCounts.getOrDefault(date, 0),
-                        todoCounts.getOrDefault(date, 0)))
+                .map(date -> {
+                    Counts routines = routineCounts.getOrDefault(date, Counts.EMPTY);
+                    Counts todos = todoCounts.getOrDefault(date, Counts.EMPTY);
+                    return new CalendarDayCount(date, routines.total(), todos.total(),
+                            routines.completed(), todos.completed());
+                })
                 .toList();
         return new CalendarMonthResponse(yearMonth, days);
     }
 
     // 기간을 오늘(KST) 기준 세 구간으로 나눠 루틴 개수를 모음. 로그가 없는 과거 날짜는 항목이 없어 0으로 읽힘
-    private Map<LocalDate, Integer> routineCountsBetween(Long userId, LocalDate first, LocalDate last) {
-        LocalDate today = LocalDate.now(KST);
+    private Map<LocalDate, Counts> routineCountsBetween(
+            Long userId, LocalDate first, LocalDate last, LocalDate today) {
         LocalDate yesterday = today.minusDays(1);
-        Map<LocalDate, Integer> counts = new HashMap<>();
+        Map<LocalDate, Counts> counts = new HashMap<>();
 
         // 그제 이전: 그날 log(COMPLETED+FAILED) 건수 단독 집계
         LocalDate pastEnd = earlier(last, yesterday.minusDays(1));
         if (!pastEnd.isBefore(first)) {
             counts.putAll(toCountMap(
-                    routineLogRepository.countByUserIdAndRoutineDateBetween(userId, first, pastEnd)));
+                    routineLogRepository.countByUserIdAndRoutineDateBetween(
+                            userId, first, pastEnd, RoutineLogStatus.COMPLETED)));
         }
         // 어제: 그날 유효했던 버전으로 재계산
         if (!yesterday.isBefore(first) && !yesterday.isAfter(last)) {
-            counts.put(yesterday, recalculateRoutines(userId, yesterday).routines().size());
+            RecalculatedRoutines recalculated = recalculateRoutines(userId, yesterday);
+            counts.put(yesterday, countRoutines(
+                    recalculated.routines(), recalculated.completedRoutineIds()));
         }
         // 오늘·미래: 현재 ACTIVE 버전을 한 번만 읽고 날짜마다 반복 대상 여부만 판정
         LocalDate liveStart = later(first, today);
@@ -163,22 +174,40 @@ public class CalendarService {
         return counts;
     }
 
-    private Map<LocalDate, Integer> liveRoutineCounts(Long userId, LocalDate from, LocalDate to) {
+    private Map<LocalDate, Counts> liveRoutineCounts(Long userId, LocalDate from, LocalDate to) {
         List<Routine> activeRoutines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE);
+        Map<LocalDate, Set<Long>> completedIdsByDate = routineLogRepository
+                .findCompletionDatesBetween(userId, from, to, RoutineLogStatus.COMPLETED)
+                .stream()
+                .collect(Collectors.groupingBy(RoutineCompletionDate::getRoutineDate,
+                        Collectors.mapping(RoutineCompletionDate::getRoutineId, Collectors.toSet())));
         return from.datesUntil(to.plusDays(1))
                 .collect(Collectors.toMap(
                         date -> date,
-                        date -> (int) activeRoutines.stream()
-                                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
-                                .count()));
+                        date -> countRoutines(activeRoutines.stream()
+                                        .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                                        .toList(),
+                                completedIdsByDate.getOrDefault(date, Set.of()))));
     }
 
-    private static Map<LocalDate, Integer> toCountMap(List<DailyCount> counts) {
+    private static Counts countRoutines(List<Routine> routines, Set<Long> completedRoutineIds) {
+        int completed = (int) routines.stream()
+                .filter(routine -> completedRoutineIds.contains(routine.getId()))
+                .count();
+        return new Counts(routines.size(), completed);
+    }
+
+    private record Counts(int total, int completed) {
+        private static final Counts EMPTY = new Counts(0, 0);
+    }
+
+    private static Map<LocalDate, Counts> toCountMap(List<DailyCount> counts) {
         return counts.stream()
                 .collect(Collectors.toMap(DailyCount::getTargetDate,
-                        count -> (int) count.getItemCount()));
+                        count -> new Counts(Math.toIntExact(count.getItemCount()),
+                                Math.toIntExact(count.getCompletedCount()))));
     }
 
     private static LocalDate earlier(LocalDate a, LocalDate b) {
