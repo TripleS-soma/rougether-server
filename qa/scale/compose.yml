@@ -1,0 +1,75 @@
+services:
+  mysql:
+    image: mysql:8.4
+    cpus: ${SCALE_DB_CPUS:-2}
+    mem_limit: ${SCALE_DB_MEMORY:-2g}
+    environment:
+      MYSQL_DATABASE: rougether_scale
+      MYSQL_USER: scale
+      MYSQL_PASSWORD: scale
+      MYSQL_ROOT_PASSWORD: scale-root
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=${SCALE_DB_BUFFER_BYTES:-1073741824}
+      - --innodb-flush-log-at-trx-commit=1
+      - --sync-binlog=1
+      - --log-bin=mysql-bin
+      - --binlog-expire-logs-seconds=3600
+      - --performance-schema=ON
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, "MYSQL_PWD=scale-root mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    logging:
+      options: {max-size: 10m, max-file: "2"}
+  api:
+    image: eclipse-temurin:25-jre
+    cpus: ${SCALE_API_CPUS:-2}
+    mem_limit: ${SCALE_API_MEMORY:-2g}
+    ports:
+      - "127.0.0.1:${SCALE_API_PORT:-19080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_URL: jdbc:mysql://mysql:3306/rougether_scale?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: scale
+      DB_PASSWORD: scale
+      JWT_SECRET: ${SCALE_JWT_SECRET:?local fixture secret required}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${SCALE_DB_POOL:-10}
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+      FIREBASE_CREDENTIALS_PATH: ""
+      LLM_API_KEY: ""
+      FURNITURE_GENERATION_ENABLED: "false"
+      FURNITURE_GENERATION_WORKER_ENABLED: "false"
+      ROUGETHER_BOTS_ENABLED: "false"
+      BILLING_WORKER_ENABLED: "false"
+      AWS_EC2_METADATA_DISABLED: "true"
+      TZ: Asia/Seoul
+    entrypoint: [java]
+    command:
+      - -Xms512m
+      - -Xmx${SCALE_API_HEAP:-1024m}
+      - -XX:StartFlightRecording=filename=/evidence/api.jfr,settings=profile,dumponexit=true,maxsize=128m
+      - -Xlog:gc*:file=/evidence/gc.log:time,uptime,level,tags:filecount=2,filesize=10m
+      - -jar
+      - /app/app.jar
+    volumes:
+      - ${SCALE_JAR:?built jar required}:/app/app.jar:ro
+      - ${SCALE_RESULT_DIR:?result directory required}:/evidence
+    networks: [isolated, frontend]
+    depends_on:
+      mysql: {condition: service_healthy}
+    stop_grace_period: 30s
+    logging:
+      options: {max-size: 20m, max-file: "2"}
+networks:
+  frontend: {}
+  isolated:
+    internal: true
+volumes:
+  mysql-data:
