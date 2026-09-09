@@ -38,12 +38,14 @@ public class CalendarController {
         return calendarService.day(authUser.id(), date);
     }
 
-    @Operation(summary = "캘린더 월별 루틴·투두 개수 조회",
-            description = "지정한 달의 모든 날짜(1일~말일)에 대해 그날 대상 루틴 개수와 마감 투두 개수만 반환합니다. "
-                    + "목록·완료 여부는 내려주지 않으며 달력 화면의 날짜별 표시(개수·점) 용도입니다. "
+    @Operation(summary = "캘린더 월별 루틴·투두 전체·완료 개수 조회",
+            description = "지정한 달의 모든 날짜(1일~말일)에 대해 루틴·투두 각각의 전체 개수와 완료 개수를 반환합니다. "
+                    + "날짜별 달성도 표시 용도이며 개별 항목 목록은 GET /api/v1/calendar로 조회합니다. "
                     + "날짜별 소싱 규칙은 GET /api/v1/calendar와 동일합니다 — 오늘·미래는 현재 ACTIVE 루틴의 반복 대상, "
                     + "어제는 그날 유효했던 버전으로 재계산, 그제 이전은 그날 수행 기록(COMPLETED+FAILED) 건수. "
-                    + "투두는 마감일(dueDate)이 그날인 것만 셉니다. 대상이 없는 날도 0으로 포함하며 본인 소유만 집계합니다.")
+                    + "투두는 마감일(dueDate)이 그날인 것만 셉니다. 완료 개수는 그날 표시 대상 안에서만 집계합니다. "
+                    + "대상이 없는 날도 모든 개수를 0으로 포함하며 본인 소유만 집계합니다. "
+                    + "미래 날짜는 예정으로 표시하고 전체 0은 달성도 계산에서 제외합니다.")
     @GetMapping("/month")
     public CalendarMonthResponse month(
             @CurrentUser AuthUser authUser,

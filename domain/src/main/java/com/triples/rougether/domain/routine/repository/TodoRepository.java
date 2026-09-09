@@ -80,7 +80,9 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     // 월 캘린더용: 기간 내 마감일별 살아있는 투두 건수. 소싱 규칙은 findOwnedWithFilters(dueDate)와 동일(마감일 없는 투두 제외)
     @Query("""
-            select t.dueDate as targetDate, count(t.id) as itemCount from Todo t
+            select t.dueDate as targetDate, count(t.id) as itemCount,
+                   sum(case when t.status = :completedStatus then 1 else 0 end) as completedCount
+            from Todo t
             where t.user.id = :userId
               and t.deletedAt is null
               and t.dueDate between :fromDate and :toDate
@@ -88,7 +90,8 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             """)
     List<DailyCount> countOwnedByDueDateBetween(@Param("userId") Long userId,
                                                 @Param("fromDate") LocalDate fromDate,
-                                                @Param("toDate") LocalDate toDate);
+                                                @Param("toDate") LocalDate toDate,
+                                                @Param("completedStatus") TodoStatus completedStatus);
 
     // 타인(집 멤버) 열람용: 그날 마감 투두 중 카테고리 공개 범위가 허용된 것만.
     // 미분류(category null) 투두는 inner join 으로 자연 제외됨(비공개 취급)
