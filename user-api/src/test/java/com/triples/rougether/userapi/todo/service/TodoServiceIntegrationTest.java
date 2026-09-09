@@ -1,5 +1,9 @@
 package com.triples.rougether.userapi.todo.service;
 
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.character.repository.CharacterRepository;
+import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +51,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 @Import(JpaConfig.class)
 class TodoServiceIntegrationTest {
 
+    @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private CharacterRepository characterRepository;
+    @Autowired private PersonalRoomRepository personalRoomRepository;
+
     @Autowired
     private TodoRepository todoRepository;
     @Autowired
@@ -69,7 +77,8 @@ class TodoServiceIntegrationTest {
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository),
+                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -320,7 +329,8 @@ class TodoServiceIntegrationTest {
         doReturn(false).when(racing).existsByUserIdAndExternalSourceAndExternalId(any(), anyString(), anyString());
         TodoService racingService = new TodoService(racing, categoryRepository, userRepository,
                 userWalletRepository, new DailyRewardService(routineLogRepository, todoRepository),
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository),
+                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
 
         assertThatThrownBy(() -> racingService.create(userId, imported("팀 회의(재동기화)", "evt-1")))
                 .isInstanceOf(BusinessException.class)

@@ -119,7 +119,8 @@ public class BotSeedService {
         }
 
         List<Goal> activeGoals = goalRepository.findByActiveTrueOrderBySortOrderAsc();
-        List<Character> activeCharacters = characterRepository.findByActiveTrueOrderBySortOrderAsc();
+        List<Character> activeCharacters = characterRepository.findByActiveTrueOrderBySortOrderAsc().stream()
+                .filter(character -> !character.isRoomLevelReward()).toList();
         List<Item> furnitureCandidates = furnitureCandidates();
         if (activeGoals.isEmpty() || activeCharacters.isEmpty() || furnitureCandidates.size() < FURNITURE_MIN) {
             log.warn("동거 봇 생성 건너뜀 - 마스터 데이터 미비(목표 {}, 캐릭터 {}, 가구 {}/{}), botKey={}",

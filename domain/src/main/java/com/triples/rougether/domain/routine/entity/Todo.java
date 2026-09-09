@@ -20,10 +20,13 @@ import java.time.LocalTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
+// 동시 제목 수정/삭제가 완료·성장 지급액의 이전 값을 덮어쓰지 않도록 변경 컬럼만 저장함.
+@DynamicUpdate
 @Table(name = "todos")
 public class Todo extends BaseEntity {
 
@@ -64,6 +67,9 @@ public class Todo extends BaseEntity {
 
     @Column(name = "reward_amount", nullable = false)
     private int rewardAmount;
+
+    @Column(name = "growth_reward_amount", nullable = false)
+    private int growthRewardAmount;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
@@ -133,6 +139,15 @@ public class Todo extends BaseEntity {
         this.completedAt = null;
         this.rewardCurrencyType = null;
         this.rewardAmount = 0;
+        this.growthRewardAmount = 0;
+    }
+
+    public void recordGrowthReward(int amount) {
+        if (status != TodoStatus.COMPLETED || amount < 0 || amount > rewardAmount
+                || growthRewardAmount != 0) {
+            throw new IllegalStateException("완료 보상 범위에서 성장 포인트를 한 번만 기록할 수 있음");
+        }
+        this.growthRewardAmount = amount;
     }
 
     public void softDelete(Instant deletedAt) {

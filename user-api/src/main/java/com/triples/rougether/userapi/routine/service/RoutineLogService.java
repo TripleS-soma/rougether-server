@@ -22,6 +22,7 @@ import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,8 +51,9 @@ public class RoutineLogService {
     private final TransactionTemplate transactionTemplate;
     private final HouseMissionService houseMissionService;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    private final RoomGrowthService roomGrowthService;
 
-    // 완료 체크: routine_logs + user_wallets + streaks 3개 테이블을 한 트랜잭션으로 변경함.
+    // 완료 이력·코인·원장·스트릭·개인 방 성장을 한 트랜잭션으로 반영함.
     // @Transactional 대신 template인 이유: unique 충돌 재시도가 롤백된 첫 트랜잭션 밖에서 새로 시작돼야 함
     public RoutineLogResponse complete(Long userId, Long routineId, RoutineLogCreateRequest request) {
         try {
@@ -64,8 +66,9 @@ public class RoutineLogService {
     }
 
     private RoutineLogResponse doComplete(Long userId, Long routineId, RoutineLogCreateRequest request) {
-        // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
+        // user → 지갑 행 락을 일반 조회보다 먼저 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
         // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
+        roomGrowthService.lockUser(userId);
         UserWallet wallet = findWalletForUpdate(userId);
 
         LocalDate today = LocalDate.now(KST);
@@ -108,6 +111,8 @@ public class RoutineLogService {
             wallet.add(reward);
             walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.ROUTINE_COMPLETE,
                     WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
+            roomGrowthService.award(userId, reward);
+            log.recordGrowthReward(reward);
         }
 
         Streak streak = isToday
@@ -129,10 +134,13 @@ public class RoutineLogService {
         return houseMissionService.autoContribute(userId, routine.getHouseMissionId());
     }
 
-    // 완료 취소: 코인 차감 + log hard delete + 스트릭 롤백을 한 트랜잭션으로 처리함.
+    // 완료 취소: 코인·성장 회수, 완료 이력 삭제/실패 복원, 스트릭 롤백을 한 트랜잭션으로 처리함.
     // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
     @Transactional
     public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
+        // 완료와 같은 순서로 잠금함. 로그를 먼저 읽으면 동시 취소가 이전 COMPLETED 스냅샷을 재사용함.
+        roomGrowthService.lockUser(userId);
+        UserWallet wallet = findWalletForUpdate(userId);
         LocalDate today = LocalDate.now(KST);
         Routine routine = findActionableRoutine(userId, routineId, date, today); // 소유권 guard
         // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
@@ -148,9 +156,9 @@ public class RoutineLogService {
                         .stream().findFirst())
                 .orElseThrow(() -> new BusinessException(RoutineLogErrorCode.ROUTINE_LOG_NOT_FOUND));
 
-        UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(log.getRewardAmount());
+        roomGrowthService.revoke(userId, log.getGrowthRewardAmount());
         // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
         walletHistoryRecorder.deleteEarned(userId, WalletHistoryReason.ROUTINE_COMPLETE,
                 WalletHistory.SOURCE_ROUTINE_LOG, log.getId());

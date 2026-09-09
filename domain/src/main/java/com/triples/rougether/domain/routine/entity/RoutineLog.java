@@ -50,6 +50,9 @@ public class RoutineLog extends BaseCreatedEntity {
     @Column(name = "reward_amount", nullable = false)
     private int rewardAmount;
 
+    @Column(name = "growth_reward_amount", nullable = false)
+    private int growthRewardAmount;
+
     private RoutineLog(Routine routine, LocalDate routineDate, RoutineLogStatus status,
                        Instant completedAt, CurrencyType rewardCurrencyType, int rewardAmount) {
         this.routine = routine;
@@ -70,6 +73,14 @@ public class RoutineLog extends BaseCreatedEntity {
         return new RoutineLog(routine, routineDate, RoutineLogStatus.FAILED, null, null, 0);
     }
 
+    public void recordGrowthReward(int amount) {
+        if (status != RoutineLogStatus.COMPLETED || amount < 0 || amount > rewardAmount
+                || growthRewardAmount != 0) {
+            throw new IllegalStateException("완료 보상 범위에서 성장 포인트를 한 번만 기록할 수 있음");
+        }
+        this.growthRewardAmount = amount;
+    }
+
     public void revertToFailed() {
         if (this.status != RoutineLogStatus.COMPLETED) {
             throw new IllegalStateException("COMPLETED 상태의 로그만 FAILED로 복원할 수 있음: " + this.status);
@@ -78,6 +89,7 @@ public class RoutineLog extends BaseCreatedEntity {
         this.completedAt = null;
         this.rewardCurrencyType = null;
         this.rewardAmount = 0;
+        this.growthRewardAmount = 0;
     }
 
     public void completeFromFailed(Instant completedAt, CurrencyType rewardCurrencyType) {

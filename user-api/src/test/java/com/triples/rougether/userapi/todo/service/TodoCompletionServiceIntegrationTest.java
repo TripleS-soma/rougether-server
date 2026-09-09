@@ -1,5 +1,9 @@
 package com.triples.rougether.userapi.todo.service;
 
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.character.repository.CharacterRepository;
+import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -38,6 +42,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 @Import(JpaConfig.class)
 class TodoCompletionServiceIntegrationTest {
 
+    @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private CharacterRepository characterRepository;
+    @Autowired private PersonalRoomRepository personalRoomRepository;
+
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Autowired
@@ -63,7 +71,8 @@ class TodoCompletionServiceIntegrationTest {
                 todoRepository);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository),
+                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         // 코인은 dueDate가 오늘인 완료에만 지급되므로 기본 픽스처는 오늘 마감으로 만듦

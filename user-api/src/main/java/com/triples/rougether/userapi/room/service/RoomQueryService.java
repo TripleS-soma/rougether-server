@@ -5,7 +5,6 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
-import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
@@ -36,6 +35,7 @@ public class RoomQueryService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    private final RoomGrowthService roomGrowthService;
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final RoomItemPlacementRepository roomItemPlacementRepository;
@@ -44,7 +44,6 @@ public class RoomQueryService {
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
-    private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
                             RoomSurfaceSlotRepository roomSurfaceSlotRepository,
@@ -54,7 +53,8 @@ public class RoomQueryService {
                             UserCharacterRepository userCharacterRepository,
                             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
                             CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                            UserRepository userRepository) {
+                            RoomGrowthService roomGrowthService) {
+        this.roomGrowthService = roomGrowthService;
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -63,15 +63,18 @@ public class RoomQueryService {
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
-        this.userRepository = userRepository;
     }
 
     // lazy 생성 가능해야 하므로 readOnly 아님.
     @Transactional
     public RoomResponse getMyRoom(Long userId) {
+        roomGrowthService.grantPendingReward(userId);
         PersonalRoom room = personalRoomRepository.findById(userId)
-                .orElseGet(() -> personalRoomRepository.save(
-                        PersonalRoom.create(userRepository.getReferenceById(userId))));
+                .orElseGet(() -> {
+                    // 첫 조회와 첫 완료가 겹쳐도 같은 방을 재사용함. locking read 로 최신 생성 결과를 읽음.
+                    personalRoomRepository.ensureExists(userId);
+                    return personalRoomRepository.findWithLockById(userId).orElseThrow();
+                });
         return assemble(room, userId);
     }
 

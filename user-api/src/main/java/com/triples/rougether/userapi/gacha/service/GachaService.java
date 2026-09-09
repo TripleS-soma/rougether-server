@@ -230,6 +230,9 @@ public class GachaService {
         if (!hasReward(entry)) {
             return false;
         }
+        if (entry.getRewardType() == RewardType.CHARACTER && entry.getCharacter().isRoomLevelReward()) {
+            return false;
+        }
         GachaCategory category = gacha.getCategory();
         return category == null || (entry.getRewardType() == RewardType.ITEM
                 && category == GachaCategory.fromItem(entry.getItem()));

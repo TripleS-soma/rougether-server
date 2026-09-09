@@ -30,7 +30,8 @@ public class OnboardingQueryService {
     }
 
     public CharacterListResponse getCharacters() {
-        return CharacterListResponse.of(characterRepository.findByActiveTrueOrderBySortOrderAsc());
+        return CharacterListResponse.of(characterRepository.findByActiveTrueOrderBySortOrderAsc().stream()
+                .filter(character -> !character.isRoomLevelReward()).toList());
     }
 
     public OnboardingResponse getOnboarding(Long userId) {

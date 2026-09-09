@@ -16,6 +16,7 @@ import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.persistence.UniqueViolations;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
@@ -53,6 +54,7 @@ public class TodoService {
     private final UserWalletRepository userWalletRepository;
     private final DailyRewardService dailyRewardService;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    private final RoomGrowthService roomGrowthService;
 
     @Transactional(readOnly = true)
     public TodoListResponse list(Long userId, Long categoryId, TodoStatus status, LocalDate dueDate) {
@@ -125,11 +127,12 @@ public class TodoService {
         findOwned(userId, todoId).softDelete(Instant.now());
     }
 
-    // 완료: todos + user_wallets 2개 테이블을 한 트랜잭션으로 변경함(재화 정합성)
+    // 완료 상태·코인·원장·개인 방 성장을 한 트랜잭션으로 반영함.
     @Transactional
     public TodoCompleteResponse complete(Long userId, Long todoId) {
-        // 지갑 행 락을 트랜잭션 첫 조회로 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
+        // user → 지갑 행 락을 일반 조회보다 먼저 선점함 — MySQL REPEATABLE_READ에서 스냅샷이 락 획득 뒤에 잡혀야
         // 동시 완료(루틴·투두)의 상한 카운트가 서로의 커밋을 보고 직렬화됨. 락 이전에 일반 SELECT를 두면 안 됨
+        roomGrowthService.lockUser(userId);
         UserWallet wallet = findWalletForUpdate(userId);
         Todo todo = findOwned(userId, todoId);
         if (todo.getStatus() == TodoStatus.COMPLETED) {
@@ -154,21 +157,26 @@ public class TodoService {
             wallet.add(reward);
             walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.TODO_COMPLETE,
                     WalletHistory.SOURCE_TODO, todo.getId());
+            roomGrowthService.award(userId, reward);
+            todo.recordGrowthReward(reward);
         }
 
         return TodoCompleteResponse.from(todo);
     }
 
-    // 완료 취소: 코인 차감 + 완료 상태 되돌리기를 한 트랜잭션으로 처리함(재화 정합성)
+    // 완료 취소: 코인·성장 회수와 완료 상태 복원을 한 트랜잭션으로 처리함.
     @Transactional
     public TodoResponse cancelComplete(Long userId, Long todoId) {
+        // 완료와 같은 순서로 잠금함. 동시 취소가 이전 COMPLETED 스냅샷을 읽지 않도록 함.
+        roomGrowthService.lockUser(userId);
+        UserWallet wallet = findWalletForUpdate(userId);
         Todo todo = findOwned(userId, todoId);
         if (todo.getStatus() != TodoStatus.COMPLETED) {
             throw new BusinessException(TodoErrorCode.TODO_NOT_COMPLETED);
         }
-        UserWallet wallet = findWalletForUpdate(userId);
         // 음수 잔액 허용 — 회수 정책 확정 전 임시로, 잔액이 보상액보다 적어도 그대로 차감함
         wallet.subtract(todo.getRewardAmount());
+        roomGrowthService.revoke(userId, todo.getGrowthRewardAmount());
         // 원장은 회수 row 대신 원 획득 row 를 삭제함(#253). 보상 0 완료는 row 가 없어 no-op
         walletHistoryRecorder.deleteEarned(userId, WalletHistoryReason.TODO_COMPLETE,
                 WalletHistory.SOURCE_TODO, todo.getId());

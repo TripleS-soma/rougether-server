@@ -115,16 +115,14 @@ class RoomLayoutServiceTest {
 
     @Test
     void 방이_없으면_lazy_생성하고_baseRevision_0으로_저장한다() {
-        when(personalRoomRepository.findWithLockById(USER_ID)).thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(USER_ID)).thenReturn(mock(User.class));
         PersonalRoom created = realRoom();
-        when(personalRoomRepository.save(any(PersonalRoom.class))).thenReturn(created);
+        when(personalRoomRepository.findWithLockById(USER_ID)).thenReturn(Optional.of(created));
         when(userItemRepository.findByUserIdAndDeletedAtIsNull(USER_ID)).thenReturn(List.of());
         stubAssemble();
 
         roomCommandService.updateLayout(USER_ID, new RoomLayoutUpdateRequest(0, List.of(), List.of()));
 
-        verify(personalRoomRepository).save(any(PersonalRoom.class));
+        verify(personalRoomRepository).ensureExists(USER_ID);
         assertThat(created.isFreeLayout()).isTrue();
         assertThat(created.getLayoutRevision()).isEqualTo(1);
     }
