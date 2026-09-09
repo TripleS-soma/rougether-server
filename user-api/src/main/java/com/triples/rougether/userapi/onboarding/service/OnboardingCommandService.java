@@ -97,9 +97,14 @@ public class OnboardingCommandService {
                 target.select();
                 userCharacterRepository.save(target);
             }
-        } else if (!userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty()) {
+        } else if (character.isRoomLevelReward()
+                || userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
+                        .anyMatch(uc -> !uc.getCharacter().isRoomLevelReward())) {
             throw new BusinessException(MemberErrorCode.CHARACTER_NOT_OWNED);
         } else {
+            // 레벨 보상을 먼저 얻었더라도 기본 캐릭터 무료 선택권은 유지함.
+            userCharacterRepository.findByUserIdAndSelectedTrueAndDeletedAtIsNull(userId)
+                    .ifPresent(UserCharacter::unselect);
             userCharacterRepository.save(UserCharacter.createSelected(user, character));
         }
 

@@ -1,5 +1,9 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.character.repository.CharacterRepository;
+import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.domain.member.entity.User;
@@ -40,6 +44,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(JpaConfig.class)
 class RoutineLogServiceDailyRewardCapIntegrationTest {
 
+    @Autowired private UserCharacterRepository userCharacterRepository;
+    @Autowired private CharacterRepository characterRepository;
+    @Autowired private PersonalRoomRepository personalRoomRepository;
+
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
     @Autowired
@@ -71,7 +79,8 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 userWalletRepository, streakRepository, dailyRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class),
-                new WalletHistoryRecorder(walletHistoryRepository));
+                new WalletHistoryRecorder(walletHistoryRepository),
+                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);

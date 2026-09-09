@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.todo.service;
 
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,7 +39,8 @@ class TodoServiceImportRaceTest {
 
     private final TodoService service = new TodoService(todoRepository, mock(CategoryRepository.class),
             userRepository, mock(UserWalletRepository.class), mock(DailyRewardService.class),
-            mock(WalletHistoryRecorder.class));
+            mock(WalletHistoryRecorder.class),
+                org.mockito.Mockito.mock(RoomGrowthService.class));
 
     @Test
     void 사전_조회를_통과했어도_unique_위반이_나면_TODO_EXTERNAL_DUPLICATE로_변환한다() {

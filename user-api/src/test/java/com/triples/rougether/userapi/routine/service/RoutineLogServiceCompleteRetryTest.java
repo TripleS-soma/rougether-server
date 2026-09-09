@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -47,7 +48,8 @@ class RoutineLogServiceCompleteRetryTest {
     private final RoutineLogService service = new RoutineLogService(routineRepository,
             routineLogRepository, userWalletRepository, streakRepository, dailyRewardService,
             new TransactionTemplate(transactionManager), mock(HouseMissionService.class),
-            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class));
+            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class),
+                org.mockito.Mockito.mock(RoomGrowthService.class));
 
     @Test
     void 배치가_먼저_FAILED를_커밋해_unique_충돌이_나면_재시도에서_전이로_흡수한다() {

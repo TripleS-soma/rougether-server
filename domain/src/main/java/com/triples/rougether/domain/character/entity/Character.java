@@ -20,6 +20,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "characters")
 public class Character {
 
+    public static final String MORU_CODE = "moru";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -51,7 +53,12 @@ public class Character {
         this.active = active;
     }
 
-    // admin 카탈로그 화면의 사용/미사용 토글. 목록·뽑기 노출은 조회 쿼리가 is_active 로 거른다.
+    // 모루는 개인 방 레벨 달성으로 획득함. 카탈로그의 대소문자 차이도 우회로 허용하지 않음.
+    public boolean isRoomLevelReward() {
+        return MORU_CODE.equalsIgnoreCase(code);
+    }
+
+    // admin 카탈로그 화면의 사용/미사용 토글.
     public void activate() {
         this.active = true;
     }

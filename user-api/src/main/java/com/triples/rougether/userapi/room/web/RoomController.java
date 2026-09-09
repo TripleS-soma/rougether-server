@@ -38,7 +38,8 @@ public class RoomController {
 
     @Operation(summary = "내 방 조회",
             description = "로그인한 회원의 방 성장 현황, 착용 캐릭터, 슬롯별 배치, 스트릭을 반환합니다. "
-                    + "첫 조회 시 방이 자동 생성되며 growthLevel 0 부터 시작합니다. "
+                    + "방이 없으면 자동 생성되며 다음 레벨에 필요한 포인트는 20, 22, 24 순으로 2씩 증가합니다. "
+                    + "growthPoints 는 누적 포인트, pointsToNextLevel 은 다음 레벨까지 남은 포인트입니다. "
                     + "slots 에는 아이템이 배치된 슬롯만 포함되고, 캐릭터 미착용이면 character 는 null 입니다. "
                     + "응답의 asset key 는 CDN base URL 과 조합해 이미지 URL 로 사용합니다.")
     @GetMapping("/me")

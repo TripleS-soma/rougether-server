@@ -5,7 +5,6 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
-import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomSlotType;
@@ -64,7 +63,6 @@ public class RoomCommandService {
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     private final StreakRepository streakRepository;
-    private final UserRepository userRepository;
 
     public RoomCommandService(PersonalRoomRepository personalRoomRepository,
                               RoomSurfaceSlotRepository roomSurfaceSlotRepository,
@@ -74,8 +72,7 @@ public class RoomCommandService {
                               UserCharacterRepository userCharacterRepository,
                               UserCharacterAccessoryRepository userCharacterAccessoryRepository,
                               CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                              StreakRepository streakRepository,
-                              UserRepository userRepository) {
+                              StreakRepository streakRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -85,7 +82,6 @@ public class RoomCommandService {
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
         this.streakRepository = streakRepository;
-        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -94,9 +90,8 @@ public class RoomCommandService {
 
         // updateLayout 과 같은 방 행 락 - 락 없이 읽으면 동시 FREE_V1 전환을 통과한 슬롯 저장이
         // 정본에 반영되지 않는 positioned row 를 남길 수 있다(성공했는데 화면에 없는 유실).
-        PersonalRoom room = personalRoomRepository.findWithLockById(userId)
-                .orElseGet(() -> personalRoomRepository.save(
-                        PersonalRoom.create(userRepository.getReferenceById(userId))));
+        personalRoomRepository.ensureExists(userId);
+        PersonalRoom room = personalRoomRepository.findWithLockById(userId).orElseThrow();
 
         // FREE_V1 전환 방: 슬롯 모델은 자유배치(한 영역 다중 가구)를 표현할 수 없어, positioned 가 포함된
         // 구버전 저장은 자유배치 데이터 보존을 위해 거부한다. surface(벽지/바닥/배경)만이면 기존대로 허용(팀 확정).
@@ -123,9 +118,8 @@ public class RoomCommandService {
     // 같은 방의 동시 저장은 행 락으로 직렬화하고, baseRevision 불일치(다른 기기가 먼저 저장)는 409 로 거부한다.
     @Transactional
     public RoomResponse updateLayout(Long userId, RoomLayoutUpdateRequest request) {
-        PersonalRoom room = personalRoomRepository.findWithLockById(userId)
-                .orElseGet(() -> personalRoomRepository.save(
-                        PersonalRoom.create(userRepository.getReferenceById(userId))));
+        personalRoomRepository.ensureExists(userId);
+        PersonalRoom room = personalRoomRepository.findWithLockById(userId).orElseThrow();
 
         if (request.baseRevision() != room.getLayoutRevision()) {
             throw new BusinessException(RoomErrorCode.LAYOUT_REVISION_CONFLICT);

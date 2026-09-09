@@ -12,6 +12,9 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     List<UserCharacter> findByUserId(Long userId);
 
+    // 삭제된 지급 이력도 포함함. 달성 보상 조회로 회수된 캐릭터를 다시 지급하지 않음.
+    boolean existsByUserIdAndCharacterId(Long userId, Long characterId);
+
     List<UserCharacter> findByUserIdAndDeletedAtIsNull(Long userId);
 
     // 보유 여부 판정용 ID projection. LAZY character 접근에 따른 보유 건수만큼의 추가 조회를 피함.

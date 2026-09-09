@@ -27,6 +27,12 @@ public record RoomResponse(
         Long roomUserId,
         @Schema(description = "방 성장 레벨 (첫 생성 시 0)", example = "1")
         int growthLevel,
+        @Schema(description = "누적 방 성장 포인트. 실제 루틴·투두 완료 보상과 같은 양을 적립하고 완료 취소 시 회수",
+                example = "30")
+        long growthPoints,
+        @Schema(description = "다음 방 레벨까지 남은 포인트. 레벨 L에서 다음 레벨에 필요한 구간 포인트는 20 + 2 × L",
+                example = "12")
+        long pointsToNextLevel,
         @Schema(description = "배치 데이터 정본. SLOT_V1 이면 slots, FREE_V1 이면 placements(+ surface 슬롯)가 정본. "
                 + "SLOT_V1 방은 새 앱이 슬롯을 고정 좌표로 변환해 표시", example = "FREE_V1")
         RoomLayoutFormat layoutFormat,
@@ -63,6 +69,8 @@ public record RoomResponse(
         return new RoomResponse(
                 room.getUserId(),
                 room.getGrowthLevel(),
+                room.getGrowthPoints(),
+                room.getPointsToNextLevel(),
                 room.getLayoutFormat(),
                 room.getLayoutRevision(),
                 RoomCharacterResponse.of(selectedCharacter, accessories, renderProfiles),

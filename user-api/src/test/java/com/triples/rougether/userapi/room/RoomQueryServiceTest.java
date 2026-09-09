@@ -46,18 +46,18 @@ class RoomQueryServiceTest {
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
+    @Mock private com.triples.rougether.userapi.room.service.RoomGrowthService roomGrowthService;
     @InjectMocks private RoomQueryService roomQueryService;
 
     @Test
     void 방이_없으면_lazy_생성하고_레벨0_스트릭0으로_응답한다() {
         Long userId = 1L;
         when(personalRoomRepository.findById(userId)).thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(userId)).thenReturn(mock(User.class));
         PersonalRoom saved = mock(PersonalRoom.class);
         when(saved.getUserId()).thenReturn(userId);
         when(saved.getGrowthLevel()).thenReturn(0);
         when(saved.getUpdatedAt()).thenReturn(Instant.EPOCH);
-        when(personalRoomRepository.save(any(PersonalRoom.class))).thenReturn(saved);
+        when(personalRoomRepository.findWithLockById(userId)).thenReturn(Optional.of(saved));
         when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
         when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
@@ -65,7 +65,7 @@ class RoomQueryServiceTest {
 
         RoomResponse response = roomQueryService.getMyRoom(userId);
 
-        verify(personalRoomRepository).save(any(PersonalRoom.class));
+        verify(personalRoomRepository).ensureExists(userId);
         assertThat(response.roomUserId()).isEqualTo(userId);
         assertThat(response.growthLevel()).isZero();
         assertThat(response.slots()).isEmpty();
