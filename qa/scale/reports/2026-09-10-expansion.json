@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "description": "Local synthetic mixed load. 30-second windows; no production or long-duration capacity claim. Server counters are completed Actuator requests, not ingress timestamps. JWT and fixture rows excluded.",
+  "runs": [
+    {
+      "label": "mixed3000-api4-users20000-todos60000",
+      "run_id": "20260910T004906-dbc5de-mixed",
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "expected_requests": 90000,
+        "users": 20000,
+        "todos": 60000,
+        "warmup_seconds": 60,
+        "preallocated_vus": 5000,
+        "max_vus": 5000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "10",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "host_cpu_count": 12,
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "fixture_profile": "minimal users/wallets/personal_rooms/todos; no routines/onboarding/history",
+        "seed_date": "2026-09-10",
+        "started_at": "2026-09-09T15:50:27.021150+00:00",
+        "completed_at": "2026-09-09T15:50:59.707908+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "fbd461546df2442e618c7b7bc86a488bd7ee0d9b",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "21bc794f715d1a65a2a77298e0f6673eecce3d186563c53a9e9b983dcf6dbd37",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "c9b41a6c3b9f5e7f021021fb452f54d93c98c44d5325a617e5f03e4e4007f1e5",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-first-baseline.md": "d3a4c734d33637389451fd9896954b302fd0242b516097915c620efd067327b6"
+        },
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)"
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 57553.0 < 89100.00",
+          "dropped_iterations must be zero, got 32448.0",
+          "endpoint complete latency p(95) 4208.0ms > 300.0ms",
+          "endpoint complete latency p(99) 4350.0ms > 1000.0ms",
+          "endpoint me latency p(95) 4285.0ms > 300.0ms",
+          "endpoint me latency p(99) 4457.0ms > 1000.0ms",
+          "endpoint today latency p(95) 4287.0ms > 300.0ms",
+          "endpoint today latency p(99) 4446.8ms > 1000.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 32448']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "only 2 generator samples; capacity claim is exploratory"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.6394777777777778,
+          "telemetry_samples": 2,
+          "generator_samples": 2
+        }
+      },
+      "sent": 57553,
+      "dropped": 32448,
+      "business_success": 57553,
+      "completion_success": 11510,
+      "reward_coins": 115100,
+      "response_latency_ms": {
+        "avg": 2594.5281219050266,
+        "min": 3,
+        "med": 2093,
+        "p(90)": 4167,
+        "p(95)": 4275,
+        "p(99)": 4432,
+        "max": 4927
+      },
+      "endpoint_response_latency_ms": {
+        "me": {
+          "avg": 2593.0374424463557,
+          "min": 16,
+          "med": 2089,
+          "p(90)": 4178,
+          "p(95)": 4285,
+          "p(99)": 4457,
+          "max": 4904
+        },
+        "today": {
+          "med": 2089,
+          "p(90)": 4182,
+          "p(95)": 4287,
+          "p(99)": 4446.8,
+          "max": 4927,
+          "avg": 2595.006689544329,
+          "min": 3
+        },
+        "complete": {
+          "min": 125,
+          "med": 2107,
+          "p(90)": 4133,
+          "p(95)": 4208,
+          "p(99)": 4350,
+          "max": 4793,
+          "avg": 2596.5525629887056
+        }
+      },
+      "server_completed_requests": {
+        "me": 23022.0,
+        "today": 23021.0,
+        "complete": 11510.0
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 11510,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 115100,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 32448"
+        ]
+      },
+      "telemetry": {
+        "samples": 2,
+        "hikari_pending": [
+          null,
+          189.0
+        ],
+        "hikari_acquire_cumulative_wait_seconds": 6025.1480256489995,
+        "generator_cpu_percent_peak": 63.7,
+        "api_cpu_percent": [
+          292.24,
+          342.46
+        ],
+        "db_cpu_percent": [
+          34.85,
+          202.45
+        ]
+      },
+      "raw_artifact_sha256": {
+        "manifest.json": "b9e497db08973f1042eea9b434d6121d495a316b461e28699e4462199b4f5d1a",
+        "summary.json": "a892c2535cc524a950372212ae737e5c9003a9428a1411717de5fd30f63dcf54",
+        "verdict.json": "4d2103c11552ba1acb84961f172809b729c45f12ccbf46bb381ed96e2ba9e0e9",
+        "db-audit.json": "366a3613b52eb40c0d9288704f3035c8cae2d24f7944fe8d25a8a430afd53b61",
+        "telemetry.jsonl": "559f94ac50596bf77c27817aae758e1ba7e9891c39b847b973e11c5b6f2cb301"
+      }
+    }
+  ]
+}

@@ -157,8 +157,9 @@ public class TodoService {
             wallet.add(reward);
             walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.TODO_COMPLETE,
                     WalletHistory.SOURCE_TODO, todo.getId());
-            roomGrowthService.award(userId, reward);
+            // 방 생성 보장의 중간 flush 전에 완료·성장 보상을 함께 기록함. 지급 실패 시 같은 트랜잭션에서 롤백됨.
             todo.recordGrowthReward(reward);
+            roomGrowthService.award(userId, reward);
         }
 
         return TodoCompleteResponse.from(todo);

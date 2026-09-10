@@ -16,6 +16,14 @@ public interface UserGoalRepository extends JpaRepository<UserGoal, Long> {
     @Query("select ug from UserGoal ug join fetch ug.goal g where ug.user.id = :userId order by g.sortOrder asc")
     List<UserGoal> findByUserIdWithGoalOrderBySortOrder(@Param("userId") Long userId);
 
+    // 상세와 같은 정렬·JOIN 범위를 유지하며 요약에 쓰는 값만 가져옴.
+    @Query("""
+            select new com.triples.rougether.domain.goal.repository.OnboardingGoalSelection(g.id, ug.primary)
+            from UserGoal ug join ug.goal g
+            where ug.user.id = :userId order by g.sortOrder asc
+            """)
+    List<OnboardingGoalSelection> findOnboardingSelections(@Param("userId") Long userId);
+
     // 온보딩 목표 재선택(replace) 경로용 파생 삭제 — 엔티티를 로드해 영속성 컨텍스트를 경유함.
     void deleteByUserId(Long userId);
 

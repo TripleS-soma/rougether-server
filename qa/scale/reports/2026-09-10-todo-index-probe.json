@@ -1,0 +1,152 @@
+{
+  "run_id": "20260910T115214-bb7abe-index-probe",
+  "project": "rougether-scale-20260910t115214-bb7abe-index-probe",
+  "kind": "격리 DB에서 EXPLAIN ANALYZE로 실행 계획을 비교한 프로브. HTTP 처리량 시험은 아님.",
+  "queries": {
+    "today": "SELECT t.* FROM todos t WHERE t.user_id = 900000000 AND t.deleted_at IS NULL AND (NULL IS NULL OR t.category_id = NULL) AND (NULL IS NULL OR t.status = NULL) AND ('2026-09-10' IS NULL OR t.due_date = '2026-09-10') ORDER BY t.due_date, t.id",
+    "reward": "SELECT COALESCE(SUM(t.reward_amount),0) FROM todos t WHERE t.user_id = 900000000 AND t.status = 'COMPLETED' AND t.completed_at >= '2026-09-09 15:00:00' AND t.completed_at < '2026-09-10 15:00:00'"
+  },
+  "phases": {
+    "small_original": {
+      "today": {
+        "explain": "1\tSIMPLE\tt\tNULL\tref\tuk_todos_user_external,idx_todos_user_status\tuk_todos_user_external\t8\tconst\t3\t1.67\tUsing where; Using filesort\n",
+        "analyze": [
+          "-> Sort: t.id  (cost=0.755 rows=3) (actual time=0.453..0.453 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=0.755 rows=3) (actual time=0.42..0.429 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=0.755 rows=3) (actual time=0.0214..0.0301 rows=3 loops=1)\n\n",
+          "-> Sort: t.id  (cost=0.755 rows=3) (actual time=0.0357..0.036 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=0.755 rows=3) (actual time=0.0168..0.0253 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=0.755 rows=3) (actual time=0.0154..0.0235 rows=3 loops=1)\n\n",
+          "-> Sort: t.id  (cost=0.755 rows=3) (actual time=0.0404..0.0407 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=0.755 rows=3) (actual time=0.02..0.0297 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=0.755 rows=3) (actual time=0.0186..0.0279 rows=3 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "3\n"
+      },
+      "reward": {
+        "explain": "1\tSIMPLE\tt\tNULL\tref\tuk_todos_user_external,idx_todos_user_status\tidx_todos_user_status\t130\tconst,const\t1\t11.11\tUsing where\n",
+        "analyze": [
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.272 rows=1) (actual time=0.0211..0.0212 rows=1 loops=1)\n    -> Filter: ((t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.261 rows=0.111) (actual time=0.0172..0.0182 rows=1 loops=1)\n        -> Index lookup on t using idx_todos_user_status (user_id=900000000, status='COMPLETED')  (cost=0.261 rows=1) (actual time=0.0149..0.0158 rows=1 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.272 rows=1) (actual time=0.0309..0.0309 rows=1 loops=1)\n    -> Filter: ((t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.261 rows=0.111) (actual time=0.0268..0.0277 rows=1 loops=1)\n        -> Index lookup on t using idx_todos_user_status (user_id=900000000, status='COMPLETED')  (cost=0.261 rows=1) (actual time=0.0244..0.0252 rows=1 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.272 rows=1) (actual time=0.0207..0.0208 rows=1 loops=1)\n    -> Filter: ((t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.261 rows=0.111) (actual time=0.0168..0.0176 rows=1 loops=1)\n        -> Index lookup on t using idx_todos_user_status (user_id=900000000, status='COMPLETED')  (cost=0.261 rows=1) (actual time=0.0141..0.0149 rows=1 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "10\n"
+      }
+    },
+    "history_10000_original": {
+      "today": {
+        "explain": "1\tSIMPLE\tt\tNULL\tref\tuk_todos_user_external,idx_todos_user_status\tuk_todos_user_external\t8\tconst\t18812\t1.00\tUsing where; Using filesort\n",
+        "analyze": [
+          "-> Sort: t.id  (cost=332 rows=18812) (actual time=7.58..7.58 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=332 rows=18812) (actual time=0.0167..7.57 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=332 rows=18812) (actual time=0.0154..7.11 rows=10003 loops=1)\n\n",
+          "-> Sort: t.id  (cost=332 rows=18812) (actual time=7.29..7.29 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=332 rows=18812) (actual time=0.0157..7.28 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=332 rows=18812) (actual time=0.0145..6.85 rows=10003 loops=1)\n\n",
+          "-> Sort: t.id  (cost=332 rows=18812) (actual time=7.38..7.38 rows=3 loops=1)\n    -> Filter: ((t.deleted_at is null) and (t.due_date = DATE'2026-09-10'))  (cost=332 rows=18812) (actual time=0.0178..7.37 rows=3 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=332 rows=18812) (actual time=0.0162..6.94 rows=10003 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "3\n"
+      },
+      "reward": {
+        "explain": "1\tSIMPLE\tt\tNULL\tref\tuk_todos_user_external,idx_todos_user_status\tuk_todos_user_external\t8\tconst\t18812\t1.11\tUsing where\n",
+        "analyze": [
+          "-> Aggregate: sum(t.reward_amount)  (cost=355 rows=1) (actual time=6.47..6.47 rows=1 loops=1)\n    -> Filter: ((t.`status` = 'COMPLETED') and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=334 rows=209) (actual time=0.0989..6.46 rows=1 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=334 rows=18812) (actual time=0.0959..5.5 rows=10003 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=355 rows=1) (actual time=6.51..6.51 rows=1 loops=1)\n    -> Filter: ((t.`status` = 'COMPLETED') and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=334 rows=209) (actual time=0.106..6.51 rows=1 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=334 rows=18812) (actual time=0.103..5.55 rows=10003 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=355 rows=1) (actual time=6.42..6.42 rows=1 loops=1)\n    -> Filter: ((t.`status` = 'COMPLETED') and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=334 rows=209) (actual time=0.0994..6.42 rows=1 loops=1)\n        -> Index lookup on t using uk_todos_user_external (user_id=900000000)  (cost=334 rows=18812) (actual time=0.0966..5.47 rows=10003 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "10\n"
+      }
+    },
+    "history_10000_indexed": {
+      "today": {
+        "explain": "1\tSIMPLE\tt\tNULL\tref\tuk_todos_user_external,idx_todos_user_status,probe_todos_user_deleted_due,probe_todos_user_status_completed\tprobe_todos_user_deleted_due\t17\tconst,const,const\t3\t100.00\tUsing index condition\n",
+        "analyze": [
+          "-> Index lookup on t using probe_todos_user_deleted_due (user_id=900000000, deleted_at=NULL, due_date=DATE'2026-09-10'), with index condition: (t.deleted_at is null)  (cost=1.05 rows=3) (actual time=0.0153..0.0214 rows=3 loops=1)\n\n",
+          "-> Index lookup on t using probe_todos_user_deleted_due (user_id=900000000, deleted_at=NULL, due_date=DATE'2026-09-10'), with index condition: (t.deleted_at is null)  (cost=1.05 rows=3) (actual time=0.0159..0.0219 rows=3 loops=1)\n\n",
+          "-> Index lookup on t using probe_todos_user_deleted_due (user_id=900000000, deleted_at=NULL, due_date=DATE'2026-09-10'), with index condition: (t.deleted_at is null)  (cost=1.05 rows=3) (actual time=0.0174..0.024 rows=3 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "3\n"
+      },
+      "reward": {
+        "explain": "1\tSIMPLE\tt\tNULL\trange\tuk_todos_user_external,idx_todos_user_status,probe_todos_user_deleted_due,probe_todos_user_status_completed\tprobe_todos_user_status_completed\t135\tNULL\t1\t100.00\tUsing index condition\n",
+        "analyze": [
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.81 rows=1) (actual time=0.0241..0.0242 rows=1 loops=1)\n    -> Index range scan on t using probe_todos_user_status_completed over (user_id = 900000000 AND status = 'COMPLETED' AND '2026-09-09 15:00:00' <= completed_at < '2026-09-10 15:00:00'), with index condition: ((t.`status` = 'COMPLETED') and (t.user_id = 900000000) and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.71 rows=1) (actual time=0.0187..0.021 rows=1 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.81 rows=1) (actual time=0.0242..0.0243 rows=1 loops=1)\n    -> Index range scan on t using probe_todos_user_status_completed over (user_id = 900000000 AND status = 'COMPLETED' AND '2026-09-09 15:00:00' <= completed_at < '2026-09-10 15:00:00'), with index condition: ((t.`status` = 'COMPLETED') and (t.user_id = 900000000) and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.71 rows=1) (actual time=0.0184..0.0207 rows=1 loops=1)\n\n",
+          "-> Aggregate: sum(t.reward_amount)  (cost=0.81 rows=1) (actual time=0.0237..0.0238 rows=1 loops=1)\n    -> Index range scan on t using probe_todos_user_status_completed over (user_id = 900000000 AND status = 'COMPLETED' AND '2026-09-09 15:00:00' <= completed_at < '2026-09-10 15:00:00'), with index condition: ((t.`status` = 'COMPLETED') and (t.user_id = 900000000) and (t.completed_at >= TIMESTAMP'2026-09-09 15:00:00') and (t.completed_at < TIMESTAMP'2026-09-10 15:00:00'))  (cost=0.71 rows=1) (actual time=0.0185..0.0207 rows=1 loops=1)\n\n"
+        ],
+        "result_count_or_sum": "10\n"
+      }
+    }
+  },
+  "source_jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+  "indexes_before": "todos\t0\tPRIMARY\t1\tid\tA\t59879\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t1\tuser_id\tA\t20129\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t2\texternal_source\tA\t20052\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t3\texternal_id\tA\t19902\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tfk_todo_category\t1\tcategory_id\tA\t1\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tidx_todos_user_status\t1\tuser_id\tA\t19746\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tidx_todos_user_status\t2\tstatus\tA\t19469\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\n",
+  "row_counts": "70000\n10003\n",
+  "indexes_after": "todos\t0\tPRIMARY\t1\tid\tA\t69881\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t1\tuser_id\tA\t19306\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t2\texternal_source\tA\t20074\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t0\tuk_todos_user_external\t3\texternal_id\tA\t20181\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tfk_todo_category\t1\tcategory_id\tA\t1\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tidx_todos_user_status\t1\tuser_id\tA\t19837\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tidx_todos_user_status\t2\tstatus\tA\t19262\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_deleted_due\t1\tuser_id\tA\t20352\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_deleted_due\t2\tdeleted_at\tA\t19334\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_deleted_due\t3\tdue_date\tA\t19334\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_status_completed\t1\tuser_id\tA\t20355\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_status_completed\t2\tstatus\tA\t19877\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\ntodos\t1\tprobe_todos_user_status_completed\t3\tcompleted_at\tA\t19883\tNULL\tNULL\tYES\tBTREE\t\t\tYES\tNULL\n",
+  "cleanup_completed": true,
+  "summary": {
+    "small_original": {
+      "today": {
+        "root_completion_ms": [
+          0.453,
+          0.036,
+          0.0407
+        ],
+        "median_root_completion_ms": 0.0407,
+        "result": "3"
+      },
+      "reward": {
+        "root_completion_ms": [
+          0.0212,
+          0.0309,
+          0.0208
+        ],
+        "median_root_completion_ms": 0.0212,
+        "result": "10"
+      }
+    },
+    "history_10000_original": {
+      "today": {
+        "root_completion_ms": [
+          7.58,
+          7.29,
+          7.38
+        ],
+        "median_root_completion_ms": 7.38,
+        "result": "3"
+      },
+      "reward": {
+        "root_completion_ms": [
+          6.47,
+          6.51,
+          6.42
+        ],
+        "median_root_completion_ms": 6.47,
+        "result": "10"
+      }
+    },
+    "history_10000_indexed": {
+      "today": {
+        "root_completion_ms": [
+          0.0214,
+          0.0219,
+          0.024
+        ],
+        "median_root_completion_ms": 0.0219,
+        "result": "3"
+      },
+      "reward": {
+        "root_completion_ms": [
+          0.0242,
+          0.0243,
+          0.0238
+        ],
+        "median_root_completion_ms": 0.0242,
+        "result": "10"
+      }
+    }
+  },
+  "raw_file_sha256": "b3dca789e390b1b3e8361cd2f9d99ff666b25654aa8719a60e0496908f38ce2f",
+  "fixture": {
+    "users": 20000,
+    "base_todos": 60000,
+    "hot_user_original_todos": 3,
+    "hot_user_added_past_completed_todos": 10000,
+    "hot_user_current_completed_todos": 1,
+    "expected_today_rows": 3,
+    "expected_daily_reward_sum": 10,
+    "database_cpu_limit": 2,
+    "database_memory_limit": "2g",
+    "database_buffer_pool_bytes": 1073741824,
+    "api_stopped_before_sql_probe": true
+  }
+}

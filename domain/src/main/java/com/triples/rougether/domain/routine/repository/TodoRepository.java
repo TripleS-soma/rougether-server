@@ -66,6 +66,16 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                     @Param("status") TodoStatus status,
                                     @Param("dueDate") LocalDate dueDate);
 
+    // 오늘 현황 전용 조회. 미분류·삭제된 카테고리의 FK도 기존 응답과 동일하게 유지함.
+    @Query("""
+            select new com.triples.rougether.domain.routine.repository.TodoAgendaRow(
+                t.id, t.category.id, t.title, t.dueDate, t.dueTime, t.status, t.completedAt)
+            from Todo t
+            where t.user.id = :userId and t.deletedAt is null and t.dueDate = :date
+            order by t.id asc
+            """)
+    List<TodoAgendaRow> findAgendaDueOn(@Param("userId") Long userId, @Param("date") LocalDate date);
+
     // 유사도 비교 후보용: 기간 내 마감일이 있는 살아있는 투두 전체(status 무관). 날짜별 그룹핑은 호출자가 한다
     @Query("""
             select t from Todo t

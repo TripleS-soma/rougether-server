@@ -1,0 +1,2602 @@
+{
+  "kind": "query-only ABBA comparison; candidate todo indexes held fixed",
+  "planned_order": [
+    "baseline",
+    "optimized",
+    "optimized",
+    "baseline"
+  ],
+  "jar_sha256": {
+    "baseline": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+    "optimized": "d8bf6a49d598a245f7a62ed3be765349215541a21a31f3be5b590310d3de8ff3"
+  },
+  "source_and_tests": {
+    "source_head": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+    "files": {
+      "domain/src/main/java/com/triples/rougether/domain/character/repository/UserCharacterRepository.java": "bcd71eb60d5d0513bdeefbc7de3751fd5817325f1927ff8d651e2bbd0dea32bf",
+      "domain/src/main/java/com/triples/rougether/domain/goal/repository/UserGoalRepository.java": "2833add98caf611ad462ffc6b1f0879a0bbdb8719e7e499ada25896c7f596e51",
+      "domain/src/main/java/com/triples/rougether/domain/routine/repository/RoutineLogRepository.java": "b936ee84f3fd9e29ae42462126b03f941bafdd53ae45082a7562bb4137460f2f",
+      "domain/src/main/java/com/triples/rougether/domain/routine/repository/RoutineRepository.java": "d35acebf0b3d90542a8944a3674e4da087c42cbcbccd8cba6cad4d23c5d5731e",
+      "domain/src/main/java/com/triples/rougether/domain/routine/repository/TodoRepository.java": "611006291f4c7090d19465078df7d432fa6febad20b7a39ea4c73a78b8638e1a",
+      "user-api/src/main/java/com/triples/rougether/userapi/agenda/DailyAgendaAssembler.java": "4a6741a7f3a100c2295505ff2f03e4fd61cbe5f305fc1fa3bfab9dd3921663a8",
+      "user-api/src/main/java/com/triples/rougether/userapi/calendar/service/CalendarService.java": "f2871a45e560ecd93bad07a460d2e527c96360cbcce0ff52150f9f0f13b82447",
+      "user-api/src/main/java/com/triples/rougether/userapi/onboarding/service/OnboardingQueryService.java": "c9115deeab6d9e87a412e273d21622fbfb47e5964510aa997e8250fd77e153ef",
+      "user-api/src/main/java/com/triples/rougether/userapi/today/service/TodayService.java": "963bd0de979928089fddac4c4e4c7ef66a4a9de7416eb03a41ee976ce2704bb7",
+      "user-api/src/test/java/com/triples/rougether/userapi/onboarding/service/OnboardingQueryServiceIntegrationTest.java": "38d1bf55b6e94c76f57efb777010b941e05e5203bb79dc310d2ca559849b7293",
+      "user-api/src/test/java/com/triples/rougether/userapi/today/service/TodayServiceIntegrationTest.java": "6b39a41105cf226e04bcce41b452ab4a8b2bba9313b7bb888ca49f0d12887471",
+      "domain/src/main/java/com/triples/rougether/domain/goal/repository/OnboardingGoalSelection.java": "fec6624235850b9371727641d5d519e67edcccbb53f9bbc87634145cbbbef46c",
+      "domain/src/main/java/com/triples/rougether/domain/routine/repository/TodoAgendaRow.java": "084915c8d4b4a237edb48d905383a76f43aa8f3fa81a476ce1d0edb1c088d731"
+    },
+    "test_results": {
+      "common": {
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "domain": {
+        "tests": 78,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "user-api": {
+        "tests": 1476,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      "admin-api": {
+        "tests": 230,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "batch": {
+        "tests": 172,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "infra/fcm": {
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "infra/llm": {
+        "tests": 26,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "runs": [
+    {
+      "index": 1,
+      "label": "baseline",
+      "run_id": "20260910T140154-f6618c-mixed",
+      "valid_accounting": false,
+      "accounting_gap": 2,
+      "sent": 75865,
+      "business_success": 75865,
+      "dropped": 14137,
+      "latency_ms": {
+        "p(99)": 797,
+        "max": 2122,
+        "avg": 333.8383971528373,
+        "min": 5,
+        "med": 290,
+        "p(90)": 571,
+        "p(95)": 644
+      },
+      "endpoint_latency_ms": {
+        "me": {
+          "p(95)": 653,
+          "p(99)": 802,
+          "max": 1749,
+          "avg": 330.3766888552033,
+          "min": 5,
+          "med": 283,
+          "p(90)": 573
+        },
+        "today": {
+          "avg": 331.4519211757728,
+          "min": 6,
+          "med": 285,
+          "p(90)": 574,
+          "p(95)": 653,
+          "p(99)": 803,
+          "max": 2122
+        },
+        "complete": {
+          "avg": 345.5347657022342,
+          "min": 12,
+          "med": 309,
+          "p(90)": 560,
+          "p(95)": 619,
+          "p(99)": 772.2799999999999,
+          "max": 1756
+        }
+      },
+      "acquire_mean_ms": 60.30782710442305,
+      "buffer_pool_miss_reads": 0,
+      "server_completed": {
+        "me": 30346.0,
+        "today": 30346.0,
+        "complete": 15173.0
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 75865.0 < 89100.00",
+          "sent_requests + dropped_iterations must match expected_requests within 1 (90002.0 != 90000.0)",
+          "dropped_iterations must be zero, got 14137.0",
+          "endpoint complete latency p(95) 619.0ms > 300.0ms",
+          "endpoint me latency p(95) 653.0ms > 300.0ms",
+          "endpoint today latency p(95) 653.0ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 14137']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8429444444444445,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "executed_audit": {
+        "scope": "executed_requests_not_offered_load",
+        "passed": true,
+        "expected_unique_completions": 15173,
+        "errors": [],
+        "history_unchanged": true,
+        "capacity_verdict_unchanged": true,
+        "excluded_dropped_iterations": 14137,
+        "completion_audit": {
+          "expected_unique_completions": 15173,
+          "actual_completed_todos": 15173,
+          "completed_outside_expected_prefix": 0,
+          "missing_expected_prefix_completion": 0,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": 151730,
+          "actual_todo_reward_total": 151730,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": 15173
+        }
+      },
+      "cleanup_completed": true,
+      "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+      "condition": {
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "warmup_seconds": 60,
+        "history": {
+          "per_user": 100,
+          "count": 2000000,
+          "start_id": 910060000,
+          "end_id": 912059999,
+          "seed_date": "2026-09-10",
+          "model": "past overdue completed todos; reward and growth zero; outside active ID range"
+        },
+        "todo_indexes": "candidate",
+        "todo_index_cache_warm": true
+      },
+      "evidence_sha256": {
+        "manifest.json": "5dc94137377b6541107a4d3256f8b4812fba35f2645524c0c858a641d854970f",
+        "summary.json": "c283fda52ba52b6ac51d3c0c6ce3a694518a47a03348fc6c377dd62cd4a4793a",
+        "verdict.json": "dcf363c23d2ed318067b3a5a238a0227b00066a09347468c6be5b4b869c01c3b",
+        "executed-db-audit.json": "c9a6c59b2d0a90381436dde35364afcba3b1b5a52610fc91572dca1307d2049a",
+        "db-before.json": "8c3e56ee143b2ffb37cdd036195e2e550b6ae346dc7f70f464a6c92fcf237043",
+        "db-after.json": "17cff168905d40c0b615f623b62711c2d983316d7105fe54b11a25344af8db66"
+      }
+    },
+    {
+      "index": 2,
+      "label": "optimized",
+      "run_id": "20260910T140415-6a5e00-mixed",
+      "valid_accounting": true,
+      "accounting_gap": 1,
+      "sent": 75565,
+      "business_success": 75565,
+      "dropped": 14436,
+      "latency_ms": {
+        "p(99)": 865,
+        "max": 1458,
+        "avg": 234.53242903460597,
+        "min": 0,
+        "med": 149,
+        "p(90)": 589,
+        "p(95)": 683
+      },
+      "endpoint_latency_ms": {
+        "me": {
+          "med": 144,
+          "p(90)": 589,
+          "p(95)": 685,
+          "p(99)": 873,
+          "max": 1403,
+          "avg": 232.07212333752398,
+          "min": 0
+        },
+        "today": {
+          "max": 1458,
+          "avg": 232.0915437040958,
+          "min": 1,
+          "med": 144,
+          "p(90)": 592,
+          "p(95)": 688,
+          "p(99)": 868.4999999999994
+        },
+        "complete": {
+          "p(95)": 668,
+          "p(99)": 816,
+          "max": 1334,
+          "avg": 244.33481108979024,
+          "min": 3,
+          "med": 167,
+          "p(90)": 582
+        }
+      },
+      "acquire_mean_ms": 51.479896686575756,
+      "buffer_pool_miss_reads": 0,
+      "server_completed": {
+        "me": 30226.0,
+        "today": 30226.0,
+        "complete": 15113.0
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 75565.0 < 89100.00",
+          "dropped_iterations must be zero, got 14436.0",
+          "endpoint complete latency p(95) 668.0ms > 300.0ms",
+          "endpoint me latency p(95) 685.0ms > 300.0ms",
+          "endpoint today latency p(95) 688.0ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 14436']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 1 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8396111111111111,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "executed_audit": {
+        "scope": "executed_requests_not_offered_load",
+        "passed": true,
+        "expected_unique_completions": 15113,
+        "errors": [],
+        "history_unchanged": true,
+        "capacity_verdict_unchanged": true,
+        "excluded_dropped_iterations": 14436,
+        "completion_audit": {
+          "expected_unique_completions": 15113,
+          "actual_completed_todos": 15113,
+          "completed_outside_expected_prefix": 0,
+          "missing_expected_prefix_completion": 0,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": 151130,
+          "actual_todo_reward_total": 151130,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": 15113
+        }
+      },
+      "cleanup_completed": true,
+      "jar_sha256": "d8bf6a49d598a245f7a62ed3be765349215541a21a31f3be5b590310d3de8ff3",
+      "condition": {
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "warmup_seconds": 60,
+        "history": {
+          "per_user": 100,
+          "count": 2000000,
+          "start_id": 910060000,
+          "end_id": 912059999,
+          "seed_date": "2026-09-10",
+          "model": "past overdue completed todos; reward and growth zero; outside active ID range"
+        },
+        "todo_indexes": "candidate",
+        "todo_index_cache_warm": true
+      },
+      "evidence_sha256": {
+        "manifest.json": "29924c8b342bd5ec163f7d1e6a6430c36949e46762e73db341976c32da3f4259",
+        "summary.json": "9eb14e7ca6bd4be138256965265df6198404210167b0e23f95db97101c29e851",
+        "verdict.json": "b879d1f450558c57f5cc7e30ad63d36eba45318008432c601f611242120cc8e6",
+        "executed-db-audit.json": "ec2ef05533e056f4b6747293a2c09f66f17e01ec247ae22144a553ea89eadc7e",
+        "db-before.json": "2ffde763d8d9052e10fb50fa9b758cd33d5b608b543fc6aea05395f31d21218a",
+        "db-after.json": "336101f3cfe6b5fe191f5afe935ab2b8720a15da8381401c82e5b7a4368ab7eb"
+      }
+    },
+    {
+      "index": 3,
+      "label": "optimized",
+      "run_id": "20260910T140636-ce5958-mixed",
+      "valid_accounting": true,
+      "accounting_gap": 0,
+      "sent": 76677,
+      "business_success": 76677,
+      "dropped": 13323,
+      "latency_ms": {
+        "med": 29,
+        "p(90)": 559,
+        "p(95)": 643,
+        "p(99)": 855,
+        "max": 2239,
+        "avg": 174.11325430050732,
+        "min": 0
+      },
+      "endpoint_latency_ms": {
+        "me": {
+          "min": 0,
+          "med": 26,
+          "p(90)": 559,
+          "p(95)": 644,
+          "p(99)": 850,
+          "max": 2025,
+          "avg": 172.05073196178802
+        },
+        "today": {
+          "max": 2239,
+          "avg": 172.77633595252846,
+          "min": 0,
+          "med": 27,
+          "p(90)": 562,
+          "p(95)": 645,
+          "p(99)": 853
+        },
+        "complete": {
+          "max": 2164,
+          "avg": 180.9123573524617,
+          "min": 2,
+          "med": 41,
+          "p(90)": 548,
+          "p(95)": 636.2999999999993,
+          "p(99)": 873.6599999999999
+        }
+      },
+      "acquire_mean_ms": 32.58207040366379,
+      "buffer_pool_miss_reads": 0,
+      "server_completed": {
+        "me": 30671.0,
+        "today": 30671.0,
+        "complete": 15335.0
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 76677.0 < 89100.00",
+          "dropped_iterations must be zero, got 13323.0",
+          "endpoint complete latency p(95) 636.2999999999993ms > 300.0ms",
+          "endpoint me latency p(95) 644.0ms > 300.0ms",
+          "endpoint today latency p(95) 645.0ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 13323']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8519666666666666,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "executed_audit": {
+        "scope": "executed_requests_not_offered_load",
+        "passed": true,
+        "expected_unique_completions": 15335,
+        "errors": [],
+        "history_unchanged": true,
+        "capacity_verdict_unchanged": true,
+        "excluded_dropped_iterations": 13323,
+        "completion_audit": {
+          "expected_unique_completions": 15335,
+          "actual_completed_todos": 15335,
+          "completed_outside_expected_prefix": 0,
+          "missing_expected_prefix_completion": 0,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": 153350,
+          "actual_todo_reward_total": 153350,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": 15335
+        }
+      },
+      "cleanup_completed": true,
+      "jar_sha256": "d8bf6a49d598a245f7a62ed3be765349215541a21a31f3be5b590310d3de8ff3",
+      "condition": {
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "warmup_seconds": 60,
+        "history": {
+          "per_user": 100,
+          "count": 2000000,
+          "start_id": 910060000,
+          "end_id": 912059999,
+          "seed_date": "2026-09-10",
+          "model": "past overdue completed todos; reward and growth zero; outside active ID range"
+        },
+        "todo_indexes": "candidate",
+        "todo_index_cache_warm": true
+      },
+      "evidence_sha256": {
+        "manifest.json": "4ca2b7f867fb70d79081c2c01ff71d02e9717328d243fb8110d8a6b313fe1395",
+        "summary.json": "096d34e1f6edc5a76c4d146cf6d465debd3a7df79bde40f0fa3c788ef33c8f7a",
+        "verdict.json": "b2db5de1b9cda276327f1ba0bd01170b24c89c05f4009831ad84415e5ce028e4",
+        "executed-db-audit.json": "39100ab7f8a48ea8e491b72bedc1b7df9f7ad160ea4e35d7ba1053ee46019429",
+        "db-before.json": "9c5406b90892615def90d35b96628940fc7316b7bb68b798a9f9a4997148eb80",
+        "db-after.json": "d375ffe1689f1d71a7567a57d0c33f9a3d9f4318411a9d52b4a4f108c6c98f6d"
+      }
+    },
+    {
+      "index": 4,
+      "label": "baseline",
+      "run_id": "20260910T140857-3de6da-mixed",
+      "valid_accounting": true,
+      "accounting_gap": 1,
+      "sent": 74071,
+      "business_success": 74071,
+      "dropped": 15930,
+      "latency_ms": {
+        "p(99)": 822,
+        "max": 1829,
+        "avg": 376.3109044025327,
+        "min": 1,
+        "med": 334,
+        "p(90)": 593,
+        "p(95)": 677
+      },
+      "endpoint_latency_ms": {
+        "me": {
+          "p(90)": 594,
+          "p(95)": 680.5999999999987,
+          "p(99)": 831.7199999999997,
+          "max": 1729,
+          "avg": 372.61277802153296,
+          "min": 1,
+          "med": 328
+        },
+        "today": {
+          "max": 1829,
+          "avg": 373.6181652490887,
+          "min": 4,
+          "med": 329,
+          "p(90)": 594,
+          "p(95)": 678,
+          "p(99)": 822.7299999999998
+        },
+        "complete": {
+          "med": 354,
+          "p(90)": 589,
+          "p(95)": 664,
+          "p(99)": 812,
+          "max": 1639,
+          "avg": 389.092885108681,
+          "min": 9
+        }
+      },
+      "acquire_mean_ms": 61.78055244344608,
+      "buffer_pool_miss_reads": 0,
+      "server_completed": {
+        "me": 29629.0,
+        "today": 29628.0,
+        "complete": 14814.0
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 74071.0 < 89100.00",
+          "dropped_iterations must be zero, got 15930.0",
+          "endpoint complete latency p(95) 664.0ms > 300.0ms",
+          "endpoint me latency p(95) 680.5999999999987ms > 300.0ms",
+          "endpoint today latency p(95) 678.0ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 15930']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 1 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8230111111111111,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "executed_audit": {
+        "scope": "executed_requests_not_offered_load",
+        "passed": true,
+        "expected_unique_completions": 14814,
+        "errors": [],
+        "history_unchanged": true,
+        "capacity_verdict_unchanged": true,
+        "excluded_dropped_iterations": 15930,
+        "completion_audit": {
+          "expected_unique_completions": 14814,
+          "actual_completed_todos": 14814,
+          "completed_outside_expected_prefix": 0,
+          "missing_expected_prefix_completion": 0,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": 148140,
+          "actual_todo_reward_total": 148140,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": 14814
+        }
+      },
+      "cleanup_completed": true,
+      "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+      "condition": {
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "warmup_seconds": 60,
+        "history": {
+          "per_user": 100,
+          "count": 2000000,
+          "start_id": 910060000,
+          "end_id": 912059999,
+          "seed_date": "2026-09-10",
+          "model": "past overdue completed todos; reward and growth zero; outside active ID range"
+        },
+        "todo_indexes": "candidate",
+        "todo_index_cache_warm": true
+      },
+      "evidence_sha256": {
+        "manifest.json": "d3a966ea23ec11377ff2e9d561ebeb27def66c2377108434b536969bca58dfe2",
+        "summary.json": "091f6d8fc6ed75e29530914924676a7523f95aa7f971cae7adaa1dd1ebc42f5c",
+        "verdict.json": "8a3f7c9201db45963716aa3102873197e114b5c536ef63365882fd56921f94ba",
+        "executed-db-audit.json": "85a3842e7d798961b3ceb03aff6eb055a04eca5aba91f0e8fe7a84daf67e9aac",
+        "db-before.json": "0781e12d95e2a1362e14a0413544a41991fe722640684493761a046ac19f48d3",
+        "db-after.json": "1311e386e5b002c68d3d8e5fb646201a10243d52964f8abf8ea38772b99b3489"
+      }
+    },
+    {
+      "index": 5,
+      "label": "baseline",
+      "run_id": "20260910T141201-2f914e-mixed",
+      "valid_accounting": true,
+      "accounting_gap": 1,
+      "sent": 71535,
+      "business_success": 71535,
+      "dropped": 18466,
+      "latency_ms": {
+        "avg": 396.8762563779968,
+        "min": 5,
+        "med": 354,
+        "p(90)": 609,
+        "p(95)": 694,
+        "p(99)": 882,
+        "max": 2040
+      },
+      "endpoint_latency_ms": {
+        "me": {
+          "p(95)": 696,
+          "p(99)": 880.8699999999998,
+          "max": 2040,
+          "avg": 393.15426015237296,
+          "min": 9,
+          "med": 348,
+          "p(90)": 609
+        },
+        "today": {
+          "p(99)": 887,
+          "max": 1943,
+          "avg": 393.51541203606627,
+          "min": 6,
+          "med": 349,
+          "p(90)": 609,
+          "p(95)": 695
+        },
+        "complete": {
+          "max": 1956,
+          "avg": 411.0419375131055,
+          "min": 5,
+          "med": 376,
+          "p(90)": 609,
+          "p(95)": 689,
+          "p(99)": 873.9399999999998
+        }
+      },
+      "acquire_mean_ms": 63.648303462029745,
+      "buffer_pool_miss_reads": 0,
+      "server_completed": {
+        "me": 28614.0,
+        "today": 28614.0,
+        "complete": 14307.0
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 71535.0 < 89100.00",
+          "dropped_iterations must be zero, got 18466.0",
+          "endpoint complete latency p(95) 689.0ms > 300.0ms",
+          "endpoint me latency p(95) 696.0ms > 300.0ms",
+          "endpoint today latency p(95) 695.0ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 18466']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.7948333333333333,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "executed_audit": {
+        "scope": "executed_requests_not_offered_load",
+        "passed": true,
+        "expected_unique_completions": 14307,
+        "errors": [],
+        "history_unchanged": true,
+        "capacity_verdict_unchanged": true,
+        "excluded_dropped_iterations": 18466,
+        "completion_audit": {
+          "expected_unique_completions": 14307,
+          "actual_completed_todos": 14307,
+          "completed_outside_expected_prefix": 0,
+          "missing_expected_prefix_completion": 0,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": 143070,
+          "actual_todo_reward_total": 143070,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": 14307
+        }
+      },
+      "cleanup_completed": true,
+      "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+      "condition": {
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "warmup_seconds": 60,
+        "history": {
+          "per_user": 100,
+          "count": 2000000,
+          "start_id": 910060000,
+          "end_id": 912059999,
+          "seed_date": "2026-09-10",
+          "model": "past overdue completed todos; reward and growth zero; outside active ID range"
+        },
+        "todo_indexes": "candidate",
+        "todo_index_cache_warm": true
+      },
+      "evidence_sha256": {
+        "manifest.json": "43f62c7ae675b5ad01bda086892f3e98a4cb3bedde7887cbb2271191a600c392",
+        "summary.json": "5a7bf050d7c031ba6dac76e834a73f91c2ff967b4a7a1755347d2ec2dacc878a",
+        "verdict.json": "1d56cbaa0c940ed43d96bbeda9533403ca0d96064785c7a0e72bb9223a91c670",
+        "executed-db-audit.json": "bb9b82e13b8242c4aeb36da48b1253761b1aaa0014268a7a3063c8939bf39301",
+        "db-before.json": "0d3ad7149b5c829ae6f46f5d3d98f3257159116c78ee78e2920abbaa2688bc9f",
+        "db-after.json": "2c627d387b29bb18610cebb45b6ca1e3c7fc03b712cfad27c4f00521c0b8b9d6"
+      }
+    }
+  ],
+  "averages": {
+    "baseline": {
+      "n": 2,
+      "business_success": 72803,
+      "p95_ms": 685.5,
+      "acquire_mean_ms": 62.714427952737914,
+      "complete_p95_ms": 676.5
+    },
+    "optimized": {
+      "n": 2,
+      "business_success": 76121,
+      "p95_ms": 663,
+      "acquire_mean_ms": 42.030983545119774,
+      "complete_p95_ms": 652.1499999999996
+    }
+  },
+  "sql_before": {
+    "run_id": "20260910T132713-4084d4-query-probe",
+    "project": "rougether-scale-20260910t132713-4084d4-query-probe",
+    "kind": "isolated real HTTP SQL sequence probe; not an RPS or latency benchmark",
+    "cases": {
+      "me_cold": {
+        "user_id": 900000000,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000000,
+            "nickname": "scale-user-000000",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": null,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 1,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 2,
+          "SET": 6
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:31.992334",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.016624",
+            "sql": "INSERT INTO user_daily_activity (user_id, activity_date, created_at)\nSELECT u.id, '2026-09-10', CURRENT_TIMESTAMP\nFROM users u\nWHERE u.id = 900000000\n  AND u.deleted_at IS NULL\n  AND u.is_bot = FALSE\nON DUPLICATE KEY UPDATE activity_date = activity_date",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.020767",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.021849",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.027799",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.028106",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.076002",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.096723",
+            "sql": "select ug1_0.id,ug1_0.created_at,ug1_0.goal_id,g1_0.id,g1_0.is_active,g1_0.code,g1_0.name,g1_0.sort_order,ug1_0.is_primary,ug1_0.user_id from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000000 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.101234",
+            "sql": "select uc1_0.id,uc1_0.acquired_at,uc1_0.character_id,uc1_0.created_at,uc1_0.deleted_at,uc1_0.is_selected,uc1_0.updated_at,uc1_0.user_id from user_characters uc1_0 where uc1_0.user_id=900000000 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.102441",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.102625",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.102879",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "me_repeat": {
+        "user_id": 900000000,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000000,
+            "nickname": "scale-user-000000",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": null,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:32.476466",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.476785",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.477663",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.478681",
+            "sql": "select ug1_0.id,ug1_0.created_at,ug1_0.goal_id,g1_0.id,g1_0.is_active,g1_0.code,g1_0.name,g1_0.sort_order,ug1_0.is_primary,ug1_0.user_id from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000000 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.479218",
+            "sql": "select uc1_0.id,uc1_0.acquired_at,uc1_0.character_id,uc1_0.created_at,uc1_0.deleted_at,uc1_0.is_selected,uc1_0.updated_at,uc1_0.user_id from user_characters uc1_0 where uc1_0.user_id=900000000 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.479523",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.479667",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.479969",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_no_routines": {
+        "user_id": 900000000,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": null,
+                "routines": [],
+                "todos": [
+                  {
+                    "id": 910000000,
+                    "title": "scale todo 0",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000003,
+                    "title": "scale todo 3",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000006,
+                    "title": "scale todo 6",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 0,
+              "remainingCount": 3,
+              "progressRate": 0.0
+            },
+            "streak": {
+              "currentCount": 0,
+              "longestCount": 0,
+              "lastSuccessDate": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 4,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:32.784857",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.785249",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.788369",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000000 and r1_0.status='ACTIVE' and r1_0.deleted_at is null order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.792709",
+            "sql": "select rl1_0.id,rl1_0.completed_at,rl1_0.created_at,rl1_0.growth_reward_amount,rl1_0.reward_amount,rl1_0.reward_currency_type,rl1_0.routine_id,rl1_0.routine_date,rl1_0.status from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000000 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.795994",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.user_id=900000000 and t1_0.deleted_at is null and (null is null or t1_0.category_id=null) and (null is null or t1_0.status=null) and ('2026-09-10' is null or t1_0.due_date='2026-09-10') order by t1_0.due_date,t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.803697",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.805116",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.805359",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:32.805622",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "me_three_goals": {
+        "user_id": 900000001,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000001,
+            "nickname": "scale-user-000001",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": 940000001,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:33.367720",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.368046",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.368825",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000001 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.369742",
+            "sql": "select ug1_0.id,ug1_0.created_at,ug1_0.goal_id,g1_0.id,g1_0.is_active,g1_0.code,g1_0.name,g1_0.sort_order,ug1_0.is_primary,ug1_0.user_id from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000001 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.370855",
+            "sql": "select uc1_0.id,uc1_0.acquired_at,uc1_0.character_id,uc1_0.created_at,uc1_0.deleted_at,uc1_0.is_selected,uc1_0.updated_at,uc1_0.user_id from user_characters uc1_0 where uc1_0.user_id=900000001 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.371194",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.371354",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.371584",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_twelve_loaded_two_target": {
+        "user_id": 900000001,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": 950000001,
+                "routines": [
+                  {
+                    "id": 960000000,
+                    "title": "Probe routine 0",
+                    "scheduledTime": "09:00:00",
+                    "authType": "CHECK",
+                    "completed": true,
+                    "houseMissionId": null
+                  },
+                  {
+                    "id": 960000001,
+                    "title": "Probe routine 1",
+                    "scheduledTime": "09:00:00",
+                    "authType": "CHECK",
+                    "completed": false,
+                    "houseMissionId": null
+                  }
+                ],
+                "todos": [
+                  {
+                    "id": 910000001,
+                    "title": "scale todo 1",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000004,
+                    "title": "scale todo 4",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000007,
+                    "title": "scale todo 7",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 1,
+              "remainingCount": 4,
+              "progressRate": 0.2
+            },
+            "streak": {
+              "currentCount": 1,
+              "longestCount": 1,
+              "lastSuccessDate": "2026-09-10"
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 4,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:33.781334",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.781665",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.782337",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000001 and r1_0.status='ACTIVE' and r1_0.deleted_at is null order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.786263",
+            "sql": "select rl1_0.id,rl1_0.completed_at,rl1_0.created_at,rl1_0.growth_reward_amount,rl1_0.reward_amount,rl1_0.reward_currency_type,rl1_0.routine_id,rl1_0.routine_date,rl1_0.status from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000001 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.787444",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.user_id=900000001 and t1_0.deleted_at is null and (null is null or t1_0.category_id=null) and (null is null or t1_0.status=null) and ('2026-09-10' is null or t1_0.due_date='2026-09-10') order by t1_0.due_date,t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.788748",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000001",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.789516",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.789792",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:33.790046",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_twelve_loaded_zero_target": {
+        "user_id": 900000001,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": 950000001,
+                "routines": [],
+                "todos": [
+                  {
+                    "id": 910000001,
+                    "title": "scale todo 1",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000004,
+                    "title": "scale todo 4",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000007,
+                    "title": "scale todo 7",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 0,
+              "remainingCount": 3,
+              "progressRate": 0.0
+            },
+            "streak": {
+              "currentCount": 1,
+              "longestCount": 1,
+              "lastSuccessDate": "2026-09-10"
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 4,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:34.308532",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.308829",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.309478",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000001 and r1_0.status='ACTIVE' and r1_0.deleted_at is null order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.312093",
+            "sql": "select rl1_0.id,rl1_0.completed_at,rl1_0.created_at,rl1_0.growth_reward_amount,rl1_0.reward_amount,rl1_0.reward_currency_type,rl1_0.routine_id,rl1_0.routine_date,rl1_0.status from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000001 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.313053",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.user_id=900000001 and t1_0.deleted_at is null and (null is null or t1_0.category_id=null) and (null is null or t1_0.status=null) and ('2026-09-10' is null or t1_0.due_date='2026-09-10') order by t1_0.due_date,t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.314706",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000001",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.315303",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.315472",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.315677",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "todo_complete_existing_room": {
+        "user_id": 900000000,
+        "path": "/api/v1/todos/910000000/complete",
+        "method": "POST",
+        "response": {
+          "status": 201,
+          "body": {
+            "id": 910000000,
+            "status": "COMPLETED",
+            "completedAt": "2026-09-10T04:27:34.652003631Z",
+            "rewardCurrencyType": "COIN",
+            "rewardAmount": 10
+          }
+        },
+        "statement_counts": {
+          "SELECT": 6,
+          "INSERT": 2,
+          "UPDATE": 4,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 2
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:34.644129",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.645039",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 for update of u1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.646239",
+            "sql": "select uw1_0.id,uw1_0.balance,uw1_0.created_at,uw1_0.currency_type,uw1_0.updated_at,uw1_0.user_id from user_wallets uw1_0 where uw1_0.user_id=900000000 and uw1_0.currency_type='COIN' for update of uw1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.648838",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.id=910000000 and t1_0.user_id=900000000 and t1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.650445",
+            "sql": "select coalesce(sum(rl1_0.reward_amount),0) from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000000 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.651611",
+            "sql": "select coalesce(sum(t1_0.reward_amount),0) from todos t1_0 where t1_0.user_id=900000000 and t1_0.completed_at>='2026-09-09 15:00:00' and t1_0.completed_at<'2026-09-10 15:00:00' and t1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.652784",
+            "sql": "insert into wallet_histories (amount,balance_after,created_at,currency_type,reason,source_id,source_type,user_id) values (10,10,'2026-09-10 04:27:34.652264','COIN','TODO_COMPLETE',910000000,'TODO',900000000)",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.655370",
+            "sql": "update user_wallets set balance=10,currency_type='COIN',updated_at='2026-09-10 04:27:34.653488',user_id=900000000 where id=920000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.657246",
+            "sql": "update todos set completed_at='2026-09-10 04:27:34.652004',reward_amount=10,reward_currency_type='COIN',status='COMPLETED',updated_at='2026-09-10 04:27:34.653595' where id=910000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.658348",
+            "sql": "INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, updated_at)\nVALUES (900000000, 0, 0, 'SLOT_V1', 0, CURRENT_TIMESTAMP)\nON DUPLICATE KEY UPDATE user_id = personal_rooms.user_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.659099",
+            "sql": "select pr1_0.user_id,pr1_0.growth_level,pr1_0.growth_points,pr1_0.highest_growth_level,pr1_0.layout_format,pr1_0.layout_revision,pr1_0.updated_at from personal_rooms pr1_0 where pr1_0.user_id=900000000 for update of pr1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.660409",
+            "sql": "update todos set growth_reward_amount=10,updated_at='2026-09-10 04:27:34.659866' where id=910000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.660949",
+            "sql": "update personal_rooms set growth_level=0,growth_points=10,highest_growth_level=0,layout_format='SLOT_V1',layout_revision=0,updated_at='2026-09-10 04:27:34.659993' where user_id=900000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.661325",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:34.662034",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "todo_complete_missing_room": {
+        "user_id": 900000002,
+        "path": "/api/v1/todos/910000002/complete",
+        "method": "POST",
+        "response": {
+          "status": 201,
+          "body": {
+            "id": 910000002,
+            "status": "COMPLETED",
+            "completedAt": "2026-09-10T04:27:35.071277506Z",
+            "rewardCurrencyType": "COIN",
+            "rewardAmount": 10
+          }
+        },
+        "statement_counts": {
+          "SELECT": 6,
+          "INSERT": 2,
+          "UPDATE": 4,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 2
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 13:27:35.066600",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.067554",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000002 for update of u1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.068755",
+            "sql": "select uw1_0.id,uw1_0.balance,uw1_0.created_at,uw1_0.currency_type,uw1_0.updated_at,uw1_0.user_id from user_wallets uw1_0 where uw1_0.user_id=900000002 and uw1_0.currency_type='COIN' for update of uw1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.069613",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.id=910000002 and t1_0.user_id=900000002 and t1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.070426",
+            "sql": "select coalesce(sum(rl1_0.reward_amount),0) from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000002 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.071054",
+            "sql": "select coalesce(sum(t1_0.reward_amount),0) from todos t1_0 where t1_0.user_id=900000002 and t1_0.completed_at>='2026-09-09 15:00:00' and t1_0.completed_at<'2026-09-10 15:00:00' and t1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.071893",
+            "sql": "insert into wallet_histories (amount,balance_after,created_at,currency_type,reason,source_id,source_type,user_id) values (10,10,'2026-09-10 04:27:35.07142','COIN','TODO_COMPLETE',910000002,'TODO',900000002)",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.072820",
+            "sql": "update user_wallets set balance=10,currency_type='COIN',updated_at='2026-09-10 04:27:35.072427',user_id=900000002 where id=920000004",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.073504",
+            "sql": "update todos set completed_at='2026-09-10 04:27:35.071278',reward_amount=10,reward_currency_type='COIN',status='COMPLETED',updated_at='2026-09-10 04:27:35.072519' where id=910000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.074488",
+            "sql": "INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, updated_at)\nVALUES (900000002, 0, 0, 'SLOT_V1', 0, CURRENT_TIMESTAMP)\nON DUPLICATE KEY UPDATE user_id = personal_rooms.user_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.075252",
+            "sql": "select pr1_0.user_id,pr1_0.growth_level,pr1_0.growth_points,pr1_0.highest_growth_level,pr1_0.layout_format,pr1_0.layout_revision,pr1_0.updated_at from personal_rooms pr1_0 where pr1_0.user_id=900000002 for update of pr1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.076356",
+            "sql": "update todos set growth_reward_amount=10,updated_at='2026-09-10 04:27:35.07589' where id=910000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.076824",
+            "sql": "update personal_rooms set growth_level=0,growth_points=10,highest_growth_level=0,layout_format='SLOT_V1',layout_revision=0,updated_at='2026-09-10 04:27:35.075993' where user_id=900000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.077021",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 13:27:35.077714",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      }
+    },
+    "source_jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+    "fixture_date_kst": "2026-09-10",
+    "fixture_routine_completion": {
+      "status": 201,
+      "body": {
+        "id": 1,
+        "routineDate": "2026-09-10",
+        "status": "COMPLETED",
+        "completedAt": "2026-09-10T04:27:33.620327464Z",
+        "rewardCurrencyType": "COIN",
+        "rewardAmount": 10,
+        "streak": {
+          "currentCount": 1,
+          "longestCount": 1,
+          "lastSuccessDate": "2026-09-10"
+        },
+        "houseMissionContribution": null
+      }
+    },
+    "fixture_counts": "{\"active_routines\": 12}\n{\"completed_logs\": 1}\n",
+    "write_audit": [
+      {
+        "growth": 10,
+        "ledger": 10,
+        "wallet": 10,
+        "user_id": 900000000,
+        "completed": 1,
+        "todo_growth": 10,
+        "todo_reward": 10
+      },
+      {
+        "growth": 10,
+        "ledger": 10,
+        "wallet": 10,
+        "user_id": 900000002,
+        "completed": 1,
+        "todo_growth": 10,
+        "todo_reward": 10
+      }
+    ],
+    "write_audit_passed": true,
+    "cleanup_completed": true
+  },
+  "sql_after": {
+    "run_id": "20260910T135949-e488c4-query-probe",
+    "project": "rougether-scale-20260910t135949-e488c4-query-probe",
+    "kind": "isolated real HTTP SQL sequence probe; not an RPS or latency benchmark",
+    "cases": {
+      "me_cold": {
+        "user_id": 900000000,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000000,
+            "nickname": "scale-user-000000",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": null,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 1,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 2,
+          "SET": 6
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:08.610491",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.634814",
+            "sql": "INSERT INTO user_daily_activity (user_id, activity_date, created_at)\nSELECT u.id, '2026-09-10', CURRENT_TIMESTAMP\nFROM users u\nWHERE u.id = 900000000\n  AND u.deleted_at IS NULL\n  AND u.is_bot = FALSE\nON DUPLICATE KEY UPDATE activity_date = activity_date",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.639469",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.640493",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.645454",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.645787",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.707335",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.727795",
+            "sql": "select g1_0.id,ug1_0.is_primary from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000000 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.731691",
+            "sql": "select uc1_0.character_id from user_characters uc1_0 where uc1_0.user_id=900000000 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.732531",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.732790",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:08.733013",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "me_repeat": {
+        "user_id": 900000000,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000000,
+            "nickname": "scale-user-000000",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": null,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:09.042508",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.042792",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.043833",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.044883",
+            "sql": "select g1_0.id,ug1_0.is_primary from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000000 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.045487",
+            "sql": "select uc1_0.character_id from user_characters uc1_0 where uc1_0.user_id=900000000 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.045795",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.045952",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.046142",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_no_routines": {
+        "user_id": 900000000,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": null,
+                "routines": [],
+                "todos": [
+                  {
+                    "id": 910000000,
+                    "title": "scale todo 0",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000003,
+                    "title": "scale todo 3",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000006,
+                    "title": "scale todo 6",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 0,
+              "remainingCount": 3,
+              "progressRate": 0.0
+            },
+            "streak": {
+              "currentCount": 0,
+              "longestCount": 0,
+              "lastSuccessDate": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:09.358054",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.358394",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.361642",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000000 and r1_0.status='ACTIVE' and r1_0.deleted_at is null and (r1_0.starts_on is null or r1_0.starts_on<='2026-09-10') and (r1_0.ends_on is null or r1_0.ends_on>='2026-09-10') order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.366887",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.title,t1_0.due_date,t1_0.due_time,t1_0.status,t1_0.completed_at from todos t1_0 where t1_0.user_id=900000000 and t1_0.deleted_at is null and t1_0.due_date='2026-09-10' order by t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.372259",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.373610",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.373757",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.373855",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "me_three_goals": {
+        "user_id": 900000001,
+        "path": "/api/v1/me",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "userId": 900000001,
+            "nickname": "scale-user-000001",
+            "bio": null,
+            "profileImageKey": null,
+            "lastAccessedAt": null,
+            "onboarding": {
+              "completed": false,
+              "primaryGoalId": 940000001,
+              "selectedCharacterId": null
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:09.910284",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.910539",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.911062",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000001 and u1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.911928",
+            "sql": "select g1_0.id,ug1_0.is_primary from user_goals ug1_0 join goals g1_0 on g1_0.id=ug1_0.goal_id where ug1_0.user_id=900000001 order by g1_0.sort_order",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.912498",
+            "sql": "select uc1_0.character_id from user_characters uc1_0 where uc1_0.user_id=900000001 and uc1_0.is_selected=true and uc1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.912814",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.912920",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:09.913047",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_twelve_loaded_two_target": {
+        "user_id": 900000001,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": 950000001,
+                "routines": [
+                  {
+                    "id": 960000000,
+                    "title": "Probe routine 0",
+                    "scheduledTime": "09:00:00",
+                    "authType": "CHECK",
+                    "completed": true,
+                    "houseMissionId": null
+                  },
+                  {
+                    "id": 960000001,
+                    "title": "Probe routine 1",
+                    "scheduledTime": "09:00:00",
+                    "authType": "CHECK",
+                    "completed": false,
+                    "houseMissionId": null
+                  }
+                ],
+                "todos": [
+                  {
+                    "id": 910000001,
+                    "title": "scale todo 1",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000004,
+                    "title": "scale todo 4",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000007,
+                    "title": "scale todo 7",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 1,
+              "remainingCount": 4,
+              "progressRate": 0.2
+            },
+            "streak": {
+              "currentCount": 1,
+              "longestCount": 1,
+              "lastSuccessDate": "2026-09-10"
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 4,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:10.294389",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.294647",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.295369",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000001 and r1_0.status='ACTIVE' and r1_0.deleted_at is null and (r1_0.starts_on is null or r1_0.starts_on<='2026-09-10') and (r1_0.ends_on is null or r1_0.ends_on>='2026-09-10') order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.297824",
+            "sql": "select rl1_0.routine_id from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000001 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.298485",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.title,t1_0.due_date,t1_0.due_time,t1_0.status,t1_0.completed_at from todos t1_0 where t1_0.user_id=900000001 and t1_0.deleted_at is null and t1_0.due_date='2026-09-10' order by t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.299305",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000001",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.299706",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.299782",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.299863",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "today_twelve_loaded_zero_target": {
+        "user_id": 900000001,
+        "path": "/api/v1/today",
+        "method": "GET",
+        "response": {
+          "status": 200,
+          "body": {
+            "date": "2026-09-10",
+            "categories": [
+              {
+                "categoryId": 950000001,
+                "routines": [],
+                "todos": [
+                  {
+                    "id": 910000001,
+                    "title": "scale todo 1",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000004,
+                    "title": "scale todo 4",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  },
+                  {
+                    "id": 910000007,
+                    "title": "scale todo 7",
+                    "dueDate": "2026-09-10",
+                    "dueTime": null,
+                    "status": "PENDING",
+                    "completedAt": null
+                  }
+                ]
+              }
+            ],
+            "summary": {
+              "completedCount": 0,
+              "remainingCount": 3,
+              "progressRate": 0.0
+            },
+            "streak": {
+              "currentCount": 1,
+              "longestCount": 1,
+              "lastSuccessDate": "2026-09-10"
+            }
+          }
+        },
+        "statement_counts": {
+          "SELECT": 3,
+          "INSERT": 0,
+          "UPDATE": 0,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 4
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:10.811604",
+            "sql": "SET SESSION TRANSACTION READ ONLY",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.811897",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.812856",
+            "sql": "select r1_0.id,r1_0.auth_type,r1_0.category_id,r1_0.created_at,r1_0.deleted_at,r1_0.ends_on,r1_0.external_id,r1_0.external_source,r1_0.house_mission_id,r1_0.origin_routine_id,r1_0.repeat_days,r1_0.repeat_type,r1_0.scheduled_time,r1_0.starts_on,r1_0.status,r1_0.title,r1_0.updated_at,r1_0.user_id from routines r1_0 where r1_0.user_id=900000001 and r1_0.status='ACTIVE' and r1_0.deleted_at is null and (r1_0.starts_on is null or r1_0.starts_on<='2026-09-10') and (r1_0.ends_on is null or r1_0.ends_on>='2026-09-10') order by r1_0.scheduled_time,r1_0.origin_routine_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.813622",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.title,t1_0.due_date,t1_0.due_time,t1_0.status,t1_0.completed_at from todos t1_0 where t1_0.user_id=900000001 and t1_0.deleted_at is null and t1_0.due_date='2026-09-10' order by t1_0.id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.814707",
+            "sql": "select s1_0.id,s1_0.current_count,s1_0.last_evaluated_date,s1_0.last_success_date,s1_0.longest_count,s1_0.status,s1_0.updated_at,s1_0.user_id from streaks s1_0 where s1_0.user_id=900000001",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.815363",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.815499",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:10.815621",
+            "sql": "SET SESSION TRANSACTION READ WRITE",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "todo_complete_existing_room": {
+        "user_id": 900000000,
+        "path": "/api/v1/todos/910000000/complete",
+        "method": "POST",
+        "response": {
+          "status": 201,
+          "body": {
+            "id": 910000000,
+            "status": "COMPLETED",
+            "completedAt": "2026-09-10T05:00:11.151007509Z",
+            "rewardCurrencyType": "COIN",
+            "rewardAmount": 10
+          }
+        },
+        "statement_counts": {
+          "SELECT": 6,
+          "INSERT": 2,
+          "UPDATE": 4,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 2
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:11.142406",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.143456",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000000 for update of u1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.144517",
+            "sql": "select uw1_0.id,uw1_0.balance,uw1_0.created_at,uw1_0.currency_type,uw1_0.updated_at,uw1_0.user_id from user_wallets uw1_0 where uw1_0.user_id=900000000 and uw1_0.currency_type='COIN' for update of uw1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.147544",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.id=910000000 and t1_0.user_id=900000000 and t1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.149536",
+            "sql": "select coalesce(sum(rl1_0.reward_amount),0) from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000000 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.150652",
+            "sql": "select coalesce(sum(t1_0.reward_amount),0) from todos t1_0 where t1_0.user_id=900000000 and t1_0.completed_at>='2026-09-09 15:00:00' and t1_0.completed_at<'2026-09-10 15:00:00' and t1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.151814",
+            "sql": "insert into wallet_histories (amount,balance_after,created_at,currency_type,reason,source_id,source_type,user_id) values (10,10,'2026-09-10 05:00:11.151271','COIN','TODO_COMPLETE',910000000,'TODO',900000000)",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.154853",
+            "sql": "update user_wallets set balance=10,currency_type='COIN',updated_at='2026-09-10 05:00:11.152504',user_id=900000000 where id=920000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.156388",
+            "sql": "update todos set completed_at='2026-09-10 05:00:11.151008',reward_amount=10,reward_currency_type='COIN',status='COMPLETED',updated_at='2026-09-10 05:00:11.152617' where id=910000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.157357",
+            "sql": "INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, updated_at)\nVALUES (900000000, 0, 0, 'SLOT_V1', 0, CURRENT_TIMESTAMP)\nON DUPLICATE KEY UPDATE user_id = personal_rooms.user_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.158245",
+            "sql": "select pr1_0.user_id,pr1_0.growth_level,pr1_0.growth_points,pr1_0.highest_growth_level,pr1_0.layout_format,pr1_0.layout_revision,pr1_0.updated_at from personal_rooms pr1_0 where pr1_0.user_id=900000000 for update of pr1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.159344",
+            "sql": "update todos set growth_reward_amount=10,updated_at='2026-09-10 05:00:11.158835' where id=910000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.159828",
+            "sql": "update personal_rooms set growth_level=0,growth_points=10,highest_growth_level=0,layout_format='SLOT_V1',layout_revision=0,updated_at='2026-09-10 05:00:11.158945' where user_id=900000000",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.160046",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.160748",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      },
+      "todo_complete_missing_room": {
+        "user_id": 900000002,
+        "path": "/api/v1/todos/910000002/complete",
+        "method": "POST",
+        "response": {
+          "status": 201,
+          "body": {
+            "id": 910000002,
+            "status": "COMPLETED",
+            "completedAt": "2026-09-10T05:00:11.567450009Z",
+            "rewardCurrencyType": "COIN",
+            "rewardAmount": 10
+          }
+        },
+        "statement_counts": {
+          "SELECT": 6,
+          "INSERT": 2,
+          "UPDATE": 4,
+          "DELETE": 0,
+          "COMMIT": 1,
+          "SET": 2
+        },
+        "sql": [
+          {
+            "at": "2026-09-10 14:00:11.562152",
+            "sql": "SET autocommit=0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.563054",
+            "sql": "select u1_0.id,u1_0.bio,u1_0.is_bot,u1_0.bot_key,u1_0.created_at,u1_0.deleted_at,u1_0.email,u1_0.last_accessed_at,u1_0.nickname,u1_0.profile_image_key,u1_0.updated_at from users u1_0 where u1_0.id=900000002 for update of u1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.564188",
+            "sql": "select uw1_0.id,uw1_0.balance,uw1_0.created_at,uw1_0.currency_type,uw1_0.updated_at,uw1_0.user_id from user_wallets uw1_0 where uw1_0.user_id=900000002 and uw1_0.currency_type='COIN' for update of uw1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.564840",
+            "sql": "select t1_0.id,t1_0.category_id,t1_0.completed_at,t1_0.created_at,t1_0.deleted_at,t1_0.description,t1_0.due_date,t1_0.due_time,t1_0.external_id,t1_0.external_source,t1_0.growth_reward_amount,t1_0.reward_amount,t1_0.reward_currency_type,t1_0.status,t1_0.title,t1_0.updated_at,t1_0.user_id from todos t1_0 where t1_0.id=910000002 and t1_0.user_id=900000002 and t1_0.deleted_at is null",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.565977",
+            "sql": "select coalesce(sum(rl1_0.reward_amount),0) from routine_logs rl1_0 join routines r1_0 on r1_0.id=rl1_0.routine_id where r1_0.user_id=900000002 and rl1_0.routine_date='2026-09-10' and rl1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.567061",
+            "sql": "select coalesce(sum(t1_0.reward_amount),0) from todos t1_0 where t1_0.user_id=900000002 and t1_0.completed_at>='2026-09-09 15:00:00' and t1_0.completed_at<'2026-09-10 15:00:00' and t1_0.status='COMPLETED'",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.568282",
+            "sql": "insert into wallet_histories (amount,balance_after,created_at,currency_type,reason,source_id,source_type,user_id) values (10,10,'2026-09-10 05:00:11.567693','COIN','TODO_COMPLETE',910000002,'TODO',900000002)",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.569542",
+            "sql": "update user_wallets set balance=10,currency_type='COIN',updated_at='2026-09-10 05:00:11.568984',user_id=900000002 where id=920000004",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.570212",
+            "sql": "update todos set completed_at='2026-09-10 05:00:11.56745',reward_amount=10,reward_currency_type='COIN',status='COMPLETED',updated_at='2026-09-10 05:00:11.569085' where id=910000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.571078",
+            "sql": "INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, updated_at)\nVALUES (900000002, 0, 0, 'SLOT_V1', 0, CURRENT_TIMESTAMP)\nON DUPLICATE KEY UPDATE user_id = personal_rooms.user_id",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.571993",
+            "sql": "select pr1_0.user_id,pr1_0.growth_level,pr1_0.growth_points,pr1_0.highest_growth_level,pr1_0.layout_format,pr1_0.layout_revision,pr1_0.updated_at from personal_rooms pr1_0 where pr1_0.user_id=900000002 for update of pr1_0",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.573121",
+            "sql": "update todos set growth_reward_amount=10,updated_at='2026-09-10 05:00:11.572561' where id=910000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.573611",
+            "sql": "update personal_rooms set growth_level=0,growth_points=10,highest_growth_level=0,layout_format='SLOT_V1',layout_revision=0,updated_at='2026-09-10 05:00:11.572675' where user_id=900000002",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.574004",
+            "sql": "COMMIT",
+            "command": "Query",
+            "thread_id": 10
+          },
+          {
+            "at": "2026-09-10 14:00:11.574731",
+            "sql": "SET autocommit=1",
+            "command": "Query",
+            "thread_id": 10
+          }
+        ]
+      }
+    },
+    "source_jar_sha256": "d8bf6a49d598a245f7a62ed3be765349215541a21a31f3be5b590310d3de8ff3",
+    "fixture_date_kst": "2026-09-10",
+    "fixture_routine_completion": {
+      "status": 201,
+      "body": {
+        "id": 1,
+        "routineDate": "2026-09-10",
+        "status": "COMPLETED",
+        "completedAt": "2026-09-10T05:00:10.142775384Z",
+        "rewardCurrencyType": "COIN",
+        "rewardAmount": 10,
+        "streak": {
+          "currentCount": 1,
+          "longestCount": 1,
+          "lastSuccessDate": "2026-09-10"
+        },
+        "houseMissionContribution": null
+      }
+    },
+    "fixture_counts": "{\"active_routines\": 12}\n{\"completed_logs\": 1}\n",
+    "write_audit": [
+      {
+        "growth": 10,
+        "ledger": 10,
+        "wallet": 10,
+        "user_id": 900000000,
+        "completed": 1,
+        "todo_growth": 10,
+        "todo_reward": 10
+      },
+      {
+        "growth": 10,
+        "ledger": 10,
+        "wallet": 10,
+        "user_id": 900000002,
+        "completed": 1,
+        "todo_growth": 10,
+        "todo_reward": 10
+      }
+    ],
+    "write_audit_passed": true,
+    "cleanup_completed": true
+  },
+  "limits": [
+    "single-host local synthetic load; no production capacity claim",
+    "history-heavy fixture has no routines or selected goals; those optimizations verified by SQL and functional tests only",
+    "read warmup and index scans do not guarantee all user or write paths are warm",
+    "invalid accounting runs retained but excluded from averages",
+    "p95 average is mean of per-run p95 values, not a pooled percentile",
+    "acquire measures connection waiting, not connection hold time"
+  ]
+}

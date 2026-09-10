@@ -41,6 +41,7 @@ import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import java.time.Instant;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -52,6 +53,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.hibernate.SessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -73,6 +77,7 @@ class RoomGrowthIntegrationTest {
     @Autowired private PersonalRoomRepository roomRepository;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private TransactionTemplate tx;
+    @Autowired private EntityManager em;
 
     @Autowired private CharacterRepository characterRepository;
     @Autowired private UserCharacterRepository userCharacterRepository;
@@ -551,6 +556,93 @@ class RoomGrowthIntegrationTest {
         assertThat(saved.getGrowthRewardAmount()).isEqualTo(10);
         todoService.cancelComplete(user.getId(), todoId);
         assertRoom(0, 0);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 투두_완료는_방_유무와_무관하게_한번의_UPDATE로_보상을_기록한다(boolean existingRoom) {
+        if (existingRoom) {
+            seedGrowth(0, 0);
+        }
+        Long todoId = todo(today);
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            todoService.complete(user.getId(), todoId);
+            assertThat(statistics.getEntityStatistics(Todo.class.getName()).getUpdateCount()).isEqualTo(1);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
+        Todo completed = todoRepository.findById(todoId).orElseThrow();
+        assertThat(completed.getStatus()).isEqualTo(TodoStatus.COMPLETED);
+        assertThat(completed.getRewardAmount()).isEqualTo(10);
+        assertThat(completed.getGrowthRewardAmount()).isEqualTo(10);
+        assertThat(balance()).isEqualTo(10);
+        assertThat(roomRepository.findById(user.getId()).orElseThrow().getGrowthPoints()).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT SUM(amount) FROM wallet_histories WHERE user_id = ?",
+                Long.class, user.getId())).isEqualTo(10);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 투두_성장_반영을_flush한_뒤_실패해도_방과_모든_보상은_롤백한다(boolean existingRoom) {
+        if (existingRoom) {
+            seedGrowth(20, 1);
+        }
+        Long todoId = todo(today);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            todoService.complete(user.getId(), todoId);
+            em.flush();
+            throw new IllegalStateException("성장 반영 후 실패 주입");
+        })).isInstanceOf(IllegalStateException.class);
+
+        Todo pending = todoRepository.findById(todoId).orElseThrow();
+        assertThat(pending.getStatus()).isEqualTo(TodoStatus.PENDING);
+        assertThat(pending.getCompletedAt()).isNull();
+        assertThat(pending.getRewardAmount()).isZero();
+        assertThat(pending.getGrowthRewardAmount()).isZero();
+        assertThat(balance()).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM wallet_histories WHERE user_id = ?",
+                Long.class, user.getId())).isZero();
+        if (existingRoom) {
+            var room = roomRepository.findById(user.getId()).orElseThrow();
+            assertThat(room.getGrowthPoints()).isEqualTo(20);
+            assertThat(room.getGrowthLevel()).isEqualTo(1);
+        } else {
+            assertThat(roomRepository.existsById(user.getId())).isFalse();
+        }
+    }
+
+    @Test
+    void 서로_다른_사용자의_첫_투두_완료가_겹쳐도_각자_방과_보상을_생성한다() throws Exception {
+        List<Callable<Boolean>> tasks = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            User owner = signUp();
+            Long todoId = todoRepository.save(Todo.create(owner, null, "첫 완료", null, today, null)).getId();
+            tasks.add(() -> {
+                todoService.complete(owner.getId(), todoId);
+                assertThat(roomRepository.findById(owner.getId()).orElseThrow().getGrowthPoints()).isEqualTo(10);
+                assertThat(walletRepository.findByUserIdAndCurrencyType(owner.getId(), CurrencyType.COIN)
+                        .orElseThrow().getBalance()).isEqualTo(10);
+                return true;
+            });
+        }
+        assertThat(concurrently(tasks)).containsOnly(true).hasSize(8);
+    }
+
+    @Test
+    void 신규_회원_저장과_첫_투두_완료를_같은_트랜잭션에서_처리한다() {
+        Long ownerId = tx.execute(status -> {
+            User owner = signUp();
+            Long todoId = todoRepository.save(Todo.create(owner, null, "가입 후 완료", null, today, null)).getId();
+            todoService.complete(owner.getId(), todoId);
+            return owner.getId();
+        });
+        assertThat(roomRepository.findById(ownerId).orElseThrow().getGrowthPoints()).isEqualTo(10);
+        assertThat(walletRepository.findByUserIdAndCurrencyType(ownerId, CurrencyType.COIN)
+                .orElseThrow().getBalance()).isEqualTo(10);
     }
 
     private boolean cancelRoutine(Long id) {
