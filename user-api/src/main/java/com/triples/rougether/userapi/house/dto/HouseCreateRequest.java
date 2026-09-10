@@ -20,5 +20,12 @@ public record HouseCreateRequest(
         @Schema(description = "최대 구성원 수 (1~10, 미지정 시 4)", example = "4")
         @Min(1) @Max(10) Integer maxMembers,
         @Schema(description = "집 목표 goal ID 목록 (필수 1~3개, 활성 goal 만 허용, 중복 id 는 자동 제거). GET /api/v1/goals (목표 마스터 목록) 응답의 id 값", example = "[1, 2]")
-        @NotEmpty @Size(max = 3) List<Long> goalIds) {
+        @NotEmpty @Size(max = 3) List<Long> goalIds,
+        @Schema(description = "공개 여부 (미지정 시 true). true면 집 탐색·비구성원 미리보기에 노출, false면 초대코드로만 참여 가능", example = "true")
+        Boolean isPublic) {
+
+    /** 미지정(null)은 공개. */
+    public boolean isPublicOrDefault() {
+        return isPublic == null || isPublic;
+    }
 }

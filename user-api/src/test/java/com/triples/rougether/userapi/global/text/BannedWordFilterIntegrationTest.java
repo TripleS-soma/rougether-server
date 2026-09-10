@@ -89,7 +89,7 @@ class BannedWordFilterIntegrationTest {
     @Test
     void 금칙어_집_이름은_400_이다() {
         assertThatThrownBy(() -> houseCommandService.create(user.getId(),
-                new HouseCreateRequest("시발하우스", null, null, null, List.of(1L))))
+                new HouseCreateRequest("시발하우스", null, null, null, List.of(1L), null)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(HouseErrorCode.HOUSE_NAME_BANNED));
     }

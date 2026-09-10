@@ -53,7 +53,7 @@ class MyHouseControllerTest {
                 .thenReturn(new AuthUser(7L, null));
         when(houseQueryService.getMyHouses(7L)).thenReturn(new MyHouseListResponse(List.of(
                 new MyHouseListResponse.MyHouseSummary(1L, "아침 루틴 하우스", "house/cover.png",
-                        0, 3, 4, HouseMemberRole.OWNER, Instant.parse("2026-07-03T00:00:00Z")))));
+                        0, 3, 4, true, HouseMemberRole.OWNER, Instant.parse("2026-07-03T00:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/me/houses"))
                 .andExpect(status().isOk())

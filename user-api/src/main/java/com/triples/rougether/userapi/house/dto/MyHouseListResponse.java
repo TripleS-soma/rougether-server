@@ -22,6 +22,8 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             int currentMemberCount,
             @Schema(description = "최대 구성원 수 (null 이면 무제한)", example = "4")
             Integer maxMembers,
+            @Schema(description = "공개 여부. true면 집 탐색·비구성원 미리보기에 노출, false면 초대코드로만 참여 가능", example = "true")
+            boolean isPublic,
             @Schema(description = "이 집에서 내 역할. OWNER(소유자 — 설정 수정·초대코드 재발급·강퇴·소유권 양도 가능), MEMBER(일반 구성원)", example = "OWNER")
             HouseMemberRole myRole,
             @Schema(description = "내 가입 시각. 직접 순서를 정하지 않은 집끼리의 정렬 기준")
@@ -35,6 +37,7 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
                     member.getHouse().getLevel(),
                     currentMemberCount,
                     member.getHouse().getMaxMembers(),
+                    member.getHouse().isPublic(),
                     member.getRole(),
                     member.getJoinedAt());
         }

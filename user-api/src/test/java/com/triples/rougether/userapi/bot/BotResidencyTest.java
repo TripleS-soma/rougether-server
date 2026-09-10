@@ -80,7 +80,7 @@ class BotResidencyTest {
 
         // 사용자가 직접 만든 집: 봇 없음
         Long created = houseCommandService.create(newcomer.getId(),
-                new HouseCreateRequest("내가 만든 집", null, null, 4, List.of(goal.getId()))).houseId();
+                new HouseCreateRequest("내가 만든 집", null, null, 4, List.of(goal.getId()), null)).houseId();
         assertThat(houseMemberRepository.findByHouseIdAndStatusWithUser(created, HouseMemberStatus.ACTIVE))
                 .hasSize(1)
                 .allSatisfy(m -> assertThat(m.getUser().isBot()).isFalse());
