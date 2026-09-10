@@ -389,7 +389,7 @@ class HouseControllerTest {
     void 집_상세_응답_계약() throws Exception {
         authAsUser7();
         when(houseQueryService.getHouseDetail(7L, 1L)).thenReturn(new HouseDetailResponse(
-                1L, "아침 루틴 하우스", "같이 아침 루틴", "house/cover.png", 4, 3, 2, 120,
+                1L, "아침 루틴 하우스", "같이 아침 루틴", "house/cover.png", 4, true, 3, 2, 120,
                 java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")),
                 HouseMemberRole.OWNER, "ABCD2345", Instant.parse("2026-07-10T00:00:00Z")));
 
@@ -398,6 +398,7 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.houseId").value(1))
                 .andExpect(jsonPath("$.coverImageKey").value("house/cover.png"))
                 .andExpect(jsonPath("$.growthPoints").value(120))
+                .andExpect(jsonPath("$.isPublic").value(true))
                 .andExpect(jsonPath("$.myRole").value("OWNER"))
                 .andExpect(jsonPath("$.inviteCode").value("ABCD2345"))
                 .andExpect(jsonPath("$.goals[0].code").value("morning_routine"));

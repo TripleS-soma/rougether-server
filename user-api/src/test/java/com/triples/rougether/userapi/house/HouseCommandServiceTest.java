@@ -57,7 +57,7 @@ class HouseCommandServiceTest {
     @InjectMocks private HouseCommandService houseCommandService;
 
     private HouseCreateRequest request(Integer maxMembers, List<Long> goalIds) {
-        return new HouseCreateRequest("아침 루틴 하우스", "설명", "house/cover.png", maxMembers, goalIds);
+        return new HouseCreateRequest("아침 루틴 하우스", "설명", "house/cover.png", maxMembers, goalIds, null);
     }
 
     private Goal goal(Long id) {

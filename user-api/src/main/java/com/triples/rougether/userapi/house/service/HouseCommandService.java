@@ -82,7 +82,7 @@ public class HouseCommandService {
         User owner = userRepository.getReferenceById(userId);
         int maxMembers = request.maxMembers() == null ? DEFAULT_MAX_MEMBERS : request.maxMembers();
         House house = saveHouse(owner, request.name(), request.description(), request.coverImageKey(),
-                maxMembers, goals);
+                maxMembers, goals, request.isPublicOrDefault());
 
         return new HouseCreateResponse(house.getId(), userId, house.getInviteCode(), house.getInviteExpiresAt());
     }

@@ -52,7 +52,7 @@ class HouseCreateTransactionTest {
         given(houseGoalRepository.saveAll(anyList())).willThrow(new RuntimeException("house_goals 저장 실패"));
 
         assertThatThrownBy(() -> houseCommandService.create(user.getId(),
-                new HouseCreateRequest(HOUSE_NAME, null, null, null, List.of(1L))))
+                new HouseCreateRequest(HOUSE_NAME, null, null, null, List.of(1L), null)))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(houseRepository.findAll())
