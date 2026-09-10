@@ -77,7 +77,7 @@ API 4 CPU/2 GiB/heap 1 GiB, DB 2 CPU/2 GiB/buffer pool 1 GiB, Hikari 20. Docker 
 
 - 기존 JAR SHA-256: `d8bf6a49d598a245f7a62ed3be765349215541a21a31f3be5b590310d3de8ff3`
 - 최종 JAR SHA-256: `066e03420a8563d7bba9eeb59c50c73213cafd40fec176a9fcfcb60fe0239575`
-- 작업공간 `output/worktrees/scale-engineering`, 브랜치 `codex/scale-engineering`, HEAD `966cf142e343d687698e03ecd1b8e5b4bf3c4a70` + 보관 diff. 운영 배포/커밋/머지는 수행하지 않았다.
+- 측정 당시 작업공간 `output/worktrees/scale-engineering`, 브랜치 `codex/scale-engineering`, HEAD `966cf142e343d687698e03ecd1b8e5b4bf3c4a70` + 보관 diff. 측정 시점에는 이 변경의 커밋·머지·운영 배포를 수행하지 않았다.
 - [전체 수치·판정·SQL·응답 대조·정합성·원본 hash](2026-09-10-todo-write-optimization.json)
 - Git 제외 원본은 `qa/scale/results/write-flush-only-artifacts/`의 전후 JAR, `source-and-tests.json`, `write-change.patch`, `sql-comparison.json`, `cohort.json`, 테스트 로그와 실행 스크립트에 보관했다. JWT/seed 원본은 공유하지 않는다.
 - SQL 진단과 두 후보 비교의 컨테이너·볼륨·네트워크는 회차별로 정리했다. 마지막 확인에서 이번 작업의 컨테이너와 볼륨은 없었고 기존 다른 프로젝트 리소스는 유지했다.
