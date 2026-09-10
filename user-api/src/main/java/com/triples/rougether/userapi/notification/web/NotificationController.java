@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,5 +61,26 @@ public class NotificationController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void markAllRead(@CurrentUser AuthUser user) {
         notificationCommandService.markAllRead(user.id());
+    }
+
+    @Operation(summary = "알림 개별 삭제",
+            description = "알림함에서 알림 하나를 삭제합니다. 본인 알림만 삭제할 수 있고, 존재하지 않거나 타인 소유면 "
+                    + "404(NOTIFICATION_NOT_FOUND)입니다. 이미 삭제한 알림에 다시 호출해도 결과는 같습니다(멱등). "
+                    + "삭제한 알림은 목록에서 사라지며 되돌릴 수 없습니다.")
+    @DeleteMapping("/{notificationId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(
+            @CurrentUser AuthUser user,
+            @Parameter(description = "알림 ID. GET /api/v1/notifications (알림 목록 조회) 응답의 notificationId 값")
+            @PathVariable Long notificationId) {
+        notificationCommandService.delete(user.id(), notificationId);
+    }
+
+    @Operation(summary = "알림 전체 삭제",
+            description = "내 알림함의 알림을 모두 삭제합니다. 읽음 여부와 무관하게 전부 삭제되며, 삭제할 알림이 없어도 204 입니다.")
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAll(@CurrentUser AuthUser user) {
+        notificationCommandService.deleteAll(user.id());
     }
 }

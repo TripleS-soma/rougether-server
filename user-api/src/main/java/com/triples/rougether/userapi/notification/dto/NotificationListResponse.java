@@ -14,7 +14,8 @@ public record NotificationListResponse(
         boolean hasNext) {
 
     public record NotificationItem(
-            @Schema(description = "알림 ID. 알림 읽음 처리(PATCH /api/v1/notifications/{notificationId}/read)의 notificationId 로 사용", example = "12")
+            @Schema(description = "알림 ID. 알림 읽음 처리(PATCH /api/v1/notifications/{notificationId}/read)·"
+                    + "개별 삭제(DELETE /api/v1/notifications/{notificationId})의 notificationId 로 사용", example = "12")
             Long notificationId,
             @Schema(description = "알림 종류: HOUSE_KICK(집에서 내보내짐), ROUTINE_REMINDER(루틴 리마인드), "
                     + "TODO_REMINDER(투두 마감 리마인드), DAILY_INCOMPLETE_DIGEST(저녁 미완료 통합 알림), "

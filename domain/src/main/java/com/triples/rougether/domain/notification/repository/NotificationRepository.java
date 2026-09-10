@@ -15,13 +15,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    // 커서 기반 최신순 조회 - cursor(null 이면 첫 페이지)보다 오래된 알림을 id 내림차순으로.
+    // 커서 기반 최신순 조회 - cursor(null 이면 첫 페이지)보다 오래된 알림을 id 내림차순으로. 삭제된 알림은 제외.
     @Query("select n from Notification n "
-            + "where n.user.id = :userId and (:cursor is null or n.id < :cursor) order by n.id desc")
+            + "where n.user.id = :userId and n.deletedAt is null and (:cursor is null or n.id < :cursor) "
+            + "order by n.id desc")
     List<Notification> findPageByCursor(@Param("userId") Long userId,
                                         @Param("cursor") Long cursor,
                                         Pageable pageable);
 
+    // 본인 알림 단건(소유권 guard). 삭제 여부는 보지 않음 - 읽음·삭제 API 는 삭제된 알림에도 멱등 204 를 주고,
+    // batch 발송 경로는 삭제된 PENDING 을 찾아 BLOCKED 로 종결해 잔존 PENDING 을 남기지 않음.
     Optional<Notification> findByIdAndUserId(Long id, Long userId);
 
     // 리마인드 중복 발송 방지: 같은 유저·타입·ref_id로 [from, to) 구간(오늘 KST)에 발송된 알림 존재 여부
@@ -45,10 +48,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                                             @Param("body") String body,
                                             @Param("since") Instant since);
 
-    // 전체 읽음 - 안 읽은 알림만 bulk update
+    // 전체 읽음 - 안 읽은 알림만 bulk update (삭제된 알림 제외)
     @Modifying
-    @Query("update Notification n set n.isRead = true where n.user.id = :userId and n.isRead = false")
+    @Query("update Notification n set n.isRead = true "
+            + "where n.user.id = :userId and n.isRead = false and n.deletedAt is null")
     int markAllReadByUserId(@Param("userId") Long userId);
+
+    // 알림함 전체 삭제 - 미삭제 알림에 deleted_at 을 찍는 bulk soft delete.
+    // 행은 남겨 digest FK 와 중복 발송 판정(type+ref_id / body)을 보존함.
+    @Modifying
+    @Query("update Notification n set n.deletedAt = :now "
+            + "where n.user.id = :userId and n.deletedAt is null")
+    int softDeleteAllByUserId(@Param("userId") Long userId, @Param("now") Instant now);
 
     // 리마인드 batch 발송 reader: 이전 실행의 잔존 PENDING도 자연 회수됨. cursorId(id > cursorId)로 커서 페이징함 -
     // writer가 처리된 알림을 PENDING에서 빼내는 쿼리라 offset 페이징이면 처리 도중 결과셋이 줄어 못 읽는 구간이 생김

@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -108,5 +109,34 @@ class NotificationControllerTest {
         mockMvc.perform(patch("/api/v1/notifications/read-all"))
                 .andExpect(status().isNoContent());
         verify(notificationCommandService).markAllRead(7L);
+    }
+
+    @Test
+    void 개별_삭제는_204() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(delete("/api/v1/notifications/5"))
+                .andExpect(status().isNoContent());
+        verify(notificationCommandService).delete(7L, 5L);
+    }
+
+    @Test
+    void 타인_또는_없는_알림_삭제는_404_에러_계약() throws Exception {
+        authAsUser7();
+        doThrow(new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND))
+                .when(notificationCommandService).delete(7L, 5L);
+
+        mockMvc.perform(delete("/api/v1/notifications/5"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOTIFICATION_NOT_FOUND"));
+    }
+
+    @Test
+    void 전체_삭제는_204() throws Exception {
+        authAsUser7();
+
+        mockMvc.perform(delete("/api/v1/notifications"))
+                .andExpect(status().isNoContent());
+        verify(notificationCommandService).deleteAll(7L);
     }
 }
