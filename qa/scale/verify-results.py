@@ -94,6 +94,8 @@ class Verifier:
             self._verify_db_audit(audit)
         if manifest is not None:
             self._verify_telemetry()
+            if "history" in manifest:
+                self._verify_index_experiment()
 
         passed = not self.failures
         scenario = manifest.get("scenario") if isinstance(manifest, dict) else None
@@ -108,6 +110,20 @@ class Verifier:
         if self.failures and scenario != "contention" and self._manifest_exit_code_nonzero(manifest):
             verdict["classification"] = "capacity_failed"
         return verdict
+
+    def _verify_index_experiment(self) -> None:
+        for name in ("history-before.json", "history-after.json", "executed-db-audit.json"):
+            report = self._read_json(name)
+            if report is None:
+                continue
+            if report.get("passed") is not True:
+                self.failures.append(f"index experiment audit failed: {name}")
+            if name.startswith("history-"):
+                if not report.get("expected") or report.get("actual") != report.get("expected"):
+                    self.failures.append(f"index history snapshot mismatch: {name}")
+            elif (report.get("scope") != "executed_requests_not_offered_load"
+                  or report.get("errors") != [] or report.get("history_unchanged") is not True):
+                self.failures.append("executed audit evidence incomplete or contradictory")
 
     def _read_json(self, name: str) -> dict[str, Any] | None:
         path = self.run_dir / name

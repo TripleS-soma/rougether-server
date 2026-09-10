@@ -17,6 +17,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from telemetry import Sampler, api_json, database_snapshot, endpoint_counts, utc_now
+import index_experiment
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -53,8 +54,16 @@ def arguments():
     parser.add_argument("--vus", type=int, default=200)
     parser.add_argument("--port", type=int, default=19080)
     parser.add_argument("--warmup", type=int, default=10)
+    parser.add_argument("--history-per-user", type=int, default=0,
+                        help="인덱스 실험용 과거 무보상 완료 이력; mixed만 지원")
+    parser.add_argument("--todo-indexes", choices=["baseline", "candidate"], default="baseline")
+    parser.add_argument("--warm-todo-indexes", action="store_true",
+                        help="별도 대조 조건: 부하 전 todos의 모든 인덱스를 한 번 순차 읽기")
     parser.add_argument("--skip-build", action="store_true", help="이미 빌드된 JAR 사용; hash를 기록함")
+    parser.add_argument("--jar", type=Path, help="전후 비교용 보관 JAR; --skip-build와 함께 사용")
     args = parser.parse_args()
+    if args.jar is not None and (not args.skip_build or not args.jar.is_file()):
+        parser.error("--jar는 존재하는 파일과 --skip-build가 필요함")
     if not (1 <= args.rate <= 100000 and 1 <= args.duration <= 7200
             and 1 <= args.users <= 1000000 and 1 <= args.vus <= 10000
             and 1024 <= args.port <= 65535 and 0 <= args.warmup <= 300):
@@ -66,6 +75,10 @@ def arguments():
         args.todos = max(args.users * 10, writes)
     if args.todos < max(writes, 1) or args.todos > 100000000:
         parser.error("todo fixture 수가 부족하거나 1억 건 상한을 넘음")
+    if not (0 <= args.history_per_user <= 1000 and args.history_per_user * args.users <= 20000000):
+        parser.error("history-per-user 0~1000, 과거 이력 총 2000만 건 이내여야 함")
+    if (args.history_per_user or args.todo_indexes != "baseline" or args.warm_todo_indexes) and args.scenario != "mixed":
+        parser.error("누적 이력 인덱스 실험은 mixed만 지원함")
     return args
 
 
@@ -79,7 +92,7 @@ def main():
     if not docker_host.startswith("unix://"):
         raise RuntimeError("로컬 Unix socket Docker context만 허용함")
     free_bytes = shutil.disk_usage(HERE).free
-    estimated_bytes = (args.todos * 1500 + args.users * 5000) * 2
+    estimated_bytes = ((args.todos + args.users * args.history_per_user) * 1500 + args.users * 5000) * 2
     if free_bytes < estimated_bytes + 5 * 1024**3:
         raise RuntimeError("합성 데이터·인덱스·binlog·SQL 임시 파일을 위한 디스크 여유 부족")
     # 포트 충돌 시 타 프로세스를 종료하지 않고 실행 자체를 거부함.
@@ -146,11 +159,13 @@ def main():
                 subprocess.run([str(ROOT / "gradlew"), "--no-daemon", ":user-api:bootJar"],
                                cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
                                timeout=600, check=True)
-        jars = list((ROOT / "user-api/build/libs").glob("*.jar"))
-        jars = [jar for jar in jars if not jar.name.endswith("-plain.jar")]
+        jars = [args.jar.resolve()] if args.jar else [
+            jar for jar in (ROOT / "user-api/build/libs").glob("*.jar")
+            if not jar.name.endswith("-plain.jar")]
         if len(jars) != 1:
             raise RuntimeError("bootJar 한 개가 필요함")
         env["SCALE_JAR"] = str(jars[0])
+        manifest["jar_path"] = str(jars[0])
         manifest["jar_sha256"] = hashlib.sha256(jars[0].read_bytes()).hexdigest()
         manifest["docker"] = json.loads(command(["docker", "info", "--format",
             '{"cpus":{{.NCPU}},"memory_bytes":{{.MemTotal}},"architecture":"{{.Architecture}}",'
@@ -186,6 +201,9 @@ def main():
         manifest["seed_date"] = kst_date()
         prepare_fixture(args, directory, env, mysql, manifest)
         fixture = json.loads((directory / "fixtures.json").read_text())
+        if args.history_per_user or args.todo_indexes != "baseline" or args.warm_todo_indexes:
+            index_experiment.prepare(directory, mysql, fixture, args.history_per_user,
+                                     args.todo_indexes, manifest, args.warm_todo_indexes)
         token = fixture["users"][0]["token"]
         me = api_json(base_url, "/api/v1/me", token)
         if me.get("userId") != fixture["users"][0]["id"]:
@@ -217,7 +235,7 @@ def main():
             raise RuntimeError("seed 후 KST 날짜가 바뀌었음; 새 회차 필요")
         database_snapshot(mysql, directory / "db-before.json")
         manifest["server_requests_before"] = endpoint_counts(base_url, token)
-        for name in ("http.server.requests", "hikaricp.connections.acquire"):
+        for name in ("http.server.requests", "hikaricp.connections.acquire", "hikaricp.connections.usage"):
             write_json(directory / (name + "-before.json"),
                        api_json(base_url, "/actuator/metrics/" + name, token))
         manifest["started_at"] = utc_now()
@@ -237,7 +255,7 @@ def main():
         manifest["server_arrivals"] = {key: value - manifest["server_requests_before"][key]
                                        for key, value in manifest["server_requests_after"].items()}
         database_snapshot(mysql, directory / "db-after.json")
-        for name in ("http.server.requests", "hikaricp.connections.acquire"):
+        for name in ("http.server.requests", "hikaricp.connections.acquire", "hikaricp.connections.usage"):
             write_json(directory / (name + "-after.json"),
                        api_json(base_url, "/actuator/metrics/" + name, token))
         audit_fixture(directory, env, mysql, manifest)
@@ -269,6 +287,11 @@ def main():
                         audit_fixture(directory, env, mysql, manifest)
                 except Exception as error:
                     manifest["audit_error"] = str(error)
+                if "history" in manifest:
+                    try:
+                        index_experiment.finish(directory, mysql, manifest)
+                    except Exception as error:
+                        manifest["executed_audit_error"] = str(error)
             try:
                 (directory / "api.log").write_text(compose("logs", "--no-color", "api"))
             except subprocess.SubprocessError as error:

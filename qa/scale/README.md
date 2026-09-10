@@ -4,6 +4,8 @@
 
 실측 결과: [2026-09-10 기준선·CPU 비교 보고서](reports/2026-09-10-first-baseline.md).
 
+투두 완료 변경: [UPDATE 통합의 최종 검증](reports/2026-09-10-todo-write-optimization.md). [방 존재 확인을 추가한 미채택 후보](reports/2026-09-10-write-optimization.md)도 비교 근거로 보존한다.
+
 ## 실행
 
 Docker Desktop, Java 25 Gradle toolchain, k6, Python 3.9 이상이 필요하다. 실행기는 새 compose project와 영속 MySQL 볼륨을 만들고, 종료 시 해당 project의 컨테이너·네트워크·볼륨을 정리한다. API는 loopback에만 공개하며 DB는 별도 내부 네트워크에 둔다. 외부 OAuth·AI·S3 호출은 부하 경로에 없다.
@@ -16,6 +18,8 @@ bash qa/scale/run-local.sh contention --rate 100 --duration 30 --users 1000 --vu
 ```
 
 각 회차는 독립된 DB를 사용한다. `--skip-build`는 이미 생성한 JAR를 재사용하며 JAR SHA-256을 manifest에 남긴다. `--todos`는 준비할 투두 수다. 기존 프로세스가 `--port`(기본 19080)를 사용 중이면 종료하지 않고 실행을 거부한다.
+
+코드 변경 전후를 비교할 때는 빌드 산출물을 별도 보관하고 `--skip-build --jar /absolute/path/baseline.jar`로 선택한다. 두 버전의 DB·자원·인덱스·예열 조건은 동일하게 맞춘다. manifest의 `source_sha`/`source_diff_sha256`은 실행기 체크아웃 상태이며, 보관 JAR의 출처는 `jar_path`/`jar_sha256`과 별도 보관한 소스 diff로 식별한다.
 
 기본 자원은 API 2 CPU / 2GiB(힙 1GiB), MySQL 2 CPU / 2GiB(buffer pool 1GiB), Hikari 최대 10개 연결이다. `SCALE_API_CPUS`, `SCALE_API_MEMORY`, `SCALE_API_HEAP`, `SCALE_DB_CPUS`, `SCALE_DB_MEMORY`, `SCALE_DB_BUFFER_BYTES`, `SCALE_DB_POOL`로 비교 조건을 바꿀 수 있다. Docker VM 전체 할당량도 결과에 기록한다. 다른 앱과 호스트 자원을 공유하므로 이 결과만으로 독립 서버 용량을 확정하지 않는다.
 
@@ -45,6 +49,7 @@ bash qa/scale/run-local.sh contention --rate 100 --duration 30 --users 1000 --vu
 - `db-audit.json`, `audit-snapshot.tsv`: 최종 업무 상태와 원장의 대조.
 - `db-before.json`, `db-after.json`: DB 내구성 설정, 테이블 크기, SQL digest, 잠금·I/O 누계.
 - `telemetry.jsonl`: k6 프로세스 CPU/RSS, 컨테이너 CPU·메모리·I/O, JVM·Hikari 관측.
+- `hikaricp.connections.acquire-before/after.json`, `hikaricp.connections.usage-before/after.json`: 부하 전후 타이머의 `TOTAL_TIME` 차이를 `COUNT` 차이로 나눈 평균 연결 획득 대기와 연결 점유 시간. 두 지표를 구분하며, 완료 요청 하나당 시간이 아닌 연결 사용 한 번당 평균이다.
 - `api.jfr`, `gc.log`, `api.log`: JVM 프로파일과 GC·서버 로그.
 - `verdict.json`: 통과·실패와 판정 근거. 자료가 없으면 통과로 간주하지 않는다.
 
@@ -55,6 +60,20 @@ JFR profile과 주기적인 관리 API 호출도 자원을 사용한다. 같은 
 `fixtures.json`의 JWT는 이 회차의 합성 사용자와 전용 키에 한정된다. 결과 폴더는 Git에서 제외한다. 포트폴리오에 공유할 때는 토큰·seed 원본을 제외하고 환경, 지표, 판정, 프로파일 분석을 추려 공개한다.
 
 ## 검증
+
+누적 이력에서 todo 인덱스를 비교할 때는 아래와 같이 실행한다. `--todo-indexes baseline`은 기존 인덱스만, `candidate`는 `(user_id, deleted_at, due_date)`와 `(user_id, status, completed_at)`을 추가한다. 변경은 회차별 일회용 DB에만 적용한다. 두 조건 모두 `ANALYZE TABLE`을 실행한다.
+
+```bash
+SCALE_API_CPUS=4 SCALE_DB_POOL=20 python3 qa/scale/run-local.py mixed \
+  --rate 3000 --duration 30 --users 20000 --todos 60000 --vus 1000 --warmup 60 \
+  --history-per-user 100 --todo-indexes baseline --skip-build
+```
+
+과거 이력은 사용자마다 기한을 넘겨 완료한 무보상 todo이며, 측정일보다 최소 30일 전에 완료되었다. 위 조건은 활성 todo 6만 건과 과거 이력 200만 건을 만든다. 오늘 조회와 오늘 보상 한도에 과거 행이 섞이지 않는지 사전·사후 검증한다. `index-plans.json`은 실제 실행 계획, `history-before/after.json`은 이력의 수·소유자·날짜·완료 상태·보상 검증 결과다.
+
+`executed-db-audit.json`은 모든 실행 iteration의 HTTP 업무 성공과 서버 완료 건수가 일치할 때만, 그 연속 완료 요청의 사용자별 코인·방 성장·중복 지급 여부를 검증한다. 요청 유실이 있는 회차의 기존 `db-audit.json`과 용량 판정은 그대로 실패한다. 성공한 요청의 정합성 확인을 목표 RPS 통과로 해석하면 안 된다.
+
+인덱스 생성 직후의 버퍼풀 미스가 섞이는지 확인하려면 **별도 비교군**의 양쪽에 `--warm-todo-indexes`를 추가한다. 모든 todo 인덱스를 `COUNT(*)`로 순차 읽은 다음 같은 읽기 warmup과 본 부하를 실행한다. 실제 업무 쿼리에는 `FORCE INDEX`를 넣지 않는다. 이 옵션만으로 메모리 상주를 보장하지 않으므로 부하 구간의 버퍼풀 읽기 카운터도 확인한다.
 
 ```bash
 python3 -m unittest discover -s qa/scale/tests -v

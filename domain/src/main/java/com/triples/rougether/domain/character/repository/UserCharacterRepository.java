@@ -28,6 +28,10 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     Optional<UserCharacter> findByUserIdAndSelectedTrueAndDeletedAtIsNull(Long userId);
 
+    @Query("select uc.character.id from UserCharacter uc "
+            + "where uc.user.id = :userId and uc.selected = true and uc.deletedAt is null")
+    Optional<Long> findSelectedCharacterId(@Param("userId") Long userId);
+
     boolean existsByUserIdAndSelectedTrueAndDeletedAtIsNull(Long userId);
 
     // 착용(대표) 캐릭터. 단일 착용(is_selected 는 동시에 1개만 true).

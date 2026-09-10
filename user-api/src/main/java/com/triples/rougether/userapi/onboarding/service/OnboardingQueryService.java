@@ -5,6 +5,7 @@ import com.triples.rougether.domain.character.repository.UserCharacterRepository
 import com.triples.rougether.domain.goal.entity.UserGoal;
 import com.triples.rougether.domain.goal.repository.GoalRepository;
 import com.triples.rougether.domain.goal.repository.UserGoalRepository;
+import com.triples.rougether.domain.goal.repository.OnboardingGoalSelection;
 import com.triples.rougether.userapi.onboarding.dto.CharacterListResponse;
 import com.triples.rougether.userapi.onboarding.dto.GoalListResponse;
 import com.triples.rougether.userapi.onboarding.dto.OnboardingGoalsResponse.GoalSelection;
@@ -39,9 +40,14 @@ public class OnboardingQueryService {
     }
 
     public OnboardingSummary getSummary(Long userId) {
-        OnboardingResponse onboarding = compute(userId);
+        List<OnboardingGoalSelection> selections = userGoalRepository.findOnboardingSelections(userId);
+        Long primaryGoalId = selections.stream()
+                .filter(OnboardingGoalSelection::primary)
+                .map(OnboardingGoalSelection::goalId)
+                .findFirst().orElse(null);
+        Long selectedCharacterId = userCharacterRepository.findSelectedCharacterId(userId).orElse(null);
         return new OnboardingSummary(
-                onboarding.completed(), onboarding.primaryGoalId(), onboarding.selectedCharacterId());
+                !selections.isEmpty() && selectedCharacterId != null, primaryGoalId, selectedCharacterId);
     }
 
     private OnboardingResponse compute(Long userId) {

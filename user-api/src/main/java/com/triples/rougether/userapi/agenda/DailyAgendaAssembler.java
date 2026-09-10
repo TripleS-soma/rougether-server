@@ -3,8 +3,8 @@ package com.triples.rougether.userapi.agenda;
 import com.triples.rougether.domain.routine.RoutineRecurrence;
 import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.Routine;
-import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
+import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import com.triples.rougether.userapi.today.dto.TodaySummary;
@@ -30,7 +30,7 @@ public class DailyAgendaAssembler {
     // 카테고리별 묶음. 미분류(category=null)는 categoryId=null 그룹으로 분리, 맨 뒤로 둠
     public List<TodayCategoryGroup> groupByCategory(List<Routine> routines,
                                                     Set<Long> completedRoutineIds,
-                                                    List<Todo> todos) {
+                                                    List<TodoAgendaRow> todos) {
         // categoryId(null=미분류) → 누적기. null 키 허용 위해 LinkedHashMap 사용
         Map<Long, Accumulator> groups = new LinkedHashMap<>();
         for (Routine routine : routines) {
@@ -41,12 +41,12 @@ public class DailyAgendaAssembler {
                             completedRoutineIds.contains(routine.getId()),
                             routine.getHouseMissionId()));
         }
-        for (Todo todo : todos) {
-            Long key = categoryIdOf(todo.getCategory());
+        for (TodoAgendaRow todo : todos) {
+            Long key = todo.categoryId();
             groups.computeIfAbsent(key, Accumulator::new)
-                    .todos.add(new TodayTodoItem(todo.getId(), todo.getTitle(),
-                            todo.getDueDate(), todo.getDueTime(), todo.getStatus(),
-                            todo.getCompletedAt()));
+                    .todos.add(new TodayTodoItem(todo.id(), todo.title(),
+                            todo.dueDate(), todo.dueTime(), todo.status(),
+                            todo.completedAt()));
         }
 
         return groups.values().stream()
@@ -57,11 +57,11 @@ public class DailyAgendaAssembler {
     }
 
     public TodaySummary summarize(List<Routine> routines, Set<Long> completedRoutineIds,
-                                  List<Todo> todos) {
+                                  List<TodoAgendaRow> todos) {
         int completedRoutines = (int) routines.stream()
                 .filter(r -> completedRoutineIds.contains(r.getId())).count();
         int completedTodos = (int) todos.stream()
-                .filter(t -> t.getStatus() == TodoStatus.COMPLETED).count();
+                .filter(t -> t.status() == TodoStatus.COMPLETED).count();
         int total = routines.size() + todos.size();
         int completedCount = completedRoutines + completedTodos;
         int remainingCount = total - completedCount;

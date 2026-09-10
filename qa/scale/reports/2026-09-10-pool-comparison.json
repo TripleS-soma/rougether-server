@@ -1,0 +1,2532 @@
+{
+  "schema_version": 1,
+  "description": "DB 풀 10/20 탐색 비교. 전송 오류를 포함한 6회 전체 기록을 보존함. VU 5000과 VU 1000 조건을 섞어 비교하지 않으며 3000 RPS 용량 통과를 주장하지 않음. JWT와 개별 fixture 행은 제외함.",
+  "primary_comparison_run_ids": [
+    "20260910T113808-a1c029-mixed",
+    "20260910T114024-816515-mixed"
+  ],
+  "primary_comparison_improvement": {
+    "business_success_increase_percent": 31.28996385877121,
+    "dropped_decrease_percent": 55.49631729791364,
+    "p95_decrease_percent": 29.62789973532598,
+    "acquire_mean_decrease_percent": 49.18458948147018
+  },
+  "limits": [
+    "VU 1000 조건은 각 풀 크기당 1회씩 측정. 최적 pool 크기와 개선 폭의 재현성을 확정하지 않음.",
+    "단일 호스트의 상태와 실행 순서를 완전히 통제하지 못함. 읽기 예열만으로 모든 사용자 키와 쓰기 경로의 예열을 보장하지 않음.",
+    "서버 완료 수는 Actuator 완료 카운터이며 ingress timestamp가 아님.",
+    "ps CPU 100%는 약 한 코어 사용량. 기존 verifier의 90% 초과 경고만으로 다중 코어 발생기의 포화를 확정하지 않음.",
+    "전송 오류의 근본 원인은 미확정. 사후 지표가 없는 경우 null로 기록하며 0으로 대체하지 않음."
+  ],
+  "runs": [
+    {
+      "run_id": "20260910T112615-7de43c-mixed",
+      "pool": 20,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 5000,
+        "max_vus": 5000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:27:36.166552+00:00",
+        "completed_at": "2026-09-10T02:28:07.928945+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 89998,
+      "dropped": 3,
+      "business_success": 80,
+      "completion_success": 0,
+      "reward_amount": 0,
+      "global_latency_ms": {
+        "p(90)": 4010,
+        "p(95)": 5000,
+        "p(99)": 5004,
+        "max": 5101,
+        "avg": 726.2353718971533,
+        "min": 0,
+        "med": 1
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "p(95)": 5000,
+            "p(99)": 5004,
+            "max": 5085,
+            "avg": 724.7177222222223,
+            "min": 0,
+            "med": 1,
+            "p(90)": 3996.100000000001
+          },
+          "business_success": {
+            "count": 38,
+            "rate": 1.2273033261761095
+          },
+          "server_completed": null
+        },
+        "today": {
+          "latency_ms": {
+            "max": 5101,
+            "avg": 724.7547709658602,
+            "min": 0,
+            "med": 1,
+            "p(90)": 4008,
+            "p(95)": 5000,
+            "p(99)": 5004
+          },
+          "business_success": {
+            "count": 42,
+            "rate": 1.3564931499841208
+          },
+          "server_completed": null
+        },
+        "complete": {
+          "latency_ms": {
+            "med": 1,
+            "p(90)": 4040.400000000001,
+            "p(95)": 5000,
+            "p(99)": 5004,
+            "max": 5074,
+            "avg": 732.2321240068893,
+            "min": 0
+          },
+          "business_success": {
+            "count": 0,
+            "rate": 0
+          },
+          "server_completed": null
+        }
+      },
+      "http_waiting_ms": {
+        "avg": 723.9941590035384,
+        "min": 0,
+        "med": 0,
+        "p(90)": 4007.5794,
+        "p(95)": 4999.821,
+        "p(99)": 5002.141,
+        "max": 5073.989
+      },
+      "http_connecting_ms": {
+        "p(90)": 0.157,
+        "p(95)": 0.707,
+        "p(99)": 3.5290299999999992,
+        "max": 24.816,
+        "avg": 0.15913208071290094,
+        "min": 0,
+        "med": 0
+      },
+      "hikari_acquire": {
+        "count": null,
+        "total_seconds": null,
+        "unavailable": true,
+        "mean_ms": null
+      },
+      "spring_http": {
+        "count": null,
+        "total_seconds": null,
+        "unavailable": true,
+        "mean_ms": null
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 123755,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 3994,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 32673,
+        "Slow_queries": 0,
+        "Threads_connected": -20,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 21,
+      "db_threads_connected_after": 1,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:27:36.169426+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 5520,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-api-1",
+              "CPUPerc": "26.58%",
+              "MemUsage": "1.116GiB / 2GiB",
+              "MemPerc": "55.82%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-mysql-1",
+              "CPUPerc": "3.99%",
+              "MemUsage": "651.7MiB / 2GiB",
+              "MemPerc": "31.82%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:27:42.033172+00:00",
+          "generator": {
+            "cpu_percent": 148.5,
+            "rss_kib": 2129232,
+            "elapsed": "00:06"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-api-1",
+              "CPUPerc": "21.91%",
+              "MemUsage": "1.149GiB / 2GiB",
+              "MemPerc": "57.47%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-mysql-1",
+              "CPUPerc": "8.08%",
+              "MemUsage": "653.2MiB / 2GiB",
+              "MemPerc": "31.90%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:27:48.912995+00:00",
+          "generator": {
+            "cpu_percent": 132.1,
+            "rss_kib": 2458032,
+            "elapsed": "00:12"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-api-1",
+              "CPUPerc": "19.18%",
+              "MemUsage": "1.181GiB / 2GiB",
+              "MemPerc": "59.06%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-mysql-1",
+              "CPUPerc": "34.21%",
+              "MemUsage": "652.7MiB / 2GiB",
+              "MemPerc": "31.87%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:27:56.487935+00:00",
+          "generator": {
+            "cpu_percent": 95.1,
+            "rss_kib": 2461504,
+            "elapsed": "00:20"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-api-1",
+              "CPUPerc": "16.74%",
+              "MemUsage": "1.183GiB / 2GiB",
+              "MemPerc": "59.17%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-mysql-1",
+              "CPUPerc": "8.87%",
+              "MemUsage": "652.8MiB / 2GiB",
+              "MemPerc": "31.87%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:28:02.101403+00:00",
+          "generator": {
+            "cpu_percent": 93.2,
+            "rss_kib": 2466352,
+            "elapsed": "00:26"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-api-1",
+              "CPUPerc": "55.05%",
+              "MemUsage": "1.183GiB / 2GiB",
+              "MemPerc": "59.15%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112615-7de43c-mysql-1",
+              "CPUPerc": "24.92%",
+              "MemUsage": "653.1MiB / 2GiB",
+              "MemPerc": "31.89%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "min": 1,
+          "med": 5,
+          "p(90)": 22,
+          "p(95)": 23,
+          "p(99)": 26,
+          "max": 81,
+          "avg": 7.72704549241793
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.execution_error present: Remote end closed connection without response",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "completion_success.values.count must be greater than zero",
+          "reward_amount.values.count must be greater than zero",
+          "dropped_iterations must be zero, got 3.0",
+          "business_success_rate below 0.999: 0.0008889086424142758",
+          "valid_outcome_rate below 0.999: 0.0008889086424142758",
+          "valid_outcomes must equal sent_requests (80.0 != 89998.0)",
+          "unexpected_failure above 0.001: 0.9991110913575857",
+          "business_success{endpoint:complete}.values.count must be greater than zero",
+          "business_success_rate{endpoint:complete}.values.rate must be greater than zero",
+          "valid_outcome_rate{endpoint:complete}.values.rate must be greater than zero",
+          "endpoint complete latency p(95) 5000.0ms > 300.0ms",
+          "endpoint complete latency p(99) 5004.0ms > 1000.0ms",
+          "endpoint me business_success_rate below 0.999: 0.0010555555555555555",
+          "endpoint me valid_outcome_rate below 0.999: 0.0010555555555555555",
+          "endpoint me latency p(95) 5000.0ms > 300.0ms",
+          "endpoint me latency p(99) 5004.0ms > 1000.0ms",
+          "endpoint today business_success_rate below 0.999: 0.0011666990749743048",
+          "endpoint today valid_outcome_rate below 0.999: 0.0011666990749743048",
+          "endpoint today latency p(95) 5000.0ms > 300.0ms",
+          "endpoint today latency p(99) 5004.0ms > 1000.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 3']"
+        ],
+        "measurement_limits": [
+          "manifest.server_arrivals missing; server-side arrival evidence is unavailable",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 3 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.9999777777777777,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 623,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 6230,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 3"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "89525d348a4bbbea0f1e42a7c7ad12d7bdbd4b8a7eb5b8fd1a6f0ae11e08b058",
+        "summary.json": "080e8989976c3d692579b615ea30408c62ed0e4f8102abd8603e237497b2175d",
+        "verdict.json": "2799b6aca39752a0765bb0fa4619da4d89b3ee2546bce8696c1d1d86b1a27b77",
+        "db-audit.json": "496d58ec0fb7d188978828ae5719bbeca87f184e6762fbf65cf2e57a273f4abe",
+        "db-before.json": "78c2636745a5babbd04af28fc62326eaa8331c552b48880c1fd277d1657278c4",
+        "db-after.json": "55531b915671c1151ae8d9b9199fc239a3782a62dbf8a82cdbfb0a910ce7e534",
+        "telemetry.jsonl": "a8d72a07d6023db55eb6c1ede32fb2588825dd68a55fbbb8bdc4f847f8da1d34",
+        "api.jfr": "07caf39118d2d7e9d3666779f71e764a3736ddd60df83083659609215a2d207a",
+        "gc.log": "555faa957816dfdce38a50034a0b6942949ff41559d6576597a41b13a3910ebe",
+        "http.server.requests-before.json": "6c91b80e2b4d8c7f6556dcdcfb4e7fa6136ff05a7025445b0250b3c03f588f87",
+        "hikaricp.connections.acquire-before.json": "bd8a37649d122027f929ebe7ff0c28d4e6b4c85afbe8d8ce4b6bd369696cb705",
+        "console.txt": "1bc9b51cb37cc8a258468027c0258ffd8b88cf1a205f1a60238bb600734b2757",
+        "warmup-summary.json": "b8bbb8aa9d37316148177168f85db568e07097e5c0f77c02bd51d09ae392fe00",
+        "api.log": "4bcb9a9c75e0ea07f0171c9ddcd3eada27742c333e5523f27f5a2e17567a1bf9"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 89918,
+        "connection_reset": 72084,
+        "timeout": 6904,
+        "eof": 10771
+      }
+    },
+    {
+      "run_id": "20260910T112922-11e8b9-mixed",
+      "pool": 10,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 5000,
+        "max_vus": 5000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "10",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:30:42.830861+00:00",
+        "completed_at": "2026-09-10T02:31:15.277939+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 67574,
+      "dropped": 22427,
+      "business_success": 67485,
+      "completion_success": 13496,
+      "reward_amount": 134960,
+      "global_latency_ms": {
+        "max": 4681,
+        "avg": 2184.9808654216117,
+        "min": 0,
+        "med": 1957,
+        "p(90)": 3184,
+        "p(95)": 3300,
+        "p(99)": 3438
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "p(90)": 3193,
+            "p(95)": 3308,
+            "p(99)": 3459,
+            "max": 4674,
+            "avg": 2183.9844987051424,
+            "min": 0,
+            "med": 1952
+          },
+          "business_success": {
+            "count": 26994,
+            "rate": 850.4850764349596
+          },
+          "server_completed": 26994.0
+        },
+        "today": {
+          "latency_ms": {
+            "min": 0,
+            "med": 1953,
+            "p(90)": 3192,
+            "p(95)": 3306.549999999999,
+            "p(99)": 3456.7099999999996,
+            "max": 4681,
+            "avg": 2184.286977432482
+          },
+          "business_success": {
+            "count": 26995,
+            "rate": 850.5165828836681
+          },
+          "server_completed": 26995.0
+        },
+        "complete": {
+          "latency_ms": {
+            "p(95)": 3260,
+            "p(99)": 3372,
+            "max": 4643,
+            "avg": 2188.361624981501,
+            "min": 0,
+            "med": 1971,
+            "p(90)": 3143
+          },
+          "business_success": {
+            "count": 13496,
+            "rate": 425.2110317687714
+          },
+          "server_completed": 13496.0
+        }
+      },
+      "http_waiting_ms": {
+        "avg": 2184.8643679817565,
+        "min": 0,
+        "med": 1956.5665,
+        "p(90)": 3184.4261,
+        "p(95)": 3299.87535,
+        "p(99)": 3438.29896,
+        "max": 4680.438
+      },
+      "http_connecting_ms": {
+        "p(95)": 0.116,
+        "p(99)": 0.975,
+        "max": 8.504,
+        "avg": 0.037899443572971925,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0
+      },
+      "hikari_acquire": {
+        "count": 80187.0,
+        "total_seconds": 5977.548498089,
+        "max_after_seconds": 1.570954626,
+        "mean_ms": 74.54510703841021
+      },
+      "spring_http": {
+        "count": 67502.0,
+        "total_seconds": 6308.382564909,
+        "max_after_seconds": 1.617028917,
+        "mean_ms": 93.45475045049035
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 2661905,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 72369,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 712187,
+        "Slow_queries": 0,
+        "Threads_connected": 0,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 11,
+      "db_threads_connected_after": 11,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:30:42.833764+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 5408,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112922-11e8b9-api-1",
+              "CPUPerc": "359.89%",
+              "MemUsage": "1.171GiB / 2GiB",
+              "MemPerc": "58.57%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112922-11e8b9-mysql-1",
+              "CPUPerc": "42.95%",
+              "MemUsage": "611.4MiB / 2GiB",
+              "MemPerc": "29.85%"
+            }
+          ],
+          "hikaricp.connections.active": "timeout",
+          "hikaricp.connections.pending": [
+            189.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:31:01.971039+00:00",
+          "generator": {
+            "cpu_percent": 60.9,
+            "rss_kib": 2392992,
+            "elapsed": "00:19"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t112922-11e8b9-api-1",
+              "CPUPerc": "279.09%",
+              "MemUsage": "1.225GiB / 2GiB",
+              "MemPerc": "61.25%"
+            },
+            {
+              "Name": "rougether-scale-20260910t112922-11e8b9-mysql-1",
+              "CPUPerc": "207.85%",
+              "MemUsage": "620.4MiB / 2GiB",
+              "MemPerc": "30.30%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            10.0
+          ],
+          "hikaricp.connections.pending": [
+            189.0
+          ]
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "avg": 7.6485,
+          "min": 2,
+          "med": 5,
+          "p(90)": 21,
+          "p(95)": 23,
+          "p(99)": 26,
+          "max": 53
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 67574.0 < 89100.00",
+          "dropped_iterations must be zero, got 22427.0",
+          "business_success_rate below 0.999: 0.9986829253855033",
+          "valid_outcome_rate below 0.999: 0.9986829253855033",
+          "valid_outcomes must equal sent_requests (67485.0 != 67574.0)",
+          "unexpected_failure above 0.001: 0.0013170746144967",
+          "endpoint complete business_success_rate below 0.999: 0.9986680479502738",
+          "endpoint complete valid_outcome_rate below 0.999: 0.9986680479502738",
+          "endpoint complete latency p(95) 3260.0ms > 300.0ms",
+          "endpoint complete latency p(99) 3372.0ms > 1000.0ms",
+          "endpoint me business_success_rate below 0.999: 0.9986681465038846",
+          "endpoint me valid_outcome_rate below 0.999: 0.9986681465038846",
+          "endpoint me latency p(95) 3308.0ms > 300.0ms",
+          "endpoint me latency p(99) 3459.0ms > 1000.0ms",
+          "endpoint today business_success_rate below 0.999: 0.9987051424343322",
+          "endpoint today valid_outcome_rate below 0.999: 0.9987051424343322",
+          "endpoint today latency p(95) 3306.549999999999ms > 300.0ms",
+          "endpoint today latency p(99) 3456.7099999999996ms > 1000.0ms",
+          "manifest.server_arrivals.me must match endpoint sent_requests (26994.0 != 27030.0)",
+          "manifest.server_arrivals.complete must match endpoint sent_requests (13496.0 != 13514.0)",
+          "manifest.server_arrivals.today must match endpoint sent_requests (26995.0 != 27030.0)",
+          "manifest.server_arrivals profile total must match sent_requests (67485.0 != 67574.0)",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 22427']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "only 2 generator samples; capacity claim is exploratory"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.7508222222222222,
+          "telemetry_samples": 2,
+          "generator_samples": 2
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 13496,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 134960,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 22427"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "40f305a07a26818ed26f89e99e010fca0621e8410eb3e4148c4da06841f39bba",
+        "summary.json": "f324b6b9d421e1e662d6c225729bf5dfac60a379b16e648cdbe58e435068cfcd",
+        "verdict.json": "de70c3975b122ec92bd18f86f5448ae57dcfaea9218cd5262e24fb8a35ed3fb1",
+        "db-audit.json": "d9c3877aab74dd068d26774ac495a44a96ac0eef2447450ed419c3bd1fc857a9",
+        "db-before.json": "af47d1fa22a1bc306b7ac0f5deb9556ead5cb2e6e712c8d64757e6ecd71839ca",
+        "db-after.json": "cbdd671c981db4ce129808c393d999ae344d34fa3ec56e3ca58c30221c80dd44",
+        "telemetry.jsonl": "68c2fc6d9bbe99bfe5226da5de23dd9ba3a58d13b2f7880301709cfd32ffd9ab",
+        "api.jfr": "dfbba601901a6926d6c600fd1a0910f8b32d686229317f4f1b253bc6394d4752",
+        "gc.log": "276f0674f1f89aecc9a25dc22c5ea7365f95329c36422924587ff22f8cf04575",
+        "http.server.requests-before.json": "43ff085f9215641210bef61da524c2fc3756ea4e43fb64d20ddc38c19c7a38a9",
+        "http.server.requests-after.json": "761341581f6e40b7e17c0492caaa680f6a80cfdfe32253eff0267e2487a12623",
+        "hikaricp.connections.acquire-before.json": "a7d1738c0f9f02a8d3ef2da989b520012400a59a2d56787f2c55fd8865b5da00",
+        "hikaricp.connections.acquire-after.json": "abf9c60ad8a5e22b05e45583898403f24d1b8d8fce363fca2bdd4ca21c4cb97f",
+        "console.txt": "71aebfde3ec24cba2e2de022819261b2a6159d059e74f748cb4438f63d843748",
+        "warmup-summary.json": "39f6626d6c2fb3eb8e65e70fde24f8c7ad42eff1f805262af03842067bd42508",
+        "api.log": "d83f408e0fd6e0ba1949685be0d074d0aad14db011371c6f720f46b7ecbe02c3"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 89,
+        "connection_reset": 88,
+        "timeout": 0,
+        "eof": 0
+      }
+    },
+    {
+      "run_id": "20260910T113156-47c9eb-mixed",
+      "pool": 20,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 5000,
+        "max_vus": 5000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:33:16.990044+00:00",
+        "completed_at": "2026-09-10T02:33:48.394407+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 77084,
+      "dropped": 12916,
+      "business_success": 76955,
+      "completion_success": 15386,
+      "reward_amount": 153860,
+      "global_latency_ms": {
+        "min": 0,
+        "med": 1358,
+        "p(90)": 2887,
+        "p(95)": 3161,
+        "p(99)": 3852.169999999999,
+        "max": 5013,
+        "avg": 1568.9536868870323
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "p(99)": 3838.3399999999992,
+            "max": 5012,
+            "avg": 1565.297658429007,
+            "min": 0,
+            "med": 1353,
+            "p(90)": 2893,
+            "p(95)": 3169.3499999999985
+          },
+          "business_success": {
+            "count": 30786,
+            "rate": 1004.7162200477993
+          },
+          "server_completed": 30830.0
+        },
+        "today": {
+          "latency_ms": {
+            "med": 1351,
+            "p(90)": 2892.7000000000007,
+            "p(95)": 3164,
+            "p(99)": 3849.6699999999996,
+            "max": 5013,
+            "avg": 1565.6567101251865,
+            "min": 1
+          },
+          "business_success": {
+            "count": 30783,
+            "rate": 1004.6183135753721
+          },
+          "server_completed": 30831.0
+        },
+        "complete": {
+          "latency_ms": {
+            "max": 5010,
+            "avg": 1582.8605993772703,
+            "min": 0,
+            "med": 1381,
+            "p(90)": 2880.5000000000005,
+            "p(95)": 3135,
+            "p(99)": 3874.3999999999996
+          },
+          "business_success": {
+            "count": 15386,
+            "rate": 502.1296615882362
+          },
+          "server_completed": 15414.0
+        }
+      },
+      "http_waiting_ms": {
+        "avg": 1568.9153723340694,
+        "min": 0,
+        "med": 1358.4105,
+        "p(90)": 2887.5018,
+        "p(95)": 3161.2992,
+        "p(99)": 3851.91216,
+        "max": 5012.625
+      },
+      "http_connecting_ms": {
+        "max": 16.16,
+        "avg": 0.027295080691194046,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0.083,
+        "p(99)": 0.6381699999999993
+      },
+      "hikari_acquire": {
+        "count": 90158.0,
+        "total_seconds": 5438.263355175,
+        "max_after_seconds": 2.087053959,
+        "mean_ms": 60.31925458833381
+      },
+      "spring_http": {
+        "count": 77095.0,
+        "total_seconds": 6086.919490348,
+        "max_after_seconds": 2.089325501,
+        "mean_ms": 78.95349231919062
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 3012461,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 34250,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 807692,
+        "Slow_queries": 0,
+        "Threads_connected": 0,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 21,
+      "db_threads_connected_after": 21,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:33:16.994022+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 5664,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-api-1",
+              "CPUPerc": "136.29%",
+              "MemUsage": "1.206GiB / 2GiB",
+              "MemPerc": "60.30%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-mysql-1",
+              "CPUPerc": "42.67%",
+              "MemUsage": "655.4MiB / 2GiB",
+              "MemPerc": "32.00%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            19.0
+          ],
+          "hikaricp.connections.pending": [
+            179.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:33:34.318217+00:00",
+          "generator": {
+            "cpu_percent": 63.2,
+            "rss_kib": 2419072,
+            "elapsed": "00:18"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-api-1",
+              "CPUPerc": "314.14%",
+              "MemUsage": "1.289GiB / 2GiB",
+              "MemPerc": "64.47%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-mysql-1",
+              "CPUPerc": "208.91%",
+              "MemUsage": "665.3MiB / 2GiB",
+              "MemPerc": "32.48%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            19.0
+          ],
+          "hikaricp.connections.pending": [
+            177.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:33:45.284512+00:00",
+          "generator": {
+            "cpu_percent": 75.5,
+            "rss_kib": 2502976,
+            "elapsed": "00:29"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-api-1",
+              "CPUPerc": "320.60%",
+              "MemUsage": "1.286GiB / 2GiB",
+              "MemPerc": "64.30%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113156-47c9eb-mysql-1",
+              "CPUPerc": "206.24%",
+              "MemUsage": "674.3MiB / 2GiB",
+              "MemPerc": "32.92%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            20.0
+          ],
+          "hikaricp.connections.pending": [
+            129.0
+          ]
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "p(90)": 23,
+          "p(95)": 25,
+          "p(99)": 32.00999999999995,
+          "max": 58,
+          "avg": 8.329,
+          "min": 2,
+          "med": 5
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 77084.0 < 89100.00",
+          "dropped_iterations must be zero, got 12916.0",
+          "business_success_rate below 0.999: 0.9983265009599916",
+          "valid_outcome_rate below 0.999: 0.9983265009599916",
+          "valid_outcomes must equal sent_requests (76955.0 != 77084.0)",
+          "unexpected_failure above 0.001: 0.0016734990400083026",
+          "endpoint complete business_success_rate below 0.999: 0.9980539699014012",
+          "endpoint complete valid_outcome_rate below 0.999: 0.9980539699014012",
+          "endpoint complete latency p(95) 3135.0ms > 300.0ms",
+          "endpoint complete latency p(99) 3874.3999999999996ms > 1000.0ms",
+          "endpoint me business_success_rate below 0.999: 0.9984432769021211",
+          "endpoint me valid_outcome_rate below 0.999: 0.9984432769021211",
+          "endpoint me latency p(95) 3169.3499999999985ms > 300.0ms",
+          "endpoint me latency p(99) 3838.3399999999992ms > 1000.0ms",
+          "endpoint today business_success_rate below 0.999: 0.9983459817085036",
+          "endpoint today valid_outcome_rate below 0.999: 0.9983459817085036",
+          "endpoint today latency p(95) 3164.0ms > 300.0ms",
+          "endpoint today latency p(99) 3849.6699999999996ms > 1000.0ms",
+          "manifest.server_arrivals.complete must match endpoint sent_requests (15414.0 != 15416.0)",
+          "manifest.server_arrivals.today must match endpoint sent_requests (30831.0 != 30834.0)",
+          "manifest.server_arrivals.me must match endpoint sent_requests (30830.0 != 30834.0)",
+          "manifest.server_arrivals profile total must match sent_requests (77075.0 != 77084.0)",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 12916']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8564888888888889,
+          "telemetry_samples": 3,
+          "generator_samples": 3
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 15414,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 154140,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 12916"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "5ebc248d1610e95e4f3cb2db70ee8d1a4a65e50a3267188e1363b648482e91bb",
+        "summary.json": "6876de2395a45ffb7f7a4d60a250d74bf909817a6ba3d5759556cca73fe59ae1",
+        "verdict.json": "d41118e3f02113a4becf49d3376096c0551419b503972ed08fef8723a2741d7f",
+        "db-audit.json": "3805621297166ba65b88d5051eb064ef280788048a27f1c42b1b5d9175befec0",
+        "db-before.json": "8c05f6f6a73f0630452fc1f31fd90018f9ec4022eade25022d43268a46c1c972",
+        "db-after.json": "37a3102ac8df922af0c806c6652da583d8008f28db13d1ea1ac419b5b77c12d6",
+        "telemetry.jsonl": "07f5df21b97aa9533094781e41de1e9ffdd28daa92aeb1200e9e6cc52a980a98",
+        "api.jfr": "c706908161269ef3ed7aee4d7c2bf12cb374d60396759eeceede332e67cf57c2",
+        "gc.log": "b37cf80ca4e3f27465cff7513d8f20c22862dc0fe232ec0968f074ce3b9edbc7",
+        "http.server.requests-before.json": "a03ca3aec0e721beeaf1304ce43b05bab4c0dd76372796ccce743eecd79a550d",
+        "http.server.requests-after.json": "163daff45cc766d45654d0251a639db4aa798122c0a1591c2a8a318c430bec80",
+        "hikaricp.connections.acquire-before.json": "cbf8a4e418f38f6efa5f30ec360d4c231d97054f183133f03138740336e7481d",
+        "hikaricp.connections.acquire-after.json": "e917a6289450fd7d520bbb01e6edededfac0792bc1d8bc5aa863d04da22a3b60",
+        "console.txt": "9e9a9ede49e0b51c095ec72491626b99171cc906c5435127e13d222cc9b638e4",
+        "warmup-summary.json": "8a585fadde67ac39128a64dfcf095fa9427317349aa922628bd01401533b697e",
+        "api.log": "58ae7d387a4c0a538ec139bfbd550d303e12217c13256767a3cf34b8aec5eee9"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 129,
+        "connection_reset": 9,
+        "timeout": 120,
+        "eof": 0
+      }
+    },
+    {
+      "run_id": "20260910T113435-53ff51-mixed",
+      "pool": 10,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 5000,
+        "max_vus": 5000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "10",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:35:56.750455+00:00",
+        "completed_at": "2026-09-10T02:36:28.833214+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 77109,
+      "dropped": 12892,
+      "business_success": 9775,
+      "completion_success": 1963,
+      "reward_amount": 19630,
+      "global_latency_ms": {
+        "avg": 1023.3786458130699,
+        "min": 0,
+        "med": 2,
+        "p(90)": 4979,
+        "p(95)": 5000,
+        "p(99)": 5004,
+        "max": 5079
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "avg": 1022.9294514330178,
+            "min": 0,
+            "med": 2,
+            "p(90)": 4982.4000000000015,
+            "p(95)": 5000,
+            "p(99)": 5004,
+            "max": 5079
+          },
+          "business_success": {
+            "rate": 126.12766367575611,
+            "count": 3905
+          },
+          "server_completed": null
+        },
+        "today": {
+          "latency_ms": {
+            "med": 2,
+            "p(90)": 4985.700000000001,
+            "p(95)": 5000,
+            "p(99)": 5004,
+            "max": 5078,
+            "avg": 1025.0091103618208,
+            "min": 0
+          },
+          "business_success": {
+            "count": 3907,
+            "rate": 126.19226171092934
+          },
+          "server_completed": null
+        },
+        "complete": {
+          "latency_ms": {
+            "p(90)": 4952,
+            "p(95)": 5001,
+            "p(99)": 5004,
+            "max": 5056,
+            "avg": 1021.0159522728746,
+            "min": 0,
+            "med": 2
+          },
+          "business_success": {
+            "count": 1963,
+            "rate": 63.40297152253758
+          },
+          "server_completed": null
+        }
+      },
+      "http_waiting_ms": {
+        "avg": 1022.090381057979,
+        "min": 0,
+        "med": 0,
+        "p(90)": 4977.359600000001,
+        "p(95)": 5000.13,
+        "p(99)": 5003.28944,
+        "max": 5073.488
+      },
+      "http_connecting_ms": {
+        "max": 16.137,
+        "avg": 0.09045390291665051,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0.118,
+        "p(95)": 0.251,
+        "p(99)": 1.8059199999999993
+      },
+      "hikari_acquire": {
+        "count": null,
+        "total_seconds": null,
+        "unavailable": true,
+        "mean_ms": null
+      },
+      "spring_http": {
+        "count": null,
+        "total_seconds": null,
+        "unavailable": true,
+        "mean_ms": null
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 561793,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 13953,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 150602,
+        "Slow_queries": 0,
+        "Threads_connected": -10,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 11,
+      "db_threads_connected_after": 1,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:35:56.753967+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 5456,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-api-1",
+              "CPUPerc": "307.75%",
+              "MemUsage": "1.142GiB / 2GiB",
+              "MemPerc": "57.11%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-mysql-1",
+              "CPUPerc": "68.15%",
+              "MemUsage": "609.9MiB / 2GiB",
+              "MemPerc": "29.78%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "ConnectionResetError"
+        },
+        {
+          "at": "2026-09-10T02:36:01.585058+00:00",
+          "generator": {
+            "cpu_percent": 46.7,
+            "rss_kib": 1971344,
+            "elapsed": "00:05"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-api-1",
+              "CPUPerc": "218.05%",
+              "MemUsage": "1.197GiB / 2GiB",
+              "MemPerc": "59.84%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-mysql-1",
+              "CPUPerc": "97.35%",
+              "MemUsage": "610.9MiB / 2GiB",
+              "MemPerc": "29.83%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:36:11.642057+00:00",
+          "generator": {
+            "cpu_percent": 158.0,
+            "rss_kib": 2457824,
+            "elapsed": "00:15"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-api-1",
+              "CPUPerc": "7.47%",
+              "MemUsage": "1.197GiB / 2GiB",
+              "MemPerc": "59.83%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-mysql-1",
+              "CPUPerc": "6.64%",
+              "MemUsage": "615.8MiB / 2GiB",
+              "MemPerc": "30.07%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:36:17.828624+00:00",
+          "generator": {
+            "cpu_percent": 155.1,
+            "rss_kib": 2465744,
+            "elapsed": "00:21"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-api-1",
+              "CPUPerc": "39.34%",
+              "MemUsage": "1.194GiB / 2GiB",
+              "MemPerc": "59.71%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-mysql-1",
+              "CPUPerc": "4.64%",
+              "MemUsage": "614.8MiB / 2GiB",
+              "MemPerc": "30.02%"
+            }
+          ],
+          "hikaricp.connections.active": "URLError",
+          "hikaricp.connections.pending": "URLError"
+        },
+        {
+          "at": "2026-09-10T02:36:24.237140+00:00",
+          "generator": {
+            "cpu_percent": 124.1,
+            "rss_kib": 2467936,
+            "elapsed": "00:28"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-api-1",
+              "CPUPerc": "64.14%",
+              "MemUsage": "1.193GiB / 2GiB",
+              "MemPerc": "59.63%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113435-53ff51-mysql-1",
+              "CPUPerc": "28.95%",
+              "MemUsage": "614.6MiB / 2GiB",
+              "MemPerc": "30.01%"
+            }
+          ],
+          "hikaricp.connections.active": "RemoteDisconnected",
+          "hikaricp.connections.pending": "RemoteDisconnected"
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "max": 142,
+          "avg": 7.839693384435927,
+          "min": 2,
+          "med": 5,
+          "p(90)": 22,
+          "p(95)": 23,
+          "p(99)": 27
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.execution_error present: Remote end closed connection without response",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 77109.0 < 89100.00",
+          "dropped_iterations must be zero, got 12892.0",
+          "business_success_rate below 0.999: 0.1267686002930916",
+          "valid_outcome_rate below 0.999: 0.1267686002930916",
+          "valid_outcomes must equal sent_requests (9775.0 != 77109.0)",
+          "unexpected_failure above 0.001: 0.8732313997069084",
+          "endpoint complete business_success_rate below 0.999: 0.12729394980870243",
+          "endpoint complete valid_outcome_rate below 0.999: 0.12729394980870243",
+          "endpoint complete latency p(95) 5001.0ms > 300.0ms",
+          "endpoint complete latency p(99) 5004.0ms > 1000.0ms",
+          "endpoint me business_success_rate below 0.999: 0.12660485021398002",
+          "endpoint me valid_outcome_rate below 0.999: 0.12660485021398002",
+          "endpoint me latency p(95) 5000.0ms > 300.0ms",
+          "endpoint me latency p(99) 5004.0ms > 1000.0ms",
+          "endpoint today business_success_rate below 0.999: 0.12666969264686812",
+          "endpoint today valid_outcome_rate below 0.999: 0.12666969264686812",
+          "endpoint today latency p(95) 5000.0ms > 300.0ms",
+          "endpoint today latency p(99) 5004.0ms > 1000.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 12892']"
+        ],
+        "measurement_limits": [
+          "manifest.server_arrivals missing; server-side arrival evidence is unavailable",
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 3 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8567666666666667,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 2528,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 25280,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 12892"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "d96c366be8f6e93009c630d111d53437c7ea5a47dd0562a7db58976a0a5e8576",
+        "summary.json": "6d5b7c31071b4a4ad92602a70a7ee89dce41d91d1d041f50a2720eebe6829969",
+        "verdict.json": "9a6677a2d709e3b34ca6882c4f06cc1186f2eabcd8285f41fc7c0c55f64f03ba",
+        "db-audit.json": "640f8b0f90377061a0f4ac745ebfe883c8e8a74f0bc49de8612a98b15805b2f3",
+        "db-before.json": "76a238fd9b212d6b614e0d3b8ad18280db23678def2d0b417c5e19a0b31afbd4",
+        "db-after.json": "b3b2764738c03360ccabfadfffcbd6699a9e3f5aa677841b3d8420d457a50613",
+        "telemetry.jsonl": "ddcb49a1629c06458a93c69e50138f06500cbe53a20782cefaf3ca890a21c6de",
+        "api.jfr": "17e27859bf78ebd77fba4165fa16aeb5506eaf478fca9920b76296c0d1d7bc0f",
+        "gc.log": "f496b7718f6a8f3360dd0fed44c5f817b7195d64c406e2368bb91c04f962ea1b",
+        "http.server.requests-before.json": "ecbbf73b6d97e73d2f38dc54e45feb496bfe2244e6cb784fea75cc3d636b60f9",
+        "hikaricp.connections.acquire-before.json": "54ebb3445f8c3d77195d891d5a72d27b87d9f8ea60391483188998d800ab4f58",
+        "console.txt": "c555c5733d16d677f144e3c8899beaf7603222d56659460bced64297af521185",
+        "warmup-summary.json": "6dfb1a9ec8476ddf26ba59e278b21f3dcb017268c8084c71791fab818fcc3c31",
+        "api.log": "dfb64d73f44ec504bc1d423b0bb606958bc005b7a87bdf6e1818ff5852ea17ff"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 67334,
+        "connection_reset": 51192,
+        "timeout": 7642,
+        "eof": 8327
+      }
+    },
+    {
+      "run_id": "20260910T113808-a1c029-mixed",
+      "pool": 10,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 1000,
+        "max_vus": 1000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "10",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:39:29.428467+00:00",
+        "completed_at": "2026-09-10T02:40:00.846378+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 57552,
+      "dropped": 32449,
+      "business_success": 57552,
+      "completion_success": 11510,
+      "reward_amount": 115100,
+      "global_latency_ms": {
+        "p(90)": 873,
+        "p(95)": 963.4499999999974,
+        "p(99)": 1121,
+        "max": 1652,
+        "avg": 514.2834132610509,
+        "min": 4,
+        "med": 414
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "min": 4,
+            "med": 407,
+            "p(90)": 883,
+            "p(95)": 971,
+            "p(99)": 1126.7999999999997,
+            "max": 1652,
+            "avg": 513.3280483037227
+          },
+          "business_success": {
+            "count": 23021,
+            "rate": 758.2345404109268
+          },
+          "server_completed": 23021.0
+        },
+        "today": {
+          "latency_ms": {
+            "p(99)": 1131.7999999999997,
+            "max": 1580,
+            "avg": 515.0384865991921,
+            "min": 5,
+            "med": 411,
+            "p(90)": 886,
+            "p(95)": 971
+          },
+          "business_success": {
+            "count": 23021,
+            "rate": 758.2345404109268
+          },
+          "server_completed": 23021.0
+        },
+        "complete": {
+          "latency_ms": {
+            "p(95)": 899,
+            "p(99)": 1027,
+            "max": 1523,
+            "avg": 514.6840139009557,
+            "min": 13,
+            "med": 431,
+            "p(90)": 827
+          },
+          "business_success": {
+            "count": 11510,
+            "rate": 379.10080188218444
+          },
+          "server_completed": 11510.0
+        }
+      },
+      "http_waiting_ms": {
+        "min": 4.518,
+        "med": 414.02049999999997,
+        "p(90)": 873.4752,
+        "p(95)": 963.4705999999999,
+        "p(99)": 1120.69519,
+        "max": 1651.694,
+        "avg": 514.315874774115
+      },
+      "http_connecting_ms": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0.084,
+        "max": 2.149,
+        "avg": 0.002659646927995547,
+        "min": 0,
+        "med": 0
+      },
+      "hikari_acquire": {
+        "count": 69853.0,
+        "total_seconds": 5733.128014897001,
+        "max_after_seconds": 0.915627292,
+        "mean_ms": 82.07418457184374
+      },
+      "spring_http": {
+        "count": 57582.0,
+        "total_seconds": 6049.546455807999,
+        "max_after_seconds": 0.918706001,
+        "mean_ms": 105.05967934090513
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 2290875,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 125499,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 613243,
+        "Slow_queries": 0,
+        "Threads_connected": 0,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 11,
+      "db_threads_connected_after": 11,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:39:29.431672+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 8640,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-api-1",
+              "CPUPerc": "369.88%",
+              "MemUsage": "1.119GiB / 2GiB",
+              "MemPerc": "55.95%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-mysql-1",
+              "CPUPerc": "133.85%",
+              "MemUsage": "609.2MiB / 2GiB",
+              "MemPerc": "29.75%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            10.0
+          ],
+          "hikaricp.connections.pending": [
+            190.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:39:37.436769+00:00",
+          "generator": {
+            "cpu_percent": 34.8,
+            "rss_kib": 535920,
+            "elapsed": "00:08"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-api-1",
+              "CPUPerc": "186.89%",
+              "MemUsage": "1.142GiB / 2GiB",
+              "MemPerc": "57.11%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-mysql-1",
+              "CPUPerc": "201.45%",
+              "MemUsage": "613.9MiB / 2GiB",
+              "MemPerc": "29.98%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            10.0
+          ],
+          "hikaricp.connections.pending": [
+            189.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:39:45.977269+00:00",
+          "generator": {
+            "cpu_percent": 79.9,
+            "rss_kib": 605632,
+            "elapsed": "00:16"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-api-1",
+              "CPUPerc": "320.38%",
+              "MemUsage": "1.152GiB / 2GiB",
+              "MemPerc": "57.61%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-mysql-1",
+              "CPUPerc": "203.37%",
+              "MemUsage": "616MiB / 2GiB",
+              "MemPerc": "30.08%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            10.0
+          ],
+          "hikaricp.connections.pending": [
+            189.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:39:52.085733+00:00",
+          "generator": {
+            "cpu_percent": 69.0,
+            "rss_kib": 617888,
+            "elapsed": "00:23"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-api-1",
+              "CPUPerc": "316.66%",
+              "MemUsage": "1.168GiB / 2GiB",
+              "MemPerc": "58.42%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-mysql-1",
+              "CPUPerc": "208.40%",
+              "MemUsage": "618.2MiB / 2GiB",
+              "MemPerc": "30.19%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            10.0
+          ],
+          "hikaricp.connections.pending": [
+            183.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:39:58.235804+00:00",
+          "generator": {
+            "cpu_percent": 95.6,
+            "rss_kib": 621808,
+            "elapsed": "00:29"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-api-1",
+              "CPUPerc": "203.28%",
+              "MemUsage": "1.163GiB / 2GiB",
+              "MemPerc": "58.16%"
+            },
+            {
+              "Name": "rougether-scale-20260910t113808-a1c029-mysql-1",
+              "CPUPerc": "205.13%",
+              "MemUsage": "622.2MiB / 2GiB",
+              "MemPerc": "30.38%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            0.0
+          ],
+          "hikaricp.connections.pending": [
+            0.0
+          ]
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "max": 58,
+          "avg": 6.994000999833361,
+          "min": 1,
+          "med": 4,
+          "p(90)": 21,
+          "p(95)": 23,
+          "p(99)": 27
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 57552.0 < 89100.00",
+          "dropped_iterations must be zero, got 32449.0",
+          "endpoint complete latency p(95) 899.0ms > 300.0ms",
+          "endpoint complete latency p(99) 1027.0ms > 1000.0ms",
+          "endpoint me latency p(95) 971.0ms > 300.0ms",
+          "endpoint me latency p(99) 1126.7999999999997ms > 1000.0ms",
+          "endpoint today latency p(95) 971.0ms > 300.0ms",
+          "endpoint today latency p(99) 1131.7999999999997ms > 1000.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 32449']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 1 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.6394666666666666,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 11510,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 115100,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 32449"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "9e40b726e7b15fd87783e5f4ce22f63099d63a440ee29dd695cf6c4668b6d3cb",
+        "summary.json": "4fb7f259b0e9a1b71f1992ec6ad23f73fd2c7ef5cc86fc04d20397079a9cf87b",
+        "verdict.json": "73161ad1cc2aad2ae6ba33c74e48f4b56f024510708a33625abb65bd65723a46",
+        "db-audit.json": "e1e9147882842a484a353b22b88f349abd1a545902ea80c0b8c86ac4787ea60e",
+        "db-before.json": "8151afde2af6869d2c797604d35a0a756bd28799f247510d72910e44601b80cd",
+        "db-after.json": "24b72cb86960801a3a2aceecbaad172df031909a62ffae27f78f272021cfa4cb",
+        "telemetry.jsonl": "1bc32a352aea682720f69d33896a229834dd6cd8c2149188b9c021e6a69ef19f",
+        "api.jfr": "9fe81443d53fa7b661730ae43fb37a4c5769fad73841943351236ac84e6e8eae",
+        "gc.log": "3d8d7bb55d1821a68293cb20ecf24fa8f8d587b61235a7f78c7409be78f3af5c",
+        "http.server.requests-before.json": "da4ac2727f816863ee77ad9a438539830cc9552e19720da4156d6aa8539875e5",
+        "http.server.requests-after.json": "8c1f8c2e2d88cff28b93b391a1b05fd7222d3ac3f867a5e9c6273e04dd9611d6",
+        "hikaricp.connections.acquire-before.json": "afec94fceb7a04d97b624c6df3001c357c02903662a15861f15baf4da28b5cbd",
+        "hikaricp.connections.acquire-after.json": "cbed57ef9c843fc4909e96890badec8d4edf37e876eb7ab3e69b581dd929761e",
+        "console.txt": "2448c3540935dd036c0d9254a4dde79f11b11ed919fee5c8b7376631030a8194",
+        "warmup-summary.json": "6ad6ad3238182615157599a42a8bb3fdb2993a7db83defa8b91e0a58c44d0499",
+        "api.log": "a86464740d0f092aa15ebdd4f6d4e1ad8560726f094646506feee2be4bbd5923"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 0,
+        "connection_reset": 0,
+        "timeout": 0,
+        "eof": 0
+      }
+    },
+    {
+      "run_id": "20260910T114024-816515-mixed",
+      "pool": 20,
+      "condition": {
+        "scenario": "mixed",
+        "rate": 3000,
+        "duration_seconds": 30,
+        "users": 20000,
+        "todos": 60000,
+        "preallocated_vus": 1000,
+        "max_vus": 1000,
+        "warmup_seconds": 60,
+        "seed_date": "2026-09-10",
+        "limits": {
+          "SCALE_API_CPUS": "4",
+          "SCALE_API_MEMORY": "2g",
+          "SCALE_API_HEAP": "1024m",
+          "SCALE_DB_CPUS": "2",
+          "SCALE_DB_MEMORY": "2g",
+          "SCALE_DB_POOL": "20",
+          "SCALE_DB_BUFFER_BYTES": "1073741824"
+        },
+        "docker": {
+          "cpus": 12,
+          "memory_bytes": 8217165824,
+          "architecture": "aarch64",
+          "version": "29.0.1"
+        },
+        "containers": {
+          "api": {
+            "image_id": "sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 4000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112"
+              ]
+            }
+          },
+          "mysql": {
+            "image_id": "sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb",
+            "memory_bytes": 2147483648,
+            "nano_cpus": 2000000000,
+            "image": {
+              "architecture": "arm64",
+              "os": "linux",
+              "repo_digests": [
+                "mysql@sha256:a2d126916bc2ba79a890a4bf62d305eb8b68fcbdd35c6e582d529df18faf5ebb"
+              ]
+            }
+          }
+        },
+        "started_at": "2026-09-10T02:41:44.907853+00:00",
+        "completed_at": "2026-09-10T02:42:15.376441+00:00",
+        "cleanup_completed": true
+      },
+      "source": {
+        "source_sha": "966cf142e343d687698e03ecd1b8e5b4bf3c4a70",
+        "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jar_sha256": "f397889a244376d67ee396922013ca49635b0582212f13551c4223d61c482dec",
+        "k6_version": "k6 v2.1.0 (commit/devel, go1.26.4, darwin/arm64)",
+        "harness_sha256": {
+          "verify-results.py": "c3ab72c8bc56be73f16c82fd4739941ab84484e975ea31cf3f1f0f61a118087f",
+          "run-local.py": "901270889e6c879293c9f15ae5acd1159d81dca79bced5e6a8db1d5538c3ac9c",
+          "telemetry.py": "90a8271c78d059718797f178cc8c3b6225e55520b1e3e433616f32314faaf371",
+          "README.md": "155c3b0cadbfb02042912b6d0c8243cd5a90b0a7abef783ae5670d7b914908f7",
+          ".gitignore": "9f1ff81aa7d0f2d5eaee36a35266ad018f962233674dad2cb35021e6f6d9fc83",
+          "run-local.sh": "92d2e0caf35b630e88d5bd9650418d56e0f0128f7b22a3f689ceb88af61acf3e",
+          "compose.yml": "71fe9ae224b44f20eac8c081953b5344bccc110899a9e93a79d1131f30507277",
+          "seed/audit.py": "04c2f52a90a10d9e0ff79fffe229c213dcfad3263457f4013609b927886c059a",
+          "seed/seed_scale_db.py": "554b0e24b9b2b2f522fd4ad37d8bdd3e63bece6571c39174e387e97a0d0e48e6",
+          "seed/mint_test_jwts.py": "caca0edf47554ae0afb4eea8df434e6647da67dff72ee123dd36b6cab486e9a6",
+          "seed/README.md": "5673ba27e8af96ec6a05ac9fca35b0a55dc19c0c403020b845f9090907d7e4aa",
+          "seed/prepare.py": "aae72abaa2050afc1097c8e068e404fa2c0dd97b2e123f53267887038a1d5b37",
+          "seed/tests/test_seed_fixture.py": "9e59d9876f98780c4cf1a31b564e907206699a955f3274d036e0d7f552f99301",
+          "seed/tests/test_audit_expectations.py": "f5fd5862fbddd4c7d97e64324b1ff61da9794c8f132e1319f498c1c4946e349a",
+          "tests/test_local_port.py": "f8c46851e72a2b723bd7b94cbb1ce7660b2d562b44d618f9944b927916a981ab",
+          "tests/test_verify_results.py": "88f12a3644cdaadb8f2a7286e6d62f5b8338654fbfa953ca8f026679a8b4dbc4",
+          "scenarios/fixture-init-self-check.js": "851dce178addcfe8cbf921d4b1437cc53208a592a274f2cb0783d7e2e7e5a781",
+          "scenarios/contract-self-check.js": "dbe7d5e74fe7ab27ef757dfa19a419059e4b3bfb1c30f68e0de93d69d3f2fe14",
+          "scenarios/write.js": "f0a43ab055020fec323133fac7d7713d91121441fadbd070ee3e8ea9a8599c11",
+          "scenarios/read.js": "0d918520169680baed779c2215644dae98e12f79e1c0e1b2174c8395f063fca3",
+          "scenarios/contention.js": "810917d6c61c5cd1fccad7a470883430b176c28047063c2f66a896bb6f3ce9fc",
+          "scenarios/mixed.js": "72e04d02a3dffe1e8fd8004ce63898bdc246abb13c695860999d3e904c4856a4",
+          "scenarios/shared.js": "3ca98085c44da163f41b7568dc7b83305e9b7529b76ce5fa2fa4ecb86bbfb4c7",
+          "reports/2026-09-10-comparison.png": "a0d6677114a86e33811fc5525c83c40dff5e40a4ed952cd418b63efb6cf1675d",
+          "reports/2026-09-10-comparison.svg": "c4e94b0984872c2dc4fed8bc98bae628b425fc037e3cb460ade2a8538cebe003",
+          "reports/2026-09-10-comparison.json": "55c71c5bc38ecdf0c14294143be25abaa45c83d1c2bfc19be583405bfcba5403",
+          "reports/2026-09-10-expansion.json": "598782dfbd8ea7774fe4921b12a7c3841f180b55200573e0b8907ad06d5ad7a9",
+          "reports/2026-09-10-first-baseline.md": "b378bd47a9c16174c773a7a853072b78c006edc409f94815f12a09916dda9669",
+          "reports/plot-comparison.py": "87dd2bfa716ecdcff3b301531a70d4bcd2a4ea08f425069e20425635311931f6"
+        }
+      },
+      "sent": 75560,
+      "dropped": 14441,
+      "business_success": 75560,
+      "completion_success": 15112,
+      "reward_amount": 151120,
+      "global_latency_ms": {
+        "med": 69,
+        "p(90)": 588,
+        "p(95)": 678,
+        "p(99)": 847,
+        "max": 2432,
+        "avg": 208.46073319216518,
+        "min": 1
+      },
+      "endpoints": {
+        "me": {
+          "latency_ms": {
+            "avg": 206.51177871889888,
+            "min": 1,
+            "med": 65,
+            "p(90)": 589.7000000000007,
+            "p(95)": 682,
+            "p(99)": 853.5399999999995,
+            "max": 1957
+          },
+          "business_success": {
+            "count": 30224,
+            "rate": 1007.0775990209115
+          },
+          "server_completed": 30224.0
+        },
+        "today": {
+          "latency_ms": {
+            "p(95)": 683.8499999999987,
+            "p(99)": 847,
+            "max": 1751,
+            "avg": 207.06127580730546,
+            "min": 1,
+            "med": 64,
+            "p(90)": 592
+          },
+          "business_success": {
+            "count": 30224,
+            "rate": 1007.0775990209115
+          },
+          "server_completed": 30224.0
+        },
+        "complete": {
+          "latency_ms": {
+            "p(90)": 579,
+            "p(95)": 658,
+            "p(99)": 826.8899999999999,
+            "max": 2432,
+            "avg": 215.15755690841715,
+            "min": 3,
+            "med": 88.5
+          },
+          "business_success": {
+            "count": 15112,
+            "rate": 503.53879951045576
+          },
+          "server_completed": 15112.0
+        }
+      },
+      "http_waiting_ms": {
+        "p(95)": 678.3361999999997,
+        "p(99)": 847.0436499999996,
+        "max": 2431.58,
+        "avg": 208.34745516146046,
+        "min": 0.787,
+        "med": 69.2355,
+        "p(90)": 588.3089
+      },
+      "http_connecting_ms": {
+        "avg": 0.0037435150873477933,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0.08,
+        "max": 4.845
+      },
+      "hikari_acquire": {
+        "count": 88582.0,
+        "total_seconds": 3694.430462436,
+        "max_after_seconds": 1.09169525,
+        "mean_ms": 41.70633381991827
+      },
+      "spring_http": {
+        "count": 75590.0,
+        "total_seconds": 4287.821629876,
+        "max_after_seconds": 1.096808375,
+        "mean_ms": 56.724720596322264
+      },
+      "db_status_delta": {
+        "Innodb_buffer_pool_read_requests": 2962335,
+        "Innodb_buffer_pool_reads": 0,
+        "Innodb_data_reads": 0,
+        "Innodb_data_writes": 35352,
+        "Innodb_log_waits": 0,
+        "Innodb_row_lock_time": 0,
+        "Innodb_row_lock_waits": 0,
+        "Questions": 792607,
+        "Slow_queries": 0,
+        "Threads_connected": 0,
+        "Threads_running": 0
+      },
+      "db_threads_connected_before": 21,
+      "db_threads_connected_after": 21,
+      "db_durability": "1\t1\t1\t1207959552\n",
+      "telemetry_samples": [
+        {
+          "at": "2026-09-10T02:41:44.911270+00:00",
+          "generator": {
+            "cpu_percent": 0.0,
+            "rss_kib": 8160,
+            "elapsed": "00:00"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t114024-816515-api-1",
+              "CPUPerc": "411.18%",
+              "MemUsage": "1.201GiB / 2GiB",
+              "MemPerc": "60.05%"
+            },
+            {
+              "Name": "rougether-scale-20260910t114024-816515-mysql-1",
+              "CPUPerc": "74.99%",
+              "MemUsage": "650MiB / 2GiB",
+              "MemPerc": "31.74%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            19.0
+          ],
+          "hikaricp.connections.pending": [
+            176.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:41:52.954300+00:00",
+          "generator": {
+            "cpu_percent": 56.0,
+            "rss_kib": 538480,
+            "elapsed": "00:08"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t114024-816515-api-1",
+              "CPUPerc": "325.18%",
+              "MemUsage": "1.223GiB / 2GiB",
+              "MemPerc": "61.16%"
+            },
+            {
+              "Name": "rougether-scale-20260910t114024-816515-mysql-1",
+              "CPUPerc": "199.47%",
+              "MemUsage": "657.3MiB / 2GiB",
+              "MemPerc": "32.09%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            20.0
+          ],
+          "hikaricp.connections.pending": [
+            178.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:42:00.271581+00:00",
+          "generator": {
+            "cpu_percent": 65.1,
+            "rss_kib": 619408,
+            "elapsed": "00:16"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t114024-816515-api-1",
+              "CPUPerc": "332.06%",
+              "MemUsage": "1.239GiB / 2GiB",
+              "MemPerc": "61.93%"
+            },
+            {
+              "Name": "rougether-scale-20260910t114024-816515-mysql-1",
+              "CPUPerc": "205.19%",
+              "MemUsage": "659.8MiB / 2GiB",
+              "MemPerc": "32.22%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            20.0
+          ],
+          "hikaricp.connections.pending": [
+            100.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:42:05.864646+00:00",
+          "generator": {
+            "cpu_percent": 64.8,
+            "rss_kib": 621888,
+            "elapsed": "00:21"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t114024-816515-api-1",
+              "CPUPerc": "338.27%",
+              "MemUsage": "1.243GiB / 2GiB",
+              "MemPerc": "62.17%"
+            },
+            {
+              "Name": "rougether-scale-20260910t114024-816515-mysql-1",
+              "CPUPerc": "209.01%",
+              "MemUsage": "661.1MiB / 2GiB",
+              "MemPerc": "32.28%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            19.0
+          ],
+          "hikaricp.connections.pending": [
+            64.0
+          ]
+        },
+        {
+          "at": "2026-09-10T02:42:10.686017+00:00",
+          "generator": {
+            "cpu_percent": 115.1,
+            "rss_kib": 621920,
+            "elapsed": "00:26"
+          },
+          "containers": [
+            {
+              "Name": "rougether-scale-20260910t114024-816515-api-1",
+              "CPUPerc": "313.52%",
+              "MemUsage": "1.244GiB / 2GiB",
+              "MemPerc": "62.18%"
+            },
+            {
+              "Name": "rougether-scale-20260910t114024-816515-mysql-1",
+              "CPUPerc": "206.29%",
+              "MemUsage": "663.4MiB / 2GiB",
+              "MemPerc": "32.39%"
+            }
+          ],
+          "hikaricp.connections.active": [
+            20.0
+          ],
+          "hikaricp.connections.pending": [
+            46.0
+          ]
+        }
+      ],
+      "warmup": {
+        "exit_code": 0,
+        "latency_ms": {
+          "avg": 6.957333333333334,
+          "min": 2,
+          "med": 4,
+          "p(90)": 21,
+          "p(95)": 23,
+          "p(99)": 25,
+          "max": 57
+        }
+      },
+      "verdict": {
+        "passed": false,
+        "classification": "capacity_failed",
+        "failures": [
+          "k6 exited non-zero: 99",
+          "manifest.audit_exit_code must be zero when present, got 1",
+          "generator under-delivered sent_requests: 75560.0 < 89100.00",
+          "dropped_iterations must be zero, got 14441.0",
+          "endpoint complete latency p(95) 658.0ms > 300.0ms",
+          "endpoint me latency p(95) 682.0ms > 300.0ms",
+          "endpoint today latency p(95) 683.8499999999987ms > 300.0ms",
+          "db-audit.passed must be true",
+          "db-audit has violations: ['run had dropped iterations: 14441']"
+        ],
+        "measurement_limits": [
+          "generator did not deliver at least 99% of offered load",
+          "k6 dropped iterations; requested load was saturated",
+          "generator CPU near saturation in 1 telemetry samples; capacity is unverified"
+        ],
+        "warnings": [],
+        "details": {
+          "offered_requests": 90000.0,
+          "sent_ratio": 0.8395555555555556,
+          "telemetry_samples": 5,
+          "generator_samples": 5
+        }
+      },
+      "db_audit": {
+        "passed": false,
+        "date": "2026-09-10",
+        "checked_tables": [
+          "todos",
+          "wallet_histories",
+          "user_wallets",
+          "personal_rooms"
+        ],
+        "completion_audit": {
+          "expected_unique_completions": null,
+          "actual_completed_todos": 15112,
+          "completed_outside_expected_prefix": null,
+          "missing_expected_prefix_completion": null,
+          "owner_mismatch": 0
+        },
+        "reward_audit": {
+          "expected_reward_total": null,
+          "actual_todo_reward_total": 151120,
+          "duplicate_history_sources": 0,
+          "history_owner_swaps": 0,
+          "rewarded_users": null
+        },
+        "violations": [
+          "run had dropped iterations: 14441"
+        ]
+      },
+      "raw_sha256": {
+        "manifest.json": "39c34d246aae784bb05b17baa21758a7ba1755494aa56eb253cbcf5cd1130e48",
+        "summary.json": "48b7dfa45ec701f64979d1ca9c4adc224ff28e9aa314253cf9792d5f3efbf455",
+        "verdict.json": "58b0690d0f34aebb306ac65b2cab6d303b530e85154afa31312582c2d0aeaf62",
+        "db-audit.json": "2c4af0cb9289b4d2432e017085ee3edc96bc1a3acc5d7bed1f18ec8b01df934d",
+        "db-before.json": "1c7ebf11bb48328801e71428292b3e1ac89c48da9d7149f31fe07e690e1bce08",
+        "db-after.json": "49cd7ca266b5e2393fa5111538f791ded310a14016c6f693e5e347d1dbbe7acf",
+        "telemetry.jsonl": "a5582d369a6b8a73232bb4a23ce302837a72d1ef1525296de6ad8f557cc82c5d",
+        "api.jfr": "64268f6199645cd380935d554f0c6f671b297d8a8806a56269cfd543c029dd22",
+        "gc.log": "f4efab24769e53c0bf12b80068bc23883813aabf8aeff2a2fc0d455ad0ea3c38",
+        "http.server.requests-before.json": "bcdf6fe54c01f36e86fb55d1b674d91daebea57daf0a77a8ae87b9ed4d7eb4f2",
+        "http.server.requests-after.json": "dc325502381781776d59411aa23055c5be435d7bb900ca3cd33b6a61844b9535",
+        "hikaricp.connections.acquire-before.json": "e5bf3798b64b3da2a0328ed0469ecc74d67554de2a721c387c2dca8ef60ca4e2",
+        "hikaricp.connections.acquire-after.json": "c49d286a6d58fa10490ec64d7316d8f7a9d8b396353d0729ebb365b4b7529aa0",
+        "console.txt": "62f63b6e059edb6f98969a83a616fd1710b2753d013baea26b33da26c14b0d15",
+        "warmup-summary.json": "7c8e58d0e06f976b69bb625f0c32009e56887e78768b3bb1587b0f9fa46b482d",
+        "api.log": "265775c91a14e0e15c35c7bf5ce2af579937552811cd764f4fa6beaf2a42f787"
+      },
+      "transport_errors": {
+        "request_failed_log_lines": 0,
+        "connection_reset": 0,
+        "timeout": 0,
+        "eof": 0
+      }
+    }
+  ]
+}

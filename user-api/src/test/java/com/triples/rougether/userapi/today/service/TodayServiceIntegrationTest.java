@@ -24,9 +24,11 @@ import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodayResponse;
 import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,8 @@ class TodayServiceIntegrationTest {
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private EntityManager em;
 
     private TodayService service;
     private User user;
@@ -250,6 +254,96 @@ class TodayServiceIntegrationTest {
         assertThat(streak.currentCount()).isZero();
         assertThat(streak.longestCount()).isEqualTo(9);
         assertThat(streak.lastSuccessDate()).isEqualTo(MONDAY.minusDays(2));
+    }
+
+    @Test
+    void 반복대상이_없으면_완료로그가_남아있어도_조회하지_않는다() {
+        Long id = persistRoutine("화요일", RoutineStatus.ACTIVE, "WEEKLY",
+                "{\"daysOfWeek\":[\"TUE\"]}", null, null, null, null);
+        persistCompletedLog(id);
+        persistTodo("오늘 투두", null, MONDAY);
+        em.flush();
+        em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            TodayResponse response = service.today(userId, MONDAY);
+            assertThat(routineTitles(response)).isEmpty();
+            assertThat(todoTitles(response)).containsExactly("오늘 투두");
+            assertThat(response.summary().completedCount()).isZero();
+            assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
+            assertThat(statistics.getEntityStatistics(RoutineLog.class.getName()).getLoadCount()).isZero();
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
+    }
+
+    @Test
+    void 기간_경계는_포함하고_기간밖_삭제_타인루틴은_DB에서_제외한다() {
+        persistRoutine("경계일", RoutineStatus.ACTIVE, "DAILY", null, null, MONDAY, MONDAY, null);
+        persistRoutine("기간없음", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistRoutine("시작전", RoutineStatus.ACTIVE, "DAILY", null, null, MONDAY.plusDays(1), null, null);
+        persistRoutine("종료후", RoutineStatus.ACTIVE, "DAILY", null, null, null, MONDAY.minusDays(1), null);
+        Long deletedId = persistRoutine("삭제됨", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        ReflectionTestUtils.setField(routineRepository.findById(deletedId).orElseThrow(), "deletedAt", Instant.now());
+        User other = userRepository.save(User.signUp());
+        routineRepository.save(Routine.create(other, null, "다른 사용자", AuthType.CHECK,
+                "DAILY", null, null, null, null));
+        em.flush();
+        em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            assertThat(routineTitles(service.today(userId, MONDAY)))
+                    .containsExactly("경계일", "기간없음");
+            assertThat(statistics.getEntityStatistics(Routine.class.getName()).getLoadCount()).isEqualTo(2);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
+    }
+
+    @Test
+    void 투두_projection은_미분류와_삭제카테고리를_보존하고_삭제투두와_타인을_제외한다() {
+        Category category = persistCategory("삭제된 카테고리");
+        ReflectionTestUtils.setField(category, "deletedAt", Instant.now());
+        Todo completed = Todo.create(user, category, "완료 투두", "응답에 없는 긴 설명", MONDAY, LocalTime.NOON);
+        Instant completedAt = Instant.parse("2026-06-29T03:00:00Z");
+        completed.complete(CurrencyType.COIN, 10, completedAt);
+        todoRepository.save(completed);
+        persistTodo("미분류", null, MONDAY);
+        Todo deleted = Todo.create(user, null, "삭제됨", null, MONDAY, null);
+        deleted.softDelete(Instant.now());
+        todoRepository.save(deleted);
+        User other = userRepository.save(User.signUp());
+        todoRepository.save(Todo.create(other, null, "타인", null, MONDAY, null));
+        Long categoryId = category.getId();
+        Long completedId = completed.getId();
+        em.flush();
+        em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            TodayResponse response = service.today(userId, MONDAY);
+            assertThat(todoTitles(response)).containsExactly("완료 투두", "미분류");
+            var group = response.categories().get(0);
+            assertThat(group.categoryId()).isEqualTo(categoryId);
+            assertThat(group.todos().get(0)).isEqualTo(new com.triples.rougether.userapi.today.dto.TodayTodoItem(
+                    completedId, "완료 투두", MONDAY, LocalTime.NOON,
+                    com.triples.rougether.domain.routine.entity.TodoStatus.COMPLETED, completedAt));
+            assertThat(response.categories().get(1).categoryId()).isNull();
+            assertThat(response.summary().completedCount()).isEqualTo(1);
+            assertThat(response.summary().remainingCount()).isEqualTo(1);
+            assertThat(statistics.getEntityLoadCount()).isZero();
+            assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
     }
 
     private java.util.List<String> routineTitles(TodayResponse response) {

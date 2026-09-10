@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -53,6 +54,13 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     // 오늘 현황용: 유저의 그날 완료 log(루틴별 완료 판정)
     List<RoutineLog> findByRoutine_UserIdAndRoutineDateAndStatus(
             Long userId, LocalDate routineDate, RoutineLogStatus status);
+
+    // 오늘 현황은 완료 여부 비교에 사용하는 루틴 ID만 필요함.
+    @Query("select l.routine.id from RoutineLog l where l.routine.user.id = :userId "
+            + "and l.routineDate = :date and l.status = :status")
+    Set<Long> findRoutineIdsCompletedOn(@Param("userId") Long userId,
+                                       @Param("date") LocalDate date,
+                                       @Param("status") RoutineLogStatus status);
 
     // 월 캘린더용: 완료 기록의 날짜와 버전 id만 읽음. 대상 여부는 일별 조회와 같은 반복 규칙으로 판정함
     @Query("select l.routine.id as routineId, l.routineDate as routineDate from RoutineLog l "

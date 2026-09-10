@@ -21,6 +21,18 @@ import org.springframework.data.repository.query.Param;
 
 public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
+    // 기간 밖 루틴은 DB에서 제외하고 세부 반복 규칙은 기존 RoutineRecurrence로 판정함.
+    @Query("""
+            select r from Routine r
+            where r.user.id = :userId and r.status = :status and r.deletedAt is null
+              and (r.startsOn is null or r.startsOn <= :date)
+              and (r.endsOn is null or r.endsOn >= :date)
+            order by r.scheduledTime asc, r.originRoutineId asc
+            """)
+    List<Routine> findAgendaCandidates(@Param("userId") Long userId,
+                                      @Param("status") RoutineStatus status,
+                                      @Param("date") LocalDate date);
+
     // 유효기간 판정 기준 타임존
     ZoneId KST = ZoneId.of("Asia/Seoul");
 

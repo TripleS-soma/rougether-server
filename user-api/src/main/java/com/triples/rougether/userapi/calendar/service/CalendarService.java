@@ -7,6 +7,7 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.RoutineCompletionDate;
+import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
@@ -229,9 +230,10 @@ public class CalendarService {
 
     private CalendarDayResponse assemble(LocalDate date, List<Routine> routines,
                                          Set<Long> completedRoutineIds, List<Todo> todos) {
+        List<TodoAgendaRow> todoRows = todos.stream().map(TodoAgendaRow::from).toList();
         List<TodayCategoryGroup> categories =
-                agendaAssembler.groupByCategory(routines, completedRoutineIds, todos);
-        TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todos);
+                agendaAssembler.groupByCategory(routines, completedRoutineIds, todoRows);
+        TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todoRows);
         return new CalendarDayResponse(date, categories, summary);
     }
 }

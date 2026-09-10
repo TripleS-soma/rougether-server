@@ -169,6 +169,24 @@ class VerifyResultsTest(unittest.TestCase):
         self.assertEqual([], verdict["failures"])
         self.assertEqual("capacity_unverified", verdict["classification"])
 
+    def test_index_experiment_requires_separate_history_and_executed_audits(self):
+        verdict = self.verify(lambda manifest, *_args: manifest.update({"history": {"count": 100}}))
+        self.assertFailsWith(verdict, "missing required artifact: history-before.json")
+        self.assertFailsWith(verdict, "missing required artifact: executed-db-audit.json")
+
+    def test_index_audit_rejects_false_pass_when_history_values_differ(self):
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            run_dir = Path(raw_tmp)
+            for name in ("history-before.json", "history-after.json"):
+                (run_dir / name).write_text(json.dumps(
+                    {"passed": True, "actual": {"count": 99}, "expected": {"count": 100}}))
+            (run_dir / "executed-db-audit.json").write_text(json.dumps(
+                {"passed": True, "scope": "executed_requests_not_offered_load",
+                 "errors": [], "history_unchanged": True}))
+            verifier = verify_results.Verifier(run_dir)
+            verifier._verify_index_experiment()
+            self.assertIn("index history snapshot mismatch: history-after.json", verifier.failures)
+
     def test_cli_writes_verdict_and_returns_nonzero_on_failure(self):
         with tempfile.TemporaryDirectory() as raw_tmp:
             run_dir = Path(raw_tmp)
