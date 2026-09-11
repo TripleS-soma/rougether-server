@@ -1,7 +1,7 @@
 package com.triples.rougether.userapi.auth.client;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;

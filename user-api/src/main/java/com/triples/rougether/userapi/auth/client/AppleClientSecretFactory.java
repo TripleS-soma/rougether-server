@@ -8,7 +8,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.AppleProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.security.KeyFactory;
 import java.security.interfaces.ECPrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;

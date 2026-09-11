@@ -1,0 +1,14 @@
+services:
+  furniture-worker:
+    image: ${FURNITURE_WORKER_IMAGE:?worker image required}
+    command: []
+    entrypoint: ["java", "-Xmx512m", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]
+    env_file: ${FURNITURE_WORKER_ENV_FILE:?absolute environment file required}
+    environment:
+      FURNITURE_GENERATION_ENABLED: "true"
+      FURNITURE_WORKER_CONCURRENCY: ${FURNITURE_WORKER_CONCURRENCY:-1}
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpus: 2
+    stop_grace_period: 300s
+    restart: unless-stopped

@@ -1,16 +1,16 @@
 package com.triples.rougether.userapi.billing.service;
 
-import static com.triples.rougether.userapi.billing.error.BillingErrorCode.*;
+import static com.triples.rougether.common.error.BillingErrorCode.*;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.billing.entity.*;
 import com.triples.rougether.domain.billing.entity.FurnitureCreditEntry.Reason;
 import com.triples.rougether.domain.billing.entity.FurnitureCreditPurchase.*;
-import com.triples.rougether.domain.billing.entity.FurnitureCreditReservation.Status;
+import com.triples.rougether.furniture.service.GenerationCreditLedger;
 import com.triples.rougether.domain.billing.repository.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.billing.config.BillingProperties;
 import com.triples.rougether.userapi.billing.store.StorePurchaseVerifier.Verified;
 import java.time.*;
@@ -28,10 +28,10 @@ public class FurnitureCreditTransactions {
     private final UserRepository users;
     private final FurnitureCreditAccountRepository accounts;
     private final FurnitureCreditPurchaseRepository purchases;
-    private final FurnitureCreditReservationRepository reservations;
     private final FurnitureCreditEntryRepository entries;
     private final BillingProperties config;
     private final Clock clock;
+    private final GenerationCreditLedger generationCredits;
 
     public record Balance(long available, long reserved, boolean purchaseAdjustmentPending, String accountToken) { }
     public record Receipt(String id, long credits, long revokedCredits, boolean storeConsumed, Balance balance) { }
@@ -98,27 +98,12 @@ public class FurnitureCreditTransactions {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void reserve(Long userId, String jobId) {
-        if (!config.requireCredits()) return;
-        activeUser(userId);
-        if (reservations.existsById(jobId)) return;
-        var account = account(userId);
-        if (account.getBalance() < 1) throw new BusinessException(FURNITURE_CREDITS_REQUIRED);
-        account.reserve();
-        reservations.save(new FurnitureCreditReservation(jobId, userId, clock.instant()));
-        record(account, jobId, Reason.RESERVE, -1);
+        generationCredits.reserve(userId, jobId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void settle(Long userId, String jobId, boolean success) {
-        // 기능을 꺼도 이미 예약된 생성권은 정산함. 기존 무료 작업과 피드백은 추가 차감하지 않음.
-        lockedUser(userId);
-        var reservation = reservations.findById(jobId).orElse(null);
-        if (reservation == null || reservation.getStatus() != Status.RESERVED) return;
-        if (!reservation.getUserId().equals(userId)) throw new IllegalStateException("생성권 작업 소유자 불일치");
-        var account = account(userId);
-        account.settle(success);
-        reservation.settle(success, clock.instant());
-        record(account, jobId, success ? Reason.SPEND : Reason.RELEASE, success ? 0 : 1);
+        generationCredits.settle(userId, jobId, success);
     }
 
     @Transactional(readOnly = true)

@@ -3,7 +3,7 @@ package com.triples.rougether.userapi.auth.client;
 import com.nimbusds.jose.RemoteKeySourceException;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.GoogleProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;

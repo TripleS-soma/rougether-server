@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.*;
 import com.triples.rougether.userapi.auth.service.TokenService;
-import com.triples.rougether.userapi.furniture.dto.FurnitureGenerationResponse;
+import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
 import com.triples.rougether.userapi.furniture.web.FurnitureGenerationController;
 import com.triples.rougether.userapi.global.security.*;

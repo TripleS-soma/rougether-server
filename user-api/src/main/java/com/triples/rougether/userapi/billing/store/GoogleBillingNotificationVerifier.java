@@ -1,6 +1,6 @@
 package com.triples.rougether.userapi.billing.store;
 
-import static com.triples.rougether.userapi.billing.error.BillingErrorCode.*;
+import static com.triples.rougether.common.error.BillingErrorCode.*;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.billing.config.BillingProperties;
 import java.nio.charset.StandardCharsets;

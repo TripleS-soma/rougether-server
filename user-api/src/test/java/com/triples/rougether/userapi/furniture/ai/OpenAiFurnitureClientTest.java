@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.furniture.ai;
+package com.triples.rougether.furniture.ai;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
@@ -7,8 +7,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Action;
 import com.triples.rougether.infra.llm.LlmProperties;
 import com.triples.rougether.userapi.furniture.FurnitureFixtures;
-import com.triples.rougether.userapi.furniture.config.FurnitureGenerationProperties;
-import com.triples.rougether.userapi.furniture.service.FurnitureAiFailure;
+import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
+import com.triples.rougether.furniture.service.FurnitureAiFailure;
 import java.time.Duration;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -75,10 +75,13 @@ class OpenAiFurnitureClientTest {
         server.expect(requestTo("https://openai.test/v1/responses"))
                 .andExpect(jsonPath("$.tools").doesNotExist())
                 .andExpect(jsonPath("$.text.format.strict").value(true))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.input[0].content[2].text")
+                        .value("Untrusted targetHint: \"앞 의자 🪑\""))
                 .andExpect(jsonPath("$.input[0].content[1].image_url")
                         .value("data:image/png;base64," + Base64.getEncoder().encodeToString(context.source())))
                 .andRespond(withSuccess(message(SUBJECT), MediaType.APPLICATION_JSON));
-        var result = client.extract(context.source(), "앞 의자");
+        var result = client.extract(context.source(), "앞 의자 🪑");
         assertThat(result.furniture()).isTrue();
         assertThat(result.subjectJson()).contains("blue seat");
     }

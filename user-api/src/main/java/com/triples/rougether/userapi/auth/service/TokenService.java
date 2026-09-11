@@ -1,7 +1,7 @@
 package com.triples.rougether.userapi.auth.service;
 
 import com.triples.rougether.userapi.auth.config.JwtProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.MemberRole;
 

@@ -1,0 +1,16 @@
+dependencies {
+    implementation project(':furniture-application')
+    implementation platform('software.amazon.awssdk:bom:2.31.0')
+    implementation 'software.amazon.awssdk:lambda'
+    implementation 'software.amazon.awssdk:apache-client'
+    implementation 'software.amazon.awssdk:ssm'
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'tools.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+tasks.register('buildZip', Zip) {
+    archiveFileName = project.name + '.zip'
+    into('lib') { from tasks.jar; from configurations.runtimeClasspath }
+}

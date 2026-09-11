@@ -1,6 +1,6 @@
 package com.triples.rougether.userapi.billing.service;
 
-import static com.triples.rougether.userapi.billing.error.BillingErrorCode.*;
+import static com.triples.rougether.common.error.BillingErrorCode.*;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.billing.entity.FurnitureCreditPurchase.Store;
 import com.triples.rougether.userapi.billing.config.BillingProperties;

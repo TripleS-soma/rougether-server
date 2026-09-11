@@ -48,3 +48,7 @@ out/
 **/terraform.tfstate.*
 **/terraform.tfvars
 **/*.tfplan
+
+### Local furniture preprocessing fixtures and extracted native packages ###
+/output/preprocess-*/
+/qa/furniture-preprocess/__pycache__/

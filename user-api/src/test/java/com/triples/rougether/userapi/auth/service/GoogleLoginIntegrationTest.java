@@ -25,7 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.util.List;
 
 // 실제 MySQL(Testcontainers)·Flyway에서 구글 최초가입·재로그인의 영속 결과를 검증함. 구글 토큰 검증만 mock.

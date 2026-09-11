@@ -3,7 +3,7 @@ package com.triples.rougether.userapi.auth.client;
 import com.nimbusds.jose.RemoteKeySourceException;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.AppleProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

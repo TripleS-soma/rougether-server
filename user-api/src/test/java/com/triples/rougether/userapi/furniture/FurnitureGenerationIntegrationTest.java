@@ -10,11 +10,13 @@ import com.triples.rougether.domain.furniture.repository.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.shop.repository.*;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient.*;
-import com.triples.rougether.userapi.furniture.dto.*;
+import com.triples.rougether.furniture.ai.FurnitureAiClient;
+import com.triples.rougether.furniture.ai.FurnitureAiClient.*;
+import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
+import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.*;
-import com.triples.rougether.userapi.global.storage.*;
+import com.triples.rougether.furniture.service.*;
+import com.triples.rougether.infra.assets.*;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -40,6 +42,7 @@ class FurnitureGenerationIntegrationTest {
     @MockitoSpyBean UserItemRepository inventory;
     @Autowired ItemRepository items;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @MockitoBean FurnitureAiClient ai;
     @MockitoBean AssetStorageService storage;
     @MockitoBean Clock kstClock;
@@ -50,6 +53,7 @@ class FurnitureGenerationIntegrationTest {
     private Instant now;
 
     @BeforeEach void setup() {
+        jdbc.update("update furniture_worker_capacity set max_in_flight=1, execution_enabled=true where id=1");
         feedbacks.deleteAll();
         jobs.deleteAll();
         now = Instant.parse("2026-09-06T03:00:00Z");
@@ -88,6 +92,51 @@ class FurnitureGenerationIntegrationTest {
             return new StoredAsset(bytes, "image/png");
         });
         doAnswer(i -> { objects.remove(i.getArgument(0)); return null; }).when(storage).delete(anyString());
+    }
+
+    @Test void 여러_워커의_동시선점도_DB_전체상한을_넘지_않음() throws Exception {
+        jdbc.update("update furniture_worker_capacity set max_in_flight=2 where id=1");
+        var ids=new ArrayList<String>();
+        for(int i=0;i<8;i++) {
+            var owner=users.save(User.signUp("capacity-"+UUID.randomUUID()+"@example.test"));
+            ids.add(service.submit(owner.getId(),UUID.randomUUID(),"",photo()).id());
+        }
+        var start=new CountDownLatch(1);
+        var claimed=new CopyOnWriteArrayList<FurnitureGenerationTransactions.Claim>();
+        try(var pool=Executors.newFixedThreadPool(8)) {
+            var futures=new ArrayList<Future<?>>();
+            for(var id:ids) futures.add(pool.submit(() -> {
+                try { start.await(); var claim=transactions.claim(id);if(claim!=null)claimed.add(claim); }
+                catch(InterruptedException e) { Thread.currentThread().interrupt();throw new RuntimeException(e); }
+            }));
+            start.countDown();
+            for(var f:futures)f.get(10,TimeUnit.SECONDS);
+        }
+        assertThat(claimed).hasSize(2);
+        assertThat(jobs.countByStatus(Status.PROCESSING)).isEqualTo(2);
+        assertThat(jobs.countByStatus(Status.QUEUED)).isEqualTo(6);
+        assertThat(jobs.findAll().stream().mapToInt(j -> j.getExtractionAttempts()).sum()).isEqualTo(2);
+        transactions.failed(claimed.getFirst(),"TEST_INTERRUPTED");
+        var queued=jobs.findAll().stream().filter(j -> j.getStatus()==Status.QUEUED).findFirst().orElseThrow();
+        assertThat(transactions.claim(queued.getId())).isNotNull();
+        assertThat(jobs.countByStatus(Status.PROCESSING)).isEqualTo(2);
+        now=now.plusSeconds(241);worker.maintain();
+        assertThat(jobs.countByStatus(Status.PROCESSING)).isZero();
+        assertThat(transactions.extracted(claimed.getLast(),new Extracted(true,"{}",1,1))).isFalse();
+    }
+
+    @Test void 실행을_중지해도_접수는_큐에_남고_재개후_선점됨() {
+        var job=service.submit(user.getId(),UUID.randomUUID(),"",photo());
+        jdbc.update("update furniture_worker_capacity set execution_enabled=false where id=1");
+        worker.runNext();
+        assertThat(jobs.findById(job.id()).orElseThrow().getExtractionAttempts()).isZero();
+        verify(ai,never()).extract(any(),anyString());
+        jdbc.update("update furniture_worker_capacity set execution_enabled=true where id=1");
+        worker.runNext(); worker.runNext(); worker.runNext();
+        assertThat(service.get(user.getId(),job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        verify(ai,times(1)).extract(any(),anyString());
+        verify(ai,times(1)).generate(any(),any());
+        verify(ai,times(1)).review(any(),any());
     }
 
     @Test void 사진_접수_생성_검수_개인_보관함_지급까지_연결() {
@@ -336,7 +385,9 @@ class FurnitureGenerationIntegrationTest {
         verify(ai, times(1)).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
         when(ai.available()).thenReturn(false);
-        assertCode(this::submitAndExtract, "FURNITURE_GENERATION_UNAVAILABLE");
+        var waiting = submitAndExtract();
+        assertThat(waiting.status()).isEqualTo(Status.QUEUED);
+        assertThat(jobs.findById(waiting.id()).orElseThrow().getExtractionAttempts()).isZero();
     }
 
     @Test void 보관함_저장이_실패하면_마스터_아이템과_성공상태도_함께_롤백() {

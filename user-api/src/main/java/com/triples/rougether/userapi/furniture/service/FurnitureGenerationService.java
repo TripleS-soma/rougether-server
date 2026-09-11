@@ -1,10 +1,13 @@
 package com.triples.rougether.userapi.furniture.service;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient;
-import com.triples.rougether.userapi.furniture.dto.*;
-import com.triples.rougether.userapi.furniture.error.FurnitureGenerationErrorCode;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
+import com.triples.rougether.furniture.service.FurnitureGenerationTransactions;
+import com.triples.rougether.furniture.service.FurnitureImages;
+import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
+import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
+import com.triples.rougether.furniture.error.FurnitureGenerationErrorCode;
+import com.triples.rougether.infra.assets.AssetStorageService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -19,13 +22,17 @@ public class FurnitureGenerationService {
     private final FurnitureGenerationTransactions transactions;
     private final FurnitureImages images;
     private final AssetStorageService storage;
-    private final FurnitureAiClient ai;
+    private final FurnitureGenerationProperties config;
 
     public FurnitureGenerationResponse submit(Long userId, UUID requestId, String hint, MultipartFile photo) {
         requireAvailable();
         String target = hint == null ? "" : hint.strip();
         var input = images.photo(photo, target);
-        var reservation = transactions.reserve(userId, requestId.toString(), input.digest(), target);
+        FurnitureGenerationTransactions.Reservation reservation;
+        try { reservation = transactions.reserve(userId, requestId.toString(), input.digest(), target); }
+        catch (org.springframework.dao.TransientDataAccessException | org.springframework.transaction.TransactionTimedOutException e) {
+            throw new BusinessException(FurnitureGenerationErrorCode.FURNITURE_ADMISSION_BUSY);
+        }
         if (!reservation.created()) return reservation.job();
         String id = reservation.job().id();
         String key = null;
@@ -44,10 +51,13 @@ public class FurnitureGenerationService {
     public List<FurnitureGenerationResponse> list(Long userId) { return transactions.list(userId); }
     public FurnitureGenerationResponse feedback(Long userId, String id, FurnitureFeedbackRequest request) {
         requireAvailable();
-        return transactions.feedback(userId, id, request.requestId().toString(), request.feedback().strip());
+        try { return transactions.feedback(userId, id, request.requestId().toString(), request.feedback().strip()); }
+        catch (org.springframework.dao.TransientDataAccessException | org.springframework.transaction.TransactionTimedOutException e) {
+            throw new BusinessException(FurnitureGenerationErrorCode.FURNITURE_ADMISSION_BUSY);
+        }
     }
     private void requireAvailable() {
-        if (!ai.available()) throw new BusinessException(FurnitureGenerationErrorCode.FURNITURE_GENERATION_UNAVAILABLE);
+        if (!config.enabled()) throw new BusinessException(FurnitureGenerationErrorCode.FURNITURE_GENERATION_UNAVAILABLE);
     }
     private void deleteQuietly(String key) {
         try { if (!transactions.referencesAsset(key)) storage.delete(key); }

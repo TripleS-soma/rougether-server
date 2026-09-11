@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.furniture;
 import static org.assertj.core.api.Assertions.*;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.furniture.service.*;
+import com.triples.rougether.furniture.service.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import javax.imageio.ImageIO;

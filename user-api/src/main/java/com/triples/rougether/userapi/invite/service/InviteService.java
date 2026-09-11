@@ -12,7 +12,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.invite.dto.InvitePreviewResponse;
 import com.triples.rougether.userapi.invite.dto.InviteRedeemResponse;
 import com.triples.rougether.userapi.invite.dto.MyInviteCodeResponse;

@@ -46,7 +46,7 @@ class AttendanceGenerationCreditTest {
     @Autowired private com.triples.rougether.domain.billing.repository.FurnitureCreditAccountRepository accounts;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     private com.triples.rougether.domain.billing.repository.FurnitureCreditEntryRepository entries;
-    @Autowired private com.triples.rougether.userapi.furniture.service.FurnitureGenerationTransactions generation;
+    @Autowired private com.triples.rougether.furniture.service.FurnitureGenerationTransactions generation;
     @MockitoBean private Clock kstClock;
 
     private User user;

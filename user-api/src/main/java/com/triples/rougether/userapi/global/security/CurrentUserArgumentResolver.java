@@ -1,7 +1,7 @@
 package com.triples.rougether.userapi.global.security;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

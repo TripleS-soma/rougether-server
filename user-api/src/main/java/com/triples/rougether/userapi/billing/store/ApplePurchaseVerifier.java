@@ -1,6 +1,6 @@
 package com.triples.rougether.userapi.billing.store;
 
-import static com.triples.rougether.userapi.billing.error.BillingErrorCode.*;
+import static com.triples.rougether.common.error.BillingErrorCode.*;
 import com.apple.itunes.storekit.client.*;
 import com.apple.itunes.storekit.model.JWSTransactionDecodedPayload;
 import com.apple.itunes.storekit.model.Type;

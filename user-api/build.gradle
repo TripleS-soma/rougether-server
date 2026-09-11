@@ -11,10 +11,12 @@ dependencyManagement {
 dependencies {
 	implementation project(':common')
 	implementation project(':domain')
+	implementation project(':furniture-application')
 	implementation project(':infra:fcm')
 	implementation project(':infra:llm')
 
 	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:sqs'
 	implementation 'com.apple.itunes.storekit:app-store-server-library:5.2.0'
 	implementation 'com.google.auth:google-auth-library-oauth2-http:1.47.0'
 

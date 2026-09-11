@@ -12,6 +12,9 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface FurnitureGenerationJobRepository extends JpaRepository<FurnitureGenerationJob, String> {
+    long countByStatus(com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status status);
+    long countByStatusIn(Collection<Status> statuses);
+
     Optional<FurnitureGenerationJob> findByUserIdAndRequestId(Long userId, String requestId);
     Optional<FurnitureGenerationJob> findByIdAndUserId(String id, Long userId);
     List<FurnitureGenerationJob> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable page);
@@ -21,7 +24,7 @@ public interface FurnitureGenerationJobRepository extends JpaRepository<Furnitur
     Optional<Long> findOwnerId(@Param("id") String id);
 
     @Query("select count(j) > 0 from FurnitureGenerationJob j where "
-            + "j.sourceKey = :key or j.candidateKey = :key or j.resultAssetKey = :key")
+            + "j.sourceKey = :key or j.rawSourceKey = :key or j.candidateKey = :key or j.resultAssetKey = :key")
     boolean referencesAsset(@Param("key") String key);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -34,12 +37,14 @@ public interface FurnitureGenerationJobRepository extends JpaRepository<Furnitur
 
     @Query("select j.id from FurnitureGenerationJob j where "
             + "(j.status = 'PROCESSING' and j.leaseUntil <= :now) "
-            + "or (j.status = 'UPLOADING' and j.createdAt <= :uploadCutoff) "
-            + "or (j.expiresAt <= :now and (j.sourceKey is not null or j.candidateKey is not null "
+            + "or (j.status = 'UPLOADING' and ((j.uploadExpiresAt is null and j.createdAt <= :uploadCutoff) or j.uploadExpiresAt <= :now)) "
+            + "or (j.status = 'QUEUED' and j.nextRunAt <= :queueCutoff) "
+            + "or (j.expiresAt <= :now and (j.sourceKey is not null or j.rawSourceKey is not null or j.candidateKey is not null "
             + "or j.targetHint <> '' or j.feedback <> '' or j.status = 'QUEUED')) "
-            + "or (j.sourceKey is not null and exists "
+            + "or ((j.sourceKey is not null or j.rawSourceKey is not null) and exists "
             + "(select u.id from User u where u.id = j.userId and u.deletedAt is not null)) "
             + "order by j.createdAt")
     List<String> findForMaintenance(@Param("now") Instant now, @Param("uploadCutoff") Instant uploadCutoff,
+                                    @Param("queueCutoff") Instant queueCutoff,
                                     Pageable page);
 }

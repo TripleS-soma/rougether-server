@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.billing.service;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.billing.config.BillingProperties;
-import com.triples.rougether.userapi.billing.error.BillingErrorCode;
+import com.triples.rougether.common.error.BillingErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;

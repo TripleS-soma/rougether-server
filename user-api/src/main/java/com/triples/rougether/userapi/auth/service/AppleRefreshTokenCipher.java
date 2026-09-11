@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.auth.service;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.AppleProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;

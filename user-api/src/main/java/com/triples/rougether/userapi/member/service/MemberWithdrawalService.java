@@ -29,7 +29,7 @@ import com.triples.rougether.userapi.bot.BotResidencyService;
 import com.triples.rougether.userapi.auth.client.AppleRevokeClient;
 import com.triples.rougether.userapi.auth.client.KakaoUnlinkClient;
 import com.triples.rougether.userapi.auth.service.AppleRefreshTokenCipher;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.infra.assets.AssetStorageService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import java.time.Instant;
 import java.util.ArrayList;

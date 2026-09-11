@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.global.storage;
+package com.triples.rougether.infra.assets;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;

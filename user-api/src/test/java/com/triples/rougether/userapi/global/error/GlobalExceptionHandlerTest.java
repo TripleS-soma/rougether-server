@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.common.error.ErrorCode;
 import com.triples.rougether.common.error.ErrorResponse;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.alert.OperationalAlertNotifier;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;

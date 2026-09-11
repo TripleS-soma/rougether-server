@@ -24,7 +24,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.OauthProvider;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 
 // appleLogin 오케스트레이션(identityToken 검증 → 핸들러 위임 → 경쟁 충돌 시 재시도)만 검증함.
 // find-or-create·영속 결과는 AppleLoginIntegrationTest가 실제 DB로 검증함.

@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.global.storage;
+package com.triples.rougether.infra.assets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

@@ -3,7 +3,7 @@ package com.triples.rougether.userapi.global.alert;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.common.error.ErrorCode;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
