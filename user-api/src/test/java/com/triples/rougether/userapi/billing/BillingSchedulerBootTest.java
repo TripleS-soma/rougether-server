@@ -1,8 +1,8 @@
 package com.triples.rougether.userapi.billing;
 import static org.assertj.core.api.Assertions.assertThat;
 import com.triples.rougether.userapi.billing.service.FurnitureBillingService;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient;
-import com.triples.rougether.userapi.global.storage.AssetStorageService;
+import com.triples.rougether.furniture.ai.FurnitureAiClient;
+import com.triples.rougether.infra.assets.AssetStorageService;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,9 +19,9 @@ class BillingSchedulerBootTest {
     @MockitoBean FurnitureBillingService billing;
     @MockitoBean FurnitureAiClient ai;
     @MockitoBean AssetStorageService storage;
-    @Test void 결제_가구_기존_스케줄러가_분리되고_JPA와_함께_기동() {
+    @Test void 결제_스케줄러는_유지하고_가구_실행은_API에서_제거됨() {
         assertThat(entityManagerFactory.isOpen()).isTrue();
-        assertThat(context.getBean("billingTaskScheduler")).isNotSameAs(context.getBean("taskScheduler"))
-                .isNotSameAs(context.getBean("furnitureTaskScheduler"));
+        assertThat(context.getBean("billingTaskScheduler")).isNotSameAs(context.getBean("taskScheduler"));
+        assertThat(context.containsBean("furnitureTaskScheduler")).isFalse();
     }
 }

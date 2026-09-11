@@ -1,0 +1,19 @@
+name                  = "rougether-dev-furniture"
+region                = "ap-northeast-2"
+asset_bucket          = "rougether-assets-isb-776158585524"
+artifact_bucket       = "rougether-furniture-deploy-776158585524"
+ai_key_parameter_name = "/rougether-dev/llm/api-key"
+ai_key_parameter_arn  = "arn:aws:ssm:ap-northeast-2:776158585524:parameter/rougether-dev/llm/api-key"
+ai_key_kms_arn        = "arn:aws:kms:ap-northeast-2:776158585524:key/5a01fdb2-cfb2-475b-8188-5e03757227dd"
+vpc_id                = "vpc-05fc72ce2f1c9d35b"
+private_subnet_ids    = ["subnet-089efb230527992d3"]
+rds_security_group_id = "sg-0ee3ad0573b10c588"
+publisher_role_name   = "rougether-dev-ec2-role"
+db_url                = "jdbc:mysql://rougether-dev-mysql.chcumqo045ix.ap-northeast-2.rds.amazonaws.com:3306/rougether?serverTimezone=Asia/Seoul"
+db_username           = "rougether"
+# db_password는 TF_VAR_db_password에 SSM에서 읽은 값을 주입한다.
+ai_concurrency        = 50
+control_concurrency   = 16
+enable_trigger        = false
+enable_preprocessing  = false
+# alarm_topic_arn을 연결하기 전에는 CloudWatch 상태만 기록하며 외부 알림은 보내지 않는다.

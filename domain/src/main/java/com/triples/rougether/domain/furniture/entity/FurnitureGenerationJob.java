@@ -23,6 +23,14 @@ public class FurnitureGenerationJob {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private Status status;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private Action action;
     @Column(length = 255) private String sourceKey;
+    @Column(length = 255) private String rawSourceKey;
+    @Column(length = 64) private String sourceSha256;
+    private Long sourceBytes;
+    @Column(length = 30) private String sourceContentType;
+    private Instant uploadExpiresAt;
+    @Column(length = 1024) private String sourceVersion;
+    @Column(length = 1024) private String processedVersion;
+    @Column(length = 64) private String processedSha256;
     @Column(length = 255) private String candidateKey;
     @Column(length = 255) private String resultAssetKey;
     private Long userItemId;
@@ -61,7 +69,20 @@ public class FurnitureGenerationJob {
         return job;
     }
 
+    @Column(length = 36) private String executionId;
+    public void assignExecution(String id) { this.executionId = id; }
+
     public boolean terminal() { return status == Status.SUCCEEDED || status == Status.FAILED; }
+
+    public void directUpload(String key, String sha256, long bytes, String contentType, Instant deadline) {
+        rawSourceKey = key;
+        sourceSha256 = sha256;
+        sourceBytes = bytes;
+        sourceContentType = contentType;
+        uploadExpiresAt = deadline;
+    }
+    public void bindSourceVersion(String version) { sourceVersion = version; }
+    public void prepared(String version, String sha256) { processedVersion = version; processedSha256 = sha256; }
 
     public void uploaded(String key, Instant now) {
         sourceKey = key;
@@ -143,6 +164,11 @@ public class FurnitureGenerationJob {
     }
 
     public void clearPrivateAssets() {
+        rawSourceKey = null;
+        sourceSha256 = null;
+        sourceVersion = null;
+        processedVersion = null;
+        processedSha256 = null;
         sourceKey = null;
         candidateKey = null;
         feedback = "";

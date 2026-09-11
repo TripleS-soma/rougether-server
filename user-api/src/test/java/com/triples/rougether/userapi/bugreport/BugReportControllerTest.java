@@ -17,7 +17,7 @@ import com.triples.rougether.userapi.bugreport.service.BugReportService;
 import com.triples.rougether.userapi.bugreport.web.BugReportController;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
-import com.triples.rougether.userapi.global.storage.StoredAsset;
+import com.triples.rougether.infra.assets.StoredAsset;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;

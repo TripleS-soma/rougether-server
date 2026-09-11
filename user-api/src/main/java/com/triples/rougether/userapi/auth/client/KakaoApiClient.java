@@ -3,7 +3,7 @@ package com.triples.rougether.userapi.auth.client;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.config.KakaoProperties;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;

@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: rougether-furniture-worker
+  main:
+    web-application-type: none
+  lifecycle:
+    timeout-per-shutdown-phase: 300s
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 0
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: false
+furniture:
+  generation:
+    enabled: ${FURNITURE_GENERATION_ENABLED:false}
+  worker:
+    concurrency: ${FURNITURE_WORKER_CONCURRENCY:1}
+asset:
+  s3:
+    bucket: ${ASSET_S3_BUCKET}
+    region: ${ASSET_S3_REGION:ap-northeast-2}
+llm:
+  base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  api-key: ${LLM_API_KEY:}
+billing:
+  require-credits: ${BILLING_REQUIRE_CREDITS:true}

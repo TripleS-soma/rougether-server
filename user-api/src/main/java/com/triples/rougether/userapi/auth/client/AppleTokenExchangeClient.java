@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.auth.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;

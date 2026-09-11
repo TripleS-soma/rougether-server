@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.furniture.web;
 
-import com.triples.rougether.userapi.furniture.dto.*;
+import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
+import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;

@@ -1,0 +1,13 @@
+dependencies {
+    implementation project(':furniture-application')
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'tools.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
+}
+tasks.register('buildZip', Zip) {
+    archiveFileName = project.name + '.zip'
+    into('lib') { from tasks.jar; from configurations.runtimeClasspath }
+}

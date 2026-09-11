@@ -31,7 +31,7 @@ import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.house.service.HouseJoinService;
 import com.triples.rougether.userapi.invite.error.InviteErrorCode;

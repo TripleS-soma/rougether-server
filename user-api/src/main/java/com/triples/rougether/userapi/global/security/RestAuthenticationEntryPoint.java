@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.global.security;
 
 import tools.jackson.databind.ObjectMapper;
 import com.triples.rougether.common.error.ErrorResponse;
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;

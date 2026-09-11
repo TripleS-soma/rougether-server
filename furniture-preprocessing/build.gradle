@@ -1,0 +1,5 @@
+dependencies {
+    implementation 'app.photofox.vips-ffm:vips-ffm-core:1.9.8'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+tasks.named('test') { jvmArgs '--enable-native-access=ALL-UNNAMED' }

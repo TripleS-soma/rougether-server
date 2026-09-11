@@ -5,7 +5,7 @@ import com.triples.rougether.userapi.global.security.CurrentUser;
 import com.triples.rougether.userapi.bugreport.dto.BugReportListResponse;
 import com.triples.rougether.userapi.bugreport.dto.BugReportResponse;
 import com.triples.rougether.userapi.bugreport.service.BugReportService;
-import com.triples.rougether.userapi.global.storage.StoredAsset;
+import com.triples.rougether.infra.assets.StoredAsset;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;

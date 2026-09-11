@@ -1,6 +1,6 @@
 package com.triples.rougether.userapi.auth.service;
 
-import com.triples.rougether.userapi.auth.error.AuthErrorCode;
+import com.triples.rougether.common.error.AuthErrorCode;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.OauthProvider;

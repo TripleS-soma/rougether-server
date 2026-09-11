@@ -36,6 +36,8 @@ admin-api/   운영자 대면 앱 :8081  /admin   아이디·비밀번호 + 세�
 | Controller, DTO | 각 앱 | 위와 동일 |
 | 공통 에러·util | `common` | `com.triples.rougether.common.*` |
 
+가구 생성의 API/워커 공용 실행 로직은 `furniture-application` 애플리케이션 라이브러리에, S3 어댑터는 `infra:assets`에 둡니다. `furniture-worker`는 별도 비웹 Boot 앱이며 user-api Boot 앱에 의존하지 않습니다. 자세한 실행·전환 기준은 [가구 워커](../work/furniture-worker.md)를 따릅니다.
+
 현재 결정상 `domain`은 영속 계층(Entity+Repository)만 둡니다. Service는 각 앱에 둡니다. 같은 핵심 로직(재화 지급 등)을 admin도 쓰게 되면 그 Service만 `domain`으로 승격하는 것을 검토합니다. 도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가하고, 아직 확정되지 않은 구조를 미리 과하게 나누지 않습니다.
 
 ## 앱 내부 패키지·서비스 구조
@@ -160,3 +162,5 @@ curl http://localhost:8081/admin/health
 ```
 
 작업을 마칠 때 `bootRun` 같은 장기 실행 프로세스를 남겨두지 않습니다.
+
+가구 Lambda 실행은 `furniture-lambda-ai`(VPC 외부 AI/S3)와 `furniture-lambda-control`(VPC 내부 DB)로 나눕니다. outbox·실행 소유권·배포 전환 및 검증 기준은 [가구 Lambda](../work/furniture-lambda.md)를 따릅니다.

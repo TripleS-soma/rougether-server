@@ -1,0 +1,46 @@
+package com.triples.rougether.common.error;
+
+import com.triples.rougether.common.error.ErrorCode;
+
+public enum AuthErrorCode implements ErrorCode {
+
+    USER_NOT_FOUND("AUTH_USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", 404),
+    INVALID_TOKEN("AUTH_INVALID_TOKEN", "인증 토큰이 유효하지 않습니다.", 401),
+    REFRESH_TOKEN_INVALID("AUTH_REFRESH_TOKEN_INVALID", "refresh 토큰이 유효하지 않습니다.", 401),
+    OAUTH_KAKAO_TOKEN_INVALID("AUTH_OAUTH_KAKAO_TOKEN_INVALID", "카카오 토큰이 유효하지 않습니다.", 401),
+    OAUTH_KAKAO_UNAVAILABLE("AUTH_OAUTH_KAKAO_UNAVAILABLE", "카카오 인증 서버 응답에 실패했습니다.", 502),
+    OAUTH_GOOGLE_TOKEN_INVALID("AUTH_OAUTH_GOOGLE_TOKEN_INVALID", "구글 토큰이 유효하지 않습니다.", 401),
+    OAUTH_GOOGLE_UNAVAILABLE("AUTH_OAUTH_GOOGLE_UNAVAILABLE", "구글 인증 서버 응답에 실패했습니다.", 502),
+    OAUTH_APPLE_TOKEN_INVALID("AUTH_OAUTH_APPLE_TOKEN_INVALID", "애플 토큰이 유효하지 않습니다.", 401),
+    OAUTH_APPLE_UNAVAILABLE("AUTH_OAUTH_APPLE_UNAVAILABLE", "애플 인증 서버 응답에 실패했습니다.", 502),
+    FORBIDDEN("AUTH_FORBIDDEN", "접근 권한이 없습니다.", 403),
+    BOT_LOGIN_NOT_ALLOWED("AUTH_BOT_LOGIN_NOT_ALLOWED", "봇 계정으로는 로그인할 수 없습니다.", 401),
+    // 소셜 최초 가입인데 같은 이메일의 활성 계정이 다른 provider 로 있음 — details.providers 에 그 provider 목록,
+    // message 에 안내 문구. allowNewAccount=true 재요청으로 새 계정 생성을 강행할 수 있음.
+    EMAIL_LINKED_TO_OTHER_PROVIDER("AUTH_EMAIL_LINKED_TO_OTHER_PROVIDER", "이 이메일로 가입된 계정이 있습니다.", 409);
+
+    private final String code;
+    private final String message;
+    private final int status;
+
+    AuthErrorCode(String code, String message, int status) {
+        this.code = code;
+        this.message = message;
+        this.status = status;
+    }
+
+    @Override
+    public String code() {
+        return code;
+    }
+
+    @Override
+    public String message() {
+        return message;
+    }
+
+    @Override
+    public int status() {
+        return status;
+    }
+}

@@ -19,12 +19,13 @@ import com.triples.rougether.userapi.billing.service.*;
 import com.triples.rougether.userapi.billing.store.*;
 import com.triples.rougether.userapi.billing.store.StorePurchaseVerifier.Verified;
 import com.triples.rougether.userapi.furniture.FurnitureFixtures;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient;
-import com.triples.rougether.userapi.furniture.ai.FurnitureAiClient.*;
+import com.triples.rougether.furniture.ai.FurnitureAiClient;
+import com.triples.rougether.furniture.ai.FurnitureAiClient.*;
 import com.triples.rougether.userapi.furniture.service.*;
+import com.triples.rougether.furniture.service.*;
 import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
 import com.triples.rougether.userapi.global.security.MemberRole;
-import com.triples.rougether.userapi.global.storage.*;
+import com.triples.rougether.infra.assets.*;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -359,7 +360,7 @@ class FurnitureBillingIntegrationTest {
                 store == Store.APPLE, store == Store.APPLE ? now.toEpochMilli() : null);
     }
     private void grant(String reference) { credits.apply(user.getId(), verified(Store.APPLE, reference, "pack3", 1), cipher.encrypt(reference)); }
-    private com.triples.rougether.userapi.furniture.dto.FurnitureGenerationResponse submit() {
+    private com.triples.rougether.furniture.dto.FurnitureGenerationResponse submit() {
         return furniture.submit(user.getId(), UUID.randomUUID(), "의자", photo());
     }
     private MockMultipartFile photo() { return new MockMultipartFile("photo", "chair.png", "image/png", sprite); }
