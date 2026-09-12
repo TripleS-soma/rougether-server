@@ -18,16 +18,29 @@ class RunnerReplayVerifierTest {
 
     @Test
     void 모바일과_동일한_JSON_픽스처로_5분_제한까지_전_구간을_검증한다() throws IOException {
-        try (var input = getClass().getResourceAsStream("/minigame/runner-fixtures.json")) {
+        verifyFixtures("/minigame/runner-fixtures.json", 1);
+    }
+
+    @Test
+    void 난이도_2의_모바일_픽스처도_최대_속도와_5분_완주까지_검증한다() throws IOException {
+        verifyFixtures("/minigame/runner-v2-fixtures.json", 2);
+    }
+
+    private void verifyFixtures(String resource, int rulesVersion) throws IOException {
+        try (var input = getClass().getResourceAsStream(resource)) {
             var fixtures = JsonMapper.builder().build().readTree(input);
             for (var fixture : fixtures) {
                 List<Integer> jumps = new java.util.ArrayList<>();
                 fixture.get("jumpTicks").forEach(jump -> jumps.add(jump.intValue()));
                 int seed = fixture.get("seed").intValue();
                 int ticks = fixture.get("ticks").intValue();
-                assertThat(verifier.verify(seed, 1, ticks, jumps))
+                assertThat(verifier.verify(seed, rulesVersion, ticks, jumps))
                         .as(fixture.get("name").stringValue()).isEqualTo(fixture.get("score").intValue());
-                assertError(seed, ticks - 1, jumps, MinigameErrorCode.RUN_NOT_FINISHED);
+                assertError(seed, rulesVersion, ticks - 1, jumps, MinigameErrorCode.RUN_NOT_FINISHED);
+                assertThat(jumps).hasSizeLessThanOrEqualTo(RunnerReplayVerifier.MAX_JUMPS);
+                if (ticks < RunnerReplayVerifier.MAX_TICKS) {
+                    assertError(seed, rulesVersion, ticks + 1, jumps, MinigameErrorCode.INVALID_REPLAY);
+                }
             }
         }
     }
@@ -60,18 +73,31 @@ class RunnerReplayVerifierTest {
     }
 
     @Test
+    void 난이도_2에서도_공중_점프와_조작한_종료_시점을_거절한다() {
+        assertThat(verifier.verify(1, 2, 133, List.of())).isEqualTo(22);
+        assertError(1, 2, 132, List.of(), MinigameErrorCode.RUN_NOT_FINISHED);
+        assertError(1, 2, 134, List.of(), MinigameErrorCode.INVALID_REPLAY);
+        assertError(1, 2, 208, List.of(124, 125), MinigameErrorCode.INVALID_REPLAY);
+        assertError(1, 2, 188, List.of(), MinigameErrorCode.INVALID_REPLAY);
+    }
+
+    @Test
     void 전체_기록의_길이와_규칙_버전_경계를_검증한다() {
         assertError(1, 0, List.of(), MinigameErrorCode.INVALID_REPLAY);
         assertError(1, 18001, List.of(), MinigameErrorCode.INVALID_REPLAY);
         assertError(1, 18000, IntStream.rangeClosed(1, 601).boxed().toList(), MinigameErrorCode.INVALID_REPLAY);
         assertError(1, 188, null, MinigameErrorCode.INVALID_REPLAY);
-        assertThatThrownBy(() -> verifier.verify(1, 2, 188, List.of()))
+        assertThatThrownBy(() -> verifier.verify(1, 3, 188, List.of()))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(MinigameErrorCode.INVALID_REPLAY));
     }
 
     private void assertError(int seed, int ticks, List<Integer> jumps, MinigameErrorCode code) {
-        assertThatThrownBy(() -> verifier.verify(seed, 1, ticks, jumps))
+        assertError(seed, 1, ticks, jumps, code);
+    }
+
+    private void assertError(int seed, int rulesVersion, int ticks, List<Integer> jumps, MinigameErrorCode code) {
+        assertThatThrownBy(() -> verifier.verify(seed, rulesVersion, ticks, jumps))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(code));
     }

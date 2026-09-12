@@ -12,6 +12,7 @@ public class MinigameCatalog {
     public static final String STAIRS = "cat-stairs";
     public static final String MERGE = "cat-merge";
     public static final int RULES_VERSION = 1;
+    public static final int CURRENT_RULES_VERSION = 2;
     private static final MinigameListResponse.Item RUNNER_ITEM = new MinigameListResponse.Item(
             RUNNER, "루틴 러너", "탭해서 장애물을 넘고, 최고 기록에 도전해요.", RULES_VERSION);
     private static final List<MinigameListResponse.Item> ITEMS = List.of(RUNNER_ITEM,
@@ -19,7 +20,20 @@ public class MinigameCatalog {
             new MinigameListResponse.Item(MERGE, "고양이 합치기", "같은 숫자의 고양이를 합쳐 더 큰 숫자를 만들어요.", RULES_VERSION));
 
     public MinigameListResponse list() {
-        return new MinigameListResponse(ITEMS);
+        return list(RULES_VERSION);
+    }
+
+    public MinigameListResponse list(int rulesVersion) {
+        requireRulesVersion(rulesVersion);
+        return new MinigameListResponse(ITEMS.stream()
+                .map(item -> new MinigameListResponse.Item(item.gameCode(), item.name(), item.description(), rulesVersion))
+                .toList());
+    }
+
+    public void requireRulesVersion(int rulesVersion) {
+        if (rulesVersion != RULES_VERSION && rulesVersion != CURRENT_RULES_VERSION) {
+            throw new BusinessException(MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        }
     }
 
     public void requireGame(String gameCode) {

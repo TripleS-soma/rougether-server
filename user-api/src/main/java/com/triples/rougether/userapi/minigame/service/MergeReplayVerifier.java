@@ -14,10 +14,16 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
     public static final int MAX_TICKS = 18_000;
     public static final int MAX_ACTIONS = 2_000;
     private static final int SIZE = 4;
+    private static final int EXTRA_TILE_INTERVAL = 8;
 
     @Override
     public String gameCode() {
         return MinigameCatalog.MERGE;
+    }
+
+    @Override
+    public int rulesVersion() {
+        return 2;
     }
 
     @Override
@@ -46,14 +52,16 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
     @Override
     public int verify(int seed, int rulesVersion, MinigameFinishRequest request) {
         validateInput(request);
-        if (seed < 1 || rulesVersion != rulesVersion()) {
+        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
             throw invalidReplay();
         }
         RandomState random = new RandomState(seed);
         int[] board = new int[SIZE * SIZE];
-        spawn(board, random);
-        spawn(board, random);
+        for (int initial = 0; initial < (rulesVersion == 1 ? 2 : 4); initial++) {
+            spawn(board, random, rulesVersion);
+        }
         int score = 0;
+        int moves = 0;
         for (MinigameAction action : request.actions()) {
             if (!hasMoves(board)) {
                 throw invalidReplay();
@@ -63,7 +71,11 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
             if (Arrays.equals(before, board)) {
                 throw invalidReplay();
             }
-            spawn(board, random);
+            spawn(board, random, rulesVersion);
+            moves++;
+            if (rulesVersion == 2 && moves % EXTRA_TILE_INTERVAL == 0) {
+                spawn(board, random, rulesVersion);
+            }
         }
         return score;
     }
@@ -117,15 +129,18 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
         return false;
     }
 
-    private static void spawn(int[] board, RandomState random) {
+    private static void spawn(int[] board, RandomState random, int rulesVersion) {
         int emptyCount = 0;
         for (int value : board) {
             if (value == 0) {
                 emptyCount++;
             }
         }
+        if (emptyCount == 0) {
+            return;
+        }
         int position = random.next(emptyCount);
-        int value = random.next(10) == 0 ? 4 : 2;
+        int value = random.next(rulesVersion == 1 ? 10 : 4) == 0 ? 4 : 2;
         for (int index = 0; index < board.length; index++) {
             if (board[index] == 0 && position-- == 0) {
                 board[index] = value;

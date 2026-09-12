@@ -14,6 +14,8 @@ import com.triples.rougether.domain.minigame.entity.MinigameRun;
 import com.triples.rougether.domain.minigame.repository.MinigameBestScoreRepository;
 import com.triples.rougether.domain.minigame.repository.MinigameRunRepository;
 import com.triples.rougether.userapi.minigame.dto.MinigameFinishRequest;
+import com.triples.rougether.userapi.minigame.dto.MinigameAction;
+import com.triples.rougether.userapi.minigame.dto.MinigameDirection;
 import com.triples.rougether.userapi.minigame.dto.MinigameFinishResponse;
 import com.triples.rougether.userapi.minigame.dto.MinigameLeaderboardResponse.Entry;
 import com.triples.rougether.userapi.minigame.error.MinigameErrorCode;
@@ -97,6 +99,81 @@ class MinigameIntegrationTest {
         assertThat(saved.getExpiresAt()).isEqualTo(started.expiresAt());
         assertThat(saved.isFinished()).isFalse();
         assertThat(saved.getScore()).isNull();
+    }
+
+    @Test
+    void 새_앱의_버전선택을_세션에_저장하고_미지원버전은_기록없이_거부한다() {
+        User player = player("규칙 선택");
+        for (String game : List.of(MinigameCatalog.RUNNER, MinigameCatalog.STAIRS, MinigameCatalog.MERGE)) {
+            var legacy = commandService.start(player.getId(), game);
+            var current = commandService.start(player.getId(), game, 2);
+            assertThat(legacy.rulesVersion()).isEqualTo(1);
+            assertThat(current.rulesVersion()).isEqualTo(2);
+            assertThat(runRepository.findById(current.runId()).orElseThrow().getRulesVersion()).isEqualTo(2);
+        }
+        long before = runRepository.count();
+        for (int unsupported : List.of(-1, 0, 3, 99)) {
+            assertError(() -> commandService.start(player.getId(), GAME, unsupported),
+                    MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        }
+        assertThat(runRepository.count()).isEqualTo(before);
+    }
+
+    @Test
+    void v1과_v2는_같은_최고점과_랭킹을_갱신하고_이전_완료영수증을_보존한다() {
+        String game = MinigameCatalog.STAIRS;
+        User player = player("게임 기록");
+        User tied = player("공동순위");
+        User lower = player("낮은 기록");
+        Instant startedAt = now.minusSeconds(100);
+        List<MinigameAction> oneStep = List.of(new MinigameAction(1, MinigameDirection.LEFT));
+        List<MinigameAction> twoSteps = List.of(new MinigameAction(1, MinigameDirection.LEFT),
+                new MinigameAction(7, MinigameDirection.LEFT));
+        MinigameRun legacyRun = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                game, 1, 1, startedAt, startedAt.plusSeconds(1800)));
+        MinigameFinishRequest legacyReplay = new MinigameFinishRequest(181, null, oneStep);
+        var legacyReceipt = commandService.finish(player.getId(), game, legacyRun.getId(), legacyReplay);
+        MinigameBestScore legacyBest = bestScoreRepository.findByUserIdAndGameCode(player.getId(), game).orElseThrow();
+        assertThat(legacyBest.getScore()).isEqualTo(1);
+        assertThat(legacyBest.getRulesVersion()).isEqualTo(1);
+        bestScoreRepository.saveAndFlush(MinigameBestScore.create(tied, game, 1, 2, now.minusSeconds(1)));
+        bestScoreRepository.saveAndFlush(MinigameBestScore.create(lower, game, 2, 1, now));
+
+        MinigameRun currentRun = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                game, 2, 1, startedAt, startedAt.plusSeconds(1800)));
+        MinigameFinishRequest currentReplay = new MinigameFinishRequest(79, null, twoSteps);
+        var currentReceipt = commandService.finish(player.getId(), game, currentRun.getId(), currentReplay);
+
+        assertThat(currentReceipt.score()).isEqualTo(2);
+        assertThat(currentReceipt.bestScore()).isEqualTo(2);
+        assertThat(currentReceipt.personalBest()).isTrue();
+        assertThat(currentReceipt.rank()).isEqualTo(1);
+        MinigameBestScore improved = bestScoreRepository.findByUserIdAndGameCode(player.getId(), game).orElseThrow();
+        assertThat(improved.getId()).isEqualTo(legacyBest.getId());
+        assertThat(improved.getScore()).isEqualTo(2);
+        assertThat(improved.getRulesVersion()).isEqualTo(2);
+        var leaderboard = queryService.leaderboard(player.getId(), game);
+        assertThat(leaderboard.totalPlayers()).isEqualTo(3);
+        assertThat(leaderboard.myEntry()).isEqualTo(new Entry(1, player.getId(), player.getNickname(), 2));
+        assertThat(leaderboard.items()).extracting(Entry::rank).containsExactly(1L, 1L, 3L);
+        assertThat(jdbc.queryForObject("select count(*) from minigame_best_scores where user_id = ?", Long.class,
+                player.getId())).isEqualTo(1);
+
+        MinigameRun lowerRun = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                game, 1, 1, startedAt, startedAt.plusSeconds(1800)));
+        var lowerReceipt = commandService.finish(player.getId(), game, lowerRun.getId(),
+                new MinigameFinishRequest(180, null, List.of()));
+        assertThat(lowerReceipt.score()).isZero();
+        assertThat(lowerReceipt.bestScore()).isEqualTo(2);
+        assertThat(lowerReceipt.personalBest()).isFalse();
+        assertThat(lowerReceipt.rank()).isEqualTo(1);
+        assertThat(bestScoreRepository.findByUserIdAndGameCode(player.getId(), game).orElseThrow().getRulesVersion())
+                .isEqualTo(2);
+        now = currentRun.getExpiresAt().plusSeconds(1);
+        assertThat(commandService.finish(player.getId(), game, currentRun.getId(), currentReplay))
+                .isEqualTo(currentReceipt);
+        assertThat(commandService.finish(player.getId(), game, legacyRun.getId(), legacyReplay))
+                .isEqualTo(legacyReceipt);
     }
 
     @Test

@@ -39,13 +39,18 @@ public class MinigameCommandService {
     private final Clock kstClock;
 
     public MinigameRunStartResponse start(Long userId, String gameCode) {
+        return start(userId, gameCode, MinigameCatalog.RULES_VERSION);
+    }
+
+    public MinigameRunStartResponse start(Long userId, String gameCode, int rulesVersion) {
         catalog.requireGame(gameCode);
+        catalog.requireRulesVersion(rulesVersion);
         MinigameReplayVerifier verifier = replayRegistry.get(gameCode);
         User user = lockActivePlayer(userId);
         Instant now = kstClock.instant();
         int seed = RANDOM.nextInt(Integer.MAX_VALUE) + 1;
         MinigameRun run = runRepository.save(MinigameRun.start(UUID.randomUUID().toString(), user,
-                gameCode, verifier.rulesVersion(), seed, now, now.plus(RUN_LIFETIME)));
+                gameCode, rulesVersion, seed, now, now.plus(RUN_LIFETIME)));
         return new MinigameRunStartResponse(run.getId(), gameCode, run.getRulesVersion(),
                 seed, verifier.maxTicks(), run.getExpiresAt());
     }

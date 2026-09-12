@@ -46,14 +46,14 @@ public class StairsReplayVerifier implements MinigameReplayVerifier {
     @Override
     public int verify(int seed, int rulesVersion, MinigameFinishRequest request) {
         validateInput(request);
-        if (seed < 1 || rulesVersion != rulesVersion()) {
+        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
             throw invalidReplay();
         }
 
         RandomState random = new RandomState(seed);
         int column = 0;
         MinigameDirection expected = random.nextDirection(column);
-        int timer = 180;
+        int timer = rulesVersion == 1 ? 180 : 72;
         int score = 0;
         int nextAction = 0;
 
@@ -79,7 +79,9 @@ public class StairsReplayVerifier implements MinigameReplayVerifier {
                 }
                 column += direction == MinigameDirection.LEFT ? -1 : 1;
                 score++;
-                timer = Math.max(45, 180 - (score / 5) * 6);
+                timer = rulesVersion == 1
+                        ? Math.max(45, 180 - (score / 5) * 6)
+                        : Math.max(18, 72 - (score / 3) * 4);
                 expected = random.nextDirection(column);
             }
             if (tick == MAX_TICKS) {
