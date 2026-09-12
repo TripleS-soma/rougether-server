@@ -19,6 +19,10 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.minigame.entity.MinigameBestScore;
+import com.triples.rougether.domain.minigame.entity.MinigameRun;
+import com.triples.rougether.domain.minigame.repository.MinigameBestScoreRepository;
+import com.triples.rougether.domain.minigame.repository.MinigameRunRepository;
 import com.triples.rougether.domain.notification.digest.entity.DailyIncompleteDigest;
 import com.triples.rougether.domain.notification.digest.entity.DailyIncompleteDigestTarget;
 import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
@@ -133,6 +137,10 @@ class MemberWithdrawalIntegrationTest {
     @Autowired
     private UserAppActivityRepository userAppActivityRepository;
     @Autowired
+    private MinigameRunRepository minigameRunRepository;
+    @Autowired
+    private MinigameBestScoreRepository minigameBestScoreRepository;
+    @Autowired
     private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private String kakaoLoginAs(String kakaoId) {
@@ -185,6 +193,44 @@ class MemberWithdrawalIntegrationTest {
         assertThat(user.getDeletedAt()).isNotNull();
         assertThat(refreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(login.userId())).isEmpty();
         assertThat(oauthAccountRepository.findAllByUser(user)).isEmpty();
+    }
+
+    @Test
+    void 탈퇴하면_미니게임_진행_완료_기록과_최고점수가_즉시_삭제되고_다른_회원은_보존된다() {
+        LoginResponse login = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        LoginResponse otherLogin = authService.kakaoLogin(kakaoLoginAs("kakao-" + UUID.randomUUID()));
+        User user = userRepository.findById(login.userId()).orElseThrow();
+        User other = userRepository.findById(otherLogin.userId()).orElseThrow();
+        Instant now = Instant.now();
+        MinigameRun running = minigameRunRepository.save(MinigameRun.start(
+                UUID.randomUUID().toString(), user, "room-runner", 1, 123, now, now.plusSeconds(600)));
+        MinigameRun finished = MinigameRun.start(
+                UUID.randomUUID().toString(), user, "room-runner", 1, 456, now.minusSeconds(60), now.plusSeconds(540));
+        finished.finish(3600, 600, "a".repeat(64), 600, true, 1L, now);
+        finished = minigameRunRepository.save(finished);
+        MinigameBestScore bestScore = minigameBestScoreRepository.save(
+                MinigameBestScore.create(user, "room-runner", 1, 600, now));
+        MinigameRun otherRun = minigameRunRepository.save(MinigameRun.start(
+                UUID.randomUUID().toString(), other, "room-runner", 1, 789, now, now.plusSeconds(600)));
+        MinigameBestScore otherBestScore = minigameBestScoreRepository.save(
+                MinigameBestScore.create(other, "room-runner", 1, 300, now));
+
+        try {
+            memberWithdrawalService.withdraw(login.userId());
+
+            assertThat(minigameRunRepository.findById(running.getId())).isEmpty();
+            assertThat(minigameRunRepository.findById(finished.getId())).isEmpty();
+            assertThat(minigameBestScoreRepository.findById(bestScore.getId())).isEmpty();
+            assertThat(minigameRunRepository.findById(otherRun.getId())).isPresent();
+            assertThat(minigameBestScoreRepository.findById(otherBestScore.getId()))
+                    .hasValueSatisfying(score -> assertThat(score.getScore()).isEqualTo(300));
+            assertThat(userRepository.findById(login.userId()).orElseThrow().isDeleted()).isTrue();
+            assertThat(userRepository.findById(otherLogin.userId()).orElseThrow().isDeleted()).isFalse();
+        } finally {
+            // 공유 DB에서 다음 랭킹 테스트에 이 테스트의 보존 확인용 기록이 섞이지 않도록 정리함.
+            minigameRunRepository.deleteById(otherRun.getId());
+            minigameBestScoreRepository.deleteById(otherBestScore.getId());
+        }
     }
 
     @Test
