@@ -54,21 +54,22 @@ public class RunnerReplayVerifier implements MinigameReplayVerifier {
 
     public int verify(int seed, int rulesVersion, int ticks, List<Integer> jumpTicks) {
         validateInput(ticks, jumpTicks);
-        if (seed < 1 || rulesVersion != MinigameCatalog.RULES_VERSION) {
+        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
             throw invalidReplay();
         }
+        boolean version2 = rulesVersion == 2;
         RandomState random = new RandomState(seed);
         List<Obstacle> obstacles = new ArrayList<>();
         int y = 0;
         int velocity = 0;
-        int countdown = 90;
+        int countdown = version2 ? 60 : 90;
         int nextJump = 0;
         for (int tick = 1; tick <= ticks; tick++) {
             if (nextJump < jumpTicks.size() && jumpTicks.get(nextJump) == tick) {
                 if (y != 0) {
                     throw invalidReplay();
                 }
-                velocity = 16;
+                velocity = version2 ? 15 : 16;
                 nextJump++;
             }
             y += velocity;
@@ -78,11 +79,16 @@ public class RunnerReplayVerifier implements MinigameReplayVerifier {
                 velocity = 0;
             }
             if (--countdown == 0) {
-                obstacles.add(new Obstacle(720, 24 + random.next(3) * 10,
-                        28 + random.next(3) * 10));
-                countdown = 75 + random.next(46);
+                int width = version2 ? 28 + random.next(3) * 16 : 24 + random.next(3) * 10;
+                int height = version2
+                        ? 40 + Math.min(2, tick / 600) * 6 + random.next(3) * 16
+                        : 28 + random.next(3) * 10;
+                obstacles.add(new Obstacle(720, width, height));
+                countdown = version2
+                        ? 65 - Math.min(23, (tick / 240) * 3) + random.next(31)
+                        : 75 + random.next(46);
             }
-            int speed = 6 + Math.min(6, tick / 600);
+            int speed = version2 ? 8 + Math.min(8, tick / 300) : 6 + Math.min(6, tick / 600);
             boolean collided = false;
             for (Obstacle obstacle : obstacles) {
                 obstacle.x -= speed;

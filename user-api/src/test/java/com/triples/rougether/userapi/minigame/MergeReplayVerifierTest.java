@@ -30,6 +30,54 @@ class MergeReplayVerifierTest {
     }
 
     @Test
+    void 버전2_추가_생성과_가득_찬_보드_생략까지_모바일_픽스처와_일치한다() throws IOException {
+        assertThat(verifier.rulesVersion()).isEqualTo(2);
+        for (Fixture fixture : fixtures("merge-v2-fixtures.json")) {
+            assertThat(verifier.verify(fixture.seed(), 2, request(fixture.ticks(), fixture.actions())))
+                    .as(fixture.name()).isEqualTo(fixture.score());
+        }
+    }
+
+    @Test
+    void 저장된_규칙_버전으로_초기_보드와_점수를_구분한다() {
+        List<MinigameAction> actions = List.of(new MinigameAction(1, MinigameDirection.UP));
+        assertThat(verifier.verify(2, 1, request(1, actions))).isEqualTo(4);
+        assertThat(verifier.verify(2, 2, request(1, actions))).isZero();
+        assertThat(verifier.verify(1, 2, request(1, List.of()))).isZero();
+    }
+
+    @Test
+    void 버전2_이동하지_않은_추가_입력은_거절한다() {
+        List<MinigameAction> actions = List.of(new MinigameAction(1, MinigameDirection.UP),
+                new MinigameAction(2, MinigameDirection.UP));
+        assertInvalid(1, 2, request(2, actions));
+    }
+
+    @Test
+    void 버전2도_같은_이동에서_합친_타일을_다시_합치지_않는다() {
+        MinigameDirection[] cycle = {MinigameDirection.UP, MinigameDirection.RIGHT,
+                MinigameDirection.DOWN, MinigameDirection.LEFT};
+        List<MinigameAction> actions = new ArrayList<>();
+        for (int index = 0; index < 17; index++) {
+            actions.add(new MinigameAction(index + 1, cycle[index % 4]));
+        }
+        assertThat(verifier.verify(1, 2, request(17, actions))).isEqualTo(96);
+        actions.add(new MinigameAction(18, MinigameDirection.LEFT));
+        assertThat(verifier.verify(1, 2, request(18, actions))).isEqualTo(104);
+    }
+
+    @Test
+    void 버전2도_막힌_이후의_입력은_거절한다() throws IOException {
+        Fixture blocked = fixtures("merge-v2-fixtures.json").stream()
+                .filter(fixture -> fixture.name().equals("blocked")).findFirst().orElseThrow();
+        for (MinigameDirection direction : MinigameDirection.values()) {
+            List<MinigameAction> extended = new ArrayList<>(blocked.actions());
+            extended.add(new MinigameAction(blocked.ticks() + 1, direction));
+            assertInvalid(blocked.seed(), 2, request(blocked.ticks() + 1, extended));
+        }
+    }
+
+    @Test
     void 이동하지_않은_수동_종료와_시간_제한_종료는_0점이다() {
         for (int seed : new int[] {1, 42, Integer.MAX_VALUE}) {
             assertThat(verifier.verify(seed, 1, request(1, List.of()))).isZero();
@@ -118,7 +166,7 @@ class MergeReplayVerifierTest {
         for (int seed : new int[] {0, -1, Integer.MIN_VALUE}) {
             assertInvalid(seed, 1, request(1, List.of()));
         }
-        for (int rulesVersion : new int[] {0, -1, 2, Integer.MAX_VALUE}) {
+        for (int rulesVersion : new int[] {0, -1, 3, Integer.MAX_VALUE}) {
             assertInvalid(1, rulesVersion, request(1, List.of()));
         }
     }
@@ -143,7 +191,11 @@ class MergeReplayVerifierTest {
     }
 
     private List<Fixture> fixtures() throws IOException {
-        try (var input = getClass().getResourceAsStream("/minigame/merge-fixtures.json")) {
+        return fixtures("merge-fixtures.json");
+    }
+
+    private List<Fixture> fixtures(String filename) throws IOException {
+        try (var input = getClass().getResourceAsStream("/minigame/" + filename)) {
             assertThat(input).isNotNull();
             var json = JsonMapper.builder().build().readTree(input);
             List<Fixture> fixtures = new ArrayList<>();

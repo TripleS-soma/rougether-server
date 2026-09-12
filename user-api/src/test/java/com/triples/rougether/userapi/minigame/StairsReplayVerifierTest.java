@@ -25,9 +25,14 @@ class StairsReplayVerifierTest {
 
     @Test
     void 모바일_JSON_픽스처의_난수와_종료_시점_점수를_독립_재생한다() throws IOException {
-        try (var input = getClass().getResourceAsStream("/minigame/stairs-fixtures.json")) {
+        verifyFixtures("/minigame/stairs-fixtures.json", 1);
+        verifyFixtures("/minigame/stairs-v2-fixtures.json", 2);
+    }
+
+    private void verifyFixtures(String resource, int version) throws IOException {
+        try (var input = getClass().getResourceAsStream(resource)) {
             var document = JsonMapper.builder().build().readTree(input);
-            assertThat(document.get("rulesVersion").intValue()).isEqualTo(verifier.rulesVersion());
+            assertThat(document.get("rulesVersion").intValue()).isEqualTo(version);
             for (var fixture : document.get("fixtures")) {
                 List<MinigameAction> actions = new ArrayList<>();
                 fixture.get("actions").forEach(action -> actions.add(new MinigameAction(
@@ -35,18 +40,31 @@ class StairsReplayVerifierTest {
                         MinigameDirection.valueOf(action.get("direction").stringValue()))));
                 int seed = fixture.get("seed").intValue();
                 int ticks = fixture.get("ticks").intValue();
-                assertThat(verifier.verify(seed, 1, request(ticks, actions)))
+                assertThat(verifier.verify(seed, version, request(ticks, actions)))
                         .as(fixture.get("name").stringValue())
                         .isEqualTo(fixture.get("score").intValue());
                 if (ticks > 1) {
                     var earlier = actions.stream().filter(action -> action.tick() < ticks).toList();
-                    assertError(seed, request(ticks - 1, earlier), MinigameErrorCode.RUN_NOT_FINISHED);
+                    assertError(seed, version, request(ticks - 1, earlier), MinigameErrorCode.RUN_NOT_FINISHED);
                 }
                 if (ticks < StairsReplayVerifier.MAX_TICKS) {
-                    assertError(seed, request(ticks + 1, actions), MinigameErrorCode.INVALID_REPLAY);
+                    assertError(seed, version, request(ticks + 1, actions), MinigameErrorCode.INVALID_REPLAY);
                 }
             }
         }
+    }
+
+    @Test
+    void 새_난이도는_72틱부터_시작하며_만료_틱의_입력은_거절한다() {
+        for (int seed : new int[] {1, 42, Integer.MAX_VALUE}) {
+            assertThat(verifier.verify(seed, 2, request(72, List.of()))).isZero();
+            assertError(seed, 2, request(71, List.of()), MinigameErrorCode.RUN_NOT_FINISHED);
+            assertError(seed, 2, request(73, List.of()), MinigameErrorCode.INVALID_REPLAY);
+        }
+        assertError(1, 2, request(72, List.of(new MinigameAction(72, LEFT))),
+                MinigameErrorCode.INVALID_REPLAY);
+        assertThat(verifier.verify(1, 2, request(143, List.of(new MinigameAction(71, LEFT)))))
+                .isEqualTo(1);
     }
 
     @Test
@@ -151,7 +169,7 @@ class StairsReplayVerifierTest {
         for (int seed : new int[] {Integer.MIN_VALUE, -1, 0}) {
             assertError(seed, request(180, List.of()), MinigameErrorCode.INVALID_REPLAY);
         }
-        for (int version : new int[] {-1, 0, 2, Integer.MAX_VALUE}) {
+        for (int version : new int[] {-1, 0, 3, Integer.MAX_VALUE}) {
             assertThatThrownBy(() -> verifier.verify(1, version, request(180, List.of())))
                     .isInstanceOfSatisfying(BusinessException.class,
                             exception -> assertThat(exception.getErrorCode())
@@ -170,7 +188,11 @@ class StairsReplayVerifierTest {
     }
 
     private void assertError(int seed, MinigameFinishRequest request, MinigameErrorCode code) {
-        assertThatThrownBy(() -> verifier.verify(seed, 1, request))
+        assertError(seed, 1, request, code);
+    }
+
+    private void assertError(int seed, int version, MinigameFinishRequest request, MinigameErrorCode code) {
+        assertThatThrownBy(() -> verifier.verify(seed, version, request))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(code));
     }

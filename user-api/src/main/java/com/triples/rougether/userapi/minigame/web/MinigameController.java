@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,17 +33,19 @@ public class MinigameController {
     private final MinigameCommandService commandService;
     private final MinigameQueryService queryService;
 
-    @Operation(summary = "이용 가능한 미니게임 목록")
+    @Operation(summary = "이용 가능한 미니게임 목록", description = "선택한 규칙 버전의 목록을 반환합니다. rulesVersion 생략 시 기존 버전 1을 사용합니다.")
     @GetMapping
-    public MinigameListResponse list(@CurrentUser AuthUser user) {
-        return catalog.list();
+    public MinigameListResponse list(@CurrentUser AuthUser user,
+                                     @RequestParam(defaultValue = "1") int rulesVersion) {
+        return catalog.list(rulesVersion);
     }
 
-    @Operation(summary = "게임 시작", description = "서버가 플레이 세션과 초기 상태를 재현하는 seed를 발급합니다.")
+    @Operation(summary = "게임 시작", description = "선택한 규칙 버전으로 플레이 세션과 seed를 발급합니다. rulesVersion 생략 시 버전 1을 사용합니다.")
     @PostMapping("/{gameCode}/runs")
     @ResponseStatus(HttpStatus.CREATED)
-    public MinigameRunStartResponse start(@CurrentUser AuthUser user, @PathVariable String gameCode) {
-        return commandService.start(user.id(), gameCode);
+    public MinigameRunStartResponse start(@CurrentUser AuthUser user, @PathVariable String gameCode,
+                                          @RequestParam(defaultValue = "1") int rulesVersion) {
+        return commandService.start(user.id(), gameCode, rulesVersion);
     }
 
     @Operation(summary = "플레이 기록 제출", description = "게임별 점프 또는 방향 입력을 서버에서 재생해 점수를 계산합니다. 같은 기록 재제출은 멱등합니다.")

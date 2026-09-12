@@ -73,7 +73,7 @@ class MinigameControllerTest {
 
     @Test
     void 게임_목록은_게임코드와_규칙버전을_포함한다() throws Exception {
-        when(minigameCatalog.list()).thenReturn(new MinigameListResponse(List.of(
+        when(minigameCatalog.list(1)).thenReturn(new MinigameListResponse(List.of(
                 new MinigameListResponse.Item(GAME_CODE, "루틴 러너", "탭해서 장애물을 넘어요.", 1))));
 
         mockMvc.perform(get("/api/v1/minigames"))
@@ -85,7 +85,7 @@ class MinigameControllerTest {
 
     @Test
     void 게임_시작은_인증_사용자로_세션을_만들고_201로_응답한다() throws Exception {
-        when(minigameCommandService.start(7L, GAME_CODE)).thenReturn(new MinigameRunStartResponse(
+        when(minigameCommandService.start(7L, GAME_CODE, 1)).thenReturn(new MinigameRunStartResponse(
                 RUN_ID, GAME_CODE, 1, 42, 18000, Instant.parse("2026-09-12T06:10:00Z")));
 
         mockMvc.perform(post("/api/v1/minigames/{gameCode}/runs", GAME_CODE))
@@ -97,7 +97,36 @@ class MinigameControllerTest {
                 .andExpect(jsonPath("$.maxTicks").value(18000))
                 .andExpect(jsonPath("$.expiresAt").value("2026-09-12T06:10:00Z"));
 
-        verify(minigameCommandService).start(7L, GAME_CODE);
+        verify(minigameCommandService).start(7L, GAME_CODE, 1);
+    }
+
+    @Test
+    void 요청한_v2를_목록과_시작에_전달한다() throws Exception {
+        when(minigameCatalog.list(2)).thenReturn(new MinigameListResponse(List.of(
+                new MinigameListResponse.Item(GAME_CODE, "루틴 러너", "장애물을 넘어요.", 2))));
+        when(minigameCommandService.start(7L, GAME_CODE, 2)).thenReturn(new MinigameRunStartResponse(
+                RUN_ID, GAME_CODE, 2, 42, 18000, Instant.parse("2026-09-12T06:10:00Z")));
+
+        mockMvc.perform(get("/api/v1/minigames").param("rulesVersion", "2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].rulesVersion").value(2));
+        mockMvc.perform(post("/api/v1/minigames/{gameCode}/runs", GAME_CODE).param("rulesVersion", "2"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.rulesVersion").value(2));
+        verify(minigameCatalog).list(2);
+        verify(minigameCommandService).start(7L, GAME_CODE, 2);
+    }
+
+    @Test
+    void 지원하지_않는_규칙버전은_명확한_400_코드로_반환한다() throws Exception {
+        BusinessException unsupported = new BusinessException(MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        when(minigameCatalog.list(99)).thenThrow(unsupported);
+        when(minigameCommandService.start(7L, GAME_CODE, 99)).thenThrow(unsupported);
+
+        mockMvc.perform(get("/api/v1/minigames").param("rulesVersion", "99"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MINIGAME_RULES_VERSION_NOT_SUPPORTED"));
+        mockMvc.perform(post("/api/v1/minigames/{gameCode}/runs", GAME_CODE).param("rulesVersion", "99"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MINIGAME_RULES_VERSION_NOT_SUPPORTED"));
     }
 
     @Test
@@ -192,7 +221,7 @@ class MinigameControllerTest {
 
     @Test
     void 지원하지_않는_게임은_404와_게임_에러코드를_반환한다() throws Exception {
-        when(minigameCommandService.start(7L, "unknown"))
+        when(minigameCommandService.start(7L, "unknown", 1))
                 .thenThrow(new BusinessException(MinigameErrorCode.GAME_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/minigames/unknown/runs"))
@@ -227,7 +256,7 @@ class MinigameControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"cat-stairs", "cat-merge"})
     void 방향_입력_게임도_인증_사용자와_게임코드로_시작한다(String gameCode) throws Exception {
-        when(minigameCommandService.start(7L, gameCode)).thenReturn(new MinigameRunStartResponse(
+        when(minigameCommandService.start(7L, gameCode, 1)).thenReturn(new MinigameRunStartResponse(
                 RUN_ID, gameCode, 1, 42, 18000, Instant.parse("2026-09-12T06:10:00Z")));
 
         mockMvc.perform(post("/api/v1/minigames/{gameCode}/runs", gameCode))
@@ -236,7 +265,7 @@ class MinigameControllerTest {
                 .andExpect(jsonPath("$.gameCode").value(gameCode))
                 .andExpect(jsonPath("$.seed").value(42));
 
-        verify(minigameCommandService).start(7L, gameCode);
+        verify(minigameCommandService).start(7L, gameCode, 1);
     }
 
     @ParameterizedTest
