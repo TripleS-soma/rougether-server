@@ -62,6 +62,12 @@ public class HouseJoinService {
         return joinByMemberCode(userId, inviteCode);
     }
 
+    // 온보딩 전용 진입점. 호출자는 집 → 사용자 락 아래 자동 입주 조건과 1회 선택 여부를 검증함.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public HouseJoinResponse joinForOnboarding(House house, Long userId) {
+        return joinImmediately(house, userId);
+    }
+
     private HouseJoinResponse joinImmediately(House house, Long userId) {
         HouseMember member = join(house, userId);
         // 락 조회 - 개인 초대코드 경로의 사전 스냅샷에 가려진 대기 신청도 함께 종결한다.

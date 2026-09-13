@@ -15,9 +15,12 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// 닉네임 연동·미션 성장 등 다른 필드 갱신이 동시 변경된 자동 입주 설정을 덮어쓰지 않게 함.
+@DynamicUpdate
 @Entity
 @Table(name = "house")
 public class House extends BaseEntity {
@@ -53,6 +56,13 @@ public class House extends BaseEntity {
 
     @Column(name = "is_public", nullable = false)
     private boolean isPublic;
+
+    @Column(name = "onboarding_auto_join_enabled", nullable = false)
+    private boolean onboardingAutoJoinEnabled;
+
+    public void changeOnboardingAutoJoinEnabled(boolean enabled) {
+        this.onboardingAutoJoinEnabled = enabled;
+    }
 
     @Column(name = "invite_code", length = 50)
     private String inviteCode;

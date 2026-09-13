@@ -142,7 +142,7 @@ public class HouseCommandService {
     // 설정 수정 - 소유자 전용, null 필드는 변경하지 않는 부분 수정.
     @Transactional
     public HouseUpdateResponse updateSettings(Long userId, Long houseId, HouseUpdateRequest request) {
-        House house = houseRepository.findById(houseId)
+        House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         boolean isOwner = houseMemberRepository.findByHouseIdAndUserId(houseId, userId)
