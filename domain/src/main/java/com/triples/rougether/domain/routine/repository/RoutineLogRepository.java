@@ -62,29 +62,24 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
                                        @Param("date") LocalDate date,
                                        @Param("status") RoutineLogStatus status);
 
-    // 그날 건너뛴 루틴의 계보 키(mobile #189). 건너뜀 뒤 버전이 분기돼도 숨김이 유지되도록 id 가 아니라 계보로 본다.
-    @Query("select distinct coalesce(r.originRoutineId, r.id) from RoutineLog l join l.routine r "
-            + "where r.user.id = :userId and l.routineDate = :date "
-            + "and l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED")
-    Set<Long> findSkippedLineageKeysOn(@Param("userId") Long userId, @Param("date") LocalDate date);
+    // 오늘 현황·캘린더(오늘 이후)용: 그날 완료(COMPLETED)와 건너뜀(SKIPPED, mobile #189)을 한 쿼리로 읽음.
+    // 완료는 버전 id, 건너뜀은 계보 키로 대조한다 — 쿼리 예산(오늘 3회·월 6회)을 지키려고 두 상태를 합쳐 읽음.
+    @Query("select l.routine.id as routineId, coalesce(r.originRoutineId, r.id) as lineageKey, "
+            + "l.routineDate as routineDate, l.status as status from RoutineLog l join l.routine r "
+            + "where r.user.id = :userId and l.routineDate = :date and l.status in :statuses")
+    List<RoutineDayLogRow> findDayLogRowsOn(@Param("userId") Long userId,
+                                            @Param("date") LocalDate date,
+                                            @Param("statuses") Collection<RoutineLogStatus> statuses);
 
-    // 기간 내 날짜별 건너뜀 계보 키(월 캘린더 오늘·미래 구간용): [routineDate, lineageKey] 행.
-    @Query("select l.routineDate, coalesce(r.originRoutineId, r.id) from RoutineLog l join l.routine r "
+    // 월 캘린더(오늘·미래)용: 기간 내 완료·건너뜀 행. 대상 여부는 일별 조회와 같은 반복 규칙으로 판정함
+    @Query("select l.routine.id as routineId, coalesce(r.originRoutineId, r.id) as lineageKey, "
+            + "l.routineDate as routineDate, l.status as status from RoutineLog l join l.routine r "
             + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
-            + "and l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED")
-    List<Object[]> findSkippedLineageKeysBetween(@Param("userId") Long userId,
+            + "and l.status in :statuses")
+    List<RoutineDayLogRow> findDayLogRowsBetween(@Param("userId") Long userId,
                                                  @Param("fromDate") LocalDate fromDate,
-                                                 @Param("toDate") LocalDate toDate);
-
-    // 월 캘린더용: 완료 기록의 날짜와 버전 id만 읽음. 대상 여부는 일별 조회와 같은 반복 규칙으로 판정함
-    @Query("select l.routine.id as routineId, l.routineDate as routineDate from RoutineLog l "
-            + "where l.routine.user.id = :userId "
-            + "and l.routineDate between :fromDate and :toDate and l.status = :status")
-    List<RoutineCompletionDate> findCompletionDatesBetween(
-            @Param("userId") Long userId,
-            @Param("fromDate") LocalDate fromDate,
-            @Param("toDate") LocalDate toDate,
-            @Param("status") RoutineLogStatus status);
+                                                 @Param("toDate") LocalDate toDate,
+                                                 @Param("statuses") Collection<RoutineLogStatus> statuses);
 
     // 과거 캘린더용: 그날 log 전체(COMPLETED+FAILED)를 루틴·카테고리까지 fetch.
     @Query("select l from RoutineLog l "
