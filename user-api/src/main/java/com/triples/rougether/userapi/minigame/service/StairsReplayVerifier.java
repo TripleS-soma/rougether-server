@@ -46,7 +46,8 @@ public class StairsReplayVerifier implements MinigameReplayVerifier {
     @Override
     public int verify(int seed, int rulesVersion, MinigameFinishRequest request) {
         validateInput(request);
-        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
+        // v3는 카탈로그 공통 버전 번호일 뿐 계단 물리는 v2와 같음 (mobile #1322).
+        if (seed < 1 || rulesVersion < 1 || rulesVersion > 3) {
             throw invalidReplay();
         }
 

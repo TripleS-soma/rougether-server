@@ -110,9 +110,13 @@ class MinigameIntegrationTest {
             assertThat(legacy.rulesVersion()).isEqualTo(1);
             assertThat(current.rulesVersion()).isEqualTo(2);
             assertThat(runRepository.findById(current.runId()).orElseThrow().getRulesVersion()).isEqualTo(2);
+            // v3 (mobile #1322) — 러너 곡선 변경 버전, 세 게임 모두 세션에 3으로 기록됨.
+            var latest = commandService.start(player.getId(), game, 3);
+            assertThat(latest.rulesVersion()).isEqualTo(3);
+            assertThat(runRepository.findById(latest.runId()).orElseThrow().getRulesVersion()).isEqualTo(3);
         }
         long before = runRepository.count();
-        for (int unsupported : List.of(-1, 0, 3, 99)) {
+        for (int unsupported : List.of(-1, 0, 4, 99)) {
             assertError(() -> commandService.start(player.getId(), GAME, unsupported),
                     MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
         }

@@ -8,6 +8,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 // 모바일의 60 Hz 정수 물리를 재생해 종료 시점과 점수를 검증함. 규칙 변경 시 버전을 올려야 함.
+// v3: 2400틱(40초)에 16으로 멈추던 속도가 이후 600틱마다 +1, 장애물 최대 높이 84→96 (mobile #1322).
 @Component
 public class RunnerReplayVerifier implements MinigameReplayVerifier {
     public static final int MAX_TICKS = 18_000;
@@ -54,10 +55,11 @@ public class RunnerReplayVerifier implements MinigameReplayVerifier {
 
     public int verify(int seed, int rulesVersion, int ticks, List<Integer> jumpTicks) {
         validateInput(ticks, jumpTicks);
-        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
+        if (seed < 1 || rulesVersion < 1 || rulesVersion > 3) {
             throw invalidReplay();
         }
-        boolean version2 = rulesVersion == 2;
+        boolean version2 = rulesVersion >= 2;
+        boolean version3 = rulesVersion >= 3;
         RandomState random = new RandomState(seed);
         List<Obstacle> obstacles = new ArrayList<>();
         int y = 0;
@@ -80,15 +82,21 @@ public class RunnerReplayVerifier implements MinigameReplayVerifier {
             }
             if (--countdown == 0) {
                 int width = version2 ? 28 + random.next(3) * 16 : 24 + random.next(3) * 10;
-                int height = version2
-                        ? 40 + Math.min(2, tick / 600) * 6 + random.next(3) * 16
-                        : 28 + random.next(3) * 10;
+                int height = version3
+                        ? 40 + Math.min(3, tick / 600) * 8 + random.next(3) * 16
+                        : version2
+                                ? 40 + Math.min(2, tick / 600) * 6 + random.next(3) * 16
+                                : 28 + random.next(3) * 10;
                 obstacles.add(new Obstacle(720, width, height));
                 countdown = version2
                         ? 65 - Math.min(23, (tick / 240) * 3) + random.next(31)
                         : 75 + random.next(46);
             }
             int speed = version2 ? 8 + Math.min(8, tick / 300) : 6 + Math.min(6, tick / 600);
+            if (version3) {
+                // 정수 나눗셈은 0으로 절삭되므로 2400 이전은 음수 → max로 0. 모바일의 Math.floor와 같음.
+                speed += Math.max(0, (tick - 2400) / 600);
+            }
             boolean collided = false;
             for (Obstacle obstacle : obstacles) {
                 obstacle.x -= speed;

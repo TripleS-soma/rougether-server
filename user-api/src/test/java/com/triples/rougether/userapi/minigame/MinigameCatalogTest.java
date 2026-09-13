@@ -17,11 +17,12 @@ class MinigameCatalogTest {
     void 기본_목록은_v1을_유지하고_명시적으로_v2를_선택할_수_있다() {
         assertThat(catalog.list().items()).hasSize(3).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(1));
         assertThat(catalog.list(2).items()).hasSize(3).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(2));
+        assertThat(catalog.list(3).items()).hasSize(3).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(3));
         assertThat(catalog.list(1).items()).isEqualTo(catalog.list().items());
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {-1, 0, 3, 99, Integer.MAX_VALUE})
+    @ValueSource(ints = {-1, 0, 4, 99, Integer.MAX_VALUE})
     void 알_수_없는_버전은_목록부터_거부한다(int rulesVersion) {
         assertThatThrownBy(() -> catalog.list(rulesVersion)).isInstanceOfSatisfying(BusinessException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED));
