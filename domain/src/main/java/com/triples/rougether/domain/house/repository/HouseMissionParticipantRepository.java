@@ -21,4 +21,10 @@ public interface HouseMissionParticipantRepository extends JpaRepository<HouseMi
     @Query("select p.mission.id, coalesce(sum(p.contributionValue), 0) from HouseMissionParticipant p "
             + "where p.mission.id in :missionIds group by p.mission.id")
     List<Object[]> sumContributionByMissionIds(@Param("missionIds") java.util.Collection<Long> missionIds);
+
+    // 목록 화면용 내 누적 기여 (N+1 회피): [missionId, contributionValue] 행. (mission, member) 참여 행은 최대 1개.
+    @Query("select p.mission.id, p.contributionValue from HouseMissionParticipant p "
+            + "where p.member.id = :memberId and p.mission.id in :missionIds")
+    List<Object[]> findContributionByMemberIdAndMissionIds(@Param("memberId") Long memberId,
+                                                            @Param("missionIds") java.util.Collection<Long> missionIds);
 }

@@ -150,6 +150,9 @@ class HouseMissionServiceTest {
                     assertThat(summary.title()).isEqualTo("공개 미리보기 미션");
                     assertThat(summary.currentValue()).isEqualTo(4);
                     assertThat(summary.targetValue()).isEqualTo(10);
+                    // 미리보기는 개인 기여값을 노출하지 않는다 (mobile #373).
+                    assertThat(summary.myContribution()).isNull();
+                    assertThat(summary.contributedToday()).isNull();
                 });
         verify(houseMemberRepository, never()).findByHouseIdAndUserId(any(), any());
     }

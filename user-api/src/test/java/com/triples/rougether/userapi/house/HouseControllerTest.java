@@ -609,7 +609,7 @@ class HouseControllerTest {
                 List.of(new MissionSummary(
                         31L, "오늘 다같이 루틴 지키기", HouseMissionType.DAILY_MEMBER_RATE,
                         70, 66, HouseMissionStatus.ACTIVE,
-                        null, null, false, Instant.parse("2026-07-28T01:00:00Z"))),
+                        null, null, false, null, null, Instant.parse("2026-07-28T01:00:00Z"))),
                 List.of(
                         new HousePreviewDetailResponse.MemberRoomSummary(12L, "진형",
                                 new RoomRenderResponse(1, RoomLayoutFormat.FREE_V1,
