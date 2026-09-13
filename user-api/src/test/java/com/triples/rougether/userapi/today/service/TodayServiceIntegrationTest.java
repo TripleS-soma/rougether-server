@@ -79,6 +79,20 @@ class TodayServiceIntegrationTest {
         assertThat(routineTitles(service.today(userId, MONDAY))).containsExactly("매일 운동");
     }
 
+    // 발생분 건너뜀(mobile #189) — SKIPPED 로그가 있는 날짜의 루틴은 오늘 현황에서 사라지고 분모에서도 빠짐
+    @Test
+    void 건너뛴_루틴은_오늘_현황에서_숨겨지고_진행률_분모에서도_빠진다() {
+        Long skipped = persistRoutine("건너뛴 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistRoutine("남은 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        Routine routine = routineRepository.findById(skipped).orElseThrow();
+        routineLogRepository.save(RoutineLog.skip(routine, MONDAY));
+
+        var response = service.today(userId, MONDAY);
+
+        assertThat(routineTitles(response)).containsExactly("남은 운동");
+        assertThat(response.summary().remainingCount()).isEqualTo(1);
+    }
+
     @Test
     void WEEKLY_루틴은_해당_요일만_노출되고_다른_요일은_제외된다() {
         persistRoutine("월요일 루틴", RoutineStatus.ACTIVE, "WEEKLY",

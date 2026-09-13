@@ -73,6 +73,12 @@ public class RoutineLog extends BaseCreatedEntity {
         return new RoutineLog(routine, routineDate, RoutineLogStatus.FAILED, null, null, 0);
     }
 
+    // 발생분 건너뜀(mobile #189) — 완료도 실패도 아님. unique(routine_id, routine_date)를 점유해
+    // day-end 배치가 그날 FAILED 를 만들지 않게 하고, today/calendar 는 이 날짜의 발생분을 숨긴다.
+    public static RoutineLog skip(Routine routine, LocalDate routineDate) {
+        return new RoutineLog(routine, routineDate, RoutineLogStatus.SKIPPED, null, null, 0);
+    }
+
     public void recordGrowthReward(int amount) {
         if (status != RoutineLogStatus.COMPLETED || amount < 0 || amount > rewardAmount
                 || growthRewardAmount != 0) {

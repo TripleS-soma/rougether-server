@@ -58,12 +58,15 @@ public class CalendarService {
     }
 
     private CalendarDayResponse liveDay(Long userId, LocalDate date) {
+        Set<Long> skippedLineages = routineLogRepository.findSkippedLineageKeysOn(userId, date);
         // ACTIVE 루틴 중 그날 반복 대상만 추림
         List<Routine> routines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
+                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
                 .toList();
 
         // 그날 완료한 루틴 id 집합
@@ -79,7 +82,10 @@ public class CalendarService {
     // 과거: 그날 log(COMPLETED+FAILED) 단독 조회. 판정은 day-end 배치가 끝냈으므로 재구성하지 않고,
     // 표시값은 log가 가리키는 버전 row에서 읽음(루틴은 soft delete라 버전 row가 남아 있음)
     private CalendarDayResponse pastDay(Long userId, LocalDate date) {
-        List<RoutineLog> logs = routineLogRepository.findAllWithRoutineForDay(userId, date);
+        // SKIPPED(건너뜀, mobile #189)는 그날 수행 대상이 아니었던 것으로 보아 노출하지 않는다
+        List<RoutineLog> logs = routineLogRepository.findAllWithRoutineForDay(userId, date).stream()
+                .filter(log -> log.getStatus() != RoutineLogStatus.SKIPPED)
+                .toList();
 
         List<Routine> routines = logs.stream()
                 .map(RoutineLog::getRoutine)
@@ -100,9 +106,8 @@ public class CalendarService {
 
     // 어제(D-1) 소싱: 그날 COMPLETED 로그의 루틴 + 그날 유효했던 버전 중 대상인 루틴을 계보 키로 합집합
     private RecalculatedRoutines recalculateRoutines(Long userId, LocalDate date) {
-        List<Routine> routines = new ArrayList<>(routineLogRepository
-                .findAllWithRoutineForDay(userId, date)
-                .stream()
+        List<RoutineLog> dayLogs = routineLogRepository.findAllWithRoutineForDay(userId, date);
+        List<Routine> routines = new ArrayList<>(dayLogs.stream()
                 .filter(log -> log.getStatus() == RoutineLogStatus.COMPLETED)
                 .map(RoutineLog::getRoutine)
                 .toList());
@@ -113,6 +118,11 @@ public class CalendarService {
         Set<Long> seenLineages = routines.stream()
                 .map(CalendarService::lineageKey)
                 .collect(Collectors.toCollection(HashSet::new));
+        // 건너뛴 계보(SKIPPED, mobile #189)는 재계산으로도 다시 채우지 않는다 — 본 것으로만 표시하고 루틴은 추가 안 함
+        dayLogs.stream()
+                .filter(log -> log.getStatus() == RoutineLogStatus.SKIPPED)
+                .map(log -> lineageKey(log.getRoutine()))
+                .forEach(seenLineages::add);
         for (Routine routine : routineRepository.findEffectiveOnDay(userId, date)) {
             if (agendaAssembler.isRoutineTargetOn(routine, date)
                     && seenLineages.add(lineageKey(routine))) {
@@ -184,11 +194,18 @@ public class CalendarService {
                 .stream()
                 .collect(Collectors.groupingBy(RoutineCompletionDate::getRoutineDate,
                         Collectors.mapping(RoutineCompletionDate::getRoutineId, Collectors.toSet())));
+        // 건너뛴 발생분(SKIPPED, mobile #189)은 날짜별 분모에서도 뺀다 — /calendar 의 live 소싱과 같은 기준
+        Map<LocalDate, Set<Long>> skippedLineagesByDate = new HashMap<>();
+        for (Object[] row : routineLogRepository.findSkippedLineageKeysBetween(userId, from, to)) {
+            skippedLineagesByDate.computeIfAbsent((LocalDate) row[0], d -> new HashSet<>()).add((Long) row[1]);
+        }
         return from.datesUntil(to.plusDays(1))
                 .collect(Collectors.toMap(
                         date -> date,
                         date -> countRoutines(activeRoutines.stream()
                                         .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                                        .filter(routine -> !skippedLineagesByDate
+                                                .getOrDefault(date, Set.of()).contains(lineageKey(routine)))
                                         .toList(),
                                 completedIdsByDate.getOrDefault(date, Set.of()))));
     }

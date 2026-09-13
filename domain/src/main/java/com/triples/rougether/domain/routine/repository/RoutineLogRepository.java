@@ -62,6 +62,20 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
                                        @Param("date") LocalDate date,
                                        @Param("status") RoutineLogStatus status);
 
+    // 그날 건너뛴 루틴의 계보 키(mobile #189). 건너뜀 뒤 버전이 분기돼도 숨김이 유지되도록 id 가 아니라 계보로 본다.
+    @Query("select distinct coalesce(r.originRoutineId, r.id) from RoutineLog l join l.routine r "
+            + "where r.user.id = :userId and l.routineDate = :date "
+            + "and l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED")
+    Set<Long> findSkippedLineageKeysOn(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    // 기간 내 날짜별 건너뜀 계보 키(월 캘린더 오늘·미래 구간용): [routineDate, lineageKey] 행.
+    @Query("select l.routineDate, coalesce(r.originRoutineId, r.id) from RoutineLog l join l.routine r "
+            + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            + "and l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED")
+    List<Object[]> findSkippedLineageKeysBetween(@Param("userId") Long userId,
+                                                 @Param("fromDate") LocalDate fromDate,
+                                                 @Param("toDate") LocalDate toDate);
+
     // 월 캘린더용: 완료 기록의 날짜와 버전 id만 읽음. 대상 여부는 일별 조회와 같은 반복 규칙으로 판정함
     @Query("select l.routine.id as routineId, l.routineDate as routineDate from RoutineLog l "
             + "where l.routine.user.id = :userId "
@@ -87,6 +101,8 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             + "sum(case when l.status = :completedStatus then 1 else 0 end) as completedCount from RoutineLog l "
             + "join l.routine r "
             + "where r.user.id = :userId and l.routineDate between :fromDate and :toDate "
+            // SKIPPED(건너뜀, mobile #189)는 그날 수행 대상이 아니었던 것으로 보아 분모에서도 뺀다.
+            + "and l.status <> com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED "
             + "group by l.routineDate")
     List<DailyCount> countByUserIdAndRoutineDateBetween(
             @Param("userId") Long userId,

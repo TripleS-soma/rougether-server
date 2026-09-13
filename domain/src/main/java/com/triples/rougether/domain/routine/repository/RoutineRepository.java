@@ -86,7 +86,10 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "and r.user.bot = false "
             + "and r.id > :cursorId "
             + "and not exists (select 1 from RoutineLog l "
-            + "  where l.routine = r and l.routineDate = :date and l.status = :completedStatus) "
+            + "  where l.routine = r and l.routineDate = :date "
+            // 건너뛴 발생분(SKIPPED, mobile #189)도 리마인드 대상 아님
+            + "  and (l.status = :completedStatus "
+            + "    or l.status = com.triples.rougether.domain.routine.entity.RoutineLogStatus.SKIPPED)) "
             + "and not exists (select 1 from Notification n "
             + "  where n.user = r.user and n.type = :notificationType and n.refId = r.id "
             + "  and n.createdAt >= :dayStart and n.createdAt < :dayEndExclusive) "

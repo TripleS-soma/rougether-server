@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -291,6 +292,37 @@ class RoutineControllerTest {
                 .andExpect(jsonPath("$.rewardAmount").value(10))
                 .andExpect(jsonPath("$.streak.currentCount").value(3))
                 .andExpect(jsonPath("$.streak.longestCount").value(10));
+    }
+
+    // 발생분 건너뜀(mobile #189) — 본문 status=SKIPPED 는 complete 가 아니라 skip 경로로 간다
+    @Test
+    void 본문_status가_SKIPPED이면_건너뜀_경로로_201과_SKIPPED_기록을_응답한다() throws Exception {
+        when(routineLogService.skip(1L, 7L, LocalDate.of(2026, 6, 30)))
+                .thenReturn(new RoutineLogResponse(101L, LocalDate.of(2026, 6, 30),
+                        RoutineLogStatus.SKIPPED, null, null, 0,
+                        new StreakSummaryResponse(3, 10, LocalDate.of(2026, 6, 29)), null));
+
+        mockMvc.perform(post("/api/v1/routines/7/logs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"routineDate\":\"2026-06-30\",\"status\":\"SKIPPED\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.status").value("SKIPPED"))
+                .andExpect(jsonPath("$.rewardAmount").value(0))
+                .andExpect(jsonPath("$.streak.currentCount").value(3));
+        verify(routineLogService, never()).complete(any(), any(), any());
+    }
+
+    @Test
+    void 지난_날짜_건너뜀은_400과_SKIP_DATE_NOT_ALLOWED를_응답한다() throws Exception {
+        when(routineLogService.skip(eq(1L), eq(7L), any()))
+                .thenThrow(new BusinessException(RoutineLogErrorCode.SKIP_DATE_NOT_ALLOWED));
+
+        mockMvc.perform(post("/api/v1/routines/7/logs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"routineDate\":\"2026-06-01\",\"status\":\"SKIPPED\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SKIP_DATE_NOT_ALLOWED"));
     }
 
     @Test

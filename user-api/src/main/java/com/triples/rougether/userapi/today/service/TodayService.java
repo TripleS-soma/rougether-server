@@ -43,10 +43,13 @@ public class TodayService {
     @Transactional(readOnly = true)
     TodayResponse today(Long userId, LocalDate targetDate) {
         // 기간 내 ACTIVE 루틴 중 오늘 반복 대상만 추림.
+        Set<Long> skippedLineages = routineLogRepository.findSkippedLineageKeysOn(userId, targetDate);
         List<Routine> routines = routineRepository
                 .findAgendaCandidates(userId, RoutineStatus.ACTIVE, targetDate)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
+                // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
+                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
                 .toList();
 
         // 대상 루틴이 없으면 완료 로그 조회 결과를 사용하지 않으므로 생략함.
@@ -61,5 +64,10 @@ public class TodayService {
         TodayStreak streak = TodayStreak.from(
                 streakRepository.findByUserId(userId).orElse(null), targetDate);
         return new TodayResponse(targetDate, categories, summary, streak);
+    }
+
+    // coalesce 키와 짝 — origin 미백필 row는 자기 id가 계보 키임
+    private static Long lineageKey(Routine routine) {
+        return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
     }
 }
