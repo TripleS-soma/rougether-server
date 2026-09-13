@@ -31,20 +31,39 @@ public record HouseMissionListResponse(List<MissionSummary> items) {
             @Schema(description = "오늘 보상 수령 여부 (DAILY 전용, WEEKLY 는 null 생략)", example = "false")
             @JsonInclude(JsonInclude.Include.NON_NULL)
             Boolean todayClaimed,
+            @Schema(description = "내 누적 기여 수치 (유형 무관 누적 체크 횟수). 구성원 목록 전용, 미리보기는 null 생략 (mobile #373)", example = "3")
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            Integer myContribution,
+            @Schema(description = "오늘(KST) 내가 이 미션에 기여했는지. 두 유형 모두 하루 1회 기여라 '기여함' 표시의 근거. 구성원 목록 전용, 미리보기는 null 생략 (mobile #373)", example = "true")
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            Boolean contributedToday,
             @Schema(description = "생성 시각. 목록은 이 값 내림차순(최신 생성순) 정렬")
             Instant createdAt) {
 
-        // WEEKLY 행 (todayClaimed 없음 — 기존 계약 유지)
+        // WEEKLY 행 (todayClaimed 없음 — 기존 계약 유지). 미리보기용 — 개인 기여값 없음.
         public static MissionSummary of(HouseMission mission, long currentValue) {
-            return build(mission, currentValue, null);
+            return build(mission, currentValue, null, null, null);
         }
 
-        // DAILY 행 - currentValue 는 오늘 달성률 %
+        // WEEKLY 행 (구성원 목록) — 내 누적 기여·오늘 기여 여부 포함.
+        public static MissionSummary of(HouseMission mission, long currentValue,
+                                        int myContribution, boolean contributedToday) {
+            return build(mission, currentValue, null, myContribution, contributedToday);
+        }
+
+        // DAILY 행 - currentValue 는 오늘 달성률 %. 미리보기용 — 개인 기여값 없음.
         public static MissionSummary ofDaily(HouseMission mission, long todayRatePercent, boolean todayClaimed) {
-            return build(mission, todayRatePercent, todayClaimed);
+            return build(mission, todayRatePercent, todayClaimed, null, null);
         }
 
-        private static MissionSummary build(HouseMission mission, long currentValue, Boolean todayClaimed) {
+        // DAILY 행 (구성원 목록) — 내 누적 기여·오늘 기여 여부 포함.
+        public static MissionSummary ofDaily(HouseMission mission, long todayRatePercent, boolean todayClaimed,
+                                             int myContribution, boolean contributedToday) {
+            return build(mission, todayRatePercent, todayClaimed, myContribution, contributedToday);
+        }
+
+        private static MissionSummary build(HouseMission mission, long currentValue, Boolean todayClaimed,
+                                            Integer myContribution, Boolean contributedToday) {
             return new MissionSummary(
                     mission.getId(),
                     mission.getTitle(),
@@ -55,6 +74,8 @@ public record HouseMissionListResponse(List<MissionSummary> items) {
                     mission.getStartsAt(),
                     mission.getEndsAt(),
                     todayClaimed,
+                    myContribution,
+                    contributedToday,
                     mission.getCreatedAt());
         }
     }

@@ -56,4 +56,16 @@ public interface HouseMissionDailyContributionRepository
             """)
     List<Object[]> countActiveByMissionIdsAndDate(@Param("missionIds") Collection<Long> missionIds,
                                                   @Param("date") LocalDate date);
+
+    // 목록 화면용 오늘 내 기여 여부 (N+1 회피): 해당 날짜에 내 기여 행이 있는 missionId 목록. 두 유형 모두 하루 1행.
+    @Query("""
+            select c.mission.id
+            from HouseMissionDailyContribution c
+            where c.member.id = :memberId
+              and c.mission.id in :missionIds
+              and c.contributionDate = :date
+            """)
+    List<Long> findMissionIdsContributedOn(@Param("memberId") Long memberId,
+                                           @Param("missionIds") Collection<Long> missionIds,
+                                           @Param("date") LocalDate date);
 }

@@ -139,23 +139,26 @@ public class HouseMissionService {
     @Transactional(readOnly = true)
     public HouseMissionListResponse getMissions(Long userId, Long houseId) {
         House house = requireHouse(houseId);
-        requireActiveMember(userId, houseId);
-        return new HouseMissionListResponse(summarizeMissions(house));
+        HouseMember me = requireActiveMember(userId, houseId);
+        return new HouseMissionListResponse(summarizeMissions(house, me.getId()));
     }
 
     // 집 미리보기용 요약 - 로그인·집 존재·삭제 여부 검증을 마친 house 를 preview API 경계에서 받는다.
     // 기여·보상 수령 가능 여부나 개인 기여값은 노출하지 않고 목록과 동일한 읽기 모델만 재사용한다.
     @Transactional(readOnly = true)
     public List<MissionSummary> getPreviewMissions(House house) {
-        return summarizeMissions(house);
+        return summarizeMissions(house, null);
     }
 
-    private List<MissionSummary> summarizeMissions(House house) {
+    // memberId 가 있으면(구성원 목록) 내 누적 기여·오늘 기여 여부를 일괄 조회해 행에 싣고, null(미리보기)이면 생략.
+    private List<MissionSummary> summarizeMissions(House house, Long memberId) {
         Long houseId = house.getId();
         List<HouseMission> missions = houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(houseId);
         Map<Long, Long> sums = sumByMissionIds(missions);
 
         LocalDate today = LocalDate.now(KST);
+        Map<Long, Integer> myContributions = myContributionsByMissionIds(memberId, missions);
+        Set<Long> contributedTodayIds = missionIdsContributedOn(memberId, missions, today);
         List<Long> dailyIds = missions.stream()
                 .filter(mission -> mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE)
                 .map(HouseMission::getId)
@@ -167,15 +170,45 @@ public class HouseMissionService {
 
         return missions.stream()
                 .map(mission -> {
-                    if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
-                        long todayCount = todayCounts.getOrDefault(mission.getId(), 0L);
-                        return MissionSummary.ofDaily(mission,
-                                ratePercent(todayCount, house.getCurrentMemberCount()),
-                                todayClaimedIds.contains(mission.getId()));
+                    long currentValue = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE
+                            ? ratePercent(todayCounts.getOrDefault(mission.getId(), 0L), house.getCurrentMemberCount())
+                            : sums.getOrDefault(mission.getId(), 0L);
+                    boolean daily = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE;
+                    boolean todayClaimed = todayClaimedIds.contains(mission.getId());
+                    if (memberId == null) {
+                        return daily
+                                ? MissionSummary.ofDaily(mission, currentValue, todayClaimed)
+                                : MissionSummary.of(mission, currentValue);
                     }
-                    return MissionSummary.of(mission, sums.getOrDefault(mission.getId(), 0L));
+                    int myContribution = myContributions.getOrDefault(mission.getId(), 0);
+                    boolean contributedToday = contributedTodayIds.contains(mission.getId());
+                    return daily
+                            ? MissionSummary.ofDaily(mission, currentValue, todayClaimed, myContribution, contributedToday)
+                            : MissionSummary.of(mission, currentValue, myContribution, contributedToday);
                 })
                 .toList();
+    }
+
+    // 내 누적 기여 일괄 조회 (N+1 회피). 참여 행이 없는 미션은 0.
+    private Map<Long, Integer> myContributionsByMissionIds(Long memberId, List<HouseMission> missions) {
+        if (memberId == null || missions.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = missions.stream().map(HouseMission::getId).toList();
+        Map<Long, Integer> contributions = new HashMap<>();
+        for (Object[] row : participantRepository.findContributionByMemberIdAndMissionIds(memberId, ids)) {
+            contributions.put((Long) row[0], ((Number) row[1]).intValue());
+        }
+        return contributions;
+    }
+
+    // 오늘 내가 기여한 미션 id 집합 (N+1 회피). 두 유형 모두 기여 시 일별 행이 남으므로 한 쿼리로 충분.
+    private Set<Long> missionIdsContributedOn(Long memberId, List<HouseMission> missions, LocalDate today) {
+        if (memberId == null || missions.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> ids = missions.stream().map(HouseMission::getId).toList();
+        return Set.copyOf(dailyContributionRepository.findMissionIdsContributedOn(memberId, ids, today));
     }
 
     // 미션 상세 - 구성원 전용. 내 기여(myContribution)는 두 유형 모두 누적 체크 횟수.

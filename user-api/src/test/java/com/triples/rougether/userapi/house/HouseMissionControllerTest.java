@@ -69,14 +69,17 @@ class HouseMissionControllerTest {
         authAsUser7();
         when(houseMissionService.getMissions(7L, 1L)).thenReturn(new HouseMissionListResponse(List.of(
                 new MissionSummary(3L, "주간 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 20, 12L,
-                        HouseMissionStatus.ACTIVE, null, null, null, Instant.parse("2026-07-05T00:00:00Z")))));
+                        HouseMissionStatus.ACTIVE, null, null, null, 3, true,
+                        Instant.parse("2026-07-05T00:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/houses/1/missions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].missionId").value(3))
                 .andExpect(jsonPath("$.items[0].missionType").value("WEEKLY_MEMBER_COUNT"))
                 .andExpect(jsonPath("$.items[0].currentValue").value(12))
-                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"));
+                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.items[0].myContribution").value(3))
+                .andExpect(jsonPath("$.items[0].contributedToday").value(true));
     }
 
     @Test

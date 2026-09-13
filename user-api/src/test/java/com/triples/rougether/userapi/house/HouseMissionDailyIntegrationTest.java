@@ -236,5 +236,10 @@ class HouseMissionDailyIntegrationTest {
         assertThat(dailyRow.todayClaimed()).isTrue();
         assertThat(dailyRow.currentValue()).isEqualTo(50);
         assertThat(weeklyRow.todayClaimed()).isNull();
+        // 구성원 목록은 내 누적 기여·오늘 기여 여부를 싣는다 (mobile #373) — 기여한 DAILY 는 1/true, 안 한 WEEKLY 는 0/false.
+        assertThat(dailyRow.myContribution()).isEqualTo(1);
+        assertThat(dailyRow.contributedToday()).isTrue();
+        assertThat(weeklyRow.myContribution()).isZero();
+        assertThat(weeklyRow.contributedToday()).isFalse();
     }
 }
