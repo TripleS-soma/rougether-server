@@ -144,6 +144,11 @@ public class Routine extends BaseEntity {
         if (repeatDays != null) {
             this.repeatDays = repeatDays;
         }
+        // DAILY는 요일·일자 규칙이 없다 — WEEKLY→DAILY로 바꾸면 옛 repeat_days가 응답에 남던 문제(mobile #373-④).
+        // 판정(RoutineRecurrence)은 DAILY에서 repeat_days를 안 보지만 응답이 거짓말을 하지 않게 지운다.
+        if ("DAILY".equalsIgnoreCase(this.repeatType)) {
+            this.repeatDays = null;
+        }
         this.scheduledTime = scheduledTime == null ? null : scheduledTime.withSecond(0).withNano(0);
         if (startsOn != null) {
             this.startsOn = startsOn;
