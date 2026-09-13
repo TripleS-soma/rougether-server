@@ -26,6 +26,21 @@ class RunnerReplayVerifierTest {
         verifyFixtures("/minigame/runner-v2-fixtures.json", 2);
     }
 
+    // v3 완주 픽스처는 lead 10 봇의 5분 기록이라 속도 42 구간(장애물 높이 96)까지 지나감.
+    @Test
+    void 난이도_3의_모바일_픽스처는_계속_빨라지는_속도로_5분_완주까지_검증한다() throws IOException {
+        verifyFixtures("/minigame/runner-v3-fixtures.json", 3);
+    }
+
+    // 2400틱까지는 v2와 같은 물리라 v2의 초반 픽스처는 v3로도 같은 결과여야 함.
+    @Test
+    void 난이도_3은_40초_이전_구간에서_난이도_2와_같은_충돌_시점을_낸다() {
+        assertThat(verifier.verify(1, 3, 133, List.of())).isEqualTo(22);
+        assertThat(verifier.verify(1, 3, 208, List.of(124))).isEqualTo(34);
+        assertError(1, 3, 132, List.of(), MinigameErrorCode.RUN_NOT_FINISHED);
+        assertError(1, 3, 134, List.of(), MinigameErrorCode.INVALID_REPLAY);
+    }
+
     private void verifyFixtures(String resource, int rulesVersion) throws IOException {
         try (var input = getClass().getResourceAsStream(resource)) {
             var fixtures = JsonMapper.builder().build().readTree(input);
@@ -87,7 +102,7 @@ class RunnerReplayVerifierTest {
         assertError(1, 18001, List.of(), MinigameErrorCode.INVALID_REPLAY);
         assertError(1, 18000, IntStream.rangeClosed(1, 601).boxed().toList(), MinigameErrorCode.INVALID_REPLAY);
         assertError(1, 188, null, MinigameErrorCode.INVALID_REPLAY);
-        assertThatThrownBy(() -> verifier.verify(1, 3, 188, List.of()))
+        assertThatThrownBy(() -> verifier.verify(1, 4, 188, List.of()))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(MinigameErrorCode.INVALID_REPLAY));
     }

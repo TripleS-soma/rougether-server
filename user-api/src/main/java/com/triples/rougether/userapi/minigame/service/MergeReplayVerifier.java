@@ -52,7 +52,8 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
     @Override
     public int verify(int seed, int rulesVersion, MinigameFinishRequest request) {
         validateInput(request);
-        if (seed < 1 || (rulesVersion != 1 && rulesVersion != 2)) {
+        // v3는 카탈로그 공통 버전 번호일 뿐 합치기 물리는 v2와 같음 (mobile #1322).
+        if (seed < 1 || rulesVersion < 1 || rulesVersion > 3) {
             throw invalidReplay();
         }
         RandomState random = new RandomState(seed);
@@ -73,7 +74,7 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
             }
             spawn(board, random, rulesVersion);
             moves++;
-            if (rulesVersion == 2 && moves % EXTRA_TILE_INTERVAL == 0) {
+            if (rulesVersion >= 2 && moves % EXTRA_TILE_INTERVAL == 0) {
                 spawn(board, random, rulesVersion);
             }
         }

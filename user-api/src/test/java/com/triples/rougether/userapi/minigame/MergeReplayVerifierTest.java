@@ -35,6 +35,9 @@ class MergeReplayVerifierTest {
         for (Fixture fixture : fixtures("merge-v2-fixtures.json")) {
             assertThat(verifier.verify(fixture.seed(), 2, request(fixture.ticks(), fixture.actions())))
                     .as(fixture.name()).isEqualTo(fixture.score());
+            // v3는 카탈로그 공통 번호라 합치기는 v2 물리 그대로 (mobile #1322).
+            assertThat(verifier.verify(fixture.seed(), 3, request(fixture.ticks(), fixture.actions())))
+                    .as(fixture.name() + " as v3").isEqualTo(fixture.score());
         }
     }
 
@@ -166,7 +169,7 @@ class MergeReplayVerifierTest {
         for (int seed : new int[] {0, -1, Integer.MIN_VALUE}) {
             assertInvalid(seed, 1, request(1, List.of()));
         }
-        for (int rulesVersion : new int[] {0, -1, 3, Integer.MAX_VALUE}) {
+        for (int rulesVersion : new int[] {0, -1, 4, Integer.MAX_VALUE}) {
             assertInvalid(1, rulesVersion, request(1, List.of()));
         }
     }

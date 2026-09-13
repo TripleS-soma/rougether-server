@@ -29,10 +29,20 @@ class StairsReplayVerifierTest {
         verifyFixtures("/minigame/stairs-v2-fixtures.json", 2);
     }
 
+    // v3는 카탈로그 공통 번호라 계단은 v2 픽스처를 그대로 재생해야 함 (mobile #1322).
+    @Test
+    void 규칙_버전_3은_난이도_2의_픽스처를_같은_점수로_재생한다() throws IOException {
+        verifyFixtures("/minigame/stairs-v2-fixtures.json", 2, 3);
+    }
+
     private void verifyFixtures(String resource, int version) throws IOException {
+        verifyFixtures(resource, version, version);
+    }
+
+    private void verifyFixtures(String resource, int fixtureVersion, int version) throws IOException {
         try (var input = getClass().getResourceAsStream(resource)) {
             var document = JsonMapper.builder().build().readTree(input);
-            assertThat(document.get("rulesVersion").intValue()).isEqualTo(version);
+            assertThat(document.get("rulesVersion").intValue()).isEqualTo(fixtureVersion);
             for (var fixture : document.get("fixtures")) {
                 List<MinigameAction> actions = new ArrayList<>();
                 fixture.get("actions").forEach(action -> actions.add(new MinigameAction(
@@ -169,7 +179,7 @@ class StairsReplayVerifierTest {
         for (int seed : new int[] {Integer.MIN_VALUE, -1, 0}) {
             assertError(seed, request(180, List.of()), MinigameErrorCode.INVALID_REPLAY);
         }
-        for (int version : new int[] {-1, 0, 3, Integer.MAX_VALUE}) {
+        for (int version : new int[] {-1, 0, 4, Integer.MAX_VALUE}) {
             assertThatThrownBy(() -> verifier.verify(1, version, request(180, List.of())))
                     .isInstanceOfSatisfying(BusinessException.class,
                             exception -> assertThat(exception.getErrorCode())
