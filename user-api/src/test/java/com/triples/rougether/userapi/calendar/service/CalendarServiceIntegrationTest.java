@@ -104,6 +104,23 @@ class CalendarServiceIntegrationTest {
         assertThat(routineTitles(service.day(userId, TODAY))).containsExactly("매일 운동");
     }
 
+    // 발생분 건너뜀(mobile #189) — live 소싱(오늘·미래)에서 SKIPPED 계보는 숨기고 월 집계 분모에서도 뺀다
+    @Test
+    void 건너뛴_루틴은_오늘과_내일_캘린더에서_숨겨지고_월_집계_분모에서도_빠진다() {
+        Long skipped = persistRoutine("건너뛴 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        persistRoutine("남은 운동", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
+        Routine routine = routineRepository.findById(skipped).orElseThrow();
+        LocalDate tomorrow = TODAY.plusDays(1);
+        routineLogRepository.save(RoutineLog.skip(routine, tomorrow));
+
+        assertThat(routineTitles(service.day(userId, tomorrow))).containsExactly("남은 운동");
+        // 건너뛰지 않은 오늘은 둘 다 대상
+        assertThat(routineTitles(service.day(userId, TODAY))).containsExactlyInAnyOrder("건너뛴 운동", "남은 운동");
+        var month = service.month(userId, java.time.YearMonth.from(tomorrow));
+        var tomorrowRow = month.days().stream().filter(d -> d.date().equals(tomorrow)).findFirst().orElseThrow();
+        assertThat(tomorrowRow.routineCount()).isEqualTo(1);
+    }
+
     @Test
     void 오늘_WEEKLY_루틴은_해당_요일만_대상이고_다른_요일은_제외된다() {
         String todayToken = weekdayToken(TODAY);

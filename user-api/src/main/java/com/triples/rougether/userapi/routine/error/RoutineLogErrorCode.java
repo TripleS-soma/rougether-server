@@ -9,7 +9,8 @@ public enum RoutineLogErrorCode implements ErrorCode {
     // 타인 소유도 404로 통일함(존재 노출 회피)
     ROUTINE_LOG_NOT_FOUND("ROUTINE_LOG_NOT_FOUND", "완료 기록을 찾을 수 없습니다.", 404),
     WALLET_NOT_FOUND("WALLET_NOT_FOUND", "지갑을 찾을 수 없습니다.", 404),
-    INVALID_ROUTINE_DATE("INVALID_ROUTINE_DATE", "미래 날짜는 완료할 수 없습니다.", 400);
+    INVALID_ROUTINE_DATE("INVALID_ROUTINE_DATE", "미래 날짜는 완료할 수 없습니다.", 400),
+    SKIP_DATE_NOT_ALLOWED("SKIP_DATE_NOT_ALLOWED", "지난 날짜는 건너뛸 수 없습니다.", 400);
 
     private final String code;
     private final String message;

@@ -94,6 +94,12 @@ public class RoutineLogService {
                     contributeLinkedMission(userId, routine, isToday), today);
         }
 
+        // 건너뛴 날짜를 다시 완료하는 경우(mobile #189) — SKIPPED row 가 unique(routine_id, routine_date)를
+        // 점유하고 있으니 먼저 지우고 일반 완료 경로로 간다(당일이면 보상·스트릭도 정상 반영)
+        routineLogRepository.findByLineageAndDateAndStatus(lineageKey(routine), routineDate, RoutineLogStatus.SKIPPED)
+                .forEach(routineLogRepository::delete);
+        routineLogRepository.flush();
+
         // 이 완료가 그 유저의 오늘 첫 완료인지(스트릭은 첫 완료에만 반응)
         boolean firstToday = isToday && routineLogRepository.countByRoutine_UserIdAndRoutineDateAndStatus(
                 userId, today, RoutineLogStatus.COMPLETED) == 0;
@@ -136,6 +142,31 @@ public class RoutineLogService {
 
     // 완료 취소: 코인·성장 회수, 완료 이력 삭제/실패 복원, 스트릭 롤백을 한 트랜잭션으로 처리함.
     // logId 대신 클라가 보는 날짜를 받음 — 다른 날짜 취소가 실수로 오늘 완료를 건드리지 않게 함
+    // 발생분 건너뜀(mobile #189): 그 날짜의 루틴을 오늘 현황·캘린더에서 숨기고 day-end 배치의 FAILED 를 막는
+    // SKIPPED row 하나만 남긴다. 보상·스트릭·단체미션 기여가 없으므로 유저·지갑 락도 잡지 않는다.
+    // 오늘·미래만 허용(지난 날짜는 이미 완료/실패로 판정이 끝났음). 같은 날짜 재요청은 기존 row 를 돌려준다(멱등).
+    @Transactional
+    public RoutineLogResponse skip(Long userId, Long routineId, LocalDate requestedDate) {
+        LocalDate today = LocalDate.now(KST);
+        LocalDate routineDate = requestedDate != null ? requestedDate : today;
+        Routine routine = findActionableRoutine(userId, routineId, routineDate, today);
+        if (routineDate.isBefore(today)) {
+            throw new BusinessException(RoutineLogErrorCode.SKIP_DATE_NOT_ALLOWED);
+        }
+        Long lineage = lineageKey(routine);
+        if (!routineLogRepository.findByLineageAndDateAndStatus(lineage, routineDate, RoutineLogStatus.COMPLETED)
+                .isEmpty()) {
+            throw new BusinessException(RoutineLogErrorCode.ALREADY_COMPLETED);
+        }
+        RoutineLog log = routineLogRepository
+                .findByLineageAndDateAndStatus(lineage, routineDate, RoutineLogStatus.SKIPPED)
+                .stream().findFirst()
+                .orElseGet(() -> routineLogRepository.save(RoutineLog.skip(routine, routineDate)));
+        Streak streak = streakRepository.findByUserId(userId).orElse(null);
+        return RoutineLogResponse.from(log, streak, null, today);
+    }
+
+    // SKIPPED row 가 있는 날짜의 취소는 건너뜀 해제(row 삭제) — 보상·스트릭이 없었으니 회수도 없음 (mobile #189).
     @Transactional
     public StreakSummaryResponse cancel(Long userId, Long routineId, LocalDate date) {
         // 완료와 같은 순서로 잠금함. 로그를 먼저 읽으면 동시 취소가 이전 COMPLETED 스냅샷을 재사용함.
@@ -143,6 +174,17 @@ public class RoutineLogService {
         UserWallet wallet = findWalletForUpdate(userId);
         LocalDate today = LocalDate.now(KST);
         Routine routine = findActionableRoutine(userId, routineId, date, today); // 소유권 guard
+        // 건너뜀 해제(mobile #189) — 미래 날짜도 건너뛸 수 있으므로 아래 미래 거부보다 먼저 본다
+        RoutineLog skipped = routineLogRepository
+                .findByLineageAndDateAndStatus(lineageKey(routine), date, RoutineLogStatus.SKIPPED)
+                .stream().findFirst().orElse(null);
+        if (skipped != null) {
+            routineLogRepository.delete(skipped);
+            Streak current = streakRepository.findByUserId(userId).orElse(null);
+            return current != null
+                    ? StreakSummaryResponse.from(current, today)
+                    : new StreakSummaryResponse(0, 0, null);
+        }
         // 과거 완료도 취소 가능(미래만 거부). 환불은 log.reward_amount라 과거 완료 취소는 0 환불임
         if (date.isAfter(today)) {
             throw new BusinessException(RoutineLogErrorCode.LOG_NOT_CANCELABLE);

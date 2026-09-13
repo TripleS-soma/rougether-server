@@ -126,6 +126,8 @@ public class RoutineController {
                     + "결과가 응답의 houseMissionContribution 으로 내려갑니다. 이미 기여한 날이거나 미션이 비활성·기간 밖·삭제됐거나 "
                     + "그 집의 구성원이 아니면 기여만 조용히 건너뛰고(houseMissionContribution=null) 완료는 정상 처리됩니다. "
                     + "완료를 취소해도 미션 기여는 회수되지 않습니다.")
+    // 본문 status=SKIPPED: 그 날짜의 발생분 건너뜀(다른 날로 옮길 때, mobile #189). 오늘·미래만(지난 날짜 400 SKIP_DATE_NOT_ALLOWED),
+    // 보상·스트릭·미션 기여 없이 오늘 현황·캘린더에서 숨기고 마감 배치 FAILED 도 막음. 재요청 멱등, 완료된 날짜는 409. 해제는 DELETE /logs?date=
     @PostMapping("/{id}/logs")
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineLogResponse complete(
@@ -133,6 +135,10 @@ public class RoutineController {
             @Parameter(description = "루틴 ID. 내 루틴 목록 조회(GET /api/v1/routines) 응답의 id 값") @PathVariable Long id,
             @RequestBody(required = false) RoutineLogCreateRequest request) {
         RoutineLogCreateRequest body = request != null ? request : new RoutineLogCreateRequest(null);
+        // status=SKIPPED 는 발생분 건너뜀(mobile #189) — 보상·스트릭 없는 별도 경로
+        if (body.isSkip()) {
+            return routineLogService.skip(authUser.id(), id, body.routineDate());
+        }
         return routineLogService.complete(authUser.id(), id, body);
     }
 

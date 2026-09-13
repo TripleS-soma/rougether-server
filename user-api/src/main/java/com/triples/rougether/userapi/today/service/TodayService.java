@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.today.service;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
+import com.triples.rougether.domain.routine.repository.RoutineDayLogRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,9 @@ public class TodayService {
 
     // KST 고정 — "오늘"·요일 판정 모두 이 기준임
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 그날 한 번에 읽는 로그 상태: 완료 대조 + 건너뜀 제외(mobile #189)
+    private static final List<RoutineLogStatus> DAY_LOG_STATUSES =
+            List.of(RoutineLogStatus.COMPLETED, RoutineLogStatus.SKIPPED);
 
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
@@ -43,15 +48,24 @@ public class TodayService {
     @Transactional(readOnly = true)
     TodayResponse today(Long userId, LocalDate targetDate) {
         // 기간 내 ACTIVE 루틴 중 오늘 반복 대상만 추림.
-        List<Routine> routines = routineRepository
+        List<Routine> targets = routineRepository
                 .findAgendaCandidates(userId, RoutineStatus.ACTIVE, targetDate)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
                 .toList();
 
-        // 대상 루틴이 없으면 완료 로그 조회 결과를 사용하지 않으므로 생략함.
-        Set<Long> completedRoutineIds = routines.isEmpty() ? Set.of() : routineLogRepository
-                .findRoutineIdsCompletedOn(userId, targetDate, RoutineLogStatus.COMPLETED);
+        // 대상 루틴이 없으면 완료·건너뜀 로그 조회 결과를 사용하지 않으므로 생략함(쿼리 예산 3회).
+        List<RoutineDayLogRow> dayLogs = targets.isEmpty() ? List.of() : routineLogRepository
+                .findDayLogRowsOn(userId, targetDate, DAY_LOG_STATUSES);
+        // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
+        Set<Long> skippedLineages = lineageKeysOf(dayLogs, RoutineLogStatus.SKIPPED);
+        List<Routine> routines = targets.stream()
+                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
+                .toList();
+        Set<Long> completedRoutineIds = dayLogs.stream()
+                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
+                .map(RoutineDayLogRow::getRoutineId)
+                .collect(Collectors.toSet());
 
         // 마감일이 정확히 오늘인 투두만(overdue·밀린 투두 제외 — calendar와 동일)
         List<TodoAgendaRow> todos = todoRepository.findAgendaDueOn(userId, targetDate);
@@ -61,5 +75,17 @@ public class TodayService {
         TodayStreak streak = TodayStreak.from(
                 streakRepository.findByUserId(userId).orElse(null), targetDate);
         return new TodayResponse(targetDate, categories, summary, streak);
+    }
+
+    // coalesce 키와 짝 — origin 미백필 row는 자기 id가 계보 키임
+    private static Long lineageKey(Routine routine) {
+        return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
+    }
+
+    private static Set<Long> lineageKeysOf(List<RoutineDayLogRow> rows, RoutineLogStatus status) {
+        return rows.stream()
+                .filter(row -> row.getStatus() == status)
+                .map(RoutineDayLogRow::getLineageKey)
+                .collect(Collectors.toSet());
     }
 }

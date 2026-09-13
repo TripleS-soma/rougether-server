@@ -6,7 +6,7 @@ import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
-import com.triples.rougether.domain.routine.repository.RoutineCompletionDate;
+import com.triples.rougether.domain.routine.repository.RoutineDayLogRow;
 import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
@@ -38,6 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class CalendarService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 그날 한 번에 읽는 로그 상태: 완료 대조 + 건너뜀 제외(mobile #189)
+    private static final List<RoutineLogStatus> DAY_LOG_STATUSES =
+            List.of(RoutineLogStatus.COMPLETED, RoutineLogStatus.SKIPPED);
 
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
@@ -58,19 +61,23 @@ public class CalendarService {
     }
 
     private CalendarDayResponse liveDay(Long userId, LocalDate date) {
+        // 그날 완료·건너뜀 로그를 한 번에 읽음(엔티티 로드 없이 id·계보 키만)
+        List<RoutineDayLogRow> dayLogs = routineLogRepository.findDayLogRowsOn(userId, date, DAY_LOG_STATUSES);
+        Set<Long> skippedLineages = lineageKeysOf(dayLogs, RoutineLogStatus.SKIPPED);
         // ACTIVE 루틴 중 그날 반복 대상만 추림
         List<Routine> routines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE)
                 .stream()
                 .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
+                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
                 .toList();
 
         // 그날 완료한 루틴 id 집합
-        Set<Long> completedRoutineIds = routineLogRepository
-                .findByRoutine_UserIdAndRoutineDateAndStatus(userId, date, RoutineLogStatus.COMPLETED)
-                .stream()
-                .map(log -> log.getRoutine().getId())
+        Set<Long> completedRoutineIds = dayLogs.stream()
+                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
+                .map(RoutineDayLogRow::getRoutineId)
                 .collect(Collectors.toSet());
 
         return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
@@ -79,7 +86,10 @@ public class CalendarService {
     // 과거: 그날 log(COMPLETED+FAILED) 단독 조회. 판정은 day-end 배치가 끝냈으므로 재구성하지 않고,
     // 표시값은 log가 가리키는 버전 row에서 읽음(루틴은 soft delete라 버전 row가 남아 있음)
     private CalendarDayResponse pastDay(Long userId, LocalDate date) {
-        List<RoutineLog> logs = routineLogRepository.findAllWithRoutineForDay(userId, date);
+        // SKIPPED(건너뜀, mobile #189)는 그날 수행 대상이 아니었던 것으로 보아 노출하지 않는다
+        List<RoutineLog> logs = routineLogRepository.findAllWithRoutineForDay(userId, date).stream()
+                .filter(log -> log.getStatus() != RoutineLogStatus.SKIPPED)
+                .toList();
 
         List<Routine> routines = logs.stream()
                 .map(RoutineLog::getRoutine)
@@ -100,9 +110,8 @@ public class CalendarService {
 
     // 어제(D-1) 소싱: 그날 COMPLETED 로그의 루틴 + 그날 유효했던 버전 중 대상인 루틴을 계보 키로 합집합
     private RecalculatedRoutines recalculateRoutines(Long userId, LocalDate date) {
-        List<Routine> routines = new ArrayList<>(routineLogRepository
-                .findAllWithRoutineForDay(userId, date)
-                .stream()
+        List<RoutineLog> dayLogs = routineLogRepository.findAllWithRoutineForDay(userId, date);
+        List<Routine> routines = new ArrayList<>(dayLogs.stream()
                 .filter(log -> log.getStatus() == RoutineLogStatus.COMPLETED)
                 .map(RoutineLog::getRoutine)
                 .toList());
@@ -113,6 +122,11 @@ public class CalendarService {
         Set<Long> seenLineages = routines.stream()
                 .map(CalendarService::lineageKey)
                 .collect(Collectors.toCollection(HashSet::new));
+        // 건너뛴 계보(SKIPPED, mobile #189)는 재계산으로도 다시 채우지 않는다 — 본 것으로만 표시하고 루틴은 추가 안 함
+        dayLogs.stream()
+                .filter(log -> log.getStatus() == RoutineLogStatus.SKIPPED)
+                .map(log -> lineageKey(log.getRoutine()))
+                .forEach(seenLineages::add);
         for (Routine routine : routineRepository.findEffectiveOnDay(userId, date)) {
             if (agendaAssembler.isRoutineTargetOn(routine, date)
                     && seenLineages.add(lineageKey(routine))) {
@@ -179,16 +193,24 @@ public class CalendarService {
         List<Routine> activeRoutines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE);
-        Map<LocalDate, Set<Long>> completedIdsByDate = routineLogRepository
-                .findCompletionDatesBetween(userId, from, to, RoutineLogStatus.COMPLETED)
-                .stream()
-                .collect(Collectors.groupingBy(RoutineCompletionDate::getRoutineDate,
-                        Collectors.mapping(RoutineCompletionDate::getRoutineId, Collectors.toSet())));
+        // 완료·건너뜀을 한 쿼리로 읽어 날짜별로 가른다(월 조회 쿼리 예산 6회 유지)
+        List<RoutineDayLogRow> logRows = routineLogRepository.findDayLogRowsBetween(userId, from, to, DAY_LOG_STATUSES);
+        Map<LocalDate, Set<Long>> completedIdsByDate = logRows.stream()
+                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
+                .collect(Collectors.groupingBy(RoutineDayLogRow::getRoutineDate,
+                        Collectors.mapping(RoutineDayLogRow::getRoutineId, Collectors.toSet())));
+        // 건너뛴 발생분(SKIPPED, mobile #189)은 날짜별 분모에서도 뺀다 — /calendar 의 live 소싱과 같은 기준
+        Map<LocalDate, Set<Long>> skippedLineagesByDate = logRows.stream()
+                .filter(row -> row.getStatus() == RoutineLogStatus.SKIPPED)
+                .collect(Collectors.groupingBy(RoutineDayLogRow::getRoutineDate,
+                        Collectors.mapping(RoutineDayLogRow::getLineageKey, Collectors.toSet())));
         return from.datesUntil(to.plusDays(1))
                 .collect(Collectors.toMap(
                         date -> date,
                         date -> countRoutines(activeRoutines.stream()
                                         .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
+                                        .filter(routine -> !skippedLineagesByDate
+                                                .getOrDefault(date, Set.of()).contains(lineageKey(routine)))
                                         .toList(),
                                 completedIdsByDate.getOrDefault(date, Set.of()))));
     }
@@ -221,6 +243,13 @@ public class CalendarService {
 
     private static Long lineageKey(Routine routine) {
         return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
+    }
+
+    private static Set<Long> lineageKeysOf(List<RoutineDayLogRow> rows, RoutineLogStatus status) {
+        return rows.stream()
+                .filter(row -> row.getStatus() == status)
+                .map(RoutineDayLogRow::getLineageKey)
+                .collect(Collectors.toSet());
     }
 
     // 마감일이 정확히 그날인 투두만
