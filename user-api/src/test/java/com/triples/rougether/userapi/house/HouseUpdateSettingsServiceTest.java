@@ -61,7 +61,7 @@ class HouseUpdateSettingsServiceTest {
     void 지정한_필드만_바뀌고_나머지는_유지된다() {
         House house = realHouse();
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         HouseUpdateResponse response = houseCommandService.updateSettings(7L, 1L,
@@ -79,7 +79,7 @@ class HouseUpdateSettingsServiceTest {
     void 모든_필드를_한_번에_수정할_수_있다() {
         House house = realHouse();
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         houseCommandService.updateSettings(7L, 1L,
@@ -97,7 +97,7 @@ class HouseUpdateSettingsServiceTest {
         house.increaseMemberCount();
         house.increaseMemberCount(); // 현재 3명
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
@@ -112,7 +112,7 @@ class HouseUpdateSettingsServiceTest {
         House house = realHouse();
         house.increaseMemberCount(); // 현재 2명
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         houseCommandService.updateSettings(7L, 1L, new HouseUpdateRequest(null, null, null, 2, null));
@@ -124,7 +124,7 @@ class HouseUpdateSettingsServiceTest {
     void 빈_요청은_아무것도_바꾸지_않는다() {
         House house = realHouse();
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         HouseUpdateResponse response = houseCommandService.updateSettings(7L, 1L,
@@ -140,7 +140,7 @@ class HouseUpdateSettingsServiceTest {
     void 공개_여부를_양방향으로_전환할_수_있다() {
         House house = realHouse(); // 일반 생성 집은 공개로 시작
         HouseMember owner = ownerMember();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(owner));
 
         HouseUpdateResponse hidden = houseCommandService.updateSettings(7L, 1L,
@@ -161,7 +161,7 @@ class HouseUpdateSettingsServiceTest {
         HouseMember member = mock(HouseMember.class);
         when(member.isActive()).thenReturn(true);
         when(member.getRole()).thenReturn(HouseMemberRole.MEMBER);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.of(member));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
@@ -173,7 +173,7 @@ class HouseUpdateSettingsServiceTest {
     @Test
     void 비구성원도_403() {
         House house = realHouse();
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(house));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(house));
         when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
@@ -183,7 +183,7 @@ class HouseUpdateSettingsServiceTest {
 
     @Test
     void 없는_집은_404() {
-        when(houseRepository.findById(99L)).thenReturn(Optional.empty());
+        when(houseRepository.findWithLockById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 99L,
                 new HouseUpdateRequest("새 이름", null, null, null, null)))
@@ -194,7 +194,7 @@ class HouseUpdateSettingsServiceTest {
     void 삭제된_집은_404() {
         House deleted = mock(House.class);
         when(deleted.isDeleted()).thenReturn(true);
-        when(houseRepository.findById(1L)).thenReturn(Optional.of(deleted));
+        when(houseRepository.findWithLockById(1L)).thenReturn(Optional.of(deleted));
 
         assertThatThrownBy(() -> houseCommandService.updateSettings(7L, 1L,
                 new HouseUpdateRequest("새 이름", null, null, null, null)))

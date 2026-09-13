@@ -3,6 +3,7 @@ package com.triples.rougether.domain.house.repository;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,6 +68,31 @@ public interface HouseRepository extends JpaRepository<House, Long> {
                                                                @Param("userId") Long userId,
                                                                @Param("status") HouseMemberStatus status,
                                                                Pageable pageable);
+
+    // 엔티티를 미리 로딩하지 않고 후보 ID만 조회함. 실제 합류는 집 락 이후 조건을 다시 검사함.
+    @Query("select h.id from House h where h.id > :afterId and h.deletedAt is null "
+            + "and h.isPublic = true and h.onboardingAutoJoinEnabled = true "
+            + "and h.owner.id <> :userId and h.owner.bot = false and h.owner.deletedAt is null "
+            + "and exists (select 1 from HouseMember human where human.house = h and human.user.bot = false "
+            + "and human.status = com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE) "
+            + "and (h.maxMembers is null or (select count(hm) from HouseMember hm "
+            + "where hm.house = h and hm.status = com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE "
+            + "and hm.user.bot = false) < h.maxMembers) "
+            + "and not exists (select 1 from HouseMember hm where hm.house = h and hm.user.id = :userId) "
+            + "and not exists (select 1 from HouseJoinRequest r where r.house = h and r.user.id = :userId) "
+            + "order by h.id asc")
+    List<Long> findOnboardingCandidates(@Param("userId") Long userId,
+                                                 @Param("afterId") Long afterId, Pageable pageable);
+
+    @Query("select h.id from House h where h.deletedAt is null and h.isPublic = false "
+            + "and h.owner.id = :userId "
+            + "and exists (select 1 from HouseMember me where me.house = h and me.user.id = :userId "
+            + "and me.role = com.triples.rougether.domain.house.entity.HouseMemberRole.OWNER "
+            + "and me.status = com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE) "
+            + "and (select count(hm) from HouseMember hm where hm.house = h "
+            + "and hm.status = com.triples.rougether.domain.house.entity.HouseMemberStatus.ACTIVE "
+            + "and hm.user.bot = false) = 1 order by h.id asc")
+    List<Long> findPersonalOnboardingCandidates(@Param("userId") Long userId, Pageable pageable);
 
     boolean existsByInviteCode(String inviteCode);
 }
