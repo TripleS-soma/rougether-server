@@ -1,3 +1,16 @@
+activity:
+  batch:
+    enabled: ${ACTIVITY_BATCH_ENABLED:false}
+    size: ${ACTIVITY_BATCH_SIZE:100}
+    queue-capacity: ${ACTIVITY_BATCH_QUEUE_CAPACITY:512}
+    collect-millis: ${ACTIVITY_BATCH_COLLECT_MILLIS:2}
+  shared-cache:
+    enabled: ${ACTIVITY_SHARED_CACHE_ENABLED:false}
+    host: ${ACTIVITY_SHARED_CACHE_HOST:localhost}
+    port: ${ACTIVITY_SHARED_CACHE_PORT:6379}
+    ssl-enabled: ${ACTIVITY_SHARED_CACHE_SSL_ENABLED:false}
+    password: ${ACTIVITY_SHARED_CACHE_PASSWORD:}
+
 spring:
   application:
     name: rougether-user-api

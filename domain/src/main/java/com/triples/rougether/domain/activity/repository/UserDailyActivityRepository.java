@@ -2,6 +2,8 @@ package com.triples.rougether.domain.activity.repository;
 
 import com.triples.rougether.domain.activity.entity.UserDailyActivity;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -27,4 +29,24 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
                            @Param("activityDate") LocalDate activityDate);
 
     long countByUserIdAndActivityDate(Long userId, LocalDate activityDate);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO user_daily_activity (user_id, activity_date, created_at)
+            SELECT u.id, :activityDate, CURRENT_TIMESTAMP
+            FROM users u
+            WHERE u.id IN (:userIds) AND u.deleted_at IS NULL AND u.is_bot = FALSE
+            ORDER BY u.id
+            ON DUPLICATE KEY UPDATE activity_date = activity_date
+            """, nativeQuery = true)
+    int insertBatchIfActiveUsers(@Param("userIds") Collection<Long> userIds,
+                                @Param("activityDate") LocalDate activityDate);
+
+    @Query(value = """
+            SELECT a.user_id FROM user_daily_activity a JOIN users u ON u.id = a.user_id
+            WHERE a.user_id IN (:userIds) AND a.activity_date = :activityDate
+              AND u.deleted_at IS NULL AND u.is_bot = FALSE
+            """, nativeQuery = true)
+    List<Long> findRecordedActiveUserIds(@Param("userIds") Collection<Long> userIds,
+                                        @Param("activityDate") LocalDate activityDate);
 }
