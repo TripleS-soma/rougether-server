@@ -4,6 +4,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.common.error.ErrorCode;
 import com.triples.rougether.common.error.ErrorResponse;
 import com.triples.rougether.userapi.global.alert.OperationalAlertNotifier;
+import com.triples.rougether.userapi.global.observability.ErrorTracker;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.slf4j.Logger;
@@ -38,14 +39,22 @@ public class GlobalExceptionHandler {
         }
     };
     private final OperationalAlertNotifier operationalAlertNotifier;
+    private final ErrorTracker errorTracker;
 
     @Autowired
-    public GlobalExceptionHandler(ObjectProvider<OperationalAlertNotifier> notifierProvider) {
-        this(notifierProvider.getIfAvailable(() -> NO_OP_NOTIFIER));
+    public GlobalExceptionHandler(ObjectProvider<OperationalAlertNotifier> notifierProvider,
+                                  ObjectProvider<ErrorTracker> errorTrackerProvider) {
+        this(notifierProvider.getIfAvailable(() -> NO_OP_NOTIFIER),
+                errorTrackerProvider.getIfAvailable(() -> ErrorTracker.NO_OP));
     }
 
     public GlobalExceptionHandler(OperationalAlertNotifier operationalAlertNotifier) {
+        this(operationalAlertNotifier, ErrorTracker.NO_OP);
+    }
+
+    public GlobalExceptionHandler(OperationalAlertNotifier operationalAlertNotifier, ErrorTracker errorTracker) {
         this.operationalAlertNotifier = operationalAlertNotifier;
+        this.errorTracker = errorTracker;
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -54,6 +63,8 @@ public class GlobalExceptionHandler {
         if (errorCode.status() >= 500) {
             log.error("business error: {} code={}, message={}",
                     endpoint(request), errorCode.code(), exception.getMessage(), exception);
+            // 5xx 비즈니스 오류만 에러 추적으로 — 4xx 는 정상 흐름이라 보내지 않음.
+            notifySafely(() -> errorTracker.captureServerError(endpoint(request), exception));
         } else {
             log.warn("business error: {} code={}, message={}",
                     endpoint(request), errorCode.code(), exception.getMessage());
@@ -121,6 +132,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
         log.error("unexpected error: {}", endpoint(request), exception);
         notifySafely(() -> operationalAlertNotifier.notifyUnexpected(endpoint(request), exception));
+        notifySafely(() -> errorTracker.captureServerError(endpoint(request), exception));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "서버 오류가 발생했습니다."));
     }

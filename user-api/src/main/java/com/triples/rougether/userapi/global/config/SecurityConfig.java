@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.global.config;
 
 import com.triples.rougether.userapi.activity.filter.UserDailyActivityFilter;
 import com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder;
+import com.triples.rougether.userapi.global.observability.RequestIdFilter;
 import com.triples.rougether.userapi.global.security.JwtAuthenticationFilter;
 import com.triples.rougether.userapi.global.security.RestAccessDeniedHandler;
 import com.triples.rougether.userapi.global.security.RestAuthenticationEntryPoint;
@@ -76,7 +77,12 @@ public class SecurityConfig {
         // 출처 목록은 설정(cors.allowed-origins)이 소유함 — 웹앱 도메인이 늘 때 코드 배포 없이 환경변수로 바꿈.
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin"));
+        // sentry-trace·baggage: 웹앱이 Sentry 분산 추적 헤더를 붙여도 preflight 가 통과하게 함(mobile #1376).
+        // X-Request-Id: 클라이언트가 자기 요청 ID 를 넘기면 서버가 이어받음(RequestIdFilter).
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin",
+                "sentry-trace", "baggage", RequestIdFilter.HEADER));
+        // 브라우저 JS 가 응답의 X-Request-Id 를 읽어 버그 제보에 첨부할 수 있게 노출함(mobile #1162).
+        configuration.setExposedHeaders(List.of(RequestIdFilter.HEADER));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

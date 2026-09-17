@@ -24,6 +24,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// 관측성(mobile #1376): Sentry 에러·트레이싱(SENTRY_DSN 없으면 비활성), Micrometer Prometheus 레지스트리(엔드포인트 비공개)
+	implementation 'io.sentry:sentry-spring-boot-4-starter:8.57.0'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'org.springframework.data:spring-data-redis'
 	implementation 'io.lettuce:lettuce-core'
 

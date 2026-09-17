@@ -42,7 +42,39 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # 공개 포트에는 health,info 만. prometheus 를 켜더라도 SecurityConfig 가 인증을 요구해 외부 공개되지 않음.
+        # 수집기를 붙일 때는 docs/operations/observability.md 의 절차(별도 관리 포트·보안그룹)를 따름.
+        include: ${MANAGEMENT_ENDPOINTS:health,info}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${ROUGETHER_ENVIRONMENT:dev}
+    distribution:
+      # HTTP 요청 지연 p50/p95/p99 — 퍼센타일 히스토그램은 Prometheus 등 수집기 쪽 집계용.
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+      slo:
+        http.server.requests: 100ms,300ms,1s
+
+# 에러 추적·트레이싱(mobile #1376). SENTRY_DSN 이 비면 SDK 비활성 — 로컬·테스트·미설정 배포 무영향.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:${ROUGETHER_ENVIRONMENT:dev}}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.2}
+  send-default-pii: false
+  # 요청 본문은 절대 싣지 않음(로그인 토큰·사용자 입력 보호).
+  max-request-body-size: none
+  # 로그 → Sentry 이벤트 연동은 끔 — 예외는 GlobalExceptionHandler 가 5xx 만 명시적으로 보냄(중복 방지).
+  logging:
+    enabled: false
+  in-app-includes: com.triples.rougether
+
+# 로그 한 줄마다 요청 ID 를 붙여 X-Request-Id·Sentry 태그와 연결함(RequestIdFilter 가 MDC 에 넣음).
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
 
 jwt:
   secret: ${JWT_SECRET:local-dev-only-secret-change-in-prod-hs256-needs-32-bytes-min}

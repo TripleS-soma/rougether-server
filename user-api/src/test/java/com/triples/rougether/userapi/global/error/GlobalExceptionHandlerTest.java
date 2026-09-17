@@ -7,6 +7,7 @@ import com.triples.rougether.common.error.ErrorCode;
 import com.triples.rougether.common.error.ErrorResponse;
 import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.userapi.global.alert.OperationalAlertNotifier;
+import com.triples.rougether.userapi.global.observability.ErrorTracker;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -94,6 +95,52 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody().code()).isEqualTo("AUTH_OAUTH_GOOGLE_TOKEN_INVALID");
     }
+    @Test
+    void 에러_추적은_예상치_못한_예외와_5xx_비즈니스_오류만_보내고_4xx는_보내지_않는다() {
+        RecordingErrorTracker tracker = new RecordingErrorTracker();
+        GlobalExceptionHandler tracked = new GlobalExceptionHandler(notifier, tracker);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/google");
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/auth/google");
+
+        tracked.handleBusiness(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_TOKEN_INVALID), request);
+        assertThat(tracker.count).isZero();
+
+        tracked.handleBusiness(new BusinessException(AuthErrorCode.OAUTH_GOOGLE_UNAVAILABLE), request);
+        assertThat(tracker.count).isEqualTo(1);
+        assertThat(tracker.endpoint).isEqualTo("POST /api/v1/auth/google");
+
+        IllegalStateException boom = new IllegalStateException("boom");
+        tracked.handleUnexpected(boom, request);
+        assertThat(tracker.count).isEqualTo(2);
+        assertThat(tracker.cause).isSameAs(boom);
+    }
+
+    @Test
+    void 에러_추적이_실패해도_응답은_그대로_500이다() {
+        GlobalExceptionHandler failing = new GlobalExceptionHandler(notifier, (endpoint, cause) -> {
+            throw new IllegalStateException("sentry down");
+        });
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/routines");
+
+        ResponseEntity<ErrorResponse> response = failing.handleUnexpected(new RuntimeException("x"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private static class RecordingErrorTracker implements ErrorTracker {
+
+        private int count;
+        private String endpoint;
+        private Throwable cause;
+
+        @Override
+        public void captureServerError(String endpoint, Throwable cause) {
+            this.count++;
+            this.endpoint = endpoint;
+            this.cause = cause;
+        }
+    }
+
 
     private static final class RecordingOperationalAlertNotifier implements OperationalAlertNotifier {
 

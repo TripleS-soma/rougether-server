@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.global.config;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +37,25 @@ class CorsConfigIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.rougether.com"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @Test
+    void 웹앱이_Sentry_추적_헤더와_요청_ID를_붙여도_preflight가_통과함() throws Exception {
+        mockMvc.perform(options("/api/v1/routines")
+                        .header(HttpHeaders.ORIGIN, "https://app.rougether.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,sentry-trace,baggage,x-request-id"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.rougether.com"));
+    }
+
+    @Test
+    void 응답의_X_Request_Id를_브라우저가_읽을_수_있게_노출함() throws Exception {
+        mockMvc.perform(get("/api/v1/health")
+                        .header(HttpHeaders.ORIGIN, "https://app.rougether.com"))
+                .andExpect(header().exists("X-Request-Id"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        org.hamcrest.Matchers.containsString("X-Request-Id")));
     }
 
     @Test
