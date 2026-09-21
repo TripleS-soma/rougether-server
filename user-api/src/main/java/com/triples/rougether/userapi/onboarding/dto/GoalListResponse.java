@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.onboarding.dto;
 import com.triples.rougether.domain.goal.entity.Goal;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 public record GoalListResponse(List<GoalItem> items) {
 
@@ -13,7 +14,7 @@ public record GoalListResponse(List<GoalItem> items) {
             @Schema(description = "정렬 순서 — 목록은 이 값 오름차순으로 정렬됨", example = "0") int sortOrder) {
 
         public static GoalItem of(Goal goal) {
-            return new GoalItem(goal.getId(), goal.getCode(), goal.getName(), goal.getSortOrder());
+            return new GoalItem(goal.getId(), goal.getCode(), CatalogNames.name(goal), goal.getSortOrder());
         }
     }
 

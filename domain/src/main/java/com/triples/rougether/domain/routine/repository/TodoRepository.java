@@ -18,6 +18,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
@@ -122,12 +123,24 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     // 리마인드 batch 투두 reader: 대상일 dueDate·대상 분 dueTime의 PENDING·살아있는 투두 중 당일 미발송만 커서 페이징 조회.
     // dueDate 없는 투두는 dueDate = :date 조건으로 자연 제외됨(알림 대상 아님).
     // RoutineRepository.findReminderCandidates와 같은 이유로 offset 대신 id 커서(id > cursorId) 페이징
+    default List<Todo> findReminderCandidates(TodoStatus status,
+                                      LocalDate date,
+                                      LocalTime dueTime,
+                                      NotificationType notificationType,
+                                      Instant dayStart,
+                                      Instant dayEndExclusive,
+                                      Long cursorId,
+                                      Pageable pageable) {
+        return findReminderCandidatesInZone(status, date, dueTime, notificationType, dayStart, dayEndExclusive, cursorId, "Asia/Seoul", pageable);
+    }
+
     @Query("""
-            select t from Todo t
+            select t from Todo t join fetch t.user
             where t.status = :status
               and t.dueDate = :date
               and t.dueTime = :dueTime
               and t.deletedAt is null
+              and t.user.deletedAt is null and t.user.timeZone = :timeZone
               and t.user.bot = false
               and t.id > :cursorId
               and not exists (select 1 from Notification n
@@ -135,14 +148,14 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                 and n.createdAt >= :dayStart and n.createdAt < :dayEndExclusive)
             order by t.id asc
             """)
-    List<Todo> findReminderCandidates(@Param("status") TodoStatus status,
+    List<Todo> findReminderCandidatesInZone(@Param("status") TodoStatus status,
                                       @Param("date") LocalDate date,
                                       @Param("dueTime") LocalTime dueTime,
                                       @Param("notificationType") NotificationType notificationType,
                                       @Param("dayStart") Instant dayStart,
                                       @Param("dayEndExclusive") Instant dayEndExclusive,
                                       @Param("cursorId") Long cursorId,
-                                      Pageable pageable);
+                                      @Param("timeZone") String timeZone, Pageable pageable);
 
     // 일일 보상 상한: KST 날짜에 완료된 투두로 지급된 코인 합계.
     // 삭제된 투두도 포함함 — 삭제는 코인을 회수하지 않으므로 집계에서 빼면 지급 한도가 부당 복구됨

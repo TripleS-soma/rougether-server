@@ -12,6 +12,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
+import java.time.ZoneId;
+import java.util.Set;
 
 // @DynamicUpdate 필수 — 전체 컬럼 UPDATE면 탈퇴와 거의 동시에 진행되던 로그인 트랜잭션의
 // recordAccess() flush가 stale deleted_at=null 을 되써서 soft delete 를 되돌릴 수 있음(dirty 필드만 갱신해 차단).
@@ -38,6 +40,12 @@ public class User extends BaseEntity {
 
     @Column(name = "email", length = 255)
     private String email;
+
+    @Column(name = "language", nullable = false, length = 10)
+    private String language = "ko";
+
+    @Column(name = "time_zone", nullable = false, length = 64)
+    private String timeZone = "Asia/Seoul";
 
     @Column(name = "last_accessed_at")
     private Instant lastAccessedAt;
@@ -102,6 +110,23 @@ public class User extends BaseEntity {
         this.nickname = null;
         this.bio = null;
         this.profileImageKey = null;
+        this.language = "ko";
+        this.timeZone = "Asia/Seoul";
+    }
+
+    public void changePreferences(String language, String timeZone) {
+        if (language != null && !Set.of("ko", "en").contains(language)) {
+            throw new IllegalArgumentException("Unsupported language");
+        }
+        if (timeZone != null && !ZoneId.getAvailableZoneIds().contains(timeZone)) {
+            throw new IllegalArgumentException("Invalid IANA time zone");
+        }
+        if (language != null) {
+            this.language = language;
+        }
+        if (timeZone != null) {
+            this.timeZone = timeZone;
+        }
     }
 
     public void changeNickname(String nickname) {

@@ -74,7 +74,7 @@ public class HouseCheerService {
 
         notificationService.send(
                 target.getUser().getId(),
-                NotificationMessages.friendCheer(requester.getUser().getNickname(), type.message()),
+                NotificationMessages.friendCheer(requester.getUser().getNickname(), type),
                 cheer.getId());
 
         return HouseCheerResponse.of(cheer, houseId, membershipId);

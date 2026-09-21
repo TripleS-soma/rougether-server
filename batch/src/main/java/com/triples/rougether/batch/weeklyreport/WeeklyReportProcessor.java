@@ -81,7 +81,7 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
                 .orElseThrow(() -> new IllegalStateException("회고 대상 사용자 없음: " + userId));
         List<UserGoal> goals = userGoalRepository.findByUserIdWithGoalOrderBySortOrder(userId);
         LlmChatRequest request = promptBuilder.build(user.getNickname(), user.getBio(), goals,
-                weekStart, weekEnd, stats, acceptedAdjustments(userId));
+                weekStart, weekEnd, stats, acceptedAdjustments(userId), user.getLanguage());
 
         String statsJson = toJson(stats);
         Instant generatedAt = Instant.now(clock);
@@ -90,7 +90,9 @@ class WeeklyReportProcessor implements ItemProcessor<Long, WeeklyReport> {
             return WeeklyReport.generated(user, weekStart, weekEnd, llmProperties.model(), statsJson,
                     parsed.get().summary(), toJson(parsed.get().sections()), generatedAt);
         }
-        String fallbackSummary = FALLBACK_SUMMARY_FORMAT.formatted(stats.scheduledCount(), stats.completedCount());
+        String fallbackSummary = "en".equals(user.getLanguage())
+                ? "You completed %d of %d routines this week.".formatted(stats.completedCount(), stats.scheduledCount())
+                : FALLBACK_SUMMARY_FORMAT.formatted(stats.scheduledCount(), stats.completedCount());
         return WeeklyReport.fallback(user, weekStart, weekEnd, statsJson, fallbackSummary,
                 toJson(WeeklyReportSections.empty()), generatedAt);
     }

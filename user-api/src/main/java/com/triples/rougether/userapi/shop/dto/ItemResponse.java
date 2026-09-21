@@ -4,6 +4,7 @@ import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.Theme;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // 상점 아이템 응답. 이미지는 전체 URL 이 아니라 assetKey 로 내려주고, 프론트가 CDN base 와 조합(spec).
 public record ItemResponse(
@@ -65,7 +66,7 @@ public record ItemResponse(
         Theme t = item.getTheme();
         return new ItemResponse(
                 item.getId(),
-                item.getName(),
+                CatalogNames.name(item),
                 item.getAssetKey(),
                 item.getPlacementType(),
                 item.getSurfaceSlotType(),
@@ -78,7 +79,7 @@ public record ItemResponse(
                 item.getPurchaseCurrencyType() != null ? item.getPurchaseCurrencyType().name() : null,
                 item.getPriceAmount(),
                 item.isLimited(),
-                new ThemeSummary(t.getId(), t.getCode(), t.getName(), t.getCoverImageKey()),
+                new ThemeSummary(t.getId(), t.getCode(), CatalogNames.name(t), t.getCoverImageKey()),
                 owned);
     }
 }

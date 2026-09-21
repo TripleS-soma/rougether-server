@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import java.util.Map;
 
 // AI 조정 추천(#329). 주간 배치가 실패 패턴 룰로 만든 반복 스케줄 조정 제안 1건 — 적용은 사용자 수락으로만.
 // originRoutineId 는 대상 루틴 계보 루트, routineId 는 생성 시점의 대상 버전(수락 시 계보 현재 버전과 다르면 stale 거부),
@@ -60,6 +61,19 @@ public class RoutineRecommendation extends BaseCreatedEntity {
 
     @Column(name = "message", length = MESSAGE_MAX_LENGTH, nullable = false)
     private String message;
+
+    @Column(name = "message_code", length = 40)
+    private String messageCode;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "message_params")
+    private Map<String, Object> messageParams;
+
+    public RoutineRecommendation withMessageTemplate(String code, Map<String, Object> params) {
+        this.messageCode = code;
+        this.messageParams = params == null ? null : Map.copyOf(params);
+        return this;
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)

@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +45,7 @@ public class AppIconReminderService {
     public void stage(Long userId) {
         User user = userRepository.findByIdForUpdate(userId).orElse(null);
         Instant now = clock.instant();
-        if (!isEligible(user) || !isDeliveryTime(now)) {
+        if (!isEligible(user) || !isDeliveryTime(now, user.getTimeZone())) {
             return;
         }
         UserAppActivity activity = activityRepository.findById(userId).orElse(null);
@@ -57,7 +58,7 @@ public class AppIconReminderService {
         }
         Notification notification = notificationRepository.save(Notification.create(
                 user, NotificationType.APP_INACTIVITY_REMINDER,
-                AppIconReminderMessage.title(state), AppIconReminderMessage.body(state), userId));
+                AppIconReminderMessage.title(state, user.getLanguage()), AppIconReminderMessage.body(state, user.getLanguage()), userId));
         activity.recordNotification(state, notification.getId());
     }
 
@@ -80,7 +81,7 @@ public class AppIconReminderService {
             return;
         }
         // 처리 중 21시를 넘긴 PENDING은 다음 허용 시간까지 보류함.
-        if (!isDeliveryTime(now)) {
+        if (!isDeliveryTime(now, user.getTimeZone())) {
             return;
         }
         pushWriter.write(new Chunk<>(notification));
@@ -101,7 +102,11 @@ public class AppIconReminderService {
     }
 
     static boolean isDeliveryTime(Instant now) {
-        int hour = now.atZone(AppIconPolicy.KST).getHour();
+        return isDeliveryTime(now, "Asia/Seoul");
+    }
+
+    static boolean isDeliveryTime(Instant now, String timeZone) {
+        int hour = now.atZone(ZoneId.of(timeZone)).getHour();
         return hour >= 9 && hour < 21;
     }
 

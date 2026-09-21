@@ -17,7 +17,6 @@ import org.springframework.batch.infrastructure.item.ItemProcessor;
 
 class EveningDigestProcessor implements ItemProcessor<User, EveningDigestDraft> {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RoutineRepository routineRepository;
     private final TodoRepository todoRepository;
@@ -37,7 +36,7 @@ class EveningDigestProcessor implements ItemProcessor<User, EveningDigestDraft> 
                 .findDailyIncompleteDigestRoutineCandidates(
                         userId,
                         targetDate,
-                        targetDate.plusDays(1).atStartOfDay(KST).toInstant(),
+                        targetDate.plusDays(1).atStartOfDay(ZoneId.of(user.getTimeZone())).toInstant(),
                         RoutineStatus.ACTIVE,
                         RoutineLogStatus.COMPLETED)
                 .stream()

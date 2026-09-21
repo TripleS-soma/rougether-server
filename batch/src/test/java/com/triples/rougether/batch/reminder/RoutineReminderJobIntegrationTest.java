@@ -51,7 +51,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.stereotype.Component;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = RoutineReminderJobIntegrationTest.TestConfig.class)
 @SpringBatchTest
@@ -392,7 +393,7 @@ class RoutineReminderJobIntegrationTest {
 
     private void runJob(LocalDate date, LocalTime time) throws Exception {
         JobExecution execution = jobOperatorTestUtils.startJob(targetMinuteParams(date, time));
-        assertThat(execution.getStatus()).isEqualTo(org.springframework.batch.core.BatchStatus.COMPLETED);
+        assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
     }
 
     private JobParameters targetMinuteParams(LocalDate date, LocalTime time) {
@@ -421,5 +422,45 @@ class RoutineReminderJobIntegrationTest {
             sb.append('"').append(tokens[i]).append('"');
         }
         return sb.append("]}").toString();
+    }
+
+    @Test
+    void 해외_예약은_현지_날짜와_요일로_판정하고_한국_사용자를_섞지_않는다() throws Exception {
+        User english = User.signUp();
+        english.changePreferences("en", "America/Los_Angeles");
+        userRepository.save(english);
+        User korean = userRepository.save(User.signUp());
+        // KST 화요일 02:00 = LA 월요일 09:00 (겨울 UTC-8)
+        Routine target = persistRoutine(english, "Read 책", "WEEKLY", weekdaysJson("MON"), LocalTime.of(9, 0), null, null);
+        persistRoutine(korean, "한국 오전", "DAILY", null, LocalTime.of(9, 0), null, null);
+        JobExecution execution = jobOperatorTestUtils.startJob(new JobParametersBuilder()
+                .addString(RoutineReminderJobConfig.TARGET_MINUTE_PARAM, "2026-01-06T02:00")
+                .addLong("testRun", System.nanoTime()).toJobParameters());
+        assertThat(execution.getStatus().toString()).isEqualTo("COMPLETED");
+        assertThat(notificationRepository.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getRefId()).isEqualTo(target.getId());
+            assertThat(n.getTitle()).isEqualTo("Routine reminder");
+            assertThat(n.getBody()).isEqualTo("Time for “Read 책”!");
+        });
+    }
+
+    @Autowired private JdbcTemplate jdbc;
+
+    @Test
+    void 서머타임_종료로_같은_예약_시각이_두번_와도_하루_한번만_적재한다() throws Exception {
+        User user = User.signUp();
+        user.changePreferences("en", "America/New_York");
+        userRepository.save(user);
+        persistRoutine(user, "Read", "DAILY", null, LocalTime.of(1, 30), null, null);
+        jobOperatorTestUtils.startJob(new JobParametersBuilder()
+                .addString(RoutineReminderJobConfig.TARGET_MINUTE_PARAM, "2026-11-01T14:30")
+                .addLong("testRun", System.nanoTime()).toJobParameters());
+        assertThat(notificationRepository.findAll()).hasSize(1);
+        // 테스트 실행일과 무관하게 첫 현지 01:30의 저장 시각을 재현한다.
+        jdbc.update("update notification set created_at = ?", java.sql.Timestamp.from(Instant.parse("2026-11-01T05:30:00Z")));
+        jobOperatorTestUtils.startJob(new JobParametersBuilder()
+                .addString(RoutineReminderJobConfig.TARGET_MINUTE_PARAM, "2026-11-01T15:30")
+                .addLong("testRun", System.nanoTime()).toJobParameters());
+        assertThat(notificationRepository.findAll()).hasSize(1);
     }
 }

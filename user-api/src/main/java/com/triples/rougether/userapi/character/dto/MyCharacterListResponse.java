@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // GET /api/v1/me/characters 응답. 보유 캐릭터 목록 - 마스터 정렬(sortOrder) 순.
 public record MyCharacterListResponse(List<MyCharacterItem> items) {
@@ -45,7 +46,7 @@ public record MyCharacterListResponse(List<MyCharacterItem> items) {
                     userCharacter.getId(),
                     character.getId(),
                     character.getCode(),
-                    character.getName(),
+                    CatalogNames.name(character),
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     CharacterPoseResponse.activeOf(character),

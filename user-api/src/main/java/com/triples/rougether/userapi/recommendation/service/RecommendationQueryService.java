@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import com.triples.rougether.common.i18n.RecommendationMessage;
+import com.triples.rougether.userapi.global.i18n.RequestLanguage;
 
 // 내 활성 조정 추천 목록(#329). 만료·루틴 삭제·stale(생성 뒤 스케줄 선수정)은 상태 전이 없이 여기서 lazy 로
 // 걸러 낸다 — ACTIVE 인 채 조용히 빠진 건은 지표에서 무반응 종결로 집계된다.
@@ -50,7 +52,10 @@ public class RecommendationQueryService {
                 continue;
             }
             items.add(new RecommendationItem(recommendation.getId(), recommendation.getRecType(),
-                    recommendation.getMessage(), current.getId(), recommendation.getOriginRoutineId(),
+                    RecommendationMessage.render(
+                            recommendation.getMessageCode(), recommendation.getMessageParams(),
+                            RequestLanguage.current(), recommendation.getMessage()),
+                    recommendation.getMessageCode(), recommendation.getMessageParams(), current.getId(), recommendation.getOriginRoutineId(),
                     current.getTitle(), proposal, recommendation.getCreatedAt(),
                     recommendation.getExpiresAt()));
         }

@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // GET /api/v1/rooms/me 응답: 방 성장 + 착용 캐릭터 + 슬롯 배치 + 자유배치 + 스트릭.
 // layoutFormat/layoutRevision/placements 는 자유배치 도입으로 추가된 additive 필드 — 구버전 앱은 무시하고 slots 만 쓴다.
@@ -123,7 +124,7 @@ public record RoomResponse(
             Map<Long, List<CharacterAccessoryRenderProfile>> byItem =
                     renderProfiles.getOrDefault(userCharacter.getId(), Map.of());
             return new RoomCharacterResponse(
-                    character.getId(), character.getCode(), character.getName(), character.getBaseAssetKey(),
+                    character.getId(), character.getCode(), CatalogNames.name(character), character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     accessories.stream()
                             .map(accessory -> EquippedAccessoryResponse.of(

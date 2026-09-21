@@ -43,8 +43,8 @@ final class EveningDigestStageWriter implements ItemWriter<EveningDigestDraft> {
         Notification notification = notificationRepository.save(Notification.create(
                 draft.user(),
                 NotificationType.DAILY_INCOMPLETE_DIGEST,
-                EveningDigestMessage.TITLE,
-                EveningDigestMessage.body(draft.routineCount(), draft.todoCount()),
+                EveningDigestMessage.title(draft.user().getLanguage()),
+                EveningDigestMessage.body(draft.routineCount(), draft.todoCount(), draft.user().getLanguage()),
                 digest.getId()));
         digest.linkNotification(notification);
     }

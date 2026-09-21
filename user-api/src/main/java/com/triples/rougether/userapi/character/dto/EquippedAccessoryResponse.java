@@ -7,6 +7,7 @@ import com.triples.rougether.domain.shop.entity.UserItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 public record EquippedAccessoryResponse(
         @Schema(description = "보유 아이템 ID", example = "77")
@@ -33,7 +34,7 @@ public record EquippedAccessoryResponse(
         return new EquippedAccessoryResponse(
                 userItem.getId(),
                 item.getId(),
-                item.getName(),
+                CatalogNames.name(item),
                 item.getAssetKey(),
                 accessory.getCharacterSlotType(),
                 renderProfiles.stream().map(AccessoryRenderProfileResponse::of).toList(),

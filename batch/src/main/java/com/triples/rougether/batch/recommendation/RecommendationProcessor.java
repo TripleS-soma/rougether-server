@@ -125,7 +125,8 @@ class RecommendationProcessor implements ItemProcessor<Long, RecommendationProce
                 .filter(proposal -> !cooldownLineages.contains(proposal.originRoutineId()))
                 .limit(budget)
                 .map(proposal -> RoutineRecommendation.rule(user, proposal.originRoutineId(), proposal.routineId(),
-                        RecommendationType.ADJUST_DAYS, toJson(proposal), proposal.message(), expiresAt))
+                        RecommendationType.ADJUST_DAYS, toJson(proposal), proposal.message(), expiresAt)
+                        .withMessageTemplate(proposal.messageCode(), proposal.messageParams()))
                 .toList();
         return recommendations;
     }

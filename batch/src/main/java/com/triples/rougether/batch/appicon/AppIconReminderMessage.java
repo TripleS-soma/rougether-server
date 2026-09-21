@@ -1,6 +1,7 @@
 package com.triples.rougether.batch.appicon;
 
 import com.triples.rougether.domain.appicon.AppIconState;
+import com.triples.rougether.common.i18n.Language;
 
 final class AppIconReminderMessage {
 
@@ -23,5 +24,26 @@ final class AppIconReminderMessage {
             case SOBBING -> "오랜만이어도 괜찮다냥. 네 자리는 그대로 있다냥.";
             default -> throw new IllegalArgumentException("미접속 상태만 알림을 보낼 수 있음");
         };
+    }
+    static String title(AppIconState state, String language) {
+        String english = switch (state) {
+            case MISSING_YOU -> "Your cat is waiting for you";
+            case TEARY -> "I miss you…";
+            case SOBBING -> "When will you be back?";
+            default -> throw new IllegalArgumentException("Inactivity state required");
+        };
+        return lang(language).choose(title(state), english);
+    }
+    static String body(AppIconState state, String language) {
+        String english = switch (state) {
+            case MISSING_YOU -> "How was your day? Come say hello for a moment.";
+            case TEARY -> "It's been quiet for a few days. Shall we try one thing together?";
+            case SOBBING -> "It's okay if it's been a while. Your place is still here.";
+            default -> throw new IllegalArgumentException("Inactivity state required");
+        };
+        return lang(language).choose(body(state), english);
+    }
+    private static Language lang(String language) {
+        return Language.from(language);
     }
 }

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // GET /api/v1/me/items 응답. 인벤토리(보유 아이템) - 최근 획득 먼저.
 public record MyItemListResponse(List<MyItemSummary> items) {
@@ -53,7 +54,7 @@ public record MyItemListResponse(List<MyItemSummary> items) {
             return new MyItemSummary(
                     userItem.getId(),
                     item.getId(),
-                    item.getName(),
+                    CatalogNames.name(item),
                     item.getAssetKey(),
                     item.getCategoryCode(),
                     item.getPlacementType(),
@@ -63,7 +64,7 @@ public record MyItemListResponse(List<MyItemSummary> items) {
                     item.getDefaultScale(),
                     item.getDefaultPositionX(),
                     item.getDefaultPositionY(),
-                    new ItemResponse.ThemeSummary(theme.getId(), theme.getCode(), theme.getName(),
+                    new ItemResponse.ThemeSummary(theme.getId(), theme.getCode(), CatalogNames.name(theme),
                             theme.getCoverImageKey()),
                     userItem.getAcquiredAt());
         }

@@ -35,6 +35,9 @@ public class AdminNotificationService {
 
     public void send(Long userId, NotificationType type, String title, String body, Long refId) {
         User user = userRepository.getReferenceById(userId);
+        if (type == NotificationType.BUG_REPORT_REPLY && "en".equals(user.getLanguage())) {
+            title = "You have a reply to your report";
+        }
         Notification notification = notificationRepository.save(
                 Notification.create(user, type, title, body, refId));
 

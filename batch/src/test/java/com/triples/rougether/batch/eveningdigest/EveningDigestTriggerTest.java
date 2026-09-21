@@ -23,6 +23,8 @@ import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
+import com.triples.rougether.domain.member.repository.UserRepository;
+import java.util.List;
 
 class EveningDigestTriggerTest {
 
@@ -88,12 +90,31 @@ class EveningDigestTriggerTest {
 
     private EveningDigestTrigger triggerAt(LocalDateTime kstNow) {
         Instant instant = ZonedDateTime.of(kstNow, KST).toInstant();
-        return new EveningDigestTrigger(jobOperator, job, Clock.fixed(instant, KST));
+        return new EveningDigestTrigger(jobOperator, job, Clock.fixed(instant, KST), users());
     }
 
     private static JobExecution execution(BatchStatus status) {
         JobExecution execution = mock(JobExecution.class);
         when(execution.getStatus()).thenReturn(status);
         return execution;
+    }
+    private static UserRepository users() {
+        var users = mock(UserRepository.class);
+        when(users.findActiveTimeZones()).thenReturn(List.of("Asia/Seoul"));
+        return users;
+    }
+
+    @Test
+    void 한국이_아침이어도_뉴욕_저녁이면_뉴욕_날짜만_시작한다() throws Exception {
+        var users = users();
+        when(users.findActiveTimeZones()).thenReturn(List.of("Asia/Seoul", "America/New_York", "Asia/Kathmandu"));
+        JobExecution completed = execution(BatchStatus.COMPLETED);
+        when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(completed);
+        new EveningDigestTrigger(jobOperator, job,
+                Clock.fixed(Instant.parse("2026-09-21T01:00:00Z"), KST), users).triggerHourly();
+        var params = ArgumentCaptor.forClass(JobParameters.class);
+        verify(jobOperator).start(any(Job.class), params.capture());
+        assertThat(params.getValue().getString("targetDate")).isEqualTo("2026-09-20");
+        assertThat(params.getValue().getString("timeZone")).isEqualTo("America/New_York");
     }
 }

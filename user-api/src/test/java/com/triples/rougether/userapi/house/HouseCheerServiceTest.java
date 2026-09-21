@@ -181,7 +181,8 @@ class HouseCheerServiceTest {
 
         // 알림 진입점을 같은 트랜잭션에서 직접 호출한다 - 내역 저장은 응원과 원자적(spec 계약)
         verify(notificationService).send(TARGET_USER_ID, new NotificationContent(
-                NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!"), 31L);
+                NotificationType.FRIEND_CHEER, "응원이 도착했어요", "진형님: 응원해요!",
+                "Someone is cheering you on", "진형: I'm cheering you on!"), 31L);
     }
 
 

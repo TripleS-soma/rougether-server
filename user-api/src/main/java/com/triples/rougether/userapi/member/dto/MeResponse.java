@@ -16,6 +16,12 @@ public record MeResponse(
         @Schema(description = "마지막 접속 시각(UTC) — 로그인 또는 refresh 재발급 성공 시 갱신되며 이력이 없으면 null", example = "2026-07-05T03:34:56Z")
         Instant lastAccessedAt,
         @Schema(description = "온보딩 진행 요약 — completed로 온보딩 화면 진입 여부 판단에 사용")
-        OnboardingSummary onboarding
+        OnboardingSummary onboarding,
+        @Schema(description = "서버 알림·AI 회고 언어", example = "ko") String language,
+        @Schema(description = "개인 리마인드 시간대", example = "Asia/Seoul") String timeZone
 ) {
+    public MeResponse(Long userId, String nickname, String bio, String profileImageKey,
+                      Instant lastAccessedAt, OnboardingSummary onboarding) {
+        this(userId, nickname, bio, profileImageKey, lastAccessedAt, onboarding, "ko", "Asia/Seoul");
+    }
 }

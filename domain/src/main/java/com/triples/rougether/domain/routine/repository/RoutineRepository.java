@@ -81,9 +81,21 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
     // cursorId 커서(id > cursorId)로 페이징함 - 처리된 루틴이 NOT EXISTS 조건에서 즉시 빠지는 쿼리라
     // offset 기반 페이징은 처리 도중 결과셋이 줄어들며 밀려서 못 읽는 구간이 생김(id는 처리 여부와 무관하게 단조증가)
     // 동거 봇(#308)의 루틴은 리마인드 대상이 아니다(알림 받을 주체 없음).
-    @Query("select r from Routine r "
+    default List<Routine> findReminderCandidates(RoutineStatus status,
+                                         LocalTime scheduledTime,
+                                         LocalDate date,
+                                         RoutineLogStatus completedStatus,
+                                         NotificationType notificationType,
+                                         Instant dayStart,
+                                         Instant dayEndExclusive,
+                                         Long cursorId,
+                                         Pageable pageable) {
+        return findReminderCandidatesInZone(status, scheduledTime, date, completedStatus, notificationType, dayStart, dayEndExclusive, cursorId, "Asia/Seoul", pageable);
+    }
+
+    @Query("select r from Routine r join fetch r.user "
             + "where r.status = :status and r.scheduledTime = :scheduledTime and r.deletedAt is null "
-            + "and r.user.bot = false "
+            + "and r.user.bot = false and r.user.deletedAt is null and r.user.timeZone = :timeZone "
             + "and r.id > :cursorId "
             + "and not exists (select 1 from RoutineLog l "
             + "  where l.routine = r and l.routineDate = :date "
@@ -94,7 +106,7 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
             + "  where n.user = r.user and n.type = :notificationType and n.refId = r.id "
             + "  and n.createdAt >= :dayStart and n.createdAt < :dayEndExclusive) "
             + "order by r.id asc")
-    List<Routine> findReminderCandidates(@Param("status") RoutineStatus status,
+    List<Routine> findReminderCandidatesInZone(@Param("status") RoutineStatus status,
                                          @Param("scheduledTime") LocalTime scheduledTime,
                                          @Param("date") LocalDate date,
                                          @Param("completedStatus") RoutineLogStatus completedStatus,
@@ -102,7 +114,7 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
                                          @Param("dayStart") Instant dayStart,
                                          @Param("dayEndExclusive") Instant dayEndExclusive,
                                          @Param("cursorId") Long cursorId,
-                                         Pageable pageable);
+                                         @Param("timeZone") String timeZone, Pageable pageable);
 
     // 조정 추천(#329): 계보의 현재 살아있는 버전. 버전 모델상 계보당 살아있는 row 는 최대 1개라는 가정에
     // 기대며(강제 unique 제약은 없음 — 동시 수정 race 로 2개가 되면 이 Optional 조회가 예외로 드러낸다),

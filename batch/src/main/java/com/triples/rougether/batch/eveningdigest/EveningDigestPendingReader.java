@@ -18,11 +18,11 @@ import org.springframework.data.domain.PageRequest;
 class EveningDigestPendingReader implements ItemReader<Notification> {
 
     private static final int PAGE_SIZE = 200;
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final NotificationRepository notificationRepository;
     private final LocalDate targetDate;
     private final Clock clock;
+    private final String timeZone;
 
     private Iterator<Notification> currentBatch = Collections.emptyIterator();
     private long cursorId;
@@ -30,16 +30,17 @@ class EveningDigestPendingReader implements ItemReader<Notification> {
 
     @Override
     public Notification read() {
-        if (!targetDate.equals(LocalDate.now(clock.withZone(KST)))) {
+        if (!targetDate.equals(LocalDate.now(clock.withZone(ZoneId.of(timeZone))))) {
             exhausted = true;
             return null;
         }
         if (!currentBatch.hasNext() && !exhausted) {
-            List<Notification> batch = notificationRepository.findDailyDigestPending(
+            List<Notification> batch = notificationRepository.findDailyDigestPendingInZone(
                     NotificationType.DAILY_INCOMPLETE_DIGEST,
                     PushStatus.PENDING,
                     targetDate,
                     cursorId,
+                    timeZone,
                     PageRequest.of(0, PAGE_SIZE));
             if (batch.isEmpty()) {
                 exhausted = true;

@@ -4,6 +4,7 @@ import com.triples.rougether.domain.gacha.entity.Gacha;
 import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.domain.shared.CurrencyType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // 뽑기 머신 정보. GET /api/v1/gacha, GET /api/v1/gacha/{id}.
 public record GachaResponse(
@@ -36,7 +37,7 @@ public record GachaResponse(
         return new GachaResponse(
                 gacha.getId(),
                 gacha.getCode(),
-                gacha.getName(),
+                CatalogNames.name(gacha),
                 gacha.getCategory(),
                 gacha.getTheme() != null ? gacha.getTheme().getId() : null,
                 giftBoxAssetKey,

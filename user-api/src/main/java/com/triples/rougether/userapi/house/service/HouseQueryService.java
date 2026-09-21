@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // 공개 집 탐색 목록. 최신 생성순 기본, goalCode 필터 1차 지원. 탐색·추천 겸용(별도 추천 엔드포인트 없음).
 @Service
@@ -249,6 +250,6 @@ public class HouseQueryService {
         return new GoalSummary(
                 houseGoal.getGoal().getId(),
                 houseGoal.getGoal().getCode(),
-                houseGoal.getGoal().getName());
+                CatalogNames.name(houseGoal.getGoal()));
     }
 }

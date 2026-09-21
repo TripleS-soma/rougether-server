@@ -4,16 +4,11 @@ import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.entity.NotificationType;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.domain.routine.entity.Routine;
-import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
-import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
-import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -27,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
+import com.triples.rougether.domain.member.repository.UserRepository;
 
 // reminderJob: Step1(루틴 판정·적재) -> Step2(투두 판정·적재) -> Step3(발송)
 @Configuration
@@ -75,7 +71,7 @@ class RoutineReminderJobConfig {
                 .transactionManager(transactionManager)
                 .reader(todoReminderCandidateReader)
                 .processor(todo -> Notification.create(todo.getUser(), NotificationType.TODO_REMINDER,
-                        ReminderMessage.TODO_TITLE, ReminderMessage.todoBody(todo.getTitle()), todo.getId()))
+                        ReminderMessage.todoTitle(todo.getUser().getLanguage()), ReminderMessage.todoBody(todo.getTitle(), todo.getUser().getLanguage()), todo.getId()))
                 .writer(chunk -> notificationRepository.saveAll(chunk.getItems()))
                 .faultTolerant()
                 .skip(Exception.class)
@@ -97,37 +93,27 @@ class RoutineReminderJobConfig {
     @Bean
     @StepScope
     ReminderCandidateReader reminderCandidateReader(RoutineRepository routineRepository,
+            UserRepository users,
             @Value("#{jobParameters['" + TARGET_MINUTE_PARAM + "']}") String targetMinuteParam) {
-        LocalDateTime targetMinute = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT);
-        LocalDate date = targetMinute.toLocalDate();
-        LocalTime time = targetMinute.toLocalTime();
-        Instant dayStart = date.atStartOfDay(KST).toInstant();
-        Instant dayEndExclusive = date.plusDays(1).atStartOfDay(KST).toInstant();
-
-        return new ReminderCandidateReader(routineRepository, RoutineStatus.ACTIVE, time, date,
-                RoutineLogStatus.COMPLETED, NotificationType.ROUTINE_REMINDER, dayStart, dayEndExclusive);
+        Instant instant = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT).atZone(KST).toInstant();
+        return new ReminderCandidateReader(routineRepository, instant, users.findActiveTimeZones());
     }
 
     @Bean
     @StepScope
     ReminderNotificationProcessor reminderNotificationProcessor(
             @Value("#{jobParameters['" + TARGET_MINUTE_PARAM + "']}") String targetMinuteParam) {
-        LocalDate date = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT).toLocalDate();
-        return new ReminderNotificationProcessor(date);
+        Instant instant = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT).atZone(KST).toInstant();
+        return new ReminderNotificationProcessor(instant);
     }
 
     @Bean
     @StepScope
     TodoReminderCandidateReader todoReminderCandidateReader(TodoRepository todoRepository,
+            UserRepository users,
             @Value("#{jobParameters['" + TARGET_MINUTE_PARAM + "']}") String targetMinuteParam) {
-        LocalDateTime targetMinute = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT);
-        LocalDate date = targetMinute.toLocalDate();
-        LocalTime time = targetMinute.toLocalTime();
-        Instant dayStart = date.atStartOfDay(KST).toInstant();
-        Instant dayEndExclusive = date.plusDays(1).atStartOfDay(KST).toInstant();
-
-        return new TodoReminderCandidateReader(todoRepository, TodoStatus.PENDING, date, time,
-                NotificationType.TODO_REMINDER, dayStart, dayEndExclusive);
+        Instant instant = LocalDateTime.parse(targetMinuteParam, TARGET_MINUTE_FORMAT).atZone(KST).toInstant();
+        return new TodoReminderCandidateReader(todoRepository, instant, users.findActiveTimeZones());
     }
 
     @Bean

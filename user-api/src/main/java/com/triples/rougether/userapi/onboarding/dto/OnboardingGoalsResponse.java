@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.onboarding.dto;
 import com.triples.rougether.domain.goal.entity.UserGoal;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 public record OnboardingGoalsResponse(
         @Schema(description = "저장된 목표 목록 — sortOrder 오름차순")
@@ -18,7 +19,7 @@ public record OnboardingGoalsResponse(
             return new GoalSelection(
                     userGoal.getGoal().getId(),
                     userGoal.getGoal().getCode(),
-                    userGoal.getGoal().getName());
+                    CatalogNames.name(userGoal.getGoal()));
         }
     }
 

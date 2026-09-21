@@ -19,6 +19,7 @@ class EveningDigestUserReader implements ItemReader<User> {
     private final UserRepository userRepository;
     private final LocalDate targetDate;
     private final Instant dayEndExclusive;
+    private final String timeZone;
 
     private Iterator<User> currentBatch = Collections.emptyIterator();
     private long cursorId;
@@ -27,8 +28,8 @@ class EveningDigestUserReader implements ItemReader<User> {
     @Override
     public User read() {
         if (!currentBatch.hasNext() && !exhausted) {
-            List<User> batch = userRepository.findDailyIncompleteDigestCandidates(
-                    targetDate, dayEndExclusive, cursorId, PageRequest.of(0, PAGE_SIZE));
+            List<User> batch = userRepository.findDailyIncompleteDigestCandidatesInZone(
+                    targetDate, dayEndExclusive, cursorId, timeZone, PageRequest.of(0, PAGE_SIZE));
             if (batch.isEmpty()) {
                 exhausted = true;
             } else {

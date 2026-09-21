@@ -27,6 +27,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import com.triples.rougether.domain.house.entity.CheerType;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
+import java.time.Instant;
+import org.springframework.core.task.TaskRejectedException;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -81,7 +85,7 @@ class NotificationServiceTest {
     @Test
     void push_제출이_실패해도_리스너는_예외를_전파하지_않는다() {
         when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(true);
-        doThrow(new org.springframework.core.task.TaskRejectedException("queue full"))
+        doThrow(new TaskRejectedException("queue full"))
                 .when(fcmPushExecutor).push(100L, 1L, "제목", "본문");
 
         assertThatCode(() -> notificationService.onNotificationCreated(
@@ -98,5 +102,37 @@ class NotificationServiceTest {
 
         verify(notificationPushStatusService).markBlocked(100L);
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+    }
+
+    @Test
+    void 같은_이벤트라도_각_수신자의_언어로_저장하고_발송한다() {
+        User korean = User.signUp();
+        User english = User.signUp();
+        english.changePreferences("en", null);
+        when(userRepository.getReferenceById(1L)).thenReturn(korean);
+        when(userRepository.getReferenceById(2L)).thenReturn(english);
+        when(notificationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var content = NotificationMessages.friendCheer(
+                "민지", CheerType.GREAT);
+        notificationService.send(1L, content, 10L);
+        notificationService.send(2L, content, 10L);
+        var captor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
+        verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(captor.capture());
+        assertThat(captor.getAllValues().get(0).body()).isEqualTo("민지님: 잘하고 있어!");
+        assertThat(captor.getAllValues().get(1).body()).isEqualTo("민지: You're doing great!");
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+    }
+
+    @Test
+    void 영어로_발송한_알림도_언어_변경_후_중복을_막는다() {
+        var content = NotificationMessages.houseJoinRequestCreated("민지", "Our house");
+        var since = Instant.parse("2026-09-01T00:00:00Z");
+        org.mockito.Mockito.doReturn(false).when(notificationRepository)
+                .existsByUserAndTypeAndBodySince(1L, content.type(), content.body(), since);
+        org.mockito.Mockito.doReturn(true).when(notificationRepository)
+                .existsByUserAndTypeAndBodySince(1L, content.type(), content.englishBody(), since);
+        notificationService.sendUnlessDuplicatedSince(1L, content, 2L, since);
+        verify(notificationRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher, userRepository);
     }
 }

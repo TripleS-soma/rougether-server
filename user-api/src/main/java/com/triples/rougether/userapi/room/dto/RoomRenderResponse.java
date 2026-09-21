@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // 방 렌더링 부분집합 - 화면에 방을 그리는 데 필요한 것만.
 // 집 미리보기(#177)처럼 비구성원에게 내려가는 자리에 쓰므로 활동 정보(streak)·편집용 값
@@ -76,7 +77,7 @@ public record RoomRenderResponse(
             return new RenderCharacter(
                     character.getId(),
                     character.getCode(),
-                    character.getName(),
+                    CatalogNames.name(character),
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     accessories.stream()
@@ -101,7 +102,7 @@ public record RoomRenderResponse(
             UserItem userItem = accessory.getUserItem();
             return new RenderAccessory(
                     userItem.getItem().getId(),
-                    userItem.getItem().getName(),
+                    CatalogNames.name(userItem.getItem()),
                     userItem.getItem().getAssetKey(),
                     accessory.getCharacterSlotType(),
                     renderProfiles.stream().map(AccessoryRenderProfileResponse::of).toList());
