@@ -165,6 +165,17 @@ upstream rougether_user_api { server 127.0.0.1:$user_port; keepalive 16; }
 server {
   listen 8080;
   client_max_body_size 40m;
+  location = /api/v1/chat/ws {
+      proxy_pass http://rougether_user_api;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade \$http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host \$host;
+      proxy_set_header X-Forwarded-For \$http_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+      proxy_read_timeout 60s;
+  }
+
   location / {
     proxy_pass http://rougether_user_api;
     proxy_http_version 1.1;
