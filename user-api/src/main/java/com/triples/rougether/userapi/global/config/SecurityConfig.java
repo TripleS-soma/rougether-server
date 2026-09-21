@@ -44,6 +44,8 @@ public class SecurityConfig {
                                 "/api/v1/billing/notifications/apple", "/api/v1/billing/notifications/google").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
+                                // 첫 WebSocket 프레임에서 JWT와 채팅방 권한을 검증함.
+                                "/api/v1/chat/ws",
                                 "/api/v1/auth/**",
                                 "/actuator/health",
                                 "/actuator/info",

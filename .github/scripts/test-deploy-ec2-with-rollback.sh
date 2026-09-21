@@ -929,6 +929,20 @@ test_candidate_health_failure_never_stops_active_service() {
   echo "ok - candidate failure leaves active traffic unchanged"
 }
 
+test_nginx_config_preserves_websocket_upgrade() {
+  reset_scenario "blue-green-websocket"
+  ( ROUGETHER_PRIVATE_IP=10.0.1.10
+    render_nginx_config "$NGINX_CONFIG_FILE" 28080 18081
+  )
+  assert_contains 'server 127.0.0.1:28080;' "$NGINX_CONFIG_FILE" "user upstream must use the candidate slot"
+  assert_contains 'location = /api/v1/chat/ws {' "$NGINX_CONFIG_FILE" "chat must have a dedicated WebSocket route"
+  assert_contains 'proxy_set_header Upgrade $http_upgrade;' "$NGINX_CONFIG_FILE" "WebSocket upgrade header must remain literal"
+  assert_contains 'proxy_set_header Connection "upgrade";' "$NGINX_CONFIG_FILE" "WebSocket connection must be upgraded"
+  assert_contains 'proxy_set_header Connection "";' "$NGINX_CONFIG_FILE" "ordinary HTTP routes must retain keepalive behavior"
+  assert_contains 'server 10.0.1.10:18081;' "$NGINX_CONFIG_FILE" "admin upstream must remain on its active slot"
+  echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
+}
+
 test_nginx_reload_failure_restores_previous_config() {
   reset_scenario "blue-green-nginx-rollback"
   local expected="$ENV_DIR/expected-nginx.conf"
@@ -1217,6 +1231,7 @@ test_blue_green_units_bind_internal_ports_and_cap_memory
 test_memory_preflight_failure_does_not_start_candidate
 test_candidate_health_precedes_initial_proxy_cutover
 test_candidate_health_failure_never_stops_active_service
+test_nginx_config_preserves_websocket_upgrade
 test_nginx_reload_failure_restores_previous_config
 test_blue_green_rollback_restarts_previous_slot_before_switching_back
 test_blue_green_orchestration_is_sequential_and_restarts_batch_once
