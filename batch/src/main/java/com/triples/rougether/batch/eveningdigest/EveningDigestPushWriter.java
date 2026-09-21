@@ -16,7 +16,6 @@ import org.springframework.batch.infrastructure.item.ItemWriter;
 @RequiredArgsConstructor
 class EveningDigestPushWriter implements ItemWriter<Notification> {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final ReminderPushWriter delegate;
     private final DailyIncompleteDigestRepository digestRepository;
@@ -24,9 +23,11 @@ class EveningDigestPushWriter implements ItemWriter<Notification> {
 
     @Override
     public void write(Chunk<? extends Notification> chunk) {
-        LocalDate today = LocalDate.now(clock.withZone(KST));
         Chunk<Notification> eligible = new Chunk<>();
         for (Notification notification : chunk) {
+            var localNow = clock.instant().atZone(ZoneId.of(notification.getUser().getTimeZone()));
+            LocalDate today = localNow.toLocalDate();
+            if (localNow.getHour() < 21) { continue; }
             if (notification.getRefId() == null) {
                 // digest 연결이 없으면 발송 불가 - PENDING 으로 남아 지표에 잡히므로 원인 추적용 로그를 남긴다.
                 log.warn("저녁 미완료 알림에 digest refId 가 없어 발송을 건너뜁니다. notificationId={}",

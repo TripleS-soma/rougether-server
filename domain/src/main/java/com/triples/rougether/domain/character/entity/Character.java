@@ -13,12 +13,17 @@ import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import java.util.Map;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "characters")
-public class Character {
+public class Character implements com.triples.rougether.domain.i18n.LocalizedName {
 
     public static final String MORU_CODE = "moru";
 
@@ -31,6 +36,14 @@ public class Character {
 
     @Column(name = "name", length = 100, nullable = false)
     private String name;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "name_translations")
+    private Map<String, String> nameTranslations;
+
+    public void updateNameTranslations(Map<String, String> translations) {
+        this.nameTranslations = Map.copyOf(translations);
+    }
 
     @Column(name = "base_asset_key", length = 255, nullable = false)
     private String baseAssetKey;

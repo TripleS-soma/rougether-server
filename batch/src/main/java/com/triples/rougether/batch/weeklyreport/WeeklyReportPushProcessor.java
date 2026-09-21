@@ -21,6 +21,6 @@ class WeeklyReportPushProcessor implements ItemProcessor<WeeklyReport, Notificat
     public Notification process(WeeklyReport report) {
         WeeklyReportStats stats = objectMapper.readValue(report.getStatsJson(), WeeklyReportStats.class);
         return Notification.create(report.getUser(), NotificationType.WEEKLY_REPORT,
-                WeeklyReportPushMessage.TITLE, WeeklyReportPushMessage.body(stats), report.getId());
+                WeeklyReportPushMessage.title(report.getUser().getLanguage()), WeeklyReportPushMessage.body(stats, report.getUser().getLanguage()), report.getId());
     }
 }

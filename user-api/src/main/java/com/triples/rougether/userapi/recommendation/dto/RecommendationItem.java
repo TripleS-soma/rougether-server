@@ -3,15 +3,18 @@ package com.triples.rougether.userapi.recommendation.dto;
 import com.triples.rougether.domain.recommendation.entity.RecommendationType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.Map;
 
 public record RecommendationItem(
         @Schema(description = "추천 ID. 수락/무시 API 의 path 값", example = "1")
         Long recommendationId,
         @Schema(description = "추천 타입. 허용값: ADJUST_DAYS(반복 요일·빈도 조정)", example = "ADJUST_DAYS")
         RecommendationType type,
-        @Schema(description = "사용자에게 보여줄 제안 문구(한국어)",
+        @Schema(description = "사용자에게 보여줄 제안 문구. Accept-Language 적용, 기존 데이터는 원문 폴백",
                 example = "『아침 러닝』 수요일 수행이 3주 연속 실패했어요. 수요일을 빼고 나머지 요일에 집중해 보면 어떨까요?")
         String message,
+        @Schema(description = "번역 코드. 기존 데이터는 null") String messageCode,
+        @Schema(description = "번역 매개변수. 사용자 입력은 번역하지 않음") Map<String, Object> messageParams,
         @Schema(description = "대상 루틴의 현재 버전 id (GET /api/v1/routines 응답의 id)", example = "42")
         Long routineId,
         @Schema(description = "대상 루틴의 버전 계보 루트 id (루틴 응답의 originRoutineId 와 동일)", example = "40")

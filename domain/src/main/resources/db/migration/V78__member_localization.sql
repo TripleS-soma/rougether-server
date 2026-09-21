@@ -1,0 +1,33 @@
+ALTER TABLE users ADD COLUMN language VARCHAR(10) NOT NULL DEFAULT 'ko';
+ALTER TABLE users ADD COLUMN time_zone VARCHAR(64) NOT NULL DEFAULT 'Asia/Seoul';
+CREATE INDEX idx_users_time_zone ON users (time_zone);
+ALTER TABLE routine_recommendations ADD COLUMN message_code VARCHAR(40);
+ALTER TABLE routine_recommendations ADD COLUMN message_params JSON;
+ALTER TABLE items ADD COLUMN name_translations JSON;
+ALTER TABLE themes ADD COLUMN name_translations JSON;
+ALTER TABLE characters ADD COLUMN name_translations JSON;
+ALTER TABLE goals ADD COLUMN name_translations JSON;
+ALTER TABLE gacha ADD COLUMN name_translations JSON;
+
+-- 프론트의 기존 영어 표기와 일치하는 기본 마스터 번역. 운영 추가 카탈로그는 관리자 번역 API로 관리.
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Cat') WHERE code = 'cat';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Puppy') WHERE code = 'dog';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Tiger') WHERE code = 'tiger';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Panda') WHERE code = 'panda';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Bear') WHERE code = 'bear';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Sheep') WHERE code = 'sheep';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Pony') WHERE code = 'horse';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Otter') WHERE code = 'otter';
+UPDATE characters SET name_translations = JSON_OBJECT('en', 'Moru') WHERE code = 'moru';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Exercise') WHERE code = 'exercise';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Study') WHERE code = 'study';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Sleep') WHERE code = 'sleep';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Reading') WHERE code = 'reading';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Organizing') WHERE code = 'organizing';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Job prep') WHERE code = 'career';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Daily habits') WHERE code = 'habit';
+UPDATE goals SET name_translations = JSON_OBJECT('en', 'Wake up early') WHERE code = 'wake_up';
+UPDATE gacha SET name_translations = JSON_OBJECT('en', 'Wallpaper gifts') WHERE code = 'wallpaper_gacha';
+UPDATE gacha SET name_translations = JSON_OBJECT('en', 'Floor gifts') WHERE code = 'floor_gacha';
+UPDATE gacha SET name_translations = JSON_OBJECT('en', 'Furniture gifts') WHERE code = 'furniture_gacha';
+UPDATE gacha SET name_translations = JSON_OBJECT('en', 'Character gifts') WHERE code = 'character_gacha';

@@ -20,6 +20,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
+import com.triples.rougether.userapi.member.dto.MemberPreferencesRequest;
+import java.time.Instant;
 
 @SpringBootTest
 @Transactional
@@ -153,5 +155,24 @@ class MemberProfileImageServiceTest {
 
         assertThat(userRepository.findById(userId).orElseThrow().getProfileImageKey())
                 .isEqualTo("profile/kept.png");
+    }
+
+    @Test
+    void 언어와_시간대는_저장되며_부분_수정은_다른_설정을_보존한다() {
+        memberService.updatePreferences(userId, new MemberPreferencesRequest("en", "America/New_York"));
+        memberService.updatePreferences(userId, new MemberPreferencesRequest("ko", null));
+        userRepository.flush();
+        assertThat(memberService.getMe(userId).language()).isEqualTo("ko");
+        assertThat(memberService.getMe(userId).timeZone()).isEqualTo("America/New_York");
+        assertThat(userRepository.findById(userId).orElseThrow().getNickname()).isNull();
+    }
+
+    @Test
+    void 탈퇴한_회원은_언어_설정도_수정할_수_없다() {
+        userRepository.findById(userId).orElseThrow().softDelete(Instant.now());
+        userRepository.flush();
+        assertThatThrownBy(() -> memberService.updatePreferences(userId,
+                new MemberPreferencesRequest("en", null)))
+                .isInstanceOf(BusinessException.class);
     }
 }

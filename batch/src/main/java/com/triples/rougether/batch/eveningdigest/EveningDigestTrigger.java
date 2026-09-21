@@ -18,6 +18,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.triples.rougether.domain.member.repository.UserRepository;
+import java.time.ZoneId;
 
 @Slf4j
 @Component
@@ -29,6 +31,7 @@ public class EveningDigestTrigger {
     private final JobOperator jobOperator;
     private final Job eveningDigestJob;
     private final Clock clock;
+    private final UserRepository users;
 
     @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     public void triggerHourly() {
@@ -41,7 +44,13 @@ public class EveningDigestTrigger {
     }
 
     void runForToday() {
-        LocalDateTime now = LocalDateTime.now(clock);
+        for (String timeZone : users.findActiveTimeZones()) {
+            runForZone(timeZone);
+        }
+    }
+
+    private void runForZone(String timeZone) {
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneId.of(timeZone));
         if (now.toLocalTime().isBefore(READY_TIME)) {
             log.debug("저녁 미완료 알림 보류 - 발송 시각 전, targetDate={}", now.toLocalDate());
             return;
@@ -50,6 +59,7 @@ public class EveningDigestTrigger {
         LocalDate targetDate = now.toLocalDate();
         JobParameters parameters = new JobParametersBuilder()
                 .addString(EveningDigestJobConfig.TARGET_DATE_PARAM, targetDate.toString())
+                .addString("timeZone", timeZone)
                 .toJobParameters();
         try {
             JobExecution execution = jobOperator.start(eveningDigestJob, parameters);

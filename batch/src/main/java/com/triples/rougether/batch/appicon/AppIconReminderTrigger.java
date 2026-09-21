@@ -35,9 +35,6 @@ public class AppIconReminderTrigger {
     @EventListener(ApplicationReadyEvent.class)
     public void run() {
         Instant now = clock.instant();
-        if (!AppIconReminderService.isDeliveryTime(now)) {
-            return;
-        }
         stageCandidates(now);
         sendPending();
     }

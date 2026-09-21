@@ -1,6 +1,7 @@
 package com.triples.rougether.batch.weeklyreport;
 
 import com.triples.rougether.domain.report.WeeklyReportStats;
+import com.triples.rougether.common.i18n.Language;
 
 // 주간 회고 push 문구. 본문 수치는 statsJson(서버 집계 정본)만 쓴다 -
 // LLM 이 만든 summary 는 길이·내용 통제가 안 되므로 push 본문에 넣지 않는다(결정값)
@@ -14,5 +15,15 @@ final class WeeklyReportPushMessage {
 
     static String body(WeeklyReportStats stats) {
         return BODY_FORMAT.formatted(stats.scheduledCount(), stats.completedCount());
+    }
+    static String title(String language) {
+        return lang(language).choose(TITLE, "Your weekly routine review is ready");
+    }
+    static String body(WeeklyReportStats stats, String language) {
+        return lang(language).choose(body(stats), "You completed %d of %d routines last week. Take a look before planning this week."
+                .formatted(stats.completedCount(), stats.scheduledCount()));
+    }
+    private static Language lang(String language) {
+        return Language.from(language);
     }
 }

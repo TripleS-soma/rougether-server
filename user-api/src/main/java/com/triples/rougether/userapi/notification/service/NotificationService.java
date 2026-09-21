@@ -40,6 +40,7 @@ public class NotificationService {
             return;
         }
         User user = userRepository.getReferenceById(userId);
+        content = content.localized(user.getLanguage());
         Notification notification = notificationRepository.save(
                 Notification.create(user, content.type(), content.title(), content.body(), refId));
 
@@ -52,7 +53,9 @@ public class NotificationService {
     // 억제창(since) 정책은 호출처가 정하며, 동시 요청 사이에서는 best-effort 다(락 없음).
     public void sendUnlessDuplicatedSince(Long userId, NotificationContent content, Long refId, Instant since) {
         if (notificationRepository.existsByUserAndTypeAndBodySince(
-                userId, content.type(), content.body(), since)) {
+                userId, content.type(), content.body(), since)
+                || notificationRepository.existsByUserAndTypeAndBodySince(
+                        userId, content.type(), content.englishBody(), since)) {
             return;
         }
         send(userId, content, refId);

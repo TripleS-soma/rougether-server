@@ -5,7 +5,6 @@ import com.triples.rougether.userapi.member.service.MemberWithdrawalService;
 import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.dto.MemberUpdateRequest;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
-
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import com.triples.rougether.userapi.member.dto.MemberPreferencesRequest;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 @Tag(name = "Member", description = "회원 관련 API")
 @RestController
@@ -46,6 +47,13 @@ public class MemberController {
     public MeResponse updateMe(@CurrentUser AuthUser authUser,
                                @Valid @RequestBody MemberUpdateRequest request) {
         return memberService.updateMe(authUser.id(), request);
+    }
+
+    @PatchMapping
+    @Operation(summary = "언어·개인 리마인드 시간대 수정", description = "생략한 설정은 유지합니다. 공동 미션·보상 날짜는 KST를 유지합니다.")
+    public MeResponse preferences(@CurrentUser AuthUser authUser,
+            @Valid @RequestBody MemberPreferencesRequest request) {
+        return memberService.updatePreferences(authUser.id(), request);
     }
 
     @Operation(summary = "프로필 사진 등록·교체", description = "multipart file 필드로 프로필 사진을 업로드하고 발급된 asset key를 반환합니다. "

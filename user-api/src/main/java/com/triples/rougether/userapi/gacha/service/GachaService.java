@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // 뽑기 조회 + 실행. 가구는 2단계 추첨(등급 70/25/5 -> 등급 pool 균등),
 // 등급 없는 캐릭터/악세사리 전용 풀은 전체 균등 추첨, COIN 차감.
@@ -244,7 +245,7 @@ public class GachaService {
         if (entry.getRewardType() == RewardType.ITEM) {
             Item item = entry.getItem();
             return new GachaRewardResponse(
-                    RewardType.ITEM.name(), item.getId(), null, item.getName(), item.getAssetKey(),
+                    RewardType.ITEM.name(), item.getId(), null, CatalogNames.name(item), item.getAssetKey(),
                     entry.getRarity(), ownedItemIds.contains(item.getId()),
                     item.getCategoryCode(), item.getPlacementType(),
                     item.getSurfaceSlotType(), item.getCharacterSlotType());
@@ -252,7 +253,7 @@ public class GachaService {
 
         Character character = entry.getCharacter();
         return new GachaRewardResponse(
-                RewardType.CHARACTER.name(), null, character.getId(), character.getName(),
+                RewardType.CHARACTER.name(), null, character.getId(), CatalogNames.name(character),
                 character.getBaseAssetKey(), entry.getRarity(),
                 ownedCharacterIds.contains(character.getId()),
                 null, null, null, null);
@@ -262,13 +263,13 @@ public class GachaService {
     private int drawItem(User user, GachaPoolEntry picked, Set<Long> ownedItemIds, List<DrawResult> results) {
         Item item = picked.getItem();
         if (ownedItemIds.contains(item.getId())) {
-            results.add(new DrawResult("CURRENCY", item.getId(), null, item.getName(),
+            results.add(new DrawResult("CURRENCY", item.getId(), null, CatalogNames.name(item),
                     item.getAssetKey(), picked.getRarity(), true, CurrencyType.DIAMOND, ITEM_REFUND_DIA));
             return ITEM_REFUND_DIA;
         }
         userItemRepository.save(UserItem.create(user, item));
         ownedItemIds.add(item.getId());
-        results.add(new DrawResult("ITEM", item.getId(), null, item.getName(),
+        results.add(new DrawResult("ITEM", item.getId(), null, CatalogNames.name(item),
                 item.getAssetKey(), picked.getRarity(), false, null, null));
         return 0;
     }
@@ -277,13 +278,13 @@ public class GachaService {
     private int drawCharacter(User user, GachaPoolEntry picked, Set<Long> ownedCharacterIds, List<DrawResult> results) {
         Character character = picked.getCharacter();
         if (ownedCharacterIds.contains(character.getId())) {
-            results.add(new DrawResult("CURRENCY", null, character.getId(), character.getName(),
+            results.add(new DrawResult("CURRENCY", null, character.getId(), CatalogNames.name(character),
                     character.getBaseAssetKey(), picked.getRarity(), true, CurrencyType.COIN, CHARACTER_REFUND_COIN));
             return CHARACTER_REFUND_COIN;
         }
         userCharacterRepository.save(UserCharacter.create(user, character));
         ownedCharacterIds.add(character.getId());
-        results.add(new DrawResult("CHARACTER", null, character.getId(), character.getName(),
+        results.add(new DrawResult("CHARACTER", null, character.getId(), CatalogNames.name(character),
                 character.getBaseAssetKey(), picked.getRarity(), false, null, null));
         return 0;
     }

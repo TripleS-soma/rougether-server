@@ -63,6 +63,7 @@ class EveningDigestProcessorTest {
     private static User user(long id) {
         User user = mock(User.class);
         when(user.getId()).thenReturn(id);
+        when(user.getTimeZone()).thenReturn("Asia/Seoul");
         return user;
     }
 

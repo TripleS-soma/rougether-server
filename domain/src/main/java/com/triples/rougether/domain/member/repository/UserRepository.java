@@ -17,6 +17,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    @Query("select distinct u.timeZone from User u where u.deletedAt is null and u.bot = false order by u.timeZone")
+    List<String> findActiveTimeZones();
+
     // refresh 회전 성공 시 마지막 접속 시각만 targeted update.
     // 엔티티 dirty checking 대신 targeted UPDATE 로 동시 refresh 경합·불필요한 전체 row 갱신을 피함.
     // bulk UPDATE 는 auditing 을 우회하므로 updated_at 을 직접 함께 갱신하고,
@@ -90,11 +93,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // 저녁 미완료 digest(#341) 후보 사용자. 반복 요일 판정은 batch processor 에서 수행하므로 여기서는
     // "완료 가능성이 있는 오늘 대상"만 coarse filter 로 좁힌다. digest 중복은 user/date unique 와 같은 범위.
+    default List<User> findDailyIncompleteDigestCandidates(LocalDate targetDate,
+                                                   Instant dayEndExclusive,
+                                                   long afterUserId,
+                                                   Pageable pageable) {
+        return findDailyIncompleteDigestCandidatesInZone(targetDate, dayEndExclusive, afterUserId, "Asia/Seoul", pageable);
+    }
+
     @Query("""
             select u from User u
             where u.id > :afterUserId
               and u.deletedAt is null
               and u.bot = false
+              and u.timeZone = :timeZone
               and not exists (
                 select 1 from DailyIncompleteDigest d
                 where d.user = u and d.digestDate = :targetDate
@@ -117,8 +128,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
               )
             order by u.id asc
             """)
-    List<User> findDailyIncompleteDigestCandidates(@Param("targetDate") LocalDate targetDate,
+    List<User> findDailyIncompleteDigestCandidatesInZone(@Param("targetDate") LocalDate targetDate,
                                                    @Param("dayEndExclusive") Instant dayEndExclusive,
                                                    @Param("afterUserId") long afterUserId,
-                                                   Pageable pageable);
+                                                   @Param("timeZone") String timeZone, Pageable pageable);
 }

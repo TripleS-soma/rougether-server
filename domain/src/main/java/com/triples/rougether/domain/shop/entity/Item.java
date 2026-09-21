@@ -16,12 +16,17 @@ import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import java.util.Map;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "items")
-public class Item {
+public class Item implements com.triples.rougether.domain.i18n.LocalizedName {
 
     private static final BigDecimal DEFAULT_SCALE = new BigDecimal("1.00");
 
@@ -49,6 +54,14 @@ public class Item {
 
     @Column(name = "name", length = 120, nullable = false)
     private String name;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "name_translations")
+    private Map<String, String> nameTranslations;
+
+    public void updateNameTranslations(Map<String, String> translations) {
+        this.nameTranslations = Map.copyOf(translations);
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "purchase_currency_type", length = 30)

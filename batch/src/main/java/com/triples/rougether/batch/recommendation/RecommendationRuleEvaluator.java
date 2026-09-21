@@ -37,7 +37,10 @@ public class RecommendationRuleEvaluator {
 
     // 제안 1건. originRoutineId = 계보 루트, routineId = 생성 시점 대상 버전(현재 ACTIVE 버전 id)
     public record Proposal(Long originRoutineId, Long routineId, String repeatType, List<String> daysOfWeek,
-                           String message) {
+                           String message, String messageCode, Map<String, Object> messageParams) {
+        public Proposal(Long originRoutineId, Long routineId, String repeatType, List<String> daysOfWeek, String message) {
+            this(originRoutineId, routineId, repeatType, daysOfWeek, message, null, null);
+        }
     }
 
     public List<Proposal> evaluate(List<Routine> activeRoutines, Map<Long, List<RoutineLog>> logsByLineage,
@@ -101,7 +104,7 @@ public class RecommendationRuleEvaluator {
         String message = "『%s』 %s요일 수행이 3주 연속 실패했어요. %s요일을 빼고 나머지 요일에 집중해 보면 어떨까요?"
                 .formatted(routine.getTitle(), label(dropped), label(dropped));
         return new Ranked(0, stats.totalFailed(),
-                new Proposal(lineageId, routine.getId(), "WEEKLY", remaining, message));
+                new Proposal(lineageId, routine.getId(), "WEEKLY", remaining, message, "ADJUST_DROP_DAY", Map.of("title", routine.getTitle(), "day", token(dropped), "weeks", 3)));
     }
 
     // 룰 2 — 빈도 축소: DAILY 또는 요일 5개 이상 WEEKLY 가 직전 2주 각각 완료율 기준 미만이면
@@ -140,7 +143,7 @@ public class RecommendationRuleEvaluator {
         String message = "『%s』 완료율이 2주째 40%%를 밑돌았어요. 완료가 잘 되던 %s요일, 주 %d회로 줄여 리듬을 되찾아 보면 어떨까요?"
                 .formatted(routine.getTitle(), labels, selected.size());
         return new Ranked(1, stats.totalFailed(),
-                new Proposal(lineageId, routine.getId(), "WEEKLY", tokens, message));
+                new Proposal(lineageId, routine.getId(), "WEEKLY", tokens, message, "ADJUST_REDUCE_DAYS", Map.of("title", routine.getTitle(), "days", tokens, "from", daily ? 7 : scheduledDays.size(), "to", tokens.size(), "weeks", 2, "threshold", 40)));
     }
 
     static Long lineageKey(Routine routine) {

@@ -4,7 +4,6 @@ import com.triples.rougether.userapi.member.dto.MeResponse;
 import com.triples.rougether.userapi.member.dto.MemberUpdateRequest;
 import com.triples.rougether.userapi.member.dto.ProfileImageResponse;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
-
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -19,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.triples.rougether.userapi.member.dto.MemberPreferencesRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +56,14 @@ public class MemberService {
         }
         // 기본 이름("나의 집") 그대로인 소유 집을 "{닉네임}의 집"으로 개명(#350) - 같은 트랜잭션에서 함께 커밋
         houseCommandService.renameDefaultNamedHouses(userId, user.getNickname());
+        return toMeResponse(user);
+    }
+
+    @Transactional
+    public MeResponse updatePreferences(Long userId,
+            MemberPreferencesRequest request) {
+        User user = findUser(userId);
+        user.changePreferences(request.language(), request.timeZone());
         return toMeResponse(user);
     }
 
@@ -103,6 +111,6 @@ public class MemberService {
 
     private MeResponse toMeResponse(User user) {
         return new MeResponse(user.getId(), user.getNickname(), user.getBio(), user.getProfileImageKey(),
-                user.getLastAccessedAt(), onboardingQueryService.getSummary(user.getId()));
+                user.getLastAccessedAt(), onboardingQueryService.getSummary(user.getId()), user.getLanguage(), user.getTimeZone());
     }
 }

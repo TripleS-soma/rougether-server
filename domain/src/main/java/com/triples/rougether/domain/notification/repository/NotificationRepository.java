@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.time.LocalDate;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
@@ -77,21 +78,30 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findWeeklyReportPendingInWeek(
             @Param("type") NotificationType type,
             @Param("pushStatus") PushStatus pushStatus,
-            @Param("weekStartDate") java.time.LocalDate weekStartDate,
+            @Param("weekStartDate") LocalDate weekStartDate,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
 
-    @Query("select n from Notification n "
-            + "where n.type = :type and n.pushStatus = :pushStatus and n.id > :cursorId "
+    default List<Notification> findDailyDigestPending(
+            NotificationType type,
+            PushStatus pushStatus,
+            LocalDate digestDate,
+            Long cursorId,
+            Pageable pageable) {
+        return findDailyDigestPendingInZone(type, pushStatus, digestDate, cursorId, "Asia/Seoul", pageable);
+    }
+
+    @Query("select n from Notification n join fetch n.user "
+            + "where n.user.timeZone = :timeZone and n.type = :type and n.pushStatus = :pushStatus and n.id > :cursorId "
             + "and exists (select 1 from DailyIncompleteDigest d "
             + "  where d.notification = n and d.digestDate = :digestDate) "
             + "order by n.id asc")
-    List<Notification> findDailyDigestPending(
+    List<Notification> findDailyDigestPendingInZone(
             @Param("type") NotificationType type,
             @Param("pushStatus") PushStatus pushStatus,
-            @Param("digestDate") java.time.LocalDate digestDate,
+            @Param("digestDate") LocalDate digestDate,
             @Param("cursorId") Long cursorId,
-            Pageable pageable);
+            @Param("timeZone") String timeZone, Pageable pageable);
 
     // Step2 writer: 발송 결과 반영. 조회 후 mutate 대신 단일 UPDATE로 커밋
     @Modifying

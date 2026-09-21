@@ -12,6 +12,7 @@ import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import java.time.ZoneId;
 
 @Slf4j
 @Component
@@ -24,7 +25,7 @@ public class RoutineReminderTrigger {
 
     @Scheduled(cron = "0 */5 * * * *", zone = "Asia/Seoul")
     public void triggerCurrentMinute() {
-        String targetMinute = LocalDateTime.now(clock)
+        String targetMinute = LocalDateTime.ofInstant(clock.instant(), ZoneId.of("Asia/Seoul"))
                 .truncatedTo(ChronoUnit.MINUTES)
                 .format(RoutineReminderJobConfig.TARGET_MINUTE_FORMAT);
         JobParameters jobParameters = new JobParametersBuilder()

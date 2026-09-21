@@ -17,6 +17,7 @@ import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.infrastructure.item.Chunk;
+import com.triples.rougether.domain.member.entity.User;
 
 class EveningDigestExpiryGateTest {
 
@@ -29,7 +30,7 @@ class EveningDigestExpiryGateTest {
     void push_reader는_job_도중_자정을_넘기면_전날_PENDING을_조회하지_않는다() {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
         EveningDigestPendingReader reader = new EveningDigestPendingReader(
-                notificationRepository, TARGET_DATE, AFTER_MIDNIGHT);
+                notificationRepository, TARGET_DATE, AFTER_MIDNIGHT, "Asia/Seoul");
 
         assertThat(reader.read()).isNull();
         verifyNoInteractions(notificationRepository);
@@ -40,6 +41,7 @@ class EveningDigestExpiryGateTest {
         ReminderPushWriter delegate = mock(ReminderPushWriter.class);
         DailyIncompleteDigestRepository digestRepository = mock(DailyIncompleteDigestRepository.class);
         Notification notification = mock(Notification.class);
+        when(notification.getUser()).thenReturn(User.signUp());
         DailyIncompleteDigest digest = mock(DailyIncompleteDigest.class);
         when(notification.getRefId()).thenReturn(1L);
         when(digest.getDigestDate()).thenReturn(TARGET_DATE);

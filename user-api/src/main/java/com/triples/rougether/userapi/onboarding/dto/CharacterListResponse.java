@@ -5,6 +5,7 @@ import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.character.dto.CharacterPoseResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 public record CharacterListResponse(List<CharacterItem> items) {
 
@@ -21,7 +22,7 @@ public record CharacterListResponse(List<CharacterItem> items) {
             return new CharacterItem(
                     character.getId(),
                     character.getCode(),
-                    character.getName(),
+                    CatalogNames.name(character),
                     character.getBaseAssetKey(),
                     CharacterAnimations.of(character.getCode()),
                     CharacterPoseResponse.activeOf(character),

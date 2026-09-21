@@ -7,19 +7,22 @@ import com.triples.rougether.domain.routine.entity.Routine;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
+import java.time.Instant;
+import java.time.ZoneId;
 
 // 반복규칙상 오늘 대상이 아니면 null 반환
 @RequiredArgsConstructor
 class ReminderNotificationProcessor implements ItemProcessor<Routine, Notification> {
 
-    private final LocalDate targetDate;
+    private final Instant targetInstant;
 
     @Override
     public Notification process(Routine routine) {
+        LocalDate targetDate = targetInstant.atZone(ZoneId.of(routine.getUser().getTimeZone())).toLocalDate();
         if (!RoutineRecurrence.isTargetOn(routine, targetDate)) {
             return null;
         }
         return Notification.create(routine.getUser(), NotificationType.ROUTINE_REMINDER,
-                ReminderMessage.TITLE, ReminderMessage.body(routine.getTitle()), routine.getId());
+                ReminderMessage.title(routine.getUser().getLanguage()), ReminderMessage.body(routine.getTitle(), routine.getUser().getLanguage()), routine.getId());
     }
 }

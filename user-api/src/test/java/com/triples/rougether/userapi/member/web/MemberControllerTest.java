@@ -32,6 +32,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.triples.rougether.userapi.member.dto.MemberPreferencesRequest;
+import java.util.List;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 @WebMvcTest(MemberController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -129,5 +132,26 @@ class MemberControllerTest {
         mockMvc.perform(delete("/api/v1/me"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    void 언어와_시간대는_닉네임_없이_본인_설정만_변경한다() throws Exception {
+        when(memberService.updatePreferences(eq(1L), any())).thenReturn(new MeResponse(
+                1L, "루티니", null, null, null, new OnboardingSummary(false, null, null), "en", "America/New_York"));
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/me")
+                        .contentType("application/json").content("{\"language\":\"en\",\"timeZone\":\"America/New_York\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.language").value("en"))
+                .andExpect(jsonPath("$.timeZone").value("America/New_York"));
+        verify(memberService).updatePreferences(eq(1L), eq(new MemberPreferencesRequest("en", "America/New_York")));
+    }
+
+    @Test
+    void 지원하지_않는_언어와_시간대와_빈_수정은_400이다() throws Exception {
+        for (String body : List.of("{}", "{\"language\":\"ja\"}", "{\"timeZone\":\"+09:00\"}", "{\"timeZone\":\"Mars/Olympus\"}")) {
+            mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/me")
+                            .contentType("application/json").content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+        org.mockito.Mockito.verifyNoInteractions(memberService);
     }
 }

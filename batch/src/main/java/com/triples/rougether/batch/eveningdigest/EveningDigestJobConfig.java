@@ -30,7 +30,6 @@ class EveningDigestJobConfig {
 
     static final String JOB_NAME = "eveningDigestJob";
     static final String TARGET_DATE_PARAM = "targetDate";
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int STAGE_CHUNK_SIZE = 1;
     private static final int PUSH_CHUNK_SIZE = 1;
     private static final int SKIP_LIMIT = 50;
@@ -39,7 +38,7 @@ class EveningDigestJobConfig {
     Job eveningDigestJob(JobRepository jobRepository, Step eveningDigestStageStep,
             Step eveningDigestPushStep) {
         return new JobBuilder(JOB_NAME, jobRepository)
-                .validator(new DefaultJobParametersValidator(new String[] {TARGET_DATE_PARAM}, new String[] {"run"}))
+                .validator(new DefaultJobParametersValidator(new String[] {TARGET_DATE_PARAM}, new String[] {"run", "timeZone"}))
                 .start(eveningDigestStageStep)
                 .next(eveningDigestPushStep)
                 .build();
@@ -77,10 +76,11 @@ class EveningDigestJobConfig {
     @Bean
     @StepScope
     EveningDigestUserReader eveningDigestUserReader(UserRepository userRepository,
-            @Value("#{jobParameters['" + TARGET_DATE_PARAM + "']}") String targetDateParam) {
+            @Value("#{jobParameters['" + TARGET_DATE_PARAM + "']}") String targetDateParam,
+            @Value("#{jobParameters['timeZone'] ?: 'Asia/Seoul'}") String timeZone) {
         LocalDate targetDate = LocalDate.parse(targetDateParam);
-        Instant dayEndExclusive = targetDate.plusDays(1).atStartOfDay(KST).toInstant();
-        return new EveningDigestUserReader(userRepository, targetDate, dayEndExclusive);
+        Instant dayEndExclusive = targetDate.plusDays(1).atStartOfDay(ZoneId.of(timeZone)).toInstant();
+        return new EveningDigestUserReader(userRepository, targetDate, dayEndExclusive, timeZone);
     }
 
     @Bean
@@ -108,7 +108,8 @@ class EveningDigestJobConfig {
     @StepScope
     EveningDigestPendingReader eveningDigestPendingReader(NotificationRepository notificationRepository,
             Clock clock,
-            @Value("#{jobParameters['" + TARGET_DATE_PARAM + "']}") String targetDateParam) {
-        return new EveningDigestPendingReader(notificationRepository, LocalDate.parse(targetDateParam), clock);
+            @Value("#{jobParameters['" + TARGET_DATE_PARAM + "']}") String targetDateParam,
+            @Value("#{jobParameters['timeZone'] ?: 'Asia/Seoul'}") String timeZone) {
+        return new EveningDigestPendingReader(notificationRepository, LocalDate.parse(targetDateParam), clock, timeZone);
     }
 }
