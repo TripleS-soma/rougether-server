@@ -1,0 +1,23 @@
+// QA 전용 source set. 제품 JAR/일반 test task에는 probe를 포함하지 않음.
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':user-api')
+    def probe = app.sourceSets.create('aiIsolation') {
+        java.srcDir new File(gradle.rootProject.projectDir, 'qa/ai-thread-isolation/java')
+        compileClasspath += app.sourceSets.main.runtimeClasspath
+        runtimeClasspath += app.sourceSets.main.runtimeClasspath
+    }
+    app.tasks.register('prepareAiIsolation') {
+        dependsOn app.tasks.named('aiIsolationClasses')
+        doLast {
+            def launcher = app.javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(25)
+            }.get()
+            def destination = new File(gradle.rootProject.projectDir, 'qa/ai-thread-isolation/build/runtime.json')
+            destination.parentFile.mkdirs()
+            destination.text = groovy.json.JsonOutput.toJson([
+                java: launcher.executablePath.asFile.absolutePath,
+                classpath: probe.runtimeClasspath.asPath
+            ])
+        }
+    }
+}
