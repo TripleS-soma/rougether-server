@@ -3,6 +3,7 @@ package com.triples.rougether.infra.llm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 // llm.api-key 미설정 환경(로컬·CI)용 stub. 실제 호출 없이 고정 JSON을 돌려줘 배치·테스트가 외부 API 없이 돈다.
 // isAvailable()=false 라 회고처럼 결과를 영구 저장하는 배치는 트리거 단계에서 보류된다(fail-closed).
 // prod 프로파일에서 stub 이 뜨면 error 로그만 남긴다 — 예외로 앱을 죽이면 다른 배치(리마인더·day-end)까지 같이 죽는다.
+@ConditionalOnProperty(name = "ai.service.enabled", havingValue = "false", matchIfMissing = true)
 @ConditionalOnExpression("!T(org.springframework.util.StringUtils).hasText('${llm.api-key:}')")
 @Component
 public class StubLlmClient implements LlmClient {

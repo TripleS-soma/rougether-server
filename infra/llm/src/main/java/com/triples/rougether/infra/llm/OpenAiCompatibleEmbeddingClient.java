@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 // OpenAI 호환 POST {base-url}/embeddings 클라이언트. base-url·api-key·timeout·재시도 정책은 채팅 클라이언트와 공유하고
 // 모델(llm.embedding-model)·차원(llm.embedding-dimensions)만 따로 둔다. 한 호출 입력 상한(2048)을 넘으면 내부에서 나눠 호출한다.
+@ConditionalOnProperty(name = "ai.service.enabled", havingValue = "false", matchIfMissing = true)
 @ConditionalOnExpression("T(org.springframework.util.StringUtils).hasText('${llm.api-key:}')")
 @Component
 public class OpenAiCompatibleEmbeddingClient implements EmbeddingClient {
