@@ -556,6 +556,21 @@ resource "aws_iam_role_policy" "app" {
         ]
       },
       {
+        # SNS 사진은 비공개 prefix에만 저장하고 회원 인증 API로 읽음. CDN 공개 범위는 유지함.
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:DeleteObjectVersion"]
+        Resource = ["arn:aws:s3:::${local.asset_bucket_name_value}/private/feed/*"]
+      },
+      {
+        # 삭제·탈퇴·미게시 사진을 버전까지 파기하기 위한 제한된 나열 권한.
+        Effect   = "Allow"
+        Action   = ["s3:ListBucketVersions"]
+        Resource = ["arn:aws:s3:::${local.asset_bucket_name_value}"]
+        Condition = {
+          StringLike = { "s3:prefix" = "private/feed/*" }
+        }
+      },
+      {
         # 회원 탈퇴 후 프로필 원본 파기용. user-api 구현의 profile/ 경계와 맞춤.
         Effect = "Allow"
         Action = [
