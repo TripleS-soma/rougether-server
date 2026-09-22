@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+dnf install -y docker nginx
+systemctl enable --now docker
+install -d -m 700 /etc/rougether-ai
+install -d -m 755 /opt/rougether-ai
+printf '%s' '${deploy_script}' | base64 -d > /opt/rougether-ai/deploy.py
+chmod 700 /opt/rougether-ai/deploy.py
+# 첫 배포가 인증서와 이미지를 검증한 뒤 nginx를 시작함.
+systemctl disable nginx || true

@@ -113,7 +113,7 @@ Spring의 `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`, `LLM_JSON_MODE`, `LLM_REASONING_E
 
 ## 전환과 복구
 
-1. AI 이미지 배포와 사설 연결·secret 주입을 먼저 준비한다. 현재 변경에는 AWS 리소스 생성, ECR 게시, 운영 전환은 포함되지 않는다.
+1. AI 이미지 배포와 사설 연결·secret 주입을 먼저 준비한다. 별도 EC2 운영 구성은 아래 전용 런북을 따릅니다. AWS 생성·ECR 게시·운영 전환 여부는 실제 배포 기록으로 구분합니다.
 2. 동일 모델/차원으로 실제 공급자 smoke를 실시한다. health만으로 전환하지 않는다. 호출 시간, 429/5xx, JVM timeout을 관찰한다.
 3. `user-api`만 `AI_SERVICE_ENABLED=true`로 전환해 루틴 유사도와 장애 시 EXACT-only 동작을 확인한다.
 4. 다음으로 `batch`를 전환한다. 중복 주간 결과 생성 없이 정상 회고/언어/모델 저장과 인증 장애 중단을 확인한다.
@@ -131,3 +131,7 @@ Spring의 `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`, `LLM_JSON_MODE`, `LLM_REASONING_E
 가구 추론 경로를 옮길지는 기존 Lambda 처리량·비용·재시도/lease/취소 보장을 비교한 뒤 결정한다. 이전 시에도 작업 생성·outbox·소유권·크레딧 정산은 Spring에 둔다. 이 단계의 성공만으로 가구 Lambda 경로 또는 모든 AI 워크로드의 분리가 완료됐다고 간주하지 않는다.
 
 구현 참고: [FastAPI lifespan](https://fastapi.tiangolo.com/advanced/events/), [HTTPX timeout 의미](https://www.python-httpx.org/advanced/timeouts/), [HTTPX connection limits](https://www.python-httpx.org/advanced/resource-limits/).
+
+## 별도 EC2 배포
+
+별도 AI EC2의 Terraform·TLS·SSM 설정·독립 배포·복구 절차는 [AI EC2 운영](../../deploy/terraform/ai-ec2/README.md)을 따릅니다. Java 내부 클라이언트의 전용 CA 설정은 해당 연결에만 적용하며 JVM 전체 신뢰 저장소를 변경하지 않습니다. 실제 HTTPS 계약 검증에는 신뢰하지 않는 인증서와 잘못된 호스트명 거부도 포함합니다.

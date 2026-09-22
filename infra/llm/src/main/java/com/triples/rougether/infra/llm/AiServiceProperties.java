@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 // 분리한 AI 서비스 연결 설정. 공급자 API key와 별도의 내부 인증 토큰을 사용함.
 @ConfigurationProperties("ai.service")
@@ -13,8 +14,14 @@ public record AiServiceProperties(
         @DefaultValue("") String baseUrl,
         @DefaultValue("") String token,
         @DefaultValue("95s") Duration timeout,
-        @DefaultValue("false") boolean allowInsecureHttp) {
+        @DefaultValue("false") boolean allowInsecureHttp,
+        @DefaultValue("") String caCertificateBase64) {
 
+    public AiServiceProperties(boolean enabled, String baseUrl, String token, Duration timeout, boolean allowInsecureHttp) {
+        this(enabled, baseUrl, token, timeout, allowInsecureHttp, "");
+    }
+
+    @ConstructorBinding
     public AiServiceProperties {
         if (enabled) {
             if (token == null || token.length() < 32 || token.chars().anyMatch(c -> c <= 32 || c > 126)) {

@@ -1,4 +1,6 @@
 """운영 전환 전 실제 공급자 연결 확인. AI_SERVICE_BASE_URL/TOKEN과 AI_* 모델 설정을 환경변수로 받음."""
+import base64
+import ssl
 import json
 import math
 import os
@@ -17,7 +19,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+context = ssl.create_default_context()
+if os.environ.get("AI_SERVICE_CA_CERTIFICATE_BASE64"):
+    context.load_verify_locations(cadata=base64.b64decode(os.environ["AI_SERVICE_CA_CERTIFICATE_BASE64"]).decode())
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(), urllib.request.HTTPSHandler(context=context))
 
 
 def call(path, payload):

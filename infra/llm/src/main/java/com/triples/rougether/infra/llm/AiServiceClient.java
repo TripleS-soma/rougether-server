@@ -1,6 +1,12 @@
 package com.triples.rougether.infra.llm;
 
 import java.net.http.HttpClient;
+import java.io.ByteArrayInputStream;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.util.Base64;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -43,10 +49,31 @@ public class AiServiceClient implements LlmClient, EmbeddingClient {
 
     private static RestClient restClient(AiServiceProperties service) {
         var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
-                .version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NEVER).build();
-        var factory = new JdkClientHttpRequestFactory(http);
+                .version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NEVER);
+        if (service.caCertificateBase64() != null && !service.caCertificateBase64().isBlank()) {
+            http.sslContext(privateTrust(service.caCertificateBase64()));
+        }
+        var factory = new JdkClientHttpRequestFactory(http.build());
         factory.setReadTimeout(service.timeout());
         return RestClient.builder().baseUrl(service.baseUrl()).requestFactory(factory).build();
+    }
+
+    // 내부 AI 연결에만 전용 CA를 적용함. JVM 전체 신뢰 저장소와 호스트명 검증은 변경하지 않음.
+    static SSLContext privateTrust(String encodedCertificate) {
+        try {
+            var certificate = CertificateFactory.getInstance("X.509").generateCertificate(
+                    new ByteArrayInputStream(Base64.getDecoder().decode(encodedCertificate)));
+            var store = KeyStore.getInstance(KeyStore.getDefaultType());
+            store.load(null, null);
+            store.setCertificateEntry("rougether-ai", certificate);
+            var trust = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trust.init(store);
+            var context = SSLContext.getInstance("TLS");
+            context.init(null, trust.getTrustManagers(), null);
+            return context;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("AI service CA 인증서 형식이 올바르지 않음");
+        }
     }
 
     @Override

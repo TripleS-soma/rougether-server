@@ -40,7 +40,8 @@ locals {
     local.apple_key_id_param,
     local.apple_private_key_param,
     local.apple_refresh_token_enc_key_param,
-    local.llm_api_key_param
+    local.llm_api_key_param,
+    "/${local.name}/ai/client"
     ], var.container_registry_password_ssm_parameter == null ? [] : [
     var.container_registry_password_ssm_parameter
   ])
@@ -478,7 +479,8 @@ resource "aws_iam_role_policy" "app" {
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_key_id_param, "/")}",
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_private_key_param, "/")}",
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.apple_refresh_token_enc_key_param, "/")}",
-            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.llm_api_key_param, "/")}"
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(local.llm_api_key_param, "/")}",
+            "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/ai/client"
           ],
           var.container_registry_password_ssm_parameter == null ? [] : [
             "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(var.container_registry_password_ssm_parameter, "/")}"

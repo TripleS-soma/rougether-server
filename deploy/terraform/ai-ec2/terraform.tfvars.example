@@ -1,0 +1,5 @@
+vpc_id                  = "vpc-xxxxxxxx"
+subnet_id               = "subnet-xxxxxxxx"
+api_security_group_id   = "sg-xxxxxxxx"
+github_deploy_role_name = "rougether-dev-github-actions-deploy"
+instance_type           = "t3.small"
