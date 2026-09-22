@@ -51,7 +51,7 @@ class NotificationSettingControllerTest {
     void 설정_조회_응답_계약() throws Exception {
         authAsUser7();
         when(notificationSettingService.getSettings(7L))
-                .thenReturn(new NotificationSettingResponse(true, true, false));
+                .thenReturn(new NotificationSettingResponse(true, true, false, true));
 
         mockMvc.perform(get("/api/v1/users/me/notification-settings"))
                 .andExpect(status().isOk())
@@ -63,8 +63,8 @@ class NotificationSettingControllerTest {
     @Test
     void 부분_변경은_보낸_필드만_서비스로_전달되고_전체_설정을_응답한다() throws Exception {
         authAsUser7();
-        when(notificationSettingService.updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false)))
-                .thenReturn(new NotificationSettingResponse(true, true, false));
+        when(notificationSettingService.updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null)))
+                .thenReturn(new NotificationSettingResponse(true, true, false, true));
 
         mockMvc.perform(patch("/api/v1/users/me/notification-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -74,7 +74,7 @@ class NotificationSettingControllerTest {
                 .andExpect(jsonPath("$.reminder").value(true))
                 .andExpect(jsonPath("$.house").value(false));
 
-        verify(notificationSettingService).updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false));
+        verify(notificationSettingService).updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null));
     }
 
     @Test

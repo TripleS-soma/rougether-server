@@ -1,14 +1,14 @@
-package com.triples.rougether.furniture.service;
+package com.triples.rougether.common.image;
 
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 // JPEG APP1의 orientation 한 값만 읽음. 모든 offset은 해당 APP1 segment 내부로 제한함.
-final class PhotoOrientation {
+public final class PhotoOrientation {
     private PhotoOrientation() { }
 
-    static int read(byte[] bytes) {
+    public static int read(byte[] bytes) {
         if (bytes.length < 4 || (bytes[0] & 255) != 255 || (bytes[1] & 255) != 216) return 1;
         int offset = 2;
         while (offset + 4 <= bytes.length && (bytes[offset] & 255) == 255) {
@@ -44,7 +44,7 @@ final class PhotoOrientation {
         return 1;
     }
 
-    static BufferedImage apply(BufferedImage image, int orientation) {
+    public static BufferedImage apply(BufferedImage image, int orientation) {
         if (orientation <= 1 || orientation > 8) return image;
         int width = image.getWidth(), height = image.getHeight();
         boolean swap = orientation >= 5;

@@ -34,7 +34,7 @@ public class NotificationSettingController {
     @Operation(summary = "알림 설정 변경",
             description = "push 알림 설정을 부분 변경하고 변경이 반영된 전체 설정을 반환합니다. 바꿀 항목만 담아 보내고, "
                     + "생략한 항목은 기존 값이 유지됩니다. 최소 한 항목은 담아야 합니다. "
-                    + "all을 false로 두면 reminder·house 값과 무관하게 모든 push가 중단되며, 그때도 각 그룹 값은 보존되어 "
+                    + "all을 false로 두면 reminder·house·feed 값과 무관하게 모든 push가 중단되며, 그때도 각 그룹 값은 보존되어 "
                     + "all을 다시 true로 되돌리면 이전 그룹 설정이 그대로 적용됩니다.")
     @PatchMapping
     public NotificationSettingResponse updateSettings(

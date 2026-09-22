@@ -24,6 +24,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FcmPushExecutorTest {
 
+    @Test
+    void 피드_알림의_이동정보도_FCM으로_전달한다() {
+        var data = java.util.Map.of("type", "FEED_COMMENT", "notificationId", "100", "postId", "20");
+        var token = tokenOf("token-1");
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(List.of(token));
+        when(fcmSender.send(List.of("token-1"), "제목", "본문", data))
+                .thenReturn(new FcmSendResult(1, List.of()));
+        fcmPushExecutor.push(100L, 1L, "제목", "본문", data);
+        verify(fcmSender).send(List.of("token-1"), "제목", "본문", data);
+        verify(notificationPushStatusService).markSent(100L);
+    }
+
     @Mock private UserDeviceTokenRepository userDeviceTokenRepository;
     @Mock private DeviceTokenService deviceTokenService;
     @Mock private NotificationPushStatusService notificationPushStatusService;

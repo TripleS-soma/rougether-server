@@ -69,7 +69,7 @@ class NotificationPushGateTest {
 
     @Test
     void 그룹을_끄면_알림은_저장되고_push만_skip된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false, null));
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
@@ -82,7 +82,7 @@ class NotificationPushGateTest {
     // 마스터가 그룹과 무관하게 우선한다는 판정 자체는 NotificationSettingServiceTest 가 전 타입으로 검증함.
     @Test
     void 마스터를_끄면_그룹이_켜져있어도_저장되고_push만_skip된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, null, true));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, null, true, null));
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_MEMBER_JOINED, "제목", "본문"));
 
@@ -93,7 +93,7 @@ class NotificationPushGateTest {
 
     @Test
     void 끈_그룹이_아닌_알림은_그대로_push된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, false, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, false, null, null));
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 

@@ -8,6 +8,7 @@ import com.triples.rougether.domain.notification.repository.NotificationReposito
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.message.NotificationContent;
 import java.time.Instant;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -45,7 +46,7 @@ public class NotificationService {
                 Notification.create(user, content.type(), content.title(), content.body(), refId));
 
         eventPublisher.publishEvent(new NotificationCreatedEvent(
-                notification.getId(), userId, content.type(), content.title(), content.body()));
+                notification.getId(), userId, content.type(), content.title(), content.body(), refId));
     }
 
     // 같은 수신자·타입·본문 알림이 since 이후 이미 갔으면 저장·push 모두 건너뛴다.
@@ -73,13 +74,19 @@ public class NotificationService {
                 notificationPushStatusService.markBlocked(event.notificationId());
                 return;
             }
-            fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());
+            if (event.type() == NotificationType.FEED_COMMENT && event.refId() != null) {
+                fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body(),
+                        Map.of("type", event.type().name(), "notificationId", event.notificationId().toString(),
+                                "postId", event.refId().toString()));
+            } else {
+                fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());
+            }
         } catch (Exception e) {
             log.warn("알림 push 제출 실패 - userId={}", event.userId(), e);
         }
     }
 
     public record NotificationCreatedEvent(Long notificationId, Long userId, NotificationType type,
-                                           String title, String body) {
+                                           String title, String body, Long refId) {
     }
 }

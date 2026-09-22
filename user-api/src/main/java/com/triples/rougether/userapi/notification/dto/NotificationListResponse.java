@@ -24,7 +24,7 @@ public record NotificationListResponse(
                     + "HOUSE_MEMBER_LEFT(집 멤버 퇴거), HOUSE_JOIN_REQUEST_CREATED(방장에게 입주 신청 도착, refId=신청 ID), "
                     + "HOUSE_JOIN_REQUEST_REJECTED(입주 신청 거절됨), HOUSE_JOIN_REQUEST_ACCEPTED(입주 신청 승인됨), "
                     + "ROOM_COBWEB_CLEANED(방 거미줄 청소됨), "
-                    + "BUG_REPORT_REPLY(버그 제보 답장 도착, refId=제보 ID)", example = "ROUTINE_REMINDER")
+                    + "BUG_REPORT_REPLY(버그 제보 답장 도착, refId=제보 ID), FEED_COMMENT(피드 댓글, refId=게시물 ID)", example = "ROUTINE_REMINDER")
             NotificationType type,
             @Schema(description = "알림 제목", example = "루틴 리마인드")
             String title,
@@ -33,7 +33,9 @@ public record NotificationListResponse(
             @Schema(description = "읽음 여부", example = "false")
             boolean isRead,
             @Schema(description = "알림 생성 시각. 목록은 최신순(notificationId 내림차순) 정렬")
-            Instant createdAt) {
+            Instant createdAt,
+            @Schema(description = "원인 리소스 ID. FEED_COMMENT는 게시물 ID이며 없으면 null")
+            Long refId) {
 
         public static NotificationItem of(Notification notification) {
             return new NotificationItem(
@@ -42,7 +44,8 @@ public record NotificationListResponse(
                     notification.getTitle(),
                     notification.getBody(),
                     notification.isRead(),
-                    notification.getCreatedAt());
+                    notification.getCreatedAt(),
+                    notification.getRefId());
         }
     }
 }

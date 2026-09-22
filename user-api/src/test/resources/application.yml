@@ -79,3 +79,8 @@ invite:
     android-cert-fingerprints: "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
     appstore-id: "6740000000"
     apple-app-id: TESTTEAM99.com.triples.rougether
+
+# 이미지 정리 스케줄은 통합테스트에서 직접 실행해 검증함.
+feed:
+  cleanup:
+    enabled: false

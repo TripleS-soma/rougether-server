@@ -61,7 +61,7 @@ class NotificationControllerTest {
         authAsUser7();
         when(notificationQueryService.getNotifications(7L, null, 20)).thenReturn(new NotificationListResponse(
                 List.of(new NotificationItem(12L, NotificationType.ROUTINE_REMINDER, "루틴 리마인드",
-                        "물 마시기 할 시간이에요", false, Instant.parse("2026-07-05T00:00:00Z"))),
+                        "물 마시기 할 시간이에요", false, Instant.parse("2026-07-05T00:00:00Z"), 21L)),
                 12L, true));
 
         mockMvc.perform(get("/api/v1/notifications"))

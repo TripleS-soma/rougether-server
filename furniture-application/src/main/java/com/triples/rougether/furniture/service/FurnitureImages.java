@@ -1,6 +1,7 @@
 package com.triples.rougether.furniture.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.common.image.PhotoOrientation;
 import com.triples.rougether.furniture.error.FurnitureGenerationErrorCode;
 import java.awt.image.BufferedImage;
 import java.io.*;

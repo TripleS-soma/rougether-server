@@ -93,9 +93,10 @@ class S3AssetStorageServiceTest {
         return ObjectVersion.builder().key(key).versionId(versionId).build();
     }
 
-    @Test
-    void temporaryFurniturePhotosAlwaysPurgeVersionsEvenWhenProfilePurgeIsDisabled() {
-        String key = "private/furniture-generation/job/source/photo.png";
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "private/furniture-generation/job/source/photo.png", "private/feed/11111111-2222-3333-4444-555555555555.jpg"})
+    void privatePhotosAlwaysPurgeVersionsEvenWhenProfilePurgeIsDisabled(String key) {
         var photos = new S3AssetStorageService(s3Client,
                 new AssetProperties(new AssetProperties.S3(BUCKET, "ap-northeast-2", false)));
         when(s3Client.listObjectVersions(any(ListObjectVersionsRequest.class))).thenReturn(
