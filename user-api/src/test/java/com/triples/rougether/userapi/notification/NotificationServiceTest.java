@@ -64,7 +64,7 @@ class NotificationServiceTest {
         ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue())
-                .isEqualTo(new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
+                .isEqualTo(new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
         // push는 커밋 이후 리스너(onNotificationCreated)에서만 나가야 함 — send() 안에서 바로 호출되면 안 됨.
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
@@ -75,7 +75,7 @@ class NotificationServiceTest {
         when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(true);
 
         notificationService.onNotificationCreated(
-                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
         verify(fcmPushExecutor).push(100L, 1L, "제목", "본문");
     }
@@ -89,7 +89,7 @@ class NotificationServiceTest {
                 .when(fcmPushExecutor).push(100L, 1L, "제목", "본문");
 
         assertThatCode(() -> notificationService.onNotificationCreated(
-                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문")))
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null)))
                 .doesNotThrowAnyException();
     }
 
@@ -98,7 +98,7 @@ class NotificationServiceTest {
         when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(false);
 
         notificationService.onNotificationCreated(
-                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문"));
+                new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
         verify(notificationPushStatusService).markBlocked(100L);
         verify(fcmPushExecutor, never()).push(any(), any(), any(), any());

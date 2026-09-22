@@ -8,6 +8,13 @@ import com.triples.rougether.domain.house.entity.CheerType;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class NotificationMessages {
 
+    public static NotificationContent feedComment() {
+        // 삭제·탈퇴한 댓글 본문이나 닉네임 사본을 알림함에 남기지 않음. 내용은 이동한 게시물에서 조회함.
+        return new NotificationContent(NotificationType.FEED_COMMENT,
+                "새 댓글이 달렸어요", "내 게시물에 새 댓글이 달렸어요. 확인해 보세요!",
+                "New comment", "Someone commented on your post. Take a look!");
+    }
+
     public static NotificationContent houseMissionAchieved(String missionTitle) {
         return new NotificationContent(
                 NotificationType.HOUSE_MISSION_ACHIEVED,

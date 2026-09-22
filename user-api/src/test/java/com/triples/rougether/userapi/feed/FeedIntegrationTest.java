@@ -53,6 +53,7 @@ class FeedIntegrationTest {
     @Autowired com.triples.rougether.domain.moderation.repository.BannedWordRepository bannedWords;
     @Autowired com.triples.rougether.userapi.global.text.BannedWordChecker bannedChecker;
     @MockitoBean FeedImageStorage storage;
+    @MockitoBean com.triples.rougether.userapi.notification.fcm.FcmPushExecutor push;
     private final List<Long> createdUsers = new ArrayList<>();
     private final Map<String, byte[]> objects = new ConcurrentHashMap<>();
 
@@ -64,6 +65,7 @@ class FeedIntegrationTest {
     @AfterEach void clean() {
         tx.executeWithoutResult(s -> {
             for (Long id : createdUsers) {
+                jdbc.update("delete from notification where user_id=?", id);
                 jdbc.update("delete c from feed_comments c join feed_posts p on p.id=c.post_id where p.author_id=? or c.author_id=?", id, id);
                 jdbc.update("delete l from feed_likes l join feed_posts p on p.id=l.post_id where p.author_id=? or l.user_id=?", id, id);
                 jdbc.update("delete from feed_images where owner_id=?", id);

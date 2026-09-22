@@ -7,6 +7,7 @@ import com.triples.rougether.infra.fcm.FcmSender;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -24,6 +25,15 @@ public class FcmPushExecutor {
 
     @Async("notificationTaskExecutor")
     public void push(Long notificationId, Long userId, String title, String body) {
+        deliver(notificationId, userId, title, body, Map.of());
+    }
+
+    @Async("notificationTaskExecutor")
+    public void push(Long notificationId, Long userId, String title, String body, Map<String, String> data) {
+        deliver(notificationId, userId, title, body, data);
+    }
+
+    private void deliver(Long notificationId, Long userId, String title, String body, Map<String, String> data) {
         List<String> tokens = userDeviceTokenRepository.findAllByUserId(userId).stream()
                 .map(UserDeviceToken::getToken)
                 .toList();
@@ -35,7 +45,7 @@ public class FcmPushExecutor {
 
         FcmSendResult result;
         try {
-            result = fcmSender.send(tokens, title, body);
+            result = data.isEmpty() ? fcmSender.send(tokens, title, body) : fcmSender.send(tokens, title, body, data);
         } catch (Exception e) {
             log.warn("FCM 발송 실패 - notificationId={}", notificationId, e);
             notificationPushStatusService.markFailed(notificationId);

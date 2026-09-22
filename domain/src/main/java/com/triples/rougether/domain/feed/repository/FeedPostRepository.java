@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
+    @Query("select p.author.id from FeedPost p where p.id = :id")
+    Optional<Long> findAuthorId(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from FeedPost p where p.id = :id")
     Optional<FeedPost> findForUpdate(@Param("id") Long id);

@@ -8,5 +8,6 @@ public enum NotificationSettingType {
     ALL,
     REMINDER,
     HOUSE,
+    FEED,
     SERVICE
 }

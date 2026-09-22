@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.notification.entity;
 
 public enum NotificationType {
+    FEED_COMMENT(NotificationSettingType.FEED),
     HOUSE_KICK(NotificationSettingType.HOUSE),
     ROUTINE_REMINDER(NotificationSettingType.REMINDER),
     TODO_REMINDER(NotificationSettingType.REMINDER),

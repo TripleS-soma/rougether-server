@@ -7,6 +7,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.userapi.feed.dto.*;
 import static com.triples.rougether.userapi.feed.error.FeedErrorCode.*;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
+import com.triples.rougether.userapi.notification.service.NotificationService;
+import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,6 +29,7 @@ public class FeedCommandService {
     private final FeedLikeRepository likes;
     private final FeedCommentRepository comments;
     private final BannedWordChecker bannedWords;
+    private final NotificationService notifications;
     private final Clock clock;
 
     public Long create(Long userId, FeedCreateRequest request) {
@@ -79,7 +82,8 @@ public class FeedCommandService {
         if (!liked) previous.ifPresent(likes::delete);
     }
     public FeedCommentResponse comment(Long userId, Long postId, FeedCommentRequest request) {
-        User user = access.lockActive(userId);
+        Long authorId = posts.findAuthorId(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
+        User user = access.lockCommentParticipants(userId, authorId);
         FeedPost post = lockVisible(postId);
         if (request.clientCommentId() == null) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 500, false);
@@ -92,6 +96,8 @@ public class FeedCommandService {
             return FeedCommentResponse.of(previous, userId);
         }
         FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(), requestHash, content));
+        // 댓글과 알림 내역을 함께 커밋하고 push만 기존 AFTER_COMMIT 경로로 발송함. 재시도·본인 댓글은 제외함.
+        if (!authorId.equals(userId)) notifications.send(authorId, NotificationMessages.feedComment(), postId);
         return FeedCommentResponse.of(comment, userId);
     }
     public void deleteComment(Long userId, Long postId, Long commentId) {
