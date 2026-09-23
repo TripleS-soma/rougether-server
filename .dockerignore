@@ -8,6 +8,10 @@
 **/terraform.tfvars
 **/*.tfplan
 .env
+**/.env
+**/__pycache__/
+# FastAPI는 ai-service/Dockerfile에서 별도 이미지로 빌드함.
+ai-service/
 .idea
 .vscode
 out/

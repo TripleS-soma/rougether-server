@@ -1,0 +1,136 @@
+name: AI service
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ai-service/**'
+      - 'infra/llm/**'
+      - 'qa/ai-service-contract/**'
+      - 'deploy/ai-service/**'
+      - 'deploy/terraform/ai-ec2/**'
+      - '.github/workflows/ai-service.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ai-service/**'
+      - 'infra/llm/**'
+      - 'qa/ai-service-contract/**'
+      - 'deploy/ai-service/**'
+      - 'deploy/terraform/ai-ec2/**'
+      - '.github/workflows/ai-service.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-service-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: AI service contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked Python dependencies
+        run: |
+          python -m pip install uv==0.10.12
+          uv sync --directory ai-service --frozen
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Python behavior and failure tests
+        run: uv run --directory ai-service --frozen pytest -q
+      - name: AI deployment rollback tests
+        run: python3 -m unittest discover -s qa/ai-service-contract -p test_deploy.py
+      - name: Java adapter tests
+        run: ./gradlew :infra:llm:test
+      - name: Real JVM to FastAPI HTTP contract
+        run: python qa/ai-service-contract/run.py
+
+  docker-build:
+    name: AI service Docker build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: ai-service
+          file: ai-service/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: rougether-ai:pr-${{ github.sha }}
+
+  publish:
+    name: Publish AI service
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [test, docker-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    env:
+      AWS_REGION: ap-northeast-2
+      REPOSITORY: rougether-dev/ai-service
+    steps:
+      - uses: actions/checkout@v5
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Check immutable release tag
+        id: existing
+        run: |
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$GITHUB_SHA" > /tmp/ai-image.json 2>/dev/null; then
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        if: steps.existing.outputs.found != 'true'
+        with:
+          context: ai-service
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}:${{ github.sha }}
+      - name: Resolve immutable image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          digest="$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text)"
+          echo "image=$REGISTRY/$REPOSITORY@$digest" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy AI EC2
+    if: vars.AI_SERVICE_DEPLOY_ENABLED == 'true'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-2
+      AI_INSTANCE_ID: ${{ vars.AI_SERVICE_INSTANCE_ID }}
+      AI_IMAGE: ${{ needs.publish.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Candidate smoke and switch with rollback
+        run: python3 deploy/ai-service/run-deploy.py "$AI_INSTANCE_ID" "$AI_IMAGE"

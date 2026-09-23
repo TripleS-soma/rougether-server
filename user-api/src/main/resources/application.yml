@@ -154,3 +154,13 @@ invite:
     android-cert-fingerprints: ${INVITE_ANDROID_CERT_FINGERPRINTS:}
     appstore-id: ${INVITE_APPSTORE_ID:}
     apple-app-id: ${INVITE_APPLE_APP_ID:}
+
+# 분리된 AI EC2 연결. CA는 PEM 인증서를 Base64로 인코딩한 공개 값임.
+ai:
+  service:
+    enabled: ${AI_SERVICE_ENABLED:false}
+    base-url: ${AI_SERVICE_BASE_URL:}
+    token: ${AI_SERVICE_TOKEN:}
+    timeout: ${AI_SERVICE_TIMEOUT:95s}
+    allow-insecure-http: ${AI_SERVICE_ALLOW_INSECURE_HTTP:false}
+    ca-certificate-base64: ${AI_SERVICE_CA_CERTIFICATE_BASE64:}

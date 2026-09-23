@@ -52,3 +52,6 @@ out/
 ### Local furniture preprocessing fixtures and extracted native packages ###
 /output/preprocess-*/
 /qa/furniture-preprocess/__pycache__/
+
+# Python 검증 산출물
+**/__pycache__/

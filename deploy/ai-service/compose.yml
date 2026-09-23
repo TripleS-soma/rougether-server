@@ -1,0 +1,23 @@
+services:
+  ai-service:
+    build:
+      context: ../../ai-service
+    image: rougether-ai:local
+    env_file:
+      - path: .env
+        required: true
+    ports:
+      - "127.0.0.1:8090:8090"
+    cpus: 1.0
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 105s
+    restart: unless-stopped

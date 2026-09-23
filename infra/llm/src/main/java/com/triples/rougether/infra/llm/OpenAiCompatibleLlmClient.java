@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 // OpenAI 호환 POST {base-url}/chat/completions 클라이언트(OpenAI·NVIDIA NIM 등 동일 스키마).
 // 429/5xx/네트워크 오류는 지수 백오프로 llm.max-retries 회 재시도하고, 그 외 4xx는 즉시 실패시킨다(OpenAiHttpSupport 공유).
+@ConditionalOnProperty(name = "ai.service.enabled", havingValue = "false", matchIfMissing = true)
 @ConditionalOnExpression("T(org.springframework.util.StringUtils).hasText('${llm.api-key:}')")
 @Component
 public class OpenAiCompatibleLlmClient implements LlmClient {

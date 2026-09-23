@@ -38,6 +38,8 @@ admin-api/   운영자 대면 앱 :8081  /admin   아이디·비밀번호 + 세�
 
 가구 생성의 API/워커 공용 실행 로직은 `furniture-application` 애플리케이션 라이브러리에, S3 어댑터는 `infra:assets`에 둡니다. `furniture-worker`는 별도 비웹 Boot 앱이며 user-api Boot 앱에 의존하지 않습니다. 자세한 실행·전환 기준은 [가구 워커](../work/furniture-worker.md)를 따릅니다.
 
+임베딩·주간 회고의 공급자 호출은 `ai-service/` FastAPI 프로세스로 선택적으로 분리합니다. `infra:llm`의 기존 인터페이스를 유지하고 `AI_SERVICE_ENABLED=true`일 때 내부 HTTP 어댑터를 사용합니다. 도메인 집계·프롬프트·결과 저장·폴백은 Spring이 담당합니다. 실행·검증·전환/복구 기준은 [AI 서버 분리](../work/ai-service.md)를 따릅니다.
+
 현재 결정상 `domain`은 영속 계층(Entity+Repository)만 둡니다. Service는 각 앱에 둡니다. 같은 핵심 로직(재화 지급 등)을 admin도 쓰게 되면 그 Service만 `domain`으로 승격하는 것을 검토합니다. 도메인 패키지는 실제 구현이 시작되는 시점에 필요한 만큼 추가하고, 아직 확정되지 않은 구조를 미리 과하게 나누지 않습니다.
 
 ## 앱 내부 패키지·서비스 구조

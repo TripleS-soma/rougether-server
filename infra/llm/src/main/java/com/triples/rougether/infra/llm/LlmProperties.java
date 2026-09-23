@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 //   temperature 를 받는 모델(gpt-4.1 등)로 바꿀 때만 값을 준다.
 // - reasoningEffort(none/low/medium/high…)는 값이 있을 때만 보낸다(미지원 공급자는 비워 둔다).
 // - jsonMode 는 response_format=json_object 전송 여부(OpenAI 지원, 일부 호환 API는 미지원이라 끌 수 있게 둠).
-// apiKey 는 환경변수(LLM_API_KEY) 주입, 커밋 금지 — 비어 있으면 StubLlmClient 가 대신 활성화된다.
+// apiKey 는 환경변수(LLM_API_KEY) 주입, 커밋 금지. ai.service.enabled=false일 때만 직접 호출/stub 선택에 사용함.
 // - embeddingModel/embeddingDimensions 는 {base-url}/embeddings 호출용(같은 키·타임아웃·재시도 공유). dimensions 는 양수일 때만
 //   전송하며(OpenAI text-embedding-3 계열의 Matryoshka 축소), 미지원 공급자는 0(LLM_EMBEDDING_DIMENSIONS=0)으로 끈다.
 //   (빈 문자열은 Binder 가 "값 없음"으로 보고 기본값을 적용하므로 끄는 값으로 쓸 수 없다. 타입을 Integer 로 둔 것은
