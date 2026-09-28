@@ -97,6 +97,17 @@ public class MarketCommand {
         return command;
     }
 
+    // 만료 접수(#403). 스케줄러가 주문 소유자 명의로 넣고, request_id 로 주문당 한 번만 들어가게 함.
+    public static MarketCommand expire(Long ownerUserId, Long assetId, Long orderId, Instant now) {
+        MarketCommand command = pending(ownerUserId, expireRequestId(orderId), CommandType.EXPIRE, assetId, now);
+        command.targetOrderId = orderId;
+        return command;
+    }
+
+    public static String expireRequestId(Long orderId) {
+        return "expire-" + orderId;
+    }
+
     // 주문 취소 접수. 환불은 엔진이 처리함.
     public static MarketCommand cancel(Long userId, String requestId, Long assetId, Long targetOrderId, Instant now) {
         MarketCommand command = pending(userId, requestId, CommandType.CANCEL, assetId, now);
