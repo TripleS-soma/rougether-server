@@ -31,11 +31,12 @@ public interface FurnitureGenerationJobRepository extends JpaRepository<Furnitur
     @Query("select j from FurnitureGenerationJob j where j.id = :id")
     Optional<FurnitureGenerationJob> findForUpdate(@Param("id") String id);
 
-    // 거래소 발행 자격 확인용. AI 가구 items row 를 처음 지급받은 생성 작업의 요청자 = 제작자.
+    // 거래소 발행 자격 확인용. AI 가구 items row 를 처음 지급받은 생성 작업(요청자 = 제작자)의 ID.
     // 되팔기로 받은 user_item 에는 생성 작업이 없으므로 user_item 이 아니라 item 기준으로 찾음.
-    @Query("select distinct j.userId from FurnitureGenerationJob j, UserItem ui "
-            + "where ui.id = j.userItemId and ui.item.id = :itemId")
-    Optional<Long> findCreatorUserIdByItemId(@Param("itemId") Long itemId);
+    // 잠금은 이 ID 로 findForUpdate 해서 작업 행(PK)만 잡음 — 서브쿼리 잠금 범위가 user_items 로 번지지 않게 함(#400).
+    @Query("select j.id from FurnitureGenerationJob j where j.userItemId in "
+            + "(select ui.id from UserItem ui where ui.item.id = :itemId)")
+    Optional<String> findGenerationJobIdByItemId(@Param("itemId") Long itemId);
 
     @Query("select j.id from FurnitureGenerationJob j where j.status = 'QUEUED' "
             + "and j.nextRunAt <= :now order by j.nextRunAt, j.id")

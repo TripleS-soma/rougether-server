@@ -144,6 +144,11 @@ public class FurnitureGenerationJob {
         leaseUntil = null;
     }
 
+    // 생성·재검수가 아직 끝나지 않은 상태. 이 동안 결과 이미지가 바뀔 수 있음.
+    public boolean isInProgress() {
+        return status == Status.UPLOADING || status == Status.QUEUED || status == Status.PROCESSING;
+    }
+
     public void requestReview(String content, Instant now) {
         feedback = content;
         candidateKey = resultAssetKey;
