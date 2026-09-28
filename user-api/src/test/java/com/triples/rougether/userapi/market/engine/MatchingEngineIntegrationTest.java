@@ -60,6 +60,7 @@ class MatchingEngineIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-09-28T00:00:00Z");
 
     @Autowired private MatchingEngine engine;
+    @Autowired private EngineLeaseManager leaseManager;
     @Autowired private MarketOrderCommandService orders;
     @Autowired private MarketAssetService assetService;
     @Autowired private MarketAssetRepository assets;
@@ -94,6 +95,9 @@ class MatchingEngineIntegrationTest {
         job.succeed(photoItem.getAssetKey(), creatorCopy.getId(), NOW);
         jobs.save(job);
         assetId = assetService.issue(creator.getId(), creatorCopy.getId(), 5).assetId();
+        // 이 컨텍스트의 인스턴스가 엔진 리스를 가져야 runOnce 가 처리함(다른 테스트 컨텍스트가 남긴 리스는 비움)
+        jdbc.update("update market_engine_lease set owner_token = null, lease_until = null where id = 1");
+        assertThat(leaseManager.tick()).isEqualTo(EngineLeaseManager.Outcome.TAKEN_OVER);
         engine.invalidateBook();
     }
 
@@ -103,6 +107,7 @@ class MatchingEngineIntegrationTest {
         jdbc.update("delete from market_orders");
         jdbc.update("delete from market_commands");
         jdbc.update("delete from market_assets");
+        jdbc.update("update market_engine_lease set owner_token = null, lease_until = null where id = 1");
         engine.invalidateBook();
     }
 

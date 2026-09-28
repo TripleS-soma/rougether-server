@@ -165,10 +165,14 @@ ai:
     allow-insecure-http: ${AI_SERVICE_ALLOW_INSECURE_HTTP:false}
     ca-certificate-base64: ${AI_SERVICE_CA_CERTIFICATE_BASE64:}
 
-# 가구 거래소 매칭 엔진(#401). 리스·펜싱(#402) 전에는 끔 — blue/green 두 컨테이너가 동시에 엔진을 돌리면 안 됨.
+# 가구 거래소 매칭 엔진(#401)과 담당 리스(#402). 켜면 모든 인스턴스가 heartbeat 로 리스를 다투고,
+# 리스를 가진 인스턴스 하나만 체결함. 켜는 시점은 배포 결정이라 기본은 끔.
 market:
   engine:
     enabled: ${MARKET_ENGINE_ENABLED:false}
     batch-size: 50
     poll-interval-millis: 100
     retry-delay-millis: 1000
+    heartbeat-millis: 3000
+    lease-seconds: 10
+    stall-seconds: 30

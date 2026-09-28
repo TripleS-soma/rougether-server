@@ -23,7 +23,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 접수 1건 = 트랜잭션 1개로 처리함(#401). 도장(engine_seq) → 처리 → APPLIED/REJECTED 가 함께 커밋되거나 함께 롤백됨.
-// 리스 행을 첫 잠금으로 잡아 순번 부여를 직렬화함(#402 에서 이 자리에 펜싱 확인이 붙음).
+// 리스 행을 첫 잠금으로 잡아 순번 부여를 직렬화하고, 같은 자리에서 펜싱 번호를 확인함(#402).
+// 잠금을 쥔 채 확인하므로 확인한 번호가 커밋 순간까지 유효함(인수는 이 트랜잭션이 끝날 때까지 기다림).
 // 발행 재고를 되돌릴 수 있는 경로는 종목 행을 처음부터 잠금 조회함(일반 조회 선행 시 갱신 유실).
 @Component
 public class CommandApplier {
@@ -65,9 +66,9 @@ public class CommandApplier {
     }
 
     // 호가창(book)은 이 트랜잭션 안에서 바뀌므로, 호출 측은 예외가 나면 호가창을 DB 에서 다시 적재해야 함.
-    public void apply(Long commandId, OrderBook book) {
+    public void apply(Long commandId, OrderBook book, long fencingToken) {
         transaction.executeWithoutResult(status -> {
-            MarketEngineLease lease = leaseRepository.findForUpdate().orElseThrow();
+            MarketEngineLease lease = lockLease(fencingToken);
             MarketCommand command = commandRepository.findById(commandId).orElseThrow();
             if (!command.isPending()) {
                 return;
@@ -84,8 +85,10 @@ public class CommandApplier {
     }
 
     // 처리 실패 횟수를 별도 트랜잭션에서 올림(처리 트랜잭션은 롤백됐으므로).
-    public int recordFailure(Long commandId) {
+    // 펜싱도 확인함: 이미 인수당한 옛 엔진이 횟수를 올려 새 엔진이 일찍 거절하는 일을 막음.
+    public int recordFailure(Long commandId, long fencingToken) {
         return transaction.execute(status -> {
+            lockLease(fencingToken);
             commandRepository.incrementAttempts(commandId);
             return commandRepository.findById(commandId).orElseThrow().getAttempts();
         });
@@ -93,18 +96,20 @@ public class CommandApplier {
 
     // 반복 실패한 접수를 거절하고 맡긴 것을 돌려줌. 환불은 일시 장애일 수 있어 몇 번 더 시도하고,
     // 그래도 실패하면 MARKET_ENGINE_ERROR_UNREFUNDED 로 남겨 수동 대사 대상임을 DB 에서 구분할 수 있게 함.
-    public void rejectAsEngineError(Long commandId) {
+    public void rejectAsEngineError(Long commandId, long fencingToken) {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= REFUND_ATTEMPTS; attempt++) {
             try {
-                transaction.executeWithoutResult(status -> reject(commandId, true));
+                transaction.executeWithoutResult(status -> reject(commandId, true, fencingToken));
                 return;
+            } catch (FencedOutException fenced) {
+                throw fenced;
             } catch (RuntimeException refundFailed) {
                 last = refundFailed;
             }
         }
         log.error("market command {} rejected without refund; manual reconciliation needed", commandId, last);
-        transaction.executeWithoutResult(status -> reject(commandId, false));
+        transaction.executeWithoutResult(status -> reject(commandId, false, fencingToken));
     }
 
     public List<Long> pendingIds(int limit) {
@@ -159,8 +164,8 @@ public class CommandApplier {
         command.applied(null, now);
     }
 
-    private void reject(Long commandId, boolean refund) {
-        MarketEngineLease lease = leaseRepository.findForUpdate().orElseThrow();
+    private void reject(Long commandId, boolean refund, long fencingToken) {
+        MarketEngineLease lease = lockLease(fencingToken);
         MarketCommand command = commandRepository.findById(commandId).orElseThrow();
         if (!command.isPending()) {
             return;
@@ -173,6 +178,15 @@ public class CommandApplier {
             ledger.refundCommand(command, asset, now);
         }
         command.rejected(refund ? ENGINE_ERROR : ENGINE_ERROR_UNREFUNDED, now);
+    }
+
+    // 리스 행 잠금 + 펜싱 확인. 토큰은 기본형 long 으로 비교함(Long 참조 비교 금지).
+    private MarketEngineLease lockLease(long fencingToken) {
+        MarketEngineLease lease = leaseRepository.findForUpdate().orElseThrow();
+        if (lease.getFencingToken() != fencingToken) {
+            throw new FencedOutException(fencingToken, lease.getFencingToken());
+        }
+        return lease;
     }
 
     private MarketAsset loadAsset(Long assetId, boolean lock) {
