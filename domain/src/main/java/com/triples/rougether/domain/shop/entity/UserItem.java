@@ -49,4 +49,20 @@ public class UserItem {
     public static UserItem create(User user, Item item) {
         return new UserItem(user, item);
     }
+
+    // 거래소 판매 등록으로 맡김. 인벤토리 조회(deletedAt is null)에서 빠짐.
+    public void deactivate(Instant now) {
+        if (deletedAt != null) {
+            throw new IllegalStateException("already inactive user item: " + id);
+        }
+        this.deletedAt = now;
+    }
+
+    // 판매 취소·만료로 돌려받음. 활성 유니크(uq_user_items_active)가 같은 아이템 중복 활성을 막음.
+    public void reactivate() {
+        if (deletedAt == null) {
+            throw new IllegalStateException("already active user item: " + id);
+        }
+        this.deletedAt = null;
+    }
 }
