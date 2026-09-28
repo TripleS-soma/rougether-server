@@ -35,6 +35,7 @@ class MarketAssetControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private MarketAssetService marketAssetService;
+    @MockitoBean private com.triples.rougether.userapi.market.service.MarketQueryService marketQueryService;
     @MockitoBean private CurrentUserArgumentResolver currentUserArgumentResolver;
     @MockitoBean private TokenService tokenService;
 
