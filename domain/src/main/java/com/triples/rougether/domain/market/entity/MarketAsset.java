@@ -79,6 +79,15 @@ public class MarketAsset {
         return true;
     }
 
+    // 발행 재고 매도가 거절·취소·만료되면 맡긴 수량을 재고로 되돌림. 잠금 조회한 인스턴스에만 호출할 것.
+    public void returnUnissued(int quantity, Instant now) {
+        if (quantity < 0 || unissuedQuantity + quantity > totalSupply) {
+            throw new IllegalStateException("invalid unissued return for asset " + id);
+        }
+        this.unissuedQuantity += quantity;
+        this.updatedAt = now;
+    }
+
     public boolean isCreator(Long userId) {
         return creatorUserId != null && creatorUserId.equals(userId);
     }

@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 // 거래소 접수 대장(#406). API 가 에스크로와 같은 트랜잭션에서 PENDING 으로 넣고,
-// 매칭 엔진이 engine_seq(공식 처리 순서)를 부여하며 처리함. 처리 메서드는 엔진 이슈(#401)에서 추가.
+// 매칭 엔진이 engine_seq(공식 처리 순서)를 부여하며 처리함.
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
@@ -102,6 +102,27 @@ public class MarketCommand {
         MarketCommand command = pending(userId, requestId, CommandType.CANCEL, assetId, now);
         command.targetOrderId = targetOrderId;
         return command;
+    }
+
+    // 엔진이 처리 순서를 확정함(#401)
+    public void stamp(long seq) {
+        this.engineSeq = seq;
+    }
+
+    public boolean isPending() {
+        return status == CommandStatus.PENDING;
+    }
+
+    public void applied(Long orderId, Instant now) {
+        this.status = CommandStatus.APPLIED;
+        this.orderId = orderId;
+        this.appliedAt = now;
+    }
+
+    public void rejected(String code, Instant now) {
+        this.status = CommandStatus.REJECTED;
+        this.rejectCode = code;
+        this.appliedAt = now;
     }
 
     // requestId 재요청 판정: 같은 주문 내용인지
