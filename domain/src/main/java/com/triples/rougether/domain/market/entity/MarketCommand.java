@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 // 거래소 접수 대장(#406). API 가 에스크로와 같은 트랜잭션에서 PENDING 으로 넣고,
-// 매칭 엔진이 engine_seq(공식 처리 순서)를 부여하며 처리함. 생성·처리 메서드는 주문 접수·엔진 이슈에서 추가.
+// 매칭 엔진이 engine_seq(공식 처리 순서)를 부여하며 처리함. 처리 메서드는 엔진 이슈(#401)에서 추가.
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
@@ -52,7 +52,7 @@ public class MarketCommand {
     @Column(name = "quantity", updatable = false)
     private Integer quantity;
 
-    // 접수 시 맡아 둔 코인(매수) 또는 수량(매도)
+    // 접수 시 맡아 둔 것. 매수는 코인, 매도는 가구 수량(보유분 1 / 발행 재고 quantity). 엔진 환급 시 side 로 구분
     @Column(name = "escrow_amount", updatable = false)
     private Integer escrowAmount;
 
@@ -83,4 +83,46 @@ public class MarketCommand {
 
     @Column(name = "applied_at")
     private Instant appliedAt;
+
+    // 주문 접수. 에스크로는 호출 측이 같은 트랜잭션에서 먼저 끝낸 뒤 이 접수를 넣음(#400).
+    public static MarketCommand place(Long userId, String requestId, Long assetId, OrderSide side, OrderSource source,
+                                      int price, int quantity, int escrowAmount, Long escrowUserItemId, Instant now) {
+        MarketCommand command = pending(userId, requestId, CommandType.PLACE, assetId, now);
+        command.side = side;
+        command.source = source;
+        command.price = price;
+        command.quantity = quantity;
+        command.escrowAmount = escrowAmount;
+        command.escrowUserItemId = escrowUserItemId;
+        return command;
+    }
+
+    // 주문 취소 접수. 환불은 엔진이 처리함.
+    public static MarketCommand cancel(Long userId, String requestId, Long assetId, Long targetOrderId, Instant now) {
+        MarketCommand command = pending(userId, requestId, CommandType.CANCEL, assetId, now);
+        command.targetOrderId = targetOrderId;
+        return command;
+    }
+
+    // requestId 재요청 판정: 같은 주문 내용인지
+    public boolean isSamePlace(Long assetId, OrderSide side, OrderSource source, int price, int quantity) {
+        return type == CommandType.PLACE && this.assetId.equals(assetId) && this.side == side && this.source == source
+                && this.price != null && this.price == price && this.quantity != null && this.quantity == quantity;
+    }
+
+    // requestId 재요청 판정: 같은 주문의 취소인지
+    public boolean isSameCancel(Long orderId) {
+        return type == CommandType.CANCEL && orderId.equals(targetOrderId);
+    }
+
+    private static MarketCommand pending(Long userId, String requestId, CommandType type, Long assetId, Instant now) {
+        MarketCommand command = new MarketCommand();
+        command.userId = userId;
+        command.requestId = requestId;
+        command.type = type;
+        command.assetId = assetId;
+        command.status = CommandStatus.PENDING;
+        command.createdAt = now;
+        return command;
+    }
 }

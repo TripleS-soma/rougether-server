@@ -38,4 +38,9 @@ public interface RoomItemPlacementRepository extends JpaRepository<RoomItemPlace
     @Modifying(flushAutomatically = true)
     @Query("delete from RoomItemPlacement p where p.room.userId = :roomUserId")
     void deleteByRoomUserId(@Param("roomUserId") Long roomUserId);
+
+    // 거래소 판매 등록으로 맡긴 가구를 방에서 뺌. 배치 조회가 user_items.deleted_at 을 거르지 않아 필수(#400).
+    @Modifying(flushAutomatically = true)
+    @Query("delete from RoomItemPlacement p where p.userItem.id = :userItemId")
+    void deleteByUserItemId(@Param("userItemId") Long userItemId);
 }
