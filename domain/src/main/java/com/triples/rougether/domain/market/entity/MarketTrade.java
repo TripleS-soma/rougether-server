@@ -57,4 +57,22 @@ public class MarketTrade {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static MarketTrade of(Long assetId, long engineSeq, MarketOrder buy, MarketOrder sell, Long royaltyUserId,
+                                 int price, int quantity, int royaltyAmount, int feeAmount, Instant now) {
+        MarketTrade trade = new MarketTrade();
+        trade.assetId = assetId;
+        trade.engineSeq = engineSeq;
+        trade.buyOrderId = buy.getId();
+        trade.sellOrderId = sell.getId();
+        trade.buyerUserId = buy.getUserId();
+        trade.sellerUserId = sell.getUserId();
+        trade.royaltyUserId = royaltyUserId;
+        trade.price = price;
+        trade.quantity = quantity;
+        trade.royaltyAmount = royaltyAmount;
+        trade.feeAmount = feeAmount;
+        trade.createdAt = now;
+        return trade;
+    }
 }

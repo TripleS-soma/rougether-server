@@ -164,3 +164,11 @@ ai:
     timeout: ${AI_SERVICE_TIMEOUT:95s}
     allow-insecure-http: ${AI_SERVICE_ALLOW_INSECURE_HTTP:false}
     ca-certificate-base64: ${AI_SERVICE_CA_CERTIFICATE_BASE64:}
+
+# 가구 거래소 매칭 엔진(#401). 리스·펜싱(#402) 전에는 끔 — blue/green 두 컨테이너가 동시에 엔진을 돌리면 안 됨.
+market:
+  engine:
+    enabled: ${MARKET_ENGINE_ENABLED:false}
+    batch-size: 50
+    poll-interval-millis: 100
+    retry-delay-millis: 1000
