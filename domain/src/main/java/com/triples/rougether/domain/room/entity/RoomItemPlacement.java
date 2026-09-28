@@ -17,7 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 // 자유배치 가구 1개의 배치 상태. 좌표는 방 렌더 영역 전체 기준 0.0~1.0 정규화.
-// UNIQUE(room_user_id, user_item_id) + user_items 의 UNIQUE(user_id, item_id)(V8) 조합으로
+// UNIQUE(room_user_id, user_item_id) + user_items 의 활성 보유 UNIQUE(user_id, item_id, active_flag)(V80) 조합으로
 // 같은 가구(item)는 방에 1개만 배치된다. 다중 배치 허용은 spec 미결정(#162 후속) — 필요 시 이 unique 완화로 대응.
 // 저장은 전체 교체(delete 후 insert) 방식이라 개별 수정 메서드 없이 place 팩토리만 둔다.
 @Getter

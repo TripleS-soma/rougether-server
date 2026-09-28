@@ -58,7 +58,7 @@ public class ShopCommandService {
         }
 
         // 지갑이 아직 없으면(다이아 미발급) 잔액 0 취급. 행 락으로 동시 구매의 이중 차감을 막고,
-        // 이중 지급은 uq_user_items_user_item 이 막는다.
+        // 이중 지급은 활성 보유 유니크 uq_user_items_active(V80)가 막는다.
         UserWallet wallet = userWalletRepository.findWithLockByUserIdAndCurrencyType(userId, item.getPurchaseCurrencyType())
                 .orElseThrow(() -> new BusinessException(ShopErrorCode.INSUFFICIENT_BALANCE));
         if (wallet.getBalance() < item.getPriceAmount()) {
