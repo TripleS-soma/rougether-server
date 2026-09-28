@@ -177,7 +177,9 @@ public class CommandApplier {
                     ? loadAsset(command.getAssetId(), true) : null;
             ledger.refundCommand(command, asset, now);
         }
-        command.rejected(refund ? ENGINE_ERROR : ENGINE_ERROR_UNREFUNDED, now);
+        // 취소·만료 접수는 맡긴 것이 없어 환불 실패가 성립하지 않음
+        boolean unrefunded = !refund && command.getType() == CommandType.PLACE;
+        command.rejected(unrefunded ? ENGINE_ERROR_UNREFUNDED : ENGINE_ERROR, now);
     }
 
     // 리스 행 잠금 + 펜싱 확인. 토큰은 기본형 long 으로 비교함(Long 참조 비교 금지).

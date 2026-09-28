@@ -176,3 +176,4 @@ market:
     heartbeat-millis: 3000
     lease-seconds: 10
     stall-seconds: 30
+    expiry-delay-millis: 60000
