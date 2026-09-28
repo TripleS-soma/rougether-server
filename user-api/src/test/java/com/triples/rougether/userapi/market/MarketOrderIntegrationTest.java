@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.market;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob;
@@ -86,8 +86,9 @@ class MarketOrderIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        when(kstClock.instant()).thenReturn(NOW);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        // 스케줄러 스레드(채팅 등)가 같은 시계 mock 을 부를 수 있어, 마지막 호출에 기대는 when() 대신 doReturn() 으로 스텁함
+        doReturn(NOW).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
         creator = newUser(0);
         buyer = newUser(100);
         photoItem = items.save(new Item(themes.findByCode("photo_furniture").orElseThrow(), "furniture", "positioned",
