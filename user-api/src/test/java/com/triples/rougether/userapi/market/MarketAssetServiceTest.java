@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob;
 import com.triples.rougether.domain.furniture.repository.FurnitureGenerationJobRepository;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -40,7 +41,11 @@ class MarketAssetServiceTest {
         UserItem owned = mock(UserItem.class);
         when(owned.getItem()).thenReturn(item);
         when(userItems.findOwnedWithItem(7L, 77L)).thenReturn(Optional.of(owned));
-        when(jobs.findCreatorUserIdByItemId(320L)).thenReturn(Optional.of(7L));
+        FurnitureGenerationJob job = mock(FurnitureGenerationJob.class);
+        when(job.getUserId()).thenReturn(7L);
+        when(job.isInProgress()).thenReturn(false);
+        when(jobs.findGenerationJobIdByItemId(320L)).thenReturn(Optional.of("job-1"));
+        when(jobs.findForUpdate("job-1")).thenReturn(Optional.of(job));
         when(assets.existsByItemId(320L)).thenReturn(false);
         when(assets.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("uk_market_assets_item"));
 

@@ -41,6 +41,7 @@ public class FurnitureGenerationTransactions {
     private final GenerationCreditLedger credits;
     private final FurnitureWorkerCapacityRepository capacity;
     private final FurnitureLambdaExecutionRepository executions;
+    private final com.triples.rougether.domain.market.repository.MarketAssetRepository marketAssets;
     @org.springframework.beans.factory.annotation.Value("${furniture.admission.max-outstanding:40}")
     private int maxOutstanding = 40;
     @org.springframework.beans.factory.annotation.Value("${furniture.admission.max-queue-wait:5m}")
@@ -194,6 +195,10 @@ public class FurnitureGenerationTransactions {
             return FurnitureGenerationResponse.from(job);
         }
         if (job.getStatus() != Status.SUCCEEDED) throw new BusinessException(FURNITURE_FEEDBACK_UNAVAILABLE);
+        // 거래소에 상장된 가구는 모든 보유자의 이미지가 바뀌므로 재검수 금지(#400). 작업 행 잠금 뒤 잠금 읽기로 최신 상장을 봄.
+        if (marketAssets.findListedForShareByUserItemId(job.getUserItemId()).isPresent()) {
+            throw new BusinessException(FURNITURE_MARKET_LISTED);
+        }
         requireNoActiveJob(userId);
         requireQueueSpace();
         if (job.getReviewAttempts() >= config.maxReviewAttempts()) throw new BusinessException(FURNITURE_BUDGET_EXHAUSTED);

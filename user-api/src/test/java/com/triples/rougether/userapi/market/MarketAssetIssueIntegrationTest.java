@@ -54,6 +54,7 @@ class MarketAssetIssueIntegrationTest {
     private User creator;
     private Item photoItem;
     private UserItem creatorCopy;
+    private FurnitureGenerationJob job;
 
     @BeforeEach
     void setUp() {
@@ -62,7 +63,7 @@ class MarketAssetIssueIntegrationTest {
         creator = newUser();
         photoItem = newItem(themes.findByCode("photo_furniture").orElseThrow());
         creatorCopy = userItems.save(UserItem.create(creator, photoItem));
-        FurnitureGenerationJob job = FurnitureGenerationJob.create(creator.getId(), UUID.randomUUID().toString(),
+        job = FurnitureGenerationJob.create(creator.getId(), UUID.randomUUID().toString(),
                 "a".repeat(64), "고양이 소파", NOW, NOW.plus(Duration.ofDays(1)));
         job.succeed(photoItem.getAssetKey(), creatorCopy.getId(), NOW);
         jobs.save(job);
@@ -144,6 +145,27 @@ class MarketAssetIssueIntegrationTest {
 
         assertError(() -> marketAssetService.issue(creator.getId(), creatorCopy.getId(), 3), MarketErrorCode.ASSET_ALREADY_LISTED);
         assertThat(marketAssets.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 재검수가_진행_중인_가구는_발행할_수_없다() {
+        job.requestReview("다리가 이상해요", NOW);
+        jobs.save(job);
+
+        assertError(() -> marketAssetService.issue(creator.getId(), creatorCopy.getId(), 3),
+                MarketErrorCode.ITEM_REVIEW_IN_PROGRESS);
+        assertThat(marketAssets.existsByItemId(photoItem.getId())).isFalse();
+    }
+
+    @Test
+    void 재검수가_실패해도_가구는_남으므로_발행할_수_있다() {
+        job.requestReview("다리가 이상해요", NOW);
+        job.fail("REVIEW_REJECTED", NOW);
+        jobs.save(job);
+
+        MarketAssetResponse response = marketAssetService.issue(creator.getId(), creatorCopy.getId(), 3);
+
+        assertThat(response.totalSupply()).isEqualTo(3);
     }
 
     @Test

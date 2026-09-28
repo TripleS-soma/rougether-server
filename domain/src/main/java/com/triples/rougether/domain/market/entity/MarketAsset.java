@@ -69,6 +69,16 @@ public class MarketAsset {
         return new MarketAsset(itemId, creatorUserId, totalSupply, now);
     }
 
+    // 제작자의 발행 재고 매도 에스크로. 재고가 모자라면 false 를 돌려주고 아무것도 바꾸지 않음.
+    public boolean takeUnissued(int quantity, Instant now) {
+        if (quantity < 1 || quantity > unissuedQuantity) {
+            return false;
+        }
+        this.unissuedQuantity -= quantity;
+        this.updatedAt = now;
+        return true;
+    }
+
     public boolean isCreator(Long userId) {
         return creatorUserId != null && creatorUserId.equals(userId);
     }

@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.market.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob;
 import com.triples.rougether.domain.furniture.repository.FurnitureGenerationJobRepository;
 import com.triples.rougether.domain.market.entity.MarketAsset;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
@@ -50,10 +51,15 @@ public class MarketAssetService {
         if (!TRADABLE_THEME_CODE.equals(item.getTheme().getCode())) {
             throw new BusinessException(MarketErrorCode.ITEM_NOT_TRADABLE);
         }
-        Long creatorId = furnitureGenerationJobRepository.findCreatorUserIdByItemId(item.getId())
+        // 생성 작업 행을 잠가 재검수(feedback)와 직렬화함. 재검수 중이면 발행 직후 이미지가 바뀔 수 있어 막음(#400).
+        FurnitureGenerationJob job = furnitureGenerationJobRepository.findGenerationJobIdByItemId(item.getId())
+                .flatMap(furnitureGenerationJobRepository::findForUpdate)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.NOT_CREATOR));
-        if (!creatorId.equals(userId)) {
+        if (!job.getUserId().equals(userId)) {
             throw new BusinessException(MarketErrorCode.NOT_CREATOR);
+        }
+        if (job.isInProgress()) {
+            throw new BusinessException(MarketErrorCode.ITEM_REVIEW_IN_PROGRESS);
         }
         if (marketAssetRepository.existsByItemId(item.getId())) {
             throw new BusinessException(MarketErrorCode.ASSET_ALREADY_LISTED);

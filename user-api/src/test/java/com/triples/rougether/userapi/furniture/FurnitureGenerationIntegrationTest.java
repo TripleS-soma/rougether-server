@@ -34,6 +34,7 @@ import org.springframework.transaction.support.*;
         "furniture.generation.style-reference-keys=items/ref.png"})
 class FurnitureGenerationIntegrationTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired com.triples.rougether.userapi.market.service.MarketAssetService marketAssetService;
     @Autowired FurnitureGenerationTransactions transactions;
     @Autowired FurnitureGenerationWorker worker;
     @Autowired FurnitureGenerationJobRepository jobs;
@@ -241,6 +242,19 @@ class FurnitureGenerationIntegrationTest {
         assertThat(corrected.assetKey()).isNotEqualTo(done.assetKey());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).singleElement()
                 .satisfies(i -> assertThat(i.getItem().getAssetKey()).isEqualTo(corrected.assetKey()));
+    }
+
+    @Test void 거래소에_상장된_가구는_재검수할_수_없음() {
+        var done = complete();
+        marketAssetService.issue(user.getId(), done.userItemId(), 3);
+        try {
+            assertCode(() -> service.feedback(user.getId(), done.id(),
+                    new FurnitureFeedbackRequest(UUID.randomUUID(), "색이 달라요")), "FURNITURE_MARKET_LISTED");
+            assertThat(feedbacks.count()).isZero();
+            assertThat(service.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
+        } finally {
+            jdbc.update("delete from market_assets");
+        }
     }
 
     @Test void 피드백_검수에서_유지가_선택되면_추가_이미지_호출_없음() {
