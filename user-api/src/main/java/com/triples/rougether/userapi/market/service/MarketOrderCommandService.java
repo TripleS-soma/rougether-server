@@ -134,6 +134,7 @@ public class MarketOrderCommandService {
 
     private MarketCommandAcceptedResponse placeBuy(Long userId, PlaceOrderRequest request, MarketAsset asset, Instant now) {
         requireNotHolding(userId, asset);
+        requireNoOwnOrder(userId, asset, OrderSide.SELL);
         UserWallet wallet = userWalletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.INSUFFICIENT_COIN));
         int amount = request.price() * request.quantity();
@@ -169,6 +170,7 @@ public class MarketOrderCommandService {
         if (!asset.isCreator(userId)) {
             throw new BusinessException(MarketErrorCode.NOT_CREATOR);
         }
+        requireNoOwnOrder(userId, asset, OrderSide.BUY);
         if (!asset.takeUnissued(request.quantity(), now)) {
             throw new BusinessException(MarketErrorCode.INSUFFICIENT_SUPPLY);
         }
@@ -200,6 +202,14 @@ public class MarketOrderCommandService {
                 || marketOrderRepository.existsOpenHolding(userId, asset.getId())
                 || marketCommandRepository.existsPendingHolding(userId, asset.getId())) {
             throw new BusinessException(MarketErrorCode.ALREADY_HOLDING);
+        }
+    }
+
+    // 같은 가구 반대 주문 금지(#401 사용자 결정): 내 주문끼리 맞물리는 상황을 접수 단계에서 없앰.
+    private void requireNoOwnOrder(Long userId, MarketAsset asset, OrderSide opposite) {
+        if (marketOrderRepository.existsOpenSide(userId, asset.getId(), opposite)
+                || marketCommandRepository.existsPendingPlace(userId, asset.getId(), opposite)) {
+            throw new BusinessException(MarketErrorCode.OWN_ORDER_CONFLICT);
         }
     }
 
