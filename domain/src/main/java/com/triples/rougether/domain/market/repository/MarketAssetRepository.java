@@ -1,8 +1,11 @@
 package com.triples.rougether.domain.market.repository;
 
 import com.triples.rougether.domain.market.entity.MarketAsset;
+import com.triples.rougether.domain.market.entity.MarketAssetStatus;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -11,6 +14,9 @@ import org.springframework.data.repository.query.Param;
 public interface MarketAssetRepository extends JpaRepository<MarketAsset, Long> {
 
     boolean existsByItemId(Long itemId);
+
+    // 종목 카드 목록: 거래 중인 종목을 최근 상장순으로
+    Page<MarketAsset> findByStatusOrderByIdDesc(MarketAssetStatus status, Pageable page);
 
     // 발행 재고 매도 에스크로용. 동시 매도의 재고 이중 차감을 막음.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

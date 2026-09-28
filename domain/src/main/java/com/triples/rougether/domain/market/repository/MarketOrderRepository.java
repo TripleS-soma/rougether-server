@@ -4,8 +4,10 @@ import com.triples.rougether.domain.market.entity.MarketOrder;
 import com.triples.rougether.domain.market.entity.OrderSide;
 import com.triples.rougether.domain.market.entity.OrderStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -32,6 +34,30 @@ public interface MarketOrderRepository extends JpaRepository<MarketOrder, Long> 
             + "where c.type = com.triples.rougether.domain.market.entity.CommandType.EXPIRE and c.targetOrderId = o.id "
             + "and c.status = com.triples.rougether.domain.market.entity.CommandStatus.REJECTED)")
     long countStuckExpired(@Param("now") Instant now);
+
+    // 호가(매도): 대기 주문의 남은 수량을 가격대별로 합산, 싼 가격부터
+    @Query("select o.price as price, sum(o.quantity - o.filledQuantity) as quantity from MarketOrder o "
+            + "where o.assetId = :assetId and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN "
+            + "group by o.price order by o.price asc")
+    List<MarketPriceLevel> findAskLevels(@Param("assetId") Long assetId, Pageable page);
+
+    // 호가(매수): 비싼 가격부터
+    @Query("select o.price as price, sum(o.quantity - o.filledQuantity) as quantity from MarketOrder o "
+            + "where o.assetId = :assetId and o.side = com.triples.rougether.domain.market.entity.OrderSide.BUY "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN "
+            + "group by o.price order by o.price desc")
+    List<MarketPriceLevel> findBidLevels(@Param("assetId") Long assetId, Pageable page);
+
+    // 종목 카드용: 여러 종목의 최저 매도가·매도 총수량을 한 번에
+    @Query("select o.assetId as assetId, min(o.price) as bestAskPrice, sum(o.quantity - o.filledQuantity) as askQuantity "
+            + "from MarketOrder o where o.assetId in :assetIds "
+            + "and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN group by o.assetId")
+    List<MarketAskSummary> summarizeAsks(@Param("assetIds") Collection<Long> assetIds);
+
+    // 내 주문 목록: 상태 묶음(대기 / 종료)별 최신순
+    Page<MarketOrder> findByUserIdAndStatusInOrderByIdDesc(Long userId, Collection<OrderStatus> statuses, Pageable page);
 
     // 반대 주문 금지 판정: 대기 중인 같은 종목·같은 방향 주문
     @Query("select count(o) > 0 from MarketOrder o where o.userId = :userId and o.assetId = :assetId "
