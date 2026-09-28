@@ -12,8 +12,8 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 
 // 단일 스레드 매칭 엔진(#401). 접수 대장의 PENDING 을 접수 순서대로 하나씩 처리함.
-// 스레드 하나가 순서를 확정하므로 같은 매물을 두고 락 경쟁이 없음. market.engine.enabled 가 켜진 인스턴스에서만 돔
-// (#402 리스 전까지 운영에서 끔 — blue/green 두 컨테이너가 동시에 돌면 안 됨).
+// 스레드 하나가 순서를 확정하므로 같은 매물을 두고 락 경쟁이 없음.
+// market.engine.enabled 인스턴스마다 스레드가 돌지만, 리스를 가진 인스턴스만 처리하고 쓰기는 펜싱 번호로 한 번 더 막힘(#402).
 @Component
 public class MatchingEngine {
 
@@ -30,6 +30,7 @@ public class MatchingEngine {
     private final OrderBook book = new OrderBook();
     private volatile boolean running;
     private volatile boolean bookLoaded;
+    private long loadedToken = -1;
     private Thread thread;
 
     public MatchingEngine(CommandApplier applier, MarketEngineLeaseGuard leaseGuard,
@@ -72,22 +73,32 @@ public class MatchingEngine {
             bookLoaded = false;
             return 0;
         }
-        if (!bookLoaded) {
-            applier.reload(book);
-            bookLoaded = true;
-        }
-        List<Long> pending = applier.pendingIds(batchSize);
-        int processed = 0;
-        for (Long commandId : pending) {
-            try {
-                applier.apply(commandId, book);
-                processed++;
-            } catch (RuntimeException failure) {
-                handleFailure(commandId, failure);
-                return -1;
+        long token = leaseGuard.fencingToken();
+        try {
+            if (!bookLoaded || token != loadedToken) {
+                // 새로 인수했으면 이전 담당이 바꾼 DB 를 기준으로 호가창을 다시 만듦
+                applier.reload(book);
+                bookLoaded = true;
+                loadedToken = token;
             }
+            List<Long> pending = applier.pendingIds(batchSize);
+            int processed = 0;
+            for (Long commandId : pending) {
+                try {
+                    applier.apply(commandId, book, token);
+                    processed++;
+                } catch (FencedOutException fenced) {
+                    onFencedOut(fenced);
+                    return 0;
+                } catch (RuntimeException failure) {
+                    handleFailure(commandId, failure, token);
+                    return -1;
+                }
+            }
+            return processed;
+        } finally {
+            leaseGuard.recordProgress();
         }
-        return processed;
     }
 
     // 테스트 격리용: 다음 runOnce 에서 호가창을 DB 로 다시 적재함.
@@ -95,7 +106,14 @@ public class MatchingEngine {
         bookLoaded = false;
     }
 
-    private void handleFailure(Long commandId, RuntimeException failure) {
+    // 다른 인스턴스가 인수함. 실패 횟수를 쓰지 않고 담당을 내려놓음(처리 트랜잭션은 이미 롤백됨).
+    private void onFencedOut(FencedOutException fenced) {
+        bookLoaded = false;
+        leaseGuard.fencedOut(fenced.staleToken());
+        log.warn("market matching engine fenced out; another instance took over", fenced);
+    }
+
+    private void handleFailure(Long commandId, RuntimeException failure, long token) {
         // 처리 트랜잭션은 롤백됐지만 메모리 호가창은 이미 바뀌었을 수 있음
         bookLoaded = false;
         if (isTransient(failure)) {
@@ -103,16 +121,27 @@ public class MatchingEngine {
             log.info("market command {} hit a transient lock failure; retrying", commandId, failure);
             return;
         }
-        int attempts = applier.recordFailure(commandId);
+        int attempts;
+        try {
+            attempts = applier.recordFailure(commandId, token);
+        } catch (FencedOutException fenced) {
+            onFencedOut(fenced);
+            return;
+        }
         log.warn("market command {} failed (attempt {})", commandId, attempts, failure);
         if (attempts >= MAX_ATTEMPTS) {
-            applier.rejectAsEngineError(commandId);
+            try {
+                applier.rejectAsEngineError(commandId, token);
+            } catch (FencedOutException fenced) {
+                onFencedOut(fenced);
+            }
         }
     }
 
     static boolean isTransient(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof TransientDataAccessException || cause instanceof PessimisticLockingFailureException
+                    || cause instanceof org.springframework.transaction.CannotCreateTransactionException
                     || cause instanceof jakarta.persistence.PessimisticLockException
                     || cause instanceof jakarta.persistence.LockTimeoutException) {
                 return true;
