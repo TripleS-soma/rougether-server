@@ -92,6 +92,15 @@ public class MarketAsset {
         return creatorUserId != null && creatorUserId.equals(userId);
     }
 
+    // 운영자 거래 정지(#399 신고 조치). 이미 정지면 그대로. 잠금 조회한 인스턴스에만 호출할 것.
+    public void suspend(Instant now) {
+        if (status == MarketAssetStatus.SUSPENDED) {
+            return;
+        }
+        this.status = MarketAssetStatus.SUSPENDED;
+        this.updatedAt = now;
+    }
+
     public boolean isSuspended() {
         return status == MarketAssetStatus.SUSPENDED;
     }

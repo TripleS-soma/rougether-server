@@ -15,8 +15,16 @@ public interface MarketAssetRepository extends JpaRepository<MarketAsset, Long> 
 
     boolean existsByItemId(Long itemId);
 
-    // 종목 카드 목록: 거래 중인 종목을 최근 상장순으로
-    Page<MarketAsset> findByStatusOrderByIdDesc(MarketAssetStatus status, Pageable page);
+    // 종목 카드 목록: 거래 중인 종목을 최근 상장순으로. 요청자(viewer)가 차단한 제작자의 종목은 뺌(#399).
+    // 제작자가 탈퇴해 creator_user_id 가 null 이면 차단 대상이 아니므로 그대로 노출함.
+    @Query(value = "select a from MarketAsset a where a.status = :status "
+            + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer "
+            + "and b.blockedUserId = a.creatorUserId) order by a.id desc",
+            countQuery = "select count(a) from MarketAsset a where a.status = :status "
+            + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer "
+            + "and b.blockedUserId = a.creatorUserId)")
+    Page<MarketAsset> findListedFor(@Param("viewer") Long viewer, @Param("status") MarketAssetStatus status,
+                                    Pageable page);
 
     // 발행 재고 매도 에스크로용. 동시 매도의 재고 이중 차감을 막음.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

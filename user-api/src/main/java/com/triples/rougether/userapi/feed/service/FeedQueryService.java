@@ -26,27 +26,28 @@ public class FeedQueryService {
         access.active(viewer);
         validatePage(cursor, size);
         if (authorId != null && authorId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
-        List<FeedPost> found = posts.findPage(authorId, cursor, PageRequest.of(0, size + 1));
+        List<FeedPost> found = posts.findPage(viewer, authorId, cursor, PageRequest.of(0, size + 1));
         boolean more = found.size() > size;
         List<FeedPost> page = more ? found.subList(0, size) : found;
         return new FeedPageResponse<>(render(viewer, page), more ? page.getLast().getId() : null, more);
     }
     public FeedPostResponse get(Long viewer, Long postId) {
         access.active(viewer);
-        return render(viewer, List.of(visible(postId))).getFirst();
+        return render(viewer, List.of(visible(postId, viewer))).getFirst();
     }
     public FeedPageResponse<FeedCommentResponse> comments(Long viewer, Long postId, Long cursor, int size) {
         access.active(viewer);
         validatePage(cursor, size);
-        visible(postId);
-        List<FeedComment> found = comments.findPage(postId, cursor, PageRequest.of(0, size + 1));
+        visible(postId, viewer);
+        List<FeedComment> found = comments.findPage(viewer, postId, cursor, PageRequest.of(0, size + 1));
         boolean more = found.size() > size;
         List<FeedComment> page = more ? found.subList(0, size) : found;
         return new FeedPageResponse<>(page.stream().map(c -> FeedCommentResponse.of(c, viewer)).toList(),
                 more ? page.getLast().getId() : null, more);
     }
-    private FeedPost visible(Long id) {
-        return posts.findVisible(id).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
+    // 차단한 작성자의 글은 삭제된 글처럼 404(#399).
+    private FeedPost visible(Long id, Long viewer) {
+        return posts.findVisible(id, viewer).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
     }
     private void validatePage(Long cursor, int size) {
         if (size < 1 || size > 50 || (cursor != null && cursor <= 0)) throw new BusinessException(FEED_INPUT_INVALID);
@@ -60,7 +61,7 @@ public class FeedQueryService {
             byPost.computeIfAbsent(image.getPost().getId(), key -> new ArrayList<>()).add(FeedImageResponse.of(image));
         }
         Map<Long, Long> likeCounts = counts(likes.countForPosts(ids));
-        Map<Long, Long> commentCounts = counts(comments.countForPosts(ids));
+        Map<Long, Long> commentCounts = counts(comments.countForPosts(viewer, ids));
         Set<Long> liked = new HashSet<>(likes.findLikedPostIds(viewer, ids));
         return page.stream().map(p -> new FeedPostResponse(p.getId(), FeedAuthorResponse.of(p.getAuthor()),
                 p.getContent(), byPost.getOrDefault(p.getId(), List.of()), likeCounts.getOrDefault(p.getId(), 0L),
