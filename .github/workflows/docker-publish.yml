@@ -249,10 +249,24 @@ jobs:
               -e "s|__DEPLOY_MODE__|${ROUGETHER_DEPLOY_MODE}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
-          script="$(printf "bash -se <<'ROUGETHER_DEPLOY_SCRIPT'\n%s\nROUGETHER_DEPLOY_SCRIPT\n" "$deploy_script")"
+          # SSM send-command 는 문서+파라미터 합이 97KB 를 넘으면 거부한다(MaxDocumentSizeExceeded).
+          # 스크립트를 gzip+base64 로 실어 보내고, 호스트에서 0600 임시 파일로 풀어 기존과 같이 bash -se 로 실행한다.
+          # 풀기에 실패하면 빈 스크립트가 성공으로 끝나지 않도록 실행 전에 종료 코드를 확인한다.
+          payload="$(printf '%s\n' "$deploy_script" | gzip -9n | base64 -w0)"
+          script="$(printf '%s\n' \
+            'deploy_file="$(mktemp)" || exit 1' \
+            "if ! printf '%s' '${payload}' | base64 -d | gunzip > \"\$deploy_file\"; then rm -f \"\$deploy_file\"; echo 'deploy script decode failed' >&2; exit 1; fi" \
+            'bash -se < "$deploy_file"; deploy_status=$?' \
+            'rm -f "$deploy_file"' \
+            'exit "$deploy_status"')"
 
           params="$(jq -n --arg script "$script" \
             '{commands: [$script], executionTimeout: ["5400"]}')"
+          params_bytes="$(printf '%s' "$params" | wc -c)"
+          if [ "$params_bytes" -gt 90000 ]; then
+            echo "SSM parameters are ${params_bytes} bytes; must stay under the 97KB SendCommand limit" >&2
+            exit 1
+          fi
           command_id="$(
             aws ssm send-command \
               --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
