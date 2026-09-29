@@ -1,5 +1,7 @@
 package com.triples.rougether.batch.dayend;
 
+import com.triples.rougether.batch.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -42,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = RoutineDayEndJobIntegrationTest.TestConfig.class)
 @SpringBatchTest
+@ExtendWith(KstMidnightGuard.class)
 class RoutineDayEndJobIntegrationTest {
 
     @SpringBootConfiguration

@@ -1,5 +1,7 @@
 package com.triples.rougether.batch.dayend;
 
+import com.triples.rougether.batch.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.batch.config.BatchJdbcConfig;
@@ -41,6 +43,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = DayEndCatchUpIntegrationTest.TestConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class DayEndCatchUpIntegrationTest {
 
     @SpringBootConfiguration

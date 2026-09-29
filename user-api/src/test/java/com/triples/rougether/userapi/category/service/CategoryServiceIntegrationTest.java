@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.category.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -58,6 +60,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class CategoryServiceIntegrationTest {
 
     // 서비스가 KST로 "오늘"을 판정하므로 테스트도 같은 기준을 씀

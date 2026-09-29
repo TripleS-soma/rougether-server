@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @SpringBootTest
+@ExtendWith(KstMidnightGuard.class)
 class RoutineCompletionRollbackTest {
 
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));

@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -49,6 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class RoutineSkipIntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Seoul"));
