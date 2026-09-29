@@ -53,6 +53,7 @@ jobs:
           bash .github/scripts/test-wait-for-ssm-command.sh
           bash .github/scripts/test-asset-privacy.sh
           bash .github/scripts/test-admin-cloudfront.sh
+          python3 -m unittest discover -s deploy/terraform/monitoring/lambda/tests
 
       - name: Run tests
         run: ./gradlew test
