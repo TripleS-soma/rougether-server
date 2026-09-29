@@ -41,7 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 
 // 어드민 신고 대기열·처리(#399). HIDE 는 게시물·댓글 삭제 경로와 종목 거래 정지를 타고, 같은 대상의 대기 신고를 함께 닫음.
-@SpringBootTest
+// 전용 H2 DB 를 씀: 같은 JVM 에서 ItemRarityRollbackTest 가 ALTER TABLE 로 제약을 붙였다 떼면 공유 H2 의
+// 다른 테이블 CHECK 제약(market_assets·content_reports)이 "Check constraint invalid" 로 깨지는 H2 문제를 피함.
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:rougether-admin-content-reports;MODE=MySQL;"
+        + "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @AutoConfigureMockMvc
 @Transactional
 class ContentReportAdminTest {
