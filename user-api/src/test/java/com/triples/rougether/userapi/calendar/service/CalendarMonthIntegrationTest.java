@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.calendar.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
@@ -49,6 +51,7 @@ import org.springframework.context.annotation.Import;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class CalendarMonthIntegrationTest {
 
     // 2026-06은 확정 과거 달 — 그제 이전(로그 단독) 경로만 타는 달

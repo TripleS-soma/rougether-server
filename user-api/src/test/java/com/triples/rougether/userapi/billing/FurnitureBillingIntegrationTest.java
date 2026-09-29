@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.billing;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -80,8 +82,8 @@ class FurnitureBillingIntegrationTest {
         feedbacks.deleteAll(); jobs.deleteAll();
         user = users.save(User.signUp("billing-" + UUID.randomUUID() + "@example.test"));
         now = Instant.parse("2026-09-07T03:00:00Z");
-        when(kstClock.instant()).thenAnswer(i -> now);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        doAnswer(i -> now).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
         accountToken = credits.balance(user.getId()).accountToken();
         when(apple.available()).thenReturn(true); when(google.available()).thenReturn(true);
         when(apple.verify(anyString())).thenAnswer(i -> {

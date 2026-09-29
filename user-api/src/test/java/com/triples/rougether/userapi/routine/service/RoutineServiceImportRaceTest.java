@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 
 // 임포트 동시 요청 경합: 사전 exists 조회를 둘 다 통과한 뒤 한쪽이 unique 에 막히는 경우 — 409 변환과 그 외 무결성 오류 전파
+@ExtendWith(KstMidnightGuard.class)
 class RoutineServiceImportRaceTest {
 
     private static final Long USER_ID = 7L;

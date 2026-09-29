@@ -1,5 +1,6 @@
 package com.triples.rougether.batch.appicon;
 
+import static org.mockito.Mockito.doReturn;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -87,8 +88,8 @@ class AppIconReminderIntegrationTest {
 
     @BeforeEach
     void setup() {
-        when(clock.instant()).thenReturn(NOW);
-        when(clock.getZone()).thenReturn(AppIconPolicy.KST);
+        doReturn(NOW).when(clock).instant();
+        doReturn(AppIconPolicy.KST).when(clock).getZone();
         when(fcm.send(anyList(), anyString(), anyString(), anyMap())).thenReturn(new FcmSendResult(1, List.of()));
     }
 
@@ -115,10 +116,10 @@ class AppIconReminderIntegrationTest {
         service.sendPending(user.getId(), first.getId());
         service.sendPending(user.getId(), first.getId());
 
-        when(clock.instant()).thenReturn(NOW.plus(Duration.ofDays(2)));
+        doReturn(NOW.plus(Duration.ofDays(2))).when(clock).instant();
         service.stage(user.getId());
         assertThat(latest(user).getTitle()).isEqualTo("보고 싶다냥…");
-        when(clock.instant()).thenReturn(NOW.plus(Duration.ofDays(5)));
+        doReturn(NOW.plus(Duration.ofDays(5))).when(clock).instant();
         service.stage(user.getId());
         assertThat(latest(user).getTitle()).isEqualTo("언제 돌아오냥…");
         service.stage(user.getId());
@@ -145,7 +146,7 @@ class AppIconReminderIntegrationTest {
         assertThat(notifications.findById(oldId).orElseThrow().getPushStatus()).isEqualTo(PushStatus.BLOCKED);
         verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());
 
-        when(clock.instant()).thenReturn(NOW.plus(Duration.ofDays(2)));
+        doReturn(NOW.plus(Duration.ofDays(2))).when(clock).instant();
         service.stage(user.getId());
         assertThat(notificationCount(user)).isEqualTo(2);
         Long newId = latest(user).getId();
@@ -159,7 +160,7 @@ class AppIconReminderIntegrationTest {
         User user = inactive(Duration.ofDays(2));
         service.stage(user.getId());
         Long oldId = latest(user).getId();
-        when(clock.instant()).thenReturn(NOW.plus(Duration.ofDays(5)));
+        doReturn(NOW.plus(Duration.ofDays(5))).when(clock).instant();
         service.stage(user.getId());
         service.sendPending(user.getId(), oldId);
         assertThat(notifications.findById(oldId).orElseThrow().getPushStatus()).isEqualTo(PushStatus.BLOCKED);
@@ -184,14 +185,14 @@ class AppIconReminderIntegrationTest {
     @Test
     void 밤에는_적재하지_않고_적재된_PENDING도_낮까지_보류한다() {
         User user = inactive(Duration.ofDays(3));
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-05T23:59:59Z")); // 08:59:59
+        doReturn(Instant.parse("2026-09-05T23:59:59Z")).when(clock).instant(); // 08:59:59
         service.stage(user.getId());
         assertThat(notificationCount(user)).isZero();
 
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T00:00:00Z")); // 09:00
+        doReturn(Instant.parse("2026-09-06T00:00:00Z")).when(clock).instant(); // 09:00
         service.stage(user.getId());
         Long id = latest(user).getId();
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T12:00:00Z")); // 21:00
+        doReturn(Instant.parse("2026-09-06T12:00:00Z")).when(clock).instant(); // 21:00
         service.sendPending(user.getId(), id);
         assertThat(notifications.findById(id).orElseThrow().getPushStatus()).isEqualTo(PushStatus.PENDING);
         verify(fcm, never()).send(anyList(), anyString(), anyString(), anyMap());

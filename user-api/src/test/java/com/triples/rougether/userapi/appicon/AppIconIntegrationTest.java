@@ -1,7 +1,8 @@
 package com.triples.rougether.userapi.appicon;
 
+import static org.mockito.Mockito.doReturn;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -74,8 +75,8 @@ class AppIconIntegrationTest {
 
     @BeforeEach
     void setClock() {
-        when(clock.instant()).thenReturn(NOW);
-        when(clock.getZone()).thenReturn(AppIconPolicy.KST);
+        doReturn(NOW).when(clock).instant();
+        doReturn(AppIconPolicy.KST).when(clock).getZone();
     }
 
     @AfterEach
@@ -193,7 +194,7 @@ class AppIconIntegrationTest {
         assertThat(service.get(user.getId()).state()).isEqualTo(AppIconState.STREAK_CHAMPION);
         assertThat(service.get(user.getId()).nextEvaluationAt()).isEqualTo(Instant.parse("2026-09-06T15:00:00Z"));
 
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T15:00:00Z"));
+        doReturn(Instant.parse("2026-09-06T15:00:00Z")).when(clock).instant();
         assertThat(service.get(user.getId()).state()).isEqualTo(AppIconState.NORMAL);
         assertThat(service.get(user.getId()).currentStreak()).isZero();
     }

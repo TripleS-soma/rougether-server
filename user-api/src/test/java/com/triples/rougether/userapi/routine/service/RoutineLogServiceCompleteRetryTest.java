@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.routine.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 // day-end 배치가 로그 부재 확인과 insert 사이에 FAILED를 먼저 커밋하는 경합은
 // 실제 커밋 타이밍 재현이 어려워 단위 수준으로 검증 - unique 충돌 시 새 트랜잭션 재시도가 전이 경로로 흡수하는지
+@ExtendWith(KstMidnightGuard.class)
 class RoutineLogServiceCompleteRetryTest {
 
     private static final LocalDate YESTERDAY = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1);

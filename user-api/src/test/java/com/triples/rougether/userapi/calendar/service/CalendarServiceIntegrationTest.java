@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.calendar.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
@@ -49,6 +51,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class CalendarServiceIntegrationTest {
 
     // 2026-06-29는 월요일(MON)이자 확정 과거 — 과거 경로(로그 기반) 검증용

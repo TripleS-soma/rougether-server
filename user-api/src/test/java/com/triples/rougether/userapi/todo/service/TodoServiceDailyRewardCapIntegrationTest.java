@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.todo.service;
 
+import com.triples.rougether.userapi.support.KstMidnightGuard;
+import org.junit.jupiter.api.extension.ExtendWith;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
@@ -36,6 +38,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
+@ExtendWith(KstMidnightGuard.class)
 class TodoServiceDailyRewardCapIntegrationTest {
 
     @Autowired private UserCharacterRepository userCharacterRepository;
