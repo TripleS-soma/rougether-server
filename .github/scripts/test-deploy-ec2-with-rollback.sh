@@ -122,6 +122,11 @@ reset_scenario() {
   ADMIN_ORIGIN_SECRET_PARAMETER_NAME="/test/admin-origin"
   WATCH_SCRIPT_PATH="$TEST_ROOT/$name/libexec/rougether/container-watch.sh"
   WATCH_STATE_DIR="$TEST_ROOT/$name/var/lib/rougether/watch"
+  AWS_REGION="ap-northeast-2"
+  CW_NAMESPACE="Rougether/Dev"
+  CW_AGENT_CTL="$TEST_ROOT/$name/cwagent/bin/amazon-cloudwatch-agent-ctl"
+  CW_AGENT_CONFIG_PATH="$TEST_ROOT/$name/cwagent/etc/rougether-agent.json"
+  MEMORY_METRICS_SCRIPT_PATH="$TEST_ROOT/$name/libexec/rougether/memory-metrics.sh"
   USER_MEMORY_LIMIT="1280m"
   USER_JAVA_MAX_HEAP="512m"
   ADMIN_MEMORY_LIMIT="768m"
@@ -1908,6 +1913,379 @@ test_dispatcher_removes_deploy_lock_and_preserves_failure_code() {
   echo "ok - dispatcher removes the deploy lock and preserves the failure code"
 }
 
+# CloudWatch Agent(#419): rpm/dnf/timeout/systemctl 은 셸 함수로, agent-ctl 은 가짜 실행 파일로 대체한다.
+setup_cloudwatch_agent_fixture() {
+  reset_scenario "$1"
+  CW_FAKE_DIR="$TEST_ROOT/$1/cwfake"
+  mkdir -p "$CW_FAKE_DIR" "$(dirname "$CW_AGENT_CTL")"
+  : > "$CW_FAKE_DIR/calls.log"
+  cat > "$CW_AGENT_CTL" <<EOF
+#!/usr/bin/env bash
+echo "ctl \$*" >> "$CW_FAKE_DIR/calls.log"
+[ -f "$CW_FAKE_DIR/ctl-fails" ] && exit 1
+: > "$CW_FAKE_DIR/agent-active"
+EOF
+  chmod 755 "$CW_AGENT_CTL"
+
+  rpm() { [ -f "$CW_FAKE_DIR/installed" ]; }
+  dnf() {
+    echo "dnf $*" >> "$CW_FAKE_DIR/calls.log"
+    [ ! -f "$CW_FAKE_DIR/dnf-fails" ] || return 1
+    : > "$CW_FAKE_DIR/installed"
+  }
+  # 실제 timeout 처럼 -k <초> 옵션과 제한 시간을 건너뛰고 명령을 실행한다. 인자는 기록해 -k 사용을 확인한다.
+  timeout() {
+    echo "timeout $*" >> "$CW_FAKE_DIR/timeout.log"
+    while [ "${1:-}" = -k ]; do shift 2; done
+    shift
+    "$@"
+  }
+  systemctl() {
+    if [ "$1" = is-active ]; then
+      [ -f "$CW_FAKE_DIR/agent-active" ]
+      return
+    fi
+    echo "systemctl $*" >> "$CW_FAKE_DIR/calls.log"
+  }
+}
+
+teardown_cloudwatch_agent_fixture() {
+  unset -f rpm dnf timeout
+  systemctl() { return 0; }
+}
+
+cw_call_count() {
+  grep -c -- "^$1" "$CW_FAKE_DIR/calls.log" || true
+}
+
+test_cloudwatch_agent_install_is_idempotent_and_restarts_only_on_config_change() {
+  setup_cloudwatch_agent_fixture "cw-agent-idempotent"
+
+  install_cloudwatch_agent >/dev/null
+  if [ "$(cw_call_count 'dnf install -y amazon-cloudwatch-agent')" -ne 1 ] || [ "$(cw_call_count 'ctl ')" -ne 1 ]; then
+    echo "not ok - first run must install the package and start the agent once" >&2
+    return 1
+  fi
+  assert_contains "^ctl -a fetch-config -m ec2 -s -c file:$CW_AGENT_CONFIG_PATH$" "$CW_FAKE_DIR/calls.log" \
+    "agent must be (re)started from the managed config file"
+  assert_contains '^timeout -k 30 300 dnf install -y amazon-cloudwatch-agent$' "$CW_FAKE_DIR/timeout.log" \
+    "package install must be bounded with a kill grace period"
+  assert_contains "^timeout -k 30 300 $CW_AGENT_CTL -a fetch-config" "$CW_FAKE_DIR/timeout.log" \
+    "agent restart must be bounded with a kill grace period"
+  python3 -m json.tool "$CW_AGENT_CONFIG_PATH" >/dev/null \
+    || { echo "not ok - agent config must be valid JSON" >&2; return 1; }
+  assert_contains '"namespace": "Rougether/Dev"' "$CW_AGENT_CONFIG_PATH" "agent must publish to the Rougether/Dev namespace"
+  assert_contains '"omit_hostname": true' "$CW_AGENT_CONFIG_PATH" "host metrics must carry no host dimension"
+  assert_contains '"mem_used_percent"' "$CW_AGENT_CONFIG_PATH" "agent must collect mem_used_percent"
+  assert_contains '"swap_used_percent"' "$CW_AGENT_CONFIG_PATH" "agent must collect swap_used_percent"
+  assert_contains '"metrics_collection_interval": 60' "$CW_AGENT_CONFIG_PATH" "agent must collect every 60 seconds"
+  assert_not_contains 'append_dimensions' "$CW_AGENT_CONFIG_PATH" "alarm dimensions must not depend on the instance"
+
+  install_cloudwatch_agent >/dev/null
+  if [ "$(cw_call_count 'dnf ')" -ne 1 ] || [ "$(cw_call_count 'ctl ')" -ne 1 ]; then
+    echo "not ok - unchanged config on a running agent must not reinstall or restart" >&2
+    return 1
+  fi
+
+  CW_NAMESPACE="Rougether/Staging"
+  install_cloudwatch_agent >/dev/null
+  if [ "$(cw_call_count 'dnf ')" -ne 1 ] || [ "$(cw_call_count 'ctl ')" -ne 2 ]; then
+    echo "not ok - a config change must restart the agent without reinstalling" >&2
+    return 1
+  fi
+  assert_contains '"namespace": "Rougether/Staging"' "$CW_AGENT_CONFIG_PATH" "config change must be written"
+
+  rm -f "$CW_FAKE_DIR/agent-active"
+  install_cloudwatch_agent >/dev/null
+  if [ "$(cw_call_count 'ctl ')" -ne 3 ]; then
+    echo "not ok - a stopped agent must be started even when the config is unchanged" >&2
+    return 1
+  fi
+  if [ -n "$(find "$(dirname "$CW_AGENT_CONFIG_PATH")" -name '.*' -type f)" ]; then
+    echo "not ok - agent config install must not leave temporary files" >&2
+    return 1
+  fi
+  teardown_cloudwatch_agent_fixture
+  echo "ok - CloudWatch agent install is idempotent and restarts only on config change"
+}
+
+test_cloudwatch_agent_failures_are_reported_and_retried() {
+  setup_cloudwatch_agent_fixture "cw-agent-failure"
+
+  : > "$CW_FAKE_DIR/dnf-fails"
+  if install_cloudwatch_agent >/dev/null 2>&1; then
+    echo "not ok - package install failure must be reported" >&2
+    return 1
+  fi
+  if [ "$(cw_call_count 'ctl ')" -ne 0 ] || [ -f "$CW_AGENT_CONFIG_PATH" ]; then
+    echo "not ok - agent must not be configured when the package install fails" >&2
+    return 1
+  fi
+
+  rm -f "$CW_FAKE_DIR/dnf-fails"
+  : > "$CW_FAKE_DIR/ctl-fails"
+  if install_cloudwatch_agent >/dev/null 2>&1; then
+    echo "not ok - agent start failure must be reported" >&2
+    return 1
+  fi
+  if [ -f "$CW_AGENT_CONFIG_PATH" ]; then
+    echo "not ok - failed config must be removed so the next deploy retries" >&2
+    return 1
+  fi
+
+  rm -f "$CW_FAKE_DIR/ctl-fails"
+  install_cloudwatch_agent >/dev/null
+  if [ "$(cw_call_count 'ctl ')" -ne 2 ] || [ ! -f "$CW_AGENT_CONFIG_PATH" ]; then
+    echo "not ok - the next deploy must retry configuring the agent" >&2
+    return 1
+  fi
+
+  local calls_before
+  calls_before="$(wc -l < "$CW_FAKE_DIR/calls.log")"
+  CW_NAMESPACE='AWS/EC2'
+  if install_cloudwatch_agent >/dev/null 2>&1 || install_memory_metrics >/dev/null 2>&1; then
+    echo "not ok - reserved or invalid namespaces must be rejected" >&2
+    return 1
+  fi
+  if [ "$(wc -l < "$CW_FAKE_DIR/calls.log")" -ne "$calls_before" ]; then
+    echo "not ok - invalid namespace must be rejected before touching the host" >&2
+    return 1
+  fi
+  teardown_cloudwatch_agent_fixture
+  echo "ok - CloudWatch agent failures are reported and retried on the next deploy"
+}
+
+test_monitoring_install_failure_does_not_block_deploy() {
+  reset_scenario "monitoring-nonblocking"
+  local dispatch="$TEST_ROOT/monitoring-nonblocking/dispatch.sh"
+  local events="$TEST_ROOT/monitoring-nonblocking/events.log"
+  local errors="$TEST_ROOT/monitoring-nonblocking/stderr.log"
+  local status=0
+  awk 'found {print} /^# BEGIN_DEPLOY_EXECUTION$/ {found=1}' "$DEPLOY_SCRIPT" > "$dispatch"
+  : > "$events"
+
+  (
+    install_container_watch() { echo watch >> "$events"; return 0; }
+    install_cloudwatch_agent() { echo agent >> "$events"; return 1; }
+    install_memory_metrics() { echo metrics >> "$events"; return 1; }
+    deploy_blue_green() { echo deploy >> "$events"; }
+    DEPLOY_MODE=blue-green
+    # shellcheck disable=SC1090
+    source "$dispatch"
+  ) >/dev/null 2> "$errors" || status="$?"
+
+  if [ "$status" -ne 0 ]; then
+    echo "not ok - monitoring install failures must not fail the deployment (status $status)" >&2
+    return 1
+  fi
+  if [ "$(tr '\n' ' ' < "$events")" != "watch agent metrics deploy " ]; then
+    echo "not ok - deploy must run after the monitoring installers: $(tr '\n' ' ' < "$events")" >&2
+    return 1
+  fi
+  assert_contains 'CloudWatch agent install or configuration failed' "$errors" "agent failure must be logged"
+  assert_contains 'memory metrics publisher install failed' "$errors" "metrics failure must be logged"
+  echo "ok - monitoring install failures do not block the deployment"
+}
+
+test_memory_metrics_install_is_idempotent() {
+  reset_scenario "metrics-install"
+  local calls="$ENV_DIR/systemctl-calls.log"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+
+  install_memory_metrics >/dev/null
+  local script_copy="$ENV_DIR/metrics-script-copy"
+  cp "$MEMORY_METRICS_SCRIPT_PATH" "$script_copy"
+  : > "$calls"
+  install_memory_metrics >/dev/null
+  systemctl() { return 0; }
+
+  [ -x "$MEMORY_METRICS_SCRIPT_PATH" ] || { echo "not ok - metrics script must be executable" >&2; return 1; }
+  bash -n "$MEMORY_METRICS_SCRIPT_PATH" || { echo "not ok - metrics script must be valid bash" >&2; return 1; }
+  assert_file_equal "$script_copy" "$MEMORY_METRICS_SCRIPT_PATH" "reinstall must keep the same metrics script"
+  assert_not_contains 'daemon-reload' "$calls" "unchanged metrics units must not trigger daemon-reload"
+  assert_not_contains '^restart ' "$calls" "unchanged metrics timer must not be restarted"
+  assert_contains '^enable --now rougether-memory-metrics.timer$' "$calls" "every deploy must keep the metrics timer enabled"
+  assert_contains '^OnUnitActiveSec=1min$' "$SYSTEMD_DIR/rougether-memory-metrics.timer" "metrics must be published every minute"
+  assert_contains '^Environment=ROUGETHER_METRICS_NAMESPACE=Rougether/Dev$' "$SYSTEMD_DIR/rougether-memory-metrics.service" \
+    "metrics unit must pass the namespace"
+  assert_contains '^Environment=ROUGETHER_METRICS_REGION=ap-northeast-2$' "$SYSTEMD_DIR/rougether-memory-metrics.service" \
+    "metrics unit must pass the region"
+  assert_contains "^ExecStart=$MEMORY_METRICS_SCRIPT_PATH$" "$SYSTEMD_DIR/rougether-memory-metrics.service" \
+    "metrics unit must run the installed script"
+
+  printf '# locally modified\n' >> "$MEMORY_METRICS_SCRIPT_PATH"
+  : > "$calls"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+  install_memory_metrics >/dev/null
+  systemctl() { return 0; }
+  assert_file_equal "$script_copy" "$MEMORY_METRICS_SCRIPT_PATH" "drifted metrics script must be restored"
+  assert_contains '^daemon-reload$' "$calls" "changed metrics files must reload systemd"
+  assert_not_contains '^restart ' "$calls" "a script-only change must not restart the timer"
+
+  printf '# locally modified\n' >> "$SYSTEMD_DIR/rougether-memory-metrics.timer"
+  : > "$calls"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+  install_memory_metrics >/dev/null
+  systemctl() { return 0; }
+  assert_before '^daemon-reload$' '^restart rougether-memory-metrics.timer$' "$calls" \
+    "a changed timer file must be reloaded and the running timer restarted"
+
+  AWS_REGION="__AWS_REGION__"
+  if install_memory_metrics >/dev/null 2>&1; then
+    echo "not ok - an unsubstituted region must be rejected" >&2
+    return 1
+  fi
+  echo "ok - memory metrics publisher install is idempotent"
+}
+
+set_container_memory() {
+  local root="$1" container_id="$2" current="$3" inactive_file="$4"
+  local directory="$root/system.slice/docker-$container_id.scope"
+  mkdir -p "$directory"
+  printf '%s\n' "$current" > "$directory/memory.current"
+  if [ -n "$inactive_file" ]; then
+    printf 'anon 1\nfile 2\nactive_file 3\ninactive_file %s\nslab 4\n' "$inactive_file" > "$directory/memory.stat"
+  fi
+}
+
+test_memory_metrics_script_publishes_max_working_set_per_service() {
+  reset_scenario "metrics-script"
+  systemctl() { return 0; }
+  install_memory_metrics >/dev/null
+
+  local fake="$TEST_ROOT/metrics-script/fake"
+  local cgroup="$TEST_ROOT/metrics-script/cgroup"
+  local blue green admin batch other
+  blue="$(printf '1%.0s' $(seq 1 64))"
+  green="$(printf '2%.0s' $(seq 1 64))"
+  admin="$(printf '3%.0s' $(seq 1 64))"
+  batch="$(printf '4%.0s' $(seq 1 64))"
+  other="$(printf '5%.0s' $(seq 1 64))"
+  mkdir -p "$fake/bin"
+  cat > "$fake/bin/docker" <<EOF
+#!/usr/bin/env bash
+[ "\$1" = ps ] || exit 0
+[ ! -f "$fake/docker-fails" ] || { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
+cat "$fake/containers"
+EOF
+  cat > "$fake/bin/aws" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$fake/aws-args"
+[ ! -f "$fake/aws-fails" ]
+EOF
+  chmod 755 "$fake/bin/docker" "$fake/bin/aws"
+
+  printf '%s rougether-user-api-blue\n%s rougether-user-api-green\n%s rougether-admin-api\n%s rougether-batch\n%s rougether-container-watch\nnot-an-id rougether-batch\n' \
+    "$blue" "$green" "$admin" "$batch" "$other" > "$fake/containers"
+  set_container_memory "$cgroup" "$blue" 943718400 104857600
+  set_container_memory "$cgroup" "$green" 524288000 10485760
+  set_container_memory "$cgroup" "$admin" 734003200 ""
+  set_container_memory "$cgroup" "$batch" 1000 5000
+  set_container_memory "$cgroup" "$other" 999999999999 0
+
+  run_metrics() {
+    PATH="$fake/bin:$PATH" \
+      ROUGETHER_METRICS_CGROUP_ROOT="$cgroup" \
+      ROUGETHER_METRICS_NAMESPACE="Rougether/Dev" \
+      ROUGETHER_METRICS_REGION="ap-northeast-2" \
+      bash "$MEMORY_METRICS_SCRIPT_PATH" 2>> "$fake/metrics.log"
+  }
+
+  run_metrics || { echo "not ok - metrics script must succeed when publishing works" >&2; return 1; }
+  python3 - "$fake/aws-args" <<'PY' || { echo "not ok - published metric data is wrong" >&2; return 1; }
+import json, sys
+args = open(sys.argv[1]).read().splitlines()
+assert args[:2] == ["cloudwatch", "put-metric-data"], args
+assert args[args.index("--region") + 1] == "ap-northeast-2", args
+assert args[args.index("--namespace") + 1] == "Rougether/Dev", args
+data = json.loads(args[args.index("--metric-data") + 1])
+values = {}
+for datum in data:
+    assert datum["MetricName"] == "container_memory_working_set", datum
+    assert datum["Unit"] == "Bytes", datum
+    assert datum["Dimensions"] == [{"Name": "Service", "Value": datum["Dimensions"][0]["Value"]}], datum
+    values[datum["Dimensions"][0]["Value"]] = datum["Value"]
+# blue(900-100MiB)와 green(500-10MiB) 중 큰 값, inactive_file 없으면 current 그대로, inactive 가 크면 0.
+assert values == {"user-api": 838860800, "admin-api": 734003200, "batch": 0}, values
+PY
+
+  : > "$fake/containers"
+  rm -f "$fake/aws-args"
+  run_metrics || { echo "not ok - no running containers must not be an error" >&2; return 1; }
+  [ ! -f "$fake/aws-args" ] || { echo "not ok - nothing must be published without containers" >&2; return 1; }
+
+  printf '%s rougether-batch\n' "$batch" > "$fake/containers"
+  : > "$fake/aws-fails"
+  if run_metrics; then
+    echo "not ok - put-metric-data failure must fail the unit run" >&2
+    return 1
+  fi
+  assert_contains 'put-metric-data failed' "$fake/metrics.log" "publish failure must be logged"
+
+  # docker 조회 실패는 비0 으로 끝내 journal 에 남기고, 아무것도 보내지 않는다.
+  rm -f "$fake/aws-fails" "$fake/aws-args"
+  : > "$fake/docker-fails"
+  if run_metrics; then
+    echo "not ok - docker ps failure must fail the unit run" >&2
+    return 1
+  fi
+  [ ! -f "$fake/aws-args" ] || { echo "not ok - nothing must be published when docker ps fails" >&2; return 1; }
+  assert_contains 'docker ps failed' "$fake/metrics.log" "docker failure must be logged"
+
+  # cgroup 을 못 읽은 컨테이너가 있으면 나머지 서비스 값은 보내되 비0 으로 끝낸다.
+  rm -f "$fake/docker-fails"
+  local missing
+  missing="$(printf '6%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n%s rougether-admin-api\n' "$batch" "$missing" > "$fake/containers"
+  if run_metrics; then
+    echo "not ok - an unreadable container cgroup must fail the unit run" >&2
+    return 1
+  fi
+  assert_contains '"Value":"batch"' "$fake/aws-args" "readable services must still be published"
+  assert_not_contains 'admin-api' "$fake/aws-args" "unreadable services must not be published"
+  assert_contains 'cgroup not found for rougether-admin-api' "$fake/metrics.log" "missing cgroup must be logged"
+  unset -f run_metrics
+  echo "ok - memory metrics script publishes the max working set per service"
+}
+
+# 배포 스크립트가 보내는 지표와 terraform 알람의 네임스페이스·이름·차원이 어긋나면 알람이 영원히 조용하다.
+test_metric_contract_matches_terraform_alarms() {
+  reset_scenario "metrics-contract"
+  local monitoring_dir="$SCRIPT_DIR/../../deploy/terraform/monitoring"
+  local script_file="$TEST_ROOT/metrics-contract/metrics.sh"
+  local agent_file="$TEST_ROOT/metrics-contract/agent.json"
+  write_memory_metrics_script > "$script_file"
+  write_cloudwatch_agent_config > "$agent_file"
+
+  assert_contains 'service_memory_metric = "container_memory_working_set"' "$monitoring_dir/main.tf" \
+    "terraform must alarm on the published service metric name"
+  assert_contains '^METRIC_NAME="container_memory_working_set"$' "$script_file" "script must publish the alarmed metric name"
+  assert_contains 'dimensions *= { Service = each.key }' "$monitoring_dir/alarms.tf" "service alarms must use the Service dimension"
+  assert_contains '"Dimensions":\[{"Name":"Service"' "$script_file" "script must publish the Service dimension"
+  assert_contains 'default *= "Rougether/Dev"' "$monitoring_dir/variables.tf" "terraform namespace default must match"
+  assert_contains 'ROUGETHER_CW_NAMESPACE:-Rougether/Dev' "$DEPLOY_SCRIPT" "deploy namespace default must match"
+  assert_contains '"user-api" *= 1280' "$monitoring_dir/variables.tf" "user-api alarm limit must match the container limit"
+  assert_contains '"admin-api" *= 768' "$monitoring_dir/variables.tf" "admin-api alarm limit must match the container limit"
+  assert_contains '"batch" *= 768' "$monitoring_dir/variables.tf" "batch alarm limit must match the container limit"
+  assert_contains 'ROUGETHER_USER_MEMORY_LIMIT:-1280m' "$DEPLOY_SCRIPT" "user-api container limit default"
+  assert_contains 'ROUGETHER_ADMIN_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "admin-api container limit default"
+  assert_contains 'ROUGETHER_BATCH_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "batch container limit default"
+  assert_contains '"cloudwatch:namespace" = var.metric_namespace' "$monitoring_dir/main.tf" \
+    "EC2 PutMetricData must be limited to the metric namespace"
+  assert_contains 'Action   = \["cloudwatch:PutMetricData"\]' "$monitoring_dir/main.tf" \
+    "EC2 metrics policy must grant only PutMetricData"
+  assert_not_contains 'policy_arn *= .*CloudWatchAgentServerPolicy' "$monitoring_dir/main.tf" \
+    "the broad managed agent policy must not be attached"
+  # 에이전트가 PutMetricData 외 API(logs·ec2:DescribeTags/Volumes)를 부르게 하는 설정이 없어야 최소 정책으로 동작한다.
+  assert_not_contains '"logs"' "$agent_file" "agent must not ship logs under the metrics-only policy"
+  assert_not_contains 'append_dimensions' "$agent_file" "agent must not need ec2:DescribeTags"
+  assert_not_contains 'ec2_tag\|"disk"\|"diskio"' "$agent_file" "agent must not need EC2 tag or volume APIs"
+  assert_contains '"namespace": "Rougether/Dev"' "$agent_file" "agent namespace must match the policy condition"
+  assert_contains 'dimensions *= { Service = "user-api" }' "$monitoring_dir/alarms.tf" \
+    "service collector heartbeat must watch the user-api series"
+  echo "ok - published metrics match the terraform alarm and policy contract"
+}
+
 test_legacy_units_cap_memory_and_pass_jvm_options
 test_jvm_options_toggle_nmt_and_reject_heap_at_limit
 test_units_treat_docker_stop_as_success
@@ -1923,6 +2301,12 @@ test_batch_webex_alert_env_is_idempotent_and_keeps_value_on_invalid_source
 test_container_watch_install_is_idempotent
 test_container_watch_detects_oom_kill_increase_with_cooldown
 test_container_watch_alerts_restarts_but_not_during_deploy
+test_cloudwatch_agent_install_is_idempotent_and_restarts_only_on_config_change
+test_cloudwatch_agent_failures_are_reported_and_retried
+test_monitoring_install_failure_does_not_block_deploy
+test_memory_metrics_install_is_idempotent
+test_memory_metrics_script_publishes_max_working_set_per_service
+test_metric_contract_matches_terraform_alarms
 test_ssm_failure_keeps_existing_credentials
 test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low

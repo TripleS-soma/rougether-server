@@ -1,0 +1,24 @@
+aws_region       = "ap-northeast-2"
+name             = "rougether-dev"
+environment_name = "dev"
+ec2_role_name    = "rougether-dev-ec2-role"
+metric_namespace = "Rougether/Dev"
+
+# 배포 스크립트(#418)의 ROUGETHER_*_MEMORY_LIMIT 를 바꾸면 여기도 같이 바꾼다.
+service_memory_limits_mib = {
+  "user-api"  = 1280
+  "admin-api" = 768
+  "batch"     = 768
+}
+service_memory_alarm_ratio = 0.9
+host_memory_alarm_percent  = 90
+alarm_evaluation_minutes   = 5
+heartbeat_missing_minutes  = 10
+
+webex_bot_token_parameter = "/rougether-dev/alerts/webex-bot-token"
+webex_room_id_parameter   = "/rougether-dev/alerts/webex-room-id"
+lambda_runtime            = "python3.14"
+log_retention_days        = 30
+
+# 알림 경로(Lambda 오류·DLQ) 알람을 받을 이메일. 빈 값이면 구독을 만들지 않는다.
+fallback_email = ""
