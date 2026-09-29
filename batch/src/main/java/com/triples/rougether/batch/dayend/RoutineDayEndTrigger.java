@@ -1,5 +1,6 @@
 package com.triples.rougether.batch.dayend;
 
+import com.triples.rougether.batch.alert.BatchFailureAlertNotifier;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +25,15 @@ public class RoutineDayEndTrigger {
     private final JobOperator jobOperator;
     private final Job routineDayEndJob;
     private final DayEndCatchUpPlanner dayEndCatchUpPlanner;
+    private final BatchFailureAlertNotifier alertNotifier;
 
     @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     public void triggerDayEnd() {
         runPendingDates();
     }
 
-    // 자정에 서버가 죽어 있던 경우 보완 - 기동 시 동일 gap 검사 1회
+    // 자정에 서버가 죽어 있던 경우 보완 - 기동 시 동일 gap 검사 1회.
+    // 이전 프로세스가 남긴 실행 중 상태는 StaleJobExecutionRecovery 가 컨텍스트 refresh 중에 먼저 정리함
     @EventListener(ApplicationReadyEvent.class)
     public void catchUpOnStartup() {
         runPendingDates();
@@ -59,6 +62,8 @@ public class RoutineDayEndTrigger {
             if (execution.getStatus() != BatchStatus.COMPLETED) {
                 log.error("하루 마감 batch 실행 실패 - targetDate={}, exitStatus={}",
                         targetDate, execution.getExitStatus());
+                alertFailure(targetDate, "status=" + execution.getStatus()
+                        + ", exitCode=" + execution.getExitStatus().getExitCode());
                 return false;
             }
             return true;
@@ -67,7 +72,21 @@ public class RoutineDayEndTrigger {
             return true;
         } catch (Exception e) {
             log.error("하루 마감 batch 실행 실패 - targetDate={}", targetDate, e);
+            alertFailure(targetDate, e.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    // 실패한 날짜는 매시 재시도되므로 날짜별 key 로 묶어 notifier cooldown 동안 한 번만 알림.
+    // 알림 오류가 다음 트리거 흐름을 막지 않도록 여기서도 삼킴
+    private void alertFailure(LocalDate targetDate, String reason) {
+        try {
+            alertNotifier.notifyFailure(
+                    RoutineDayEndJobConfig.JOB_NAME + "|" + targetDate,
+                    "하루 마감(" + RoutineDayEndJobConfig.JOB_NAME + ") 실패",
+                    "targetDate=" + targetDate + ", " + reason + " - 매시 정각 재시도");
+        } catch (RuntimeException e) {
+            log.warn("하루 마감 실패 알림 호출 실패 - targetDate={}", targetDate, e);
         }
     }
 }
