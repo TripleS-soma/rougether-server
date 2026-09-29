@@ -63,3 +63,55 @@ resource "aws_cloudwatch_metric_alarm" "host_metrics_missing" {
   alarm_actions       = local.alarm_actions
   ok_actions          = local.alarm_actions
 }
+
+# 서비스 메모리 수집기(rougether-memory-metrics timer)가 멈추면 서비스 알람은 notBreaching 으로 조용해진다.
+# user-api 는 항상 떠 있어야 하므로 그 지표 표본 누락을 수집기 heartbeat 로 본다.
+resource "aws_cloudwatch_metric_alarm" "service_metrics_missing" {
+  alarm_name          = "${var.name}-service-metrics-missing"
+  alarm_description   = "서비스 메모리 수집기 지표(${local.service_memory_metric}, Service=user-api)가 10분 동안 들어오지 않음"
+  namespace           = var.metric_namespace
+  metric_name         = local.service_memory_metric
+  dimensions          = { Service = "user-api" }
+  statistic           = "SampleCount"
+  period              = 300
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# 아래 두 알람은 알림 경로 자체의 실패를 알린다. 같은 SNS→Lambda 로 보내면 실패가 순환하므로 fallback 토픽으로 보낸다.
+resource "aws_cloudwatch_metric_alarm" "forwarder_errors" {
+  alarm_name          = "${local.forwarder_name}-errors"
+  alarm_description   = "Webex 전달 Lambda 실행 오류. SSM 권한·토큰·Webex 장애를 Lambda 로그에서 확인"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.forwarder.function_name }
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.fallback.arn]
+  ok_actions          = [aws_sns_topic.fallback.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "forwarder_dlq_not_empty" {
+  alarm_name          = "${local.forwarder_name}-dlq-not-empty"
+  alarm_description   = "재시도까지 실패해 Webex 로 전달되지 않은 알람이 DLQ 에 남아 있음"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  dimensions          = { QueueName = aws_sqs_queue.forwarder_dlq.name }
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.fallback.arn]
+  ok_actions          = [aws_sns_topic.fallback.arn]
+}

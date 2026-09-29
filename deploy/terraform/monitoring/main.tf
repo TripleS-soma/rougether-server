@@ -15,12 +15,26 @@ locals {
   ]
 }
 
-# 에이전트의 PutMetricData 와 서비스 메모리 수집기(aws cloudwatch put-metric-data) 모두 이 정책으로 동작한다.
-# 정책의 ssm:GetParameter(AmazonCloudWatch-*) 는 app 정책의 SSM Deny allowlist 에 막히지만, 에이전트 설정은
-# 로컬 파일로 넣으므로 필요 없다.
-resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
-  role       = data.aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+# 에이전트와 서비스 메모리 수집기(aws cloudwatch put-metric-data)가 쓰는 권한만 준다.
+# 관리형 CloudWatchAgentServerPolicy 는 logs·ec2:DescribeTags/Volumes·ssm 까지 열어 대신 인라인 최소 정책을 쓴다.
+# 에이전트 설정(배포 스크립트)은 logs 섹션·append_dimensions·ec2 태그·디스크 지표가 없어 PutMetricData 외 API 를
+# 호출하지 않는다(인스턴스 ID·리전은 IMDS 에서 읽는다). 설정에 그런 항목을 추가하면 여기 권한도 같이 늘린다.
+# PutMetricData 는 리소스 단위 권한이 없어 Resource "*" 에 네임스페이스 조건으로 좁힌다.
+# 메인 스택의 aws_iam_role.ec2 는 inline_policy 를 독점 관리하지 않으므로 메인 스택 apply 가 이 정책을 지우지 않는다.
+resource "aws_iam_role_policy" "ec2_cloudwatch_metrics" {
+  name = "${var.name}-cloudwatch-metrics"
+  role = data.aws_iam_role.ec2.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["cloudwatch:PutMetricData"]
+      Resource = "*"
+      Condition = {
+        StringEquals = { "cloudwatch:namespace" = var.metric_namespace }
+      }
+    }]
+  })
 }
 
 # 알람 데이터는 비밀이 아니고, CloudWatch 알람은 AWS 관리형 키(aws/sns)로 암호화된 토픽에 게시할 수 없어 암호화하지 않는다.
@@ -51,7 +65,7 @@ resource "aws_iam_role" "forwarder" {
   })
 }
 
-# 최소 권한: 두 파라미터 GetParameter 와 자기 로그 그룹 쓰기만 준다.
+# 최소 권한: 두 파라미터 GetParameter, 자기 로그 그룹 쓰기, DLQ 전송만 준다.
 # 토큰은 AWS 관리형 키(alias/aws/ssm)로 암호화돼 있고, 그 키 정책이 같은 계정 주체의 SSM 경유 복호화를
 # 허용하므로 kms:Decrypt 를 따로 주지 않는다. 고객 관리형 키로 바꾸면 kms:Decrypt 를 추가해야 한다.
 resource "aws_iam_role_policy" "forwarder" {
@@ -69,6 +83,12 @@ resource "aws_iam_role_policy" "forwarder" {
         Effect   = "Allow"
         Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "${aws_cloudwatch_log_group.forwarder.arn}:*"
+      },
+      {
+        # 비동기 재시도까지 실패한 이벤트를 on-failure destination(DLQ)으로 보낸다.
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.forwarder_dlq.arn
       }
     ]
   })
@@ -114,4 +134,39 @@ resource "aws_sns_topic_subscription" "forwarder" {
   endpoint  = aws_lambda_function.forwarder.arn
 
   depends_on = [aws_lambda_permission.sns]
+}
+
+# Webex 전달이 재시도(2회)까지 실패한 SNS 이벤트를 보관한다. 원문 알람을 여기서 확인·재처리한다.
+resource "aws_sqs_queue" "forwarder_dlq" {
+  name                      = "${local.forwarder_name}-dlq"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+}
+
+resource "aws_lambda_function_event_invoke_config" "forwarder" {
+  function_name                = aws_lambda_function.forwarder.function_name
+  maximum_retry_attempts       = 2
+  maximum_event_age_in_seconds = 3600
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.forwarder_dlq.arn
+    }
+  }
+
+  depends_on = [aws_iam_role_policy.forwarder]
+}
+
+# 알림 경로 자체(Lambda·DLQ)의 알람은 같은 SNS→Lambda 로 보내면 실패가 순환하므로 별도 토픽으로 보낸다.
+# 이메일 구독은 fallback_email 을 줄 때만 만들며, 수신자가 확인 메일을 승인해야 전달된다.
+resource "aws_sns_topic" "fallback" {
+  name = "${var.name}-ops-alarms-fallback"
+}
+
+resource "aws_sns_topic_subscription" "fallback_email" {
+  count = var.fallback_email == "" ? 0 : 1
+
+  topic_arn = aws_sns_topic.fallback.arn
+  protocol  = "email"
+  endpoint  = var.fallback_email
 }

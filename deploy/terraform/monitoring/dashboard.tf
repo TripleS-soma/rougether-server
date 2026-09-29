@@ -32,9 +32,15 @@ locals {
     width  = 12
     height = 6
     properties = {
-      title = "메모리 알람 상태"
+      title = "메모리·알림 경로 알람 상태"
       alarms = concat(
-        [aws_cloudwatch_metric_alarm.host_memory_high.arn, aws_cloudwatch_metric_alarm.host_metrics_missing.arn],
+        [
+          aws_cloudwatch_metric_alarm.host_memory_high.arn,
+          aws_cloudwatch_metric_alarm.host_metrics_missing.arn,
+          aws_cloudwatch_metric_alarm.service_metrics_missing.arn,
+          aws_cloudwatch_metric_alarm.forwarder_errors.arn,
+          aws_cloudwatch_metric_alarm.forwarder_dlq_not_empty.arn,
+        ],
         [for service in local.dashboard_services : aws_cloudwatch_metric_alarm.service_memory_high[service].arn if contains(keys(var.service_memory_limits_mib), service)],
       )
     }

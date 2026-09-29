@@ -2525,7 +2525,8 @@ install_cloudwatch_agent() {
   cw_namespace_valid || { echo "invalid CloudWatch namespace: $CW_NAMESPACE" >&2; return 1; }
   if ! rpm -q "$CW_AGENT_PACKAGE" >/dev/null 2>&1; then
     echo "installing $CW_AGENT_PACKAGE"
-    timeout "$CW_AGENT_INSTALL_TIMEOUT_SECONDS" dnf install -y "$CW_AGENT_PACKAGE" || return 1
+    # dnf 가 SIGTERM 을 무시하고 멈춰도 30초 뒤 SIGKILL 로 끊어 배포가 걸리지 않게 한다.
+    timeout -k 30 "$CW_AGENT_INSTALL_TIMEOUT_SECONDS" dnf install -y "$CW_AGENT_PACKAGE" || return 1
   fi
   [ -x "$CW_AGENT_CTL" ] || { echo "CloudWatch agent control script not found: $CW_AGENT_CTL" >&2; return 1; }
 
@@ -2536,7 +2537,8 @@ install_cloudwatch_agent() {
 
   # 설정이 바뀌었거나 에이전트가 멈춰 있을 때만 (재)시작한다. fetch-config -s 가 설정 변환 후 서비스를 재시작한다.
   if [ "$changed" = true ] || ! systemctl is-active --quiet "$CW_AGENT_SERVICE"; then
-    if ! "$CW_AGENT_CTL" -a fetch-config -m ec2 -s -c "file:$CW_AGENT_CONFIG_PATH"; then
+    if ! timeout -k 30 "$CW_AGENT_INSTALL_TIMEOUT_SECONDS" \
+        "$CW_AGENT_CTL" -a fetch-config -m ec2 -s -c "file:$CW_AGENT_CONFIG_PATH"; then
       # 다음 배포가 같은 설정을 '변경 없음'으로 건너뛰지 않도록 지운다.
       rm -f "$CW_AGENT_CONFIG_PATH"
       return 1
@@ -2557,10 +2559,23 @@ set -uo pipefail
 CGROUP_ROOT="${ROUGETHER_METRICS_CGROUP_ROOT:-/sys/fs/cgroup}"
 NAMESPACE="${ROUGETHER_METRICS_NAMESPACE:-Rougether/Dev}"
 REGION="${ROUGETHER_METRICS_REGION:-}"
+DOCKER_TIMEOUT_SECONDS="${ROUGETHER_METRICS_DOCKER_TIMEOUT_SECONDS:-15}"
+PUBLISH_TIMEOUT_SECONDS="${ROUGETHER_METRICS_PUBLISH_TIMEOUT_SECONDS:-25}"
 METRIC_NAME="container_memory_working_set"
 
 log() {
   echo "memory-metrics: $*" >&2
+}
+
+# 외부 명령이 멈춰도 다음 timer 주기를 막지 않게 한다(서비스 TimeoutStartSec 가 최종 안전장치).
+bounded() {
+  local seconds="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout -k 5 "$seconds" "$@"
+  else
+    "$@"
+  fi
 }
 
 is_number() {
@@ -2610,39 +2625,53 @@ metric_datum() {
     "$METRIC_NAME" "$1" "$2"
 }
 
+# 실패는 비0 으로 끝내 journal·systemctl 에 남긴다. 읽을 수 있는 서비스 값은 그래도 보낸다.
 main() {
   local user_api="" admin_api="" batch="" line container_id container_name service directory value data=""
+  local containers status=0
+
+  if ! containers="$(bounded "$DOCKER_TIMEOUT_SECONDS" docker ps --no-trunc --filter 'name=^rougether-' --format '{{.ID}} {{.Names}}')"; then
+    log "docker ps failed; no metrics published"
+    return 1
+  fi
 
   while IFS= read -r line; do
+    [ -n "$line" ] || continue
     container_id="${line%% *}"
     container_name="${line#* }"
     [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || continue
     service="$(service_of "$container_name")" || continue
     if ! directory="$(container_cgroup_dir "$container_id")"; then
       log "cgroup not found for $container_name"
+      status=1
       continue
     fi
-    value="$(working_set_bytes "$directory")" || { log "cannot read memory of $container_name"; continue; }
+    if ! value="$(working_set_bytes "$directory")"; then
+      log "cannot read memory of $container_name"
+      status=1
+      continue
+    fi
     case "$service" in
       user-api) user_api="$(max_value "$user_api" "$value")" ;;
       admin-api) admin_api="$(max_value "$admin_api" "$value")" ;;
       batch) batch="$(max_value "$batch" "$value")" ;;
     esac
-  done < <(docker ps --no-trunc --filter 'name=^rougether-' --format '{{.ID}} {{.Names}}' 2>/dev/null)
+  done <<< "$containers"
 
   [ -z "$user_api" ] || data="$data${data:+,}$(metric_datum user-api "$user_api")"
   [ -z "$admin_api" ] || data="$data${data:+,}$(metric_datum admin-api "$admin_api")"
   [ -z "$batch" ] || data="$data${data:+,}$(metric_datum batch "$batch")"
   if [ -z "$data" ]; then
     log "no running rougether service containers; nothing to publish"
-    return 0
+    return "$status"
   fi
 
-  if ! aws cloudwatch put-metric-data ${REGION:+--region "$REGION"} \
+  if ! bounded "$PUBLISH_TIMEOUT_SECONDS" aws cloudwatch put-metric-data ${REGION:+--region "$REGION"} \
       --namespace "$NAMESPACE" --metric-data "[$data]"; then
     log "put-metric-data failed"
     return 1
   fi
+  return "$status"
 }
 
 main "$@"
@@ -2681,7 +2710,7 @@ EOF
 }
 
 install_memory_metrics() {
-  local changed=false result writer destination mode
+  local changed=false timer_changed=false result writer destination mode
 
   cw_namespace_valid || { echo "invalid CloudWatch namespace: $CW_NAMESPACE" >&2; return 1; }
   [[ "$AWS_REGION" =~ ^[a-z]{2}(-[a-z]+)+-[0-9]+$ ]] || { echo "invalid AWS region: $AWS_REGION" >&2; return 1; }
@@ -2700,7 +2729,10 @@ install_memory_metrics() {
     result=0
     replace_file_if_changed "$destination" "$mode" "$writer" || result="$?"
     [ "$result" -ne 2 ] || return 1
-    [ "$result" -ne 0 ] || changed=true
+    if [ "$result" -eq 0 ]; then
+      changed=true
+      [ "$writer" != write_memory_metrics_timer ] || timer_changed=true
+    fi
   done
 
   if [ "$changed" = true ]; then
@@ -2708,6 +2740,10 @@ install_memory_metrics() {
     echo "memory metrics publisher installed or updated"
   fi
   systemctl enable --now "$MEMORY_METRICS_UNIT_NAME.timer" || return 1
+  # enable --now 는 이미 도는 timer 에 바뀐 주기를 다시 걸지 않으므로 timer 파일이 바뀌면 재시작한다.
+  if [ "$timer_changed" = true ]; then
+    systemctl restart "$MEMORY_METRICS_UNIT_NAME.timer" || return 1
+  fi
 }
 
 # BEGIN_DEPLOY_EXECUTION

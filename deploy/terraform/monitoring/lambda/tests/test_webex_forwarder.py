@@ -165,6 +165,38 @@ class WebexForwarderTest(unittest.TestCase):
         self.assertNotIn(TOKEN, str(raised.exception))
         self.assertIsNone(raised.exception.__cause__)
 
+    def test_rejected_token_invalidates_cache_so_retry_reads_ssm_again(self):
+        for status in (401, 403):
+            with self.subTest(status=status):
+                webex_forwarder._credential_cache.update(token=None, room=None, expires_at=0.0)
+                self.ssm.calls.clear()
+                webex_forwarder.handler({"Records": [alarm_record()]}, None)
+                self.assertEqual(2, len(self.ssm.calls))
+
+                self.urlopen.side_effect = urllib.error.HTTPError(
+                    webex_forwarder.WEBEX_MESSAGES_URL, status, "rejected", {}, None
+                )
+                with self.assertRaises(webex_forwarder.ForwardingError):
+                    webex_forwarder.handler({"Records": [alarm_record()]}, None)
+                self.assertEqual(2, len(self.ssm.calls), "cached credentials are used for the failing call")
+                self.assertIsNone(webex_forwarder._credential_cache["token"])
+
+                self.ssm.values[ENVIRONMENT["WEBEX_BOT_TOKEN_PARAMETER"]] = "rotated-token"
+                self.urlopen.side_effect = self._fake_urlopen
+                webex_forwarder.handler({"Records": [alarm_record()]}, None)
+                self.assertEqual(4, len(self.ssm.calls))
+                self.assertEqual("Bearer rotated-token", self.requests[-1][0].get_header("Authorization"))
+                self.ssm.values[ENVIRONMENT["WEBEX_BOT_TOKEN_PARAMETER"]] = TOKEN
+
+    def test_server_error_keeps_cached_credentials(self):
+        webex_forwarder.handler({"Records": [alarm_record()]}, None)
+        self.urlopen.side_effect = urllib.error.HTTPError(
+            webex_forwarder.WEBEX_MESSAGES_URL, 503, "unavailable", {}, None
+        )
+        with self.assertRaises(webex_forwarder.ForwardingError):
+            webex_forwarder.handler({"Records": [alarm_record()]}, None)
+        self.assertEqual(TOKEN, webex_forwarder._credential_cache["token"])
+
     def test_network_error_is_raised_for_retry(self):
         self.urlopen.side_effect = urllib.error.URLError("timed out")
         with self.assertRaises(webex_forwarder.ForwardingError):

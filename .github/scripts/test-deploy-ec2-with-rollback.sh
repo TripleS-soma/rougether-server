@@ -1933,7 +1933,13 @@ EOF
     [ ! -f "$CW_FAKE_DIR/dnf-fails" ] || return 1
     : > "$CW_FAKE_DIR/installed"
   }
-  timeout() { shift; "$@"; }
+  # 실제 timeout 처럼 -k <초> 옵션과 제한 시간을 건너뛰고 명령을 실행한다. 인자는 기록해 -k 사용을 확인한다.
+  timeout() {
+    echo "timeout $*" >> "$CW_FAKE_DIR/timeout.log"
+    while [ "${1:-}" = -k ]; do shift 2; done
+    shift
+    "$@"
+  }
   systemctl() {
     if [ "$1" = is-active ]; then
       [ -f "$CW_FAKE_DIR/agent-active" ]
@@ -1962,6 +1968,10 @@ test_cloudwatch_agent_install_is_idempotent_and_restarts_only_on_config_change()
   fi
   assert_contains "^ctl -a fetch-config -m ec2 -s -c file:$CW_AGENT_CONFIG_PATH$" "$CW_FAKE_DIR/calls.log" \
     "agent must be (re)started from the managed config file"
+  assert_contains '^timeout -k 30 300 dnf install -y amazon-cloudwatch-agent$' "$CW_FAKE_DIR/timeout.log" \
+    "package install must be bounded with a kill grace period"
+  assert_contains "^timeout -k 30 300 $CW_AGENT_CTL -a fetch-config" "$CW_FAKE_DIR/timeout.log" \
+    "agent restart must be bounded with a kill grace period"
   python3 -m json.tool "$CW_AGENT_CONFIG_PATH" >/dev/null \
     || { echo "not ok - agent config must be valid JSON" >&2; return 1; }
   assert_contains '"namespace": "Rougether/Dev"' "$CW_AGENT_CONFIG_PATH" "agent must publish to the Rougether/Dev namespace"
@@ -2093,6 +2103,7 @@ test_memory_metrics_install_is_idempotent() {
   bash -n "$MEMORY_METRICS_SCRIPT_PATH" || { echo "not ok - metrics script must be valid bash" >&2; return 1; }
   assert_file_equal "$script_copy" "$MEMORY_METRICS_SCRIPT_PATH" "reinstall must keep the same metrics script"
   assert_not_contains 'daemon-reload' "$calls" "unchanged metrics units must not trigger daemon-reload"
+  assert_not_contains '^restart ' "$calls" "unchanged metrics timer must not be restarted"
   assert_contains '^enable --now rougether-memory-metrics.timer$' "$calls" "every deploy must keep the metrics timer enabled"
   assert_contains '^OnUnitActiveSec=1min$' "$SYSTEMD_DIR/rougether-memory-metrics.timer" "metrics must be published every minute"
   assert_contains '^Environment=ROUGETHER_METRICS_NAMESPACE=Rougether/Dev$' "$SYSTEMD_DIR/rougether-memory-metrics.service" \
@@ -2109,6 +2120,15 @@ test_memory_metrics_install_is_idempotent() {
   systemctl() { return 0; }
   assert_file_equal "$script_copy" "$MEMORY_METRICS_SCRIPT_PATH" "drifted metrics script must be restored"
   assert_contains '^daemon-reload$' "$calls" "changed metrics files must reload systemd"
+  assert_not_contains '^restart ' "$calls" "a script-only change must not restart the timer"
+
+  printf '# locally modified\n' >> "$SYSTEMD_DIR/rougether-memory-metrics.timer"
+  : > "$calls"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+  install_memory_metrics >/dev/null
+  systemctl() { return 0; }
+  assert_before '^daemon-reload$' '^restart rougether-memory-metrics.timer$' "$calls" \
+    "a changed timer file must be reloaded and the running timer restarted"
 
   AWS_REGION="__AWS_REGION__"
   if install_memory_metrics >/dev/null 2>&1; then
@@ -2144,7 +2164,9 @@ test_memory_metrics_script_publishes_max_working_set_per_service() {
   mkdir -p "$fake/bin"
   cat > "$fake/bin/docker" <<EOF
 #!/usr/bin/env bash
-[ "\$1" = ps ] && cat "$fake/containers"
+[ "\$1" = ps ] || exit 0
+[ ! -f "$fake/docker-fails" ] || { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
+cat "$fake/containers"
 EOF
   cat > "$fake/bin/aws" <<EOF
 #!/usr/bin/env bash
@@ -2199,6 +2221,29 @@ PY
     return 1
   fi
   assert_contains 'put-metric-data failed' "$fake/metrics.log" "publish failure must be logged"
+
+  # docker 조회 실패는 비0 으로 끝내 journal 에 남기고, 아무것도 보내지 않는다.
+  rm -f "$fake/aws-fails" "$fake/aws-args"
+  : > "$fake/docker-fails"
+  if run_metrics; then
+    echo "not ok - docker ps failure must fail the unit run" >&2
+    return 1
+  fi
+  [ ! -f "$fake/aws-args" ] || { echo "not ok - nothing must be published when docker ps fails" >&2; return 1; }
+  assert_contains 'docker ps failed' "$fake/metrics.log" "docker failure must be logged"
+
+  # cgroup 을 못 읽은 컨테이너가 있으면 나머지 서비스 값은 보내되 비0 으로 끝낸다.
+  rm -f "$fake/docker-fails"
+  local missing
+  missing="$(printf '6%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n%s rougether-admin-api\n' "$batch" "$missing" > "$fake/containers"
+  if run_metrics; then
+    echo "not ok - an unreadable container cgroup must fail the unit run" >&2
+    return 1
+  fi
+  assert_contains '"Value":"batch"' "$fake/aws-args" "readable services must still be published"
+  assert_not_contains 'admin-api' "$fake/aws-args" "unreadable services must not be published"
+  assert_contains 'cgroup not found for rougether-admin-api' "$fake/metrics.log" "missing cgroup must be logged"
   unset -f run_metrics
   echo "ok - memory metrics script publishes the max working set per service"
 }
@@ -2225,7 +2270,20 @@ test_metric_contract_matches_terraform_alarms() {
   assert_contains 'ROUGETHER_USER_MEMORY_LIMIT:-1280m' "$DEPLOY_SCRIPT" "user-api container limit default"
   assert_contains 'ROUGETHER_ADMIN_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "admin-api container limit default"
   assert_contains 'ROUGETHER_BATCH_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "batch container limit default"
-  echo "ok - published metrics match the terraform alarm contract"
+  assert_contains '"cloudwatch:namespace" = var.metric_namespace' "$monitoring_dir/main.tf" \
+    "EC2 PutMetricData must be limited to the metric namespace"
+  assert_contains 'Action   = \["cloudwatch:PutMetricData"\]' "$monitoring_dir/main.tf" \
+    "EC2 metrics policy must grant only PutMetricData"
+  assert_not_contains 'policy_arn *= .*CloudWatchAgentServerPolicy' "$monitoring_dir/main.tf" \
+    "the broad managed agent policy must not be attached"
+  # 에이전트가 PutMetricData 외 API(logs·ec2:DescribeTags/Volumes)를 부르게 하는 설정이 없어야 최소 정책으로 동작한다.
+  assert_not_contains '"logs"' "$agent_file" "agent must not ship logs under the metrics-only policy"
+  assert_not_contains 'append_dimensions' "$agent_file" "agent must not need ec2:DescribeTags"
+  assert_not_contains 'ec2_tag\|"disk"\|"diskio"' "$agent_file" "agent must not need EC2 tag or volume APIs"
+  assert_contains '"namespace": "Rougether/Dev"' "$agent_file" "agent namespace must match the policy condition"
+  assert_contains 'dimensions *= { Service = "user-api" }' "$monitoring_dir/alarms.tf" \
+    "service collector heartbeat must watch the user-api series"
+  echo "ok - published metrics match the terraform alarm and policy contract"
 }
 
 test_legacy_units_cap_memory_and_pass_jvm_options

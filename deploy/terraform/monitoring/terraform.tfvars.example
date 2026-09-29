@@ -19,3 +19,6 @@ webex_bot_token_parameter = "/rougether-dev/alerts/webex-bot-token"
 webex_room_id_parameter   = "/rougether-dev/alerts/webex-room-id"
 lambda_runtime            = "python3.14"
 log_retention_days        = 30
+
+# 알림 경로(Lambda 오류·DLQ) 알람을 받을 이메일. 빈 값이면 구독을 만들지 않는다.
+fallback_email = ""

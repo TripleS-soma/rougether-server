@@ -103,3 +103,14 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "fallback_email" {
+  description = "알림 경로(Lambda 오류·DLQ) 알람을 받을 이메일. 빈 값이면 fallback 토픽에 구독을 만들지 않는다."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.fallback_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.fallback_email))
+    error_message = "fallback_email 은 빈 값이거나 이메일 주소여야 합니다."
+  }
+}

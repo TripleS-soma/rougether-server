@@ -3,7 +3,8 @@
 - 토큰·room 은 SSM 파라미터에서 읽고 짧게 캐시한다. 둘 다 로그·예외 메시지에 싣지 않는다.
 - 알람 이름·상태·사유·시각을 markdown 으로 보낸다. 사용자 입력이 섞일 수 있는 값은
   멘션(<@...>, @all)과 markdown 강조 문자를 무력화한 뒤 넣는다.
-- 전송 실패는 예외로 올려 Lambda 비동기 재시도(최대 2회)에 맡긴다.
+- 전송 실패는 예외로 올려 Lambda 비동기 재시도(최대 2회)에 맡긴다. 401/403 이면 토큰 캐시를 비운다.
+  재시도까지 실패한 이벤트는 SQS DLQ 로 가고, Errors·DLQ 알람이 fallback 토픽으로 알린다.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ LOGGER.setLevel(logging.INFO)
 WEBEX_MESSAGES_URL = "https://webexapis.com/v1/messages"
 HTTP_TIMEOUT_SECONDS = 10
 CREDENTIAL_CACHE_SECONDS = 300
+CREDENTIAL_REJECTED_STATUSES = (401, 403)
 MAX_FIELD_LENGTH = 1000
 MAX_MESSAGE_LENGTH = 6000
 KST = timezone(timedelta(hours=9), "KST")
@@ -70,6 +72,10 @@ def _read_parameter(name: str) -> str:
     if not value or any(character.isspace() for character in value):
         raise ForwardingError(f"SSM 파라미터 {name} 값이 비었거나 형식이 잘못됐습니다")
     return value
+
+
+def invalidate_credentials() -> None:
+    _credential_cache.update(token=None, room=None, expires_at=0.0)
 
 
 def load_credentials(now: float | None = None) -> tuple[str, str]:
@@ -176,6 +182,9 @@ def send_to_webex(markdown: str, token: str, room: str) -> int:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
             return response.status
     except urllib.error.HTTPError as error:
+        if error.code in CREDENTIAL_REJECTED_STATUSES:
+            # 토큰이 교체·폐기됐을 수 있다. 캐시를 비워 재시도가 SSM 의 새 값을 읽게 한다.
+            invalidate_credentials()
         raise ForwardingError(f"Webex 응답 HTTP {error.code}") from None
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         raise ForwardingError(f"Webex 연결 실패: {type(error).__name__}") from None
