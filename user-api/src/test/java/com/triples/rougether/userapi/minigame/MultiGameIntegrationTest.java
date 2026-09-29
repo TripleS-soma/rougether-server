@@ -1,8 +1,10 @@
 package com.triples.rougether.userapi.minigame;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.common.error.ErrorCode;
@@ -66,8 +68,8 @@ class MultiGameIntegrationTest {
     @BeforeEach
     void setClock() {
         now = Instant.parse("2026-09-12T06:00:00Z");
-        when(kstClock.instant()).thenAnswer(invocation -> now);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        doAnswer(invocation -> now).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
     }
 
     @AfterEach

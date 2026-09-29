@@ -1,7 +1,8 @@
 package com.triples.rougether.userapi.minigame;
 
+import static org.mockito.Mockito.doReturn;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+
 
 import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
@@ -47,8 +48,8 @@ class MinigameWithdrawalConcurrencyTest {
 
     @BeforeEach
     void setUp() {
-        when(kstClock.instant()).thenReturn(NOW);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        doReturn(NOW).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
         user = users.save(User.signUp());
     }
 

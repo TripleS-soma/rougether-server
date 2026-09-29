@@ -1,7 +1,8 @@
 package com.triples.rougether.userapi.attendance;
 
+import static org.mockito.Mockito.doReturn;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+
 
 import com.triples.rougether.domain.attendance.entity.AttendanceEvent;
 import com.triples.rougether.domain.attendance.repository.AttendanceCheckInRepository;
@@ -59,7 +60,7 @@ class AttendanceEventServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        when(kstClock.getZone()).thenReturn(KST);
+        doReturn(KST).when(kstClock).getZone();
 
         user = userRepository.save(User.signUp("attendance-event@rougether.dev"));
         userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));
@@ -185,7 +186,7 @@ class AttendanceEventServiceIntegrationTest {
     }
 
     private void setToday(LocalDate date) {
-        when(kstClock.instant()).thenReturn(date.atTime(9, 0).atZone(KST).toInstant());
+        doReturn(date.atTime(9, 0).atZone(KST).toInstant()).when(kstClock).instant();
     }
 
     private int coinBalance() {

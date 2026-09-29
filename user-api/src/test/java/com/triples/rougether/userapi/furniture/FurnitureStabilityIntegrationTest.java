@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.furniture;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import com.triples.rougether.common.error.BusinessException;
@@ -54,8 +56,8 @@ class FurnitureStabilityIntegrationTest {
         jobs.deleteAll();
         jdbc.update("update furniture_worker_capacity set execution_mode='LAMBDA',max_in_flight=2,execution_enabled=true where id=1");
         now=Instant.parse("2026-09-09T06:00:00Z");
-        when(kstClock.instant()).thenAnswer(i->now);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        doAnswer(i->now).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
     }
     @AfterEach void cleanup(TestInfo info) throws Exception {
         Path dir=Path.of("build/stability-evidence");Files.createDirectories(dir);

@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.furniture;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import com.triples.rougether.common.error.BusinessException;
@@ -37,8 +39,8 @@ class FurnitureDirectUploadIntegrationTest {
         jdbc.update("delete from furniture_generation_feedback");
         jobs.deleteAll();
         now = Instant.parse("2026-09-11T00:00:00Z");
-        when(kstClock.instant()).thenAnswer(i -> now);
-        when(kstClock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
+        doAnswer(i -> now).when(kstClock).instant();
+        doReturn(ZoneId.of("Asia/Seoul")).when(kstClock).getZone();
         user = users.save(User.signUp("upload-" + UUID.randomUUID() + "@example.test")).getId();
         var account = new FurnitureCreditAccount(user); account.adjust(1); accounts.save(account);
     }
