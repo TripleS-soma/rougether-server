@@ -43,8 +43,10 @@ USER_MEMORY_LIMIT="${ROUGETHER_USER_MEMORY_LIMIT:-1280m}"
 USER_MEMORY_LIMIT_KB="${ROUGETHER_USER_MEMORY_LIMIT_KB:-}"
 USER_JAVA_MAX_HEAP="${ROUGETHER_USER_JAVA_MAX_HEAP:-512m}"
 # 기본값은 t3.medium(3.8GB)에서 legacy 운영(세 컨테이너 동시)을 기준으로 잡는다(#418).
-# 상한은 힙 + 힙 바깥(메타스페이스·JIT 코드 캐시·스레드 스택·GC 구조체 ≈ 250MB) + 여유다.
 # 640m/힙 384m 에서 batch 가 JIT 컴파일 중 OOM kill(anon-rss≈649MB)된 실측을 반영해 admin/batch 를 768m 로 올린다.
+# 주의: admin/batch 는 힙(384m) + MaxMetaspaceSize(256m) + ReservedCodeCacheSize(128m) 상한의 합이 컨테이너 상한(768m)과
+# 같다. 이 셋은 "최대" 예약치이고 평소 사용량(메타스페이스 ~100MB·코드 캐시 ~50MB)은 훨씬 작아서, 그 차이가
+# 상한이 없는 스레드 스택·GC 구조체·direct buffer(MaxDirectMemorySize 로 제한)를 담는다. 여유가 넉넉한 구성은 아니다.
 ADMIN_MEMORY_LIMIT="${ROUGETHER_ADMIN_MEMORY_LIMIT:-768m}"
 ADMIN_MEMORY_LIMIT_KB="${ROUGETHER_ADMIN_MEMORY_LIMIT_KB:-}"
 ADMIN_JAVA_MAX_HEAP="${ROUGETHER_ADMIN_JAVA_MAX_HEAP:-384m}"
@@ -54,6 +56,9 @@ BATCH_JAVA_MAX_HEAP="${ROUGETHER_BATCH_JAVA_MAX_HEAP:-384m}"
 # 힙 바깥 영역 상한과 진단 옵션 — 모든 유닛(blue/green·legacy·batch)의 JAVA_TOOL_OPTIONS 에 공통으로 붙는다.
 JAVA_RESERVED_CODE_CACHE="${ROUGETHER_JAVA_RESERVED_CODE_CACHE:-128m}"
 JAVA_MAX_METASPACE="${ROUGETHER_JAVA_MAX_METASPACE:-256m}"
+JAVA_MAX_DIRECT_MEMORY="${ROUGETHER_JAVA_MAX_DIRECT_MEMORY:-64m}"
+# NativeMemoryTracking 은 진단 때만 켠다(off|summary). 켜면 메모리·성능 오버헤드가 조금 있다.
+JAVA_NMT="${ROUGETHER_JAVA_NMT:-off}"
 MEMORY_RESERVE_KB="${ROUGETHER_MEMORY_RESERVE_KB:-262144}"
 # 호스트 이벤트 감시(OOM kill·비정상 재시작 → 운영 Webex, #418)
 WATCH_SCRIPT_PATH="${ROUGETHER_WATCH_SCRIPT_PATH:-/usr/local/libexec/rougether/container-watch.sh}"
@@ -529,8 +534,40 @@ runtime_env_value() {
   awk -v key="$key" 'index($0, key "=") == 1 {value = substr($0, length(key) + 2)} END {printf "%s", value}' "$env_file"
 }
 
-# batch 운영 알림(#417)이 user-api 와 같은 Webex 봇·room 을 쓰도록 user-api.env 의 값을 batch.env 로 복사한다(멱등).
-# refresh_webex_alert_env 가 먼저 user-api.env 를 갱신한 뒤 호출한다. 값이 비었거나 형식이 이상하면 기존 batch 값을 유지한다.
+# batch 운영 알림(#417)이 user-api 와 같은 Webex 봇·room·환경명을 쓰도록 user-api 런타임 env 의 값을 batch 로 복사한다(멱등).
+# refresh_webex_alert_env 가 먼저 user-api 쪽을 갱신한 뒤 호출한다. 값이 비었거나 형식이 이상하면 기존 batch 값을 유지한다.
+# 호출부가 `||` 로 감싸 set -e 가 꺼지므로 단계마다 실패를 직접 확인하고, 불완전한 임시 파일은 절대 옮기지 않는다.
+render_batch_webex_env() {
+  local destination="$1"
+  local token_file="$2"
+  local room_id="$3"
+  local environment="$4"
+  local replace_token="$5"
+  local replace_room="$6"
+  local replace_environment="$7"
+
+  awk -v replace_token="$replace_token" -v replace_room="$replace_room" -v replace_environment="$replace_environment" '
+    replace_token == "true" && /^OPERATIONS_WEBEX_BOT_TOKEN=/ { next }
+    replace_room == "true" && /^OPERATIONS_WEBEX_ROOM_ID=/ { next }
+    replace_environment == "true" && /^ROUGETHER_ENVIRONMENT=/ { next }
+    { print }
+  ' "$BATCH_RUNTIME_ENV" > "$destination" || return 1
+
+  # 매 배포 빈 줄이 쌓이지 않도록 마지막 줄바꿈만 보장한다.
+  if [ -s "$destination" ] && [ -n "$(tail -c 1 "$destination")" ]; then
+    printf '\n' >> "$destination" || return 1
+  fi
+  if [ "$replace_token" = true ]; then
+    printf 'OPERATIONS_WEBEX_BOT_TOKEN=%s\n' "$(tr -d '\r\n' < "$token_file")" >> "$destination" || return 1
+  fi
+  if [ "$replace_room" = true ]; then
+    printf 'OPERATIONS_WEBEX_ROOM_ID=%s\n' "$room_id" >> "$destination" || return 1
+  fi
+  if [ "$replace_environment" = true ]; then
+    printf 'ROUGETHER_ENVIRONMENT=%s\n' "$environment" >> "$destination" || return 1
+  fi
+}
+
 refresh_batch_webex_alert_env() {
   local token_file room_id environment temporary_env replace_token=false replace_room=false replace_environment=false
 
@@ -543,50 +580,41 @@ refresh_batch_webex_alert_env() {
     return 1
   fi
 
-  token_file="$(mktemp "$ENV_DIR/.webex-bot-token.XXXXXX")"
-  runtime_env_value "$USER_RUNTIME_ENV" OPERATIONS_WEBEX_BOT_TOKEN > "$token_file"
+  token_file="$(mktemp "$ENV_DIR/.webex-bot-token.XXXXXX")" || return 1
+  if ! runtime_env_value "$USER_RUNTIME_ENV" OPERATIONS_WEBEX_BOT_TOKEN > "$token_file" \
+      || ! room_id="$(runtime_env_value "$USER_RUNTIME_ENV" OPERATIONS_WEBEX_ROOM_ID)" \
+      || ! environment="$(runtime_env_value "$USER_RUNTIME_ENV" ROUGETHER_ENVIRONMENT)"; then
+    rm -f "$token_file"
+    echo "cannot read Webex values from $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+
   if webex_bot_token_valid "$token_file"; then
     replace_token=true
   else
     echo "user-api Webex bot token is missing or invalid; keeping the current batch token" >&2
   fi
-
-  room_id="$(runtime_env_value "$USER_RUNTIME_ENV" OPERATIONS_WEBEX_ROOM_ID)"
   if [ -n "$room_id" ] && [ "${#room_id}" -le 1024 ] && [[ "$room_id" != *[[:space:]]* ]]; then
     replace_room=true
   else
     echo "user-api Webex room ID is missing or invalid; keeping the current batch room ID" >&2
   fi
-
-  environment="$(runtime_env_value "$USER_RUNTIME_ENV" ROUGETHER_ENVIRONMENT)"
   if [[ "$environment" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
     replace_environment=true
   fi
 
-  temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"
-  awk -v replace_token="$replace_token" -v replace_room="$replace_room" -v replace_environment="$replace_environment" '
-    replace_token == "true" && /^OPERATIONS_WEBEX_BOT_TOKEN=/ { next }
-    replace_room == "true" && /^OPERATIONS_WEBEX_ROOM_ID=/ { next }
-    replace_environment == "true" && /^ROUGETHER_ENVIRONMENT=/ { next }
-    { print }
-  ' "$BATCH_RUNTIME_ENV" > "$temporary_env"
-
-  # 매 배포 빈 줄이 쌓이지 않도록 마지막 줄바꿈만 보장한다.
-  if [ -s "$temporary_env" ] && [ -n "$(tail -c 1 "$temporary_env")" ]; then
-    printf '\n' >> "$temporary_env"
+  if ! temporary_env="$(mktemp "$ENV_DIR/.batch.env.XXXXXX")"; then
+    rm -f "$token_file"
+    return 1
   fi
-  if [ "$replace_token" = true ]; then
-    printf 'OPERATIONS_WEBEX_BOT_TOKEN=%s\n' "$(tr -d '\r\n' < "$token_file")" >> "$temporary_env"
+  if ! render_batch_webex_env "$temporary_env" "$token_file" "$room_id" "$environment" \
+        "$replace_token" "$replace_room" "$replace_environment" \
+      || ! chmod 600 "$temporary_env" \
+      || ! mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"; then
+    rm -f "$temporary_env" "$token_file"
+    echo "batch Webex alert env update failed; keeping the current batch runtime env" >&2
+    return 1
   fi
-  if [ "$replace_room" = true ]; then
-    printf 'OPERATIONS_WEBEX_ROOM_ID=%s\n' "$room_id" >> "$temporary_env"
-  fi
-  if [ "$replace_environment" = true ]; then
-    printf 'ROUGETHER_ENVIRONMENT=%s\n' "$environment" >> "$temporary_env"
-  fi
-
-  chmod 600 "$temporary_env"
-  mv -f "$temporary_env" "$BATCH_RUNTIME_ENV"
   rm -f "$token_file"
 }
 
@@ -1101,13 +1129,29 @@ memory_size_valid() {
 
 # 유닛 파일에 그대로 구워지는 값이라 ROUGETHER_* 로 덮을 때 형식을 강제한다(공백·따옴표·% 가 섞이면 ExecStart 가 깨진다).
 validate_memory_settings() {
-  local value
+  local value service_pair limit heap
   for value in "$USER_MEMORY_LIMIT" "$USER_JAVA_MAX_HEAP" \
       "$ADMIN_MEMORY_LIMIT" "$ADMIN_JAVA_MAX_HEAP" \
       "$BATCH_MEMORY_LIMIT" "$BATCH_JAVA_MAX_HEAP" \
-      "$JAVA_RESERVED_CODE_CACHE" "$JAVA_MAX_METASPACE"; do
+      "$JAVA_RESERVED_CODE_CACHE" "$JAVA_MAX_METASPACE" "$JAVA_MAX_DIRECT_MEMORY"; do
     if ! memory_size_valid "$value"; then
       echo "invalid memory setting '$value' (expected <number>[k|m|g])" >&2
+      return 1
+    fi
+  done
+
+  case "$JAVA_NMT" in
+    off|summary) ;;
+    *) echo "invalid ROUGETHER_JAVA_NMT '$JAVA_NMT' (expected off or summary)" >&2; return 1 ;;
+  esac
+
+  # 힙이 컨테이너 상한 이상이면 힙 바깥 메모리가 들어갈 자리가 없어 기동 직후 OOM kill 된다.
+  for service_pair in "user-api:$USER_MEMORY_LIMIT:$USER_JAVA_MAX_HEAP" \
+      "admin-api:$ADMIN_MEMORY_LIMIT:$ADMIN_JAVA_MAX_HEAP" \
+      "batch:$BATCH_MEMORY_LIMIT:$BATCH_JAVA_MAX_HEAP"; do
+    IFS=: read -r value limit heap <<< "$service_pair"
+    if [ "$(memory_size_to_kb "$heap")" -ge "$(memory_size_to_kb "$limit")" ]; then
+      echo "$value max heap $heap must be smaller than its container limit $limit" >&2
       return 1
     fi
   done
@@ -1115,8 +1159,11 @@ validate_memory_settings() {
 
 java_tool_options() {
   local max_heap="$1"
-  printf -- '-Xmx%s -XX:ReservedCodeCacheSize=%s -XX:MaxMetaspaceSize=%s -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary' \
-    "$max_heap" "$JAVA_RESERVED_CODE_CACHE" "$JAVA_MAX_METASPACE"
+  printf -- '-Xmx%s -XX:ReservedCodeCacheSize=%s -XX:MaxMetaspaceSize=%s -XX:MaxDirectMemorySize=%s -XX:+ExitOnOutOfMemoryError' \
+    "$max_heap" "$JAVA_RESERVED_CODE_CACHE" "$JAVA_MAX_METASPACE" "$JAVA_MAX_DIRECT_MEMORY"
+  if [ "$JAVA_NMT" = summary ]; then
+    printf -- ' -XX:NativeMemoryTracking=summary'
+  fi
 }
 
 # docker run 의 메모리 상한과 JVM 옵션 인자. JAVA_TOOL_OPTIONS 값에 공백이 있으므로 systemd ExecStart 의
@@ -1169,6 +1216,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/user-api-%i.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api-%i
 ExecStart=/usr/bin/docker run --rm --name rougether-user-api-%i $user_memory_args --env-file /etc/rougether/user-api.env $firebase_mount_option -p 127.0.0.1:\${ROUGETHER_HOST_PORT}:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
@@ -1189,6 +1238,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/admin-api-%i.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api-%i
 ExecStart=/usr/bin/docker run --rm --name rougether-admin-api-%i --network host $admin_memory_args --env-file /etc/rougether/admin-api.env --env SERVER_PORT=\${ROUGETHER_HOST_PORT} --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
@@ -1209,6 +1260,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/batch.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-batch
 ExecStart=/usr/bin/docker run --rm --name rougether-batch $batch_memory_args --env-file /etc/rougether/batch.env $firebase_mount_option -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_BATCH_IMAGE}
@@ -1585,6 +1638,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/user-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-user-api
 ExecStart=/usr/bin/docker run --rm --name rougether-user-api $user_memory_args --env-file /etc/rougether/user-api.env $firebase_mount_option -p 8080:8080 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_USER_API_IMAGE}
@@ -1604,6 +1659,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/admin-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
 ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --network host $admin_memory_args --env-file /etc/rougether/admin-api.env --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_ADMIN_API_IMAGE}
@@ -1626,6 +1683,8 @@ Wants=network-online.target
 [Service]
 Restart=always
 RestartSec=10
+# docker stop 이 SIGTERM 으로 내린 컨테이너는 docker run 이 143 으로 끝난다 — 정상 정지로 본다.
+SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/batch.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-batch
 ExecStart=/usr/bin/docker run --rm --name rougether-batch $batch_memory_args --env-file /etc/rougether/batch.env $firebase_mount_option -p 127.0.0.1:8082:8082 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_BATCH_IMAGE}
@@ -2001,6 +2060,7 @@ write_container_watch_script() {
 #  - 실행 중인 rougether-* 컨테이너 cgroup v2 memory.events 의 oom_kill 증가
 #  - rougether-* 유닛의 자동 재시작(NRestarts 증가)과 enabled 유닛의 failed 전이
 # 배포 중(deploy-in-progress 잠금)에는 알리지 않고 기준값만 갱신한다. 같은 종류·대상은 cooldown 동안 한 번만 알린다.
+# 전송에 실패하면 기준값을 그대로 둬서 다음 실행에서 다시 알린다. 외부 명령은 모두 timeout 으로 감싼다.
 set -uo pipefail
 umask 077
 
@@ -2011,6 +2071,10 @@ ENVIRONMENT_NAME="${ROUGETHER_WATCH_ENVIRONMENT:-unknown}"
 COOLDOWN_SECONDS="${ROUGETHER_WATCH_COOLDOWN_SECONDS:-1800}"
 DEPLOY_LOCK_MAX_AGE_SECONDS="${ROUGETHER_WATCH_DEPLOY_LOCK_MAX_AGE_SECONDS:-3600}"
 WEBEX_MESSAGES_URL="${ROUGETHER_WATCH_WEBEX_URL:-https://webexapis.com/v1/messages}"
+COMMAND_TIMEOUT_SECONDS="${ROUGETHER_WATCH_COMMAND_TIMEOUT_SECONDS:-10}"
+NOTIFY_SENT=0
+NOTIFY_FAILED=1
+NOTIFY_SUPPRESSED=2
 SELF_UNIT="rougether-container-watch.service"
 NOW="${ROUGETHER_WATCH_NOW:-$(date +%s)}"
 DEPLOY_LOCK="$STATE_DIR/deploy-in-progress"
@@ -2025,6 +2089,15 @@ log() {
 
 is_number() {
   [[ "${1:-}" =~ ^[0-9]+$ ]]
+}
+
+# 외부 명령이 멈춰도 감시가 영구히 걸리지 않게 한다(서비스 TimeoutStartSec 가 최종 안전장치).
+bounded() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$COMMAND_TIMEOUT_SECONDS" "$@"
+  else
+    "$@"
+  fi
 }
 
 read_number() {
@@ -2095,7 +2168,7 @@ send_webex() {
   header_file="$(mktemp "$STATE_DIR/.webex-header.XXXXXX")" || return 1
   body_file="$(mktemp "$STATE_DIR/.webex-body.XXXXXX")" || { rm -f "$header_file"; return 1; }
   printf 'Authorization: Bearer %s\nContent-Type: application/json\n' "$token" > "$header_file"
-  if ! printf '%s' "$text" | ROUGETHER_WATCH_ROOM="$room" python3 -c '
+  if ! printf '%s' "$text" | ROUGETHER_WATCH_ROOM="$room" bounded python3 -c '
 import json, os, sys
 print(json.dumps({"roomId": os.environ["ROUGETHER_WATCH_ROOM"], "markdown": sys.stdin.read()}))
 ' > "$body_file"; then
@@ -2103,12 +2176,13 @@ print(json.dumps({"roomId": os.environ["ROUGETHER_WATCH_ROOM"], "markdown": sys.
     return 1
   fi
 
-  curl -fsS --connect-timeout 5 --max-time 15 -o /dev/null \
+  bounded curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null \
     -H @"$header_file" --data-binary @"$body_file" "$WEBEX_MESSAGES_URL" || exit_code="$?"
   rm -f "$header_file" "$body_file"
   return "$exit_code"
 }
 
+# 반환값: NOTIFY_SENT(보냄), NOTIFY_SUPPRESSED(배포 잠금·cooldown 으로 억제), NOTIFY_FAILED(전송 실패 — 호출부는 기준값을 두고 재시도).
 notify() {
   local kind="$1"
   local target="$2"
@@ -2118,11 +2192,11 @@ notify() {
 
   if [ "$SUPPRESS_ALERTS" = true ]; then
     log "deploy in progress; $kind alert for $target suppressed"
-    return 0
+    return "$NOTIFY_SUPPRESSED"
   fi
   if ! alert_allowed "$kind" "$target"; then
     log "$kind alert for $target suppressed by cooldown"
-    return 0
+    return "$NOTIFY_SUPPRESSED"
   fi
 
   # shellcheck disable=SC2016 # 백틱은 Webex markdown 코드 표기다.
@@ -2131,9 +2205,10 @@ notify() {
   if send_webex "$message"; then
     write_state "$(cooldown_file "$kind" "$target")" "$NOW"
     log "$kind alert sent for $target"
-  else
-    log "$kind alert for $target could not be sent"
+    return "$NOTIFY_SENT"
   fi
+  log "$kind alert for $target could not be sent; will retry on the next run"
+  return "$NOTIFY_FAILED"
 }
 
 container_memory_events() {
@@ -2151,10 +2226,15 @@ container_memory_events() {
 }
 
 check_container_oom_kills() {
-  local line container_id container_name events_file count previous
+  local line container_id container_name events_file count previous containers result
   local -a seen=()
 
   mkdir -p "$STATE_DIR/oom" || return 1
+  # docker ps 가 실패하면 실행 중 컨테이너를 모르므로 기준값을 지우지 않고 이번 검사를 건너뛴다.
+  if ! containers="$(bounded docker ps --no-trunc --filter 'name=^rougether-' --format '{{.ID}} {{.Names}}' 2>/dev/null)"; then
+    log "docker ps failed; skipping the OOM check and keeping its state"
+    return 1
+  fi
   while IFS= read -r line; do
     container_id="${line%% *}"
     container_name="${line#* }"
@@ -2170,12 +2250,14 @@ check_container_oom_kills() {
       # 감시 첫 실행이면 기존 누적값을 기준으로 삼고, 이후 새로 뜬 컨테이너는 0부터 센다.
       if [ "$INITIALIZED" = true ]; then previous=0; else previous="$count"; fi
     fi
+    result="$NOTIFY_SENT"
     if [ "$count" -gt "$previous" ]; then
       notify oom "$container_name" "컨테이너 OOM kill 감지" \
         "cgroup memory.events oom_kill +$(( count - previous )) (누적 $count). 상한·힙 설정과 docker logs 를 확인하세요."
+      result="$?"
     fi
-    write_state "$STATE_DIR/oom/$container_id" "$count"
-  done < <(docker ps --no-trunc --filter 'name=^rougether-' --format '{{.ID}} {{.Names}}' 2>/dev/null)
+    [ "$result" -eq "$NOTIFY_FAILED" ] || write_state "$STATE_DIR/oom/$container_id" "$count"
+  done <<< "$containers"
 
   local state_file known found
   for state_file in "$STATE_DIR"/oom/*; do
@@ -2192,7 +2274,7 @@ check_container_oom_kills() {
 unit_exit_summary() {
   local unit="$1"
   local since="$2"
-  journalctl -u "$unit" --since "@$since" --no-pager -o cat 2>/dev/null \
+  bounded journalctl -u "$unit" --since "@$since" --no-pager -o cat 2>/dev/null \
     | grep -E 'Main process exited|Failed with result' \
     | tail -n 3 \
     | tr '\n' ' ' \
@@ -2200,17 +2282,21 @@ unit_exit_summary() {
 }
 
 check_unit_restarts() {
-  local unit restarts previous active_state unit_file_state previous_state since summary detail
+  local unit restarts previous active_state unit_file_state previous_state since summary detail units result
 
   mkdir -p "$STATE_DIR/restarts" "$STATE_DIR/unit-state" || return 1
   since="$(read_number "$LAST_RUN_FILE")"
   [ -n "$since" ] || since=$(( NOW - 120 ))
+  if ! units="$(bounded systemctl list-units --all --plain --no-legend --type=service 'rougether-*' 2>/dev/null)"; then
+    log "systemctl list-units failed; skipping the restart check"
+    return 1
+  fi
 
   while IFS= read -r unit; do
     [[ "$unit" =~ ^rougether-[A-Za-z0-9_.@-]+\.service$ ]] || continue
     [ "$unit" != "$SELF_UNIT" ] || continue
 
-    restarts="$(systemctl show -p NRestarts --value "$unit" 2>/dev/null || true)"
+    restarts="$(bounded systemctl show -p NRestarts --value "$unit" 2>/dev/null || true)"
     if is_number "$restarts"; then
       previous="$(read_number "$STATE_DIR/restarts/$unit")"
       if [ -z "$previous" ]; then
@@ -2225,21 +2311,29 @@ check_unit_restarts() {
         fi
         [ -z "$summary" ] || detail="$detail 최근 종료: $summary"
         notify restart "$unit" "서비스 비정상 종료·재시작 감지" "$detail"
+        result="$?"
+      else
+        result="$NOTIFY_SENT"
       fi
-      write_state "$STATE_DIR/restarts/$unit" "$restarts"
+      [ "$result" -eq "$NOTIFY_FAILED" ] || write_state "$STATE_DIR/restarts/$unit" "$restarts"
     fi
 
-    active_state="$(systemctl show -p ActiveState --value "$unit" 2>/dev/null || true)"
-    unit_file_state="$(systemctl show -p UnitFileState --value "$unit" 2>/dev/null || true)"
+    active_state="$(bounded systemctl show -p ActiveState --value "$unit" 2>/dev/null || true)"
+    unit_file_state="$(bounded systemctl show -p UnitFileState --value "$unit" 2>/dev/null || true)"
     previous_state="$(head -n 1 "$STATE_DIR/unit-state/$unit" 2>/dev/null || true)"
     # 배포가 disable 후 내린 슬롯도 failed 로 끝날 수 있으므로 enabled 유닛이 failed 로 바뀔 때만 알린다.
+    result="$NOTIFY_SENT"
     if [ "$active_state" = failed ] && [ "$previous_state" != failed ] \
         && [ "$unit_file_state" = enabled ] && [ "$INITIALIZED" = true ]; then
       summary="$(unit_exit_summary "$unit" "$since")"
       notify failed "$unit" "서비스 중단(failed) 감지" "재시작을 멈추고 failed 상태입니다. ${summary:-journalctl -u $unit 로 확인하세요.}"
+      result="$?"
     fi
-    [ -z "$active_state" ] || write_state "$STATE_DIR/unit-state/$unit" "$active_state"
-  done < <(systemctl list-units --all --plain --no-legend --type=service 'rougether-*' 2>/dev/null | awk '{print $1}')
+    # 배포 잠금 중에는 상태를 기록하지 않는다 — 잠금 중 failed 가 된 유닛이 해제 후에도 failed 면 그때 한 번 알린다.
+    if [ -n "$active_state" ] && [ "$SUPPRESS_ALERTS" != true ] && [ "$result" -ne "$NOTIFY_FAILED" ]; then
+      write_state "$STATE_DIR/unit-state/$unit" "$active_state"
+    fi
+  done < <(printf '%s\n' "$units" | awk 'NF {print $1}')
 }
 
 main() {
@@ -2278,6 +2372,8 @@ After=docker.service
 
 [Service]
 Type=oneshot
+# 외부 명령이 멈춰도 다음 timer 주기를 막지 않도록 실행 시간을 제한한다(명령별 timeout 은 스크립트 안).
+TimeoutStartSec=50
 Environment=ROUGETHER_WATCH_ENVIRONMENT=$(watch_environment_label)
 Environment=ROUGETHER_WATCH_STATE_DIR=$WATCH_STATE_DIR
 Environment=ROUGETHER_WATCH_RUNTIME_ENV=$USER_RUNTIME_ENV
@@ -2359,9 +2455,17 @@ install_container_watch() {
 # 배포 중 수동 재시작·컨테이너 교체를 알림으로 오인하지 않게 감시 스크립트에 잠금을 남긴다.
 # 스크립트가 강제 종료돼 잠금이 남아도 감시 스크립트가 1시간 뒤 낡은 잠금으로 보고 무시한다.
 begin_deploy_watch_suppression() {
+  local temporary_lock
+
   mkdir -p "$WATCH_STATE_DIR" || return 1
   chmod 700 "$WATCH_STATE_DIR" || return 1
-  printf '%s\n' "$(date +%s)" > "$WATCH_STATE_DIR/deploy-in-progress"
+  # 감시 스크립트가 반쯤 쓴 잠금을 읽지 않도록 임시 파일에 쓴 뒤 mv 로 원자적으로 바꾼다.
+  temporary_lock="$(mktemp "$WATCH_STATE_DIR/.deploy-in-progress.XXXXXX")" || return 1
+  if ! printf '%s\n' "$(date +%s)" > "$temporary_lock" \
+      || ! mv -f "$temporary_lock" "$WATCH_STATE_DIR/deploy-in-progress"; then
+    rm -f "$temporary_lock"
+    return 1
+  fi
 }
 
 end_deploy_watch_suppression() {

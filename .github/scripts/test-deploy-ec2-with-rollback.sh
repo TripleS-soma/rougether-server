@@ -130,6 +130,8 @@ reset_scenario() {
   BATCH_JAVA_MAX_HEAP="384m"
   JAVA_RESERVED_CODE_CACHE="128m"
   JAVA_MAX_METASPACE="256m"
+  JAVA_MAX_DIRECT_MEMORY="64m"
+  JAVA_NMT="off"
   USER_MEMORY_LIMIT_KB=""
   ADMIN_MEMORY_LIMIT_KB=""
 
@@ -1259,7 +1261,7 @@ EOF
 }
 
 expected_java_options() {
-  printf -- '-Xmx%s -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary' "$1"
+  printf -- '-Xmx%s -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError' "$1"
 }
 
 # systemd 는 ExecStart 를 큰따옴표 인용 규칙으로 인자 분리한다. 공백이 든 JAVA_TOOL_OPTIONS 가 한 인자로 남는지 확인한다.
@@ -1398,6 +1400,8 @@ test_container_watch_install_is_idempotent() {
     "watch must run every minute"
   assert_contains "^ExecStart=$WATCH_SCRIPT_PATH$" "$SYSTEMD_DIR/rougether-container-watch.service" \
     "watch service must run the installed script"
+  assert_contains '^TimeoutStartSec=50$' "$SYSTEMD_DIR/rougether-container-watch.service" \
+    "a hung watch run must be stopped before it blocks the timer"
   assert_contains '^Environment=ROUGETHER_WATCH_ENVIRONMENT=dev$' "$SYSTEMD_DIR/rougether-container-watch.service" \
     "watch alerts must carry the environment name"
   assert_not_contains 'OPERATIONS_WEBEX_BOT_TOKEN=' "$SYSTEMD_DIR/rougether-container-watch.service" \
@@ -1436,6 +1440,7 @@ setup_watch_fixture() {
 
   cat > "$WATCH_FAKE_BIN/docker" <<'EOF'
 #!/usr/bin/env bash
+[ -f "$WATCH_FAKE_DIR/docker-fail" ] && exit 1
 [ "$1" = ps ] && cat "$WATCH_FAKE_DIR/containers"
 EOF
   cat > "$WATCH_FAKE_BIN/systemctl" <<'EOF'
@@ -1452,6 +1457,10 @@ EOF
   # 인자는 그대로 기록하고, -H @file 로 받은 헤더는 따로 보관해 토큰이 인자로 새지 않았는지 확인한다.
   cat > "$WATCH_FAKE_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
+if [ -f "$WATCH_FAKE_DIR/curl-fail" ]; then
+  echo "FAILED $*" >> "$WATCH_FAKE_DIR/curl-failures.log"
+  exit 22
+fi
 echo "ARGS $*" >> "$WATCH_FAKE_DIR/curl-calls.log"
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1619,7 +1628,296 @@ test_container_watch_alerts_restarts_but_not_during_deploy() {
   echo "ok - container watch alerts restarts but stays quiet during deploys"
 }
 
+test_jvm_options_toggle_nmt_and_reject_heap_at_limit() {
+  reset_scenario "jvm-options"
+
+  if [ "$(java_tool_options 384m)" != "$(expected_java_options 384m)" ]; then
+    echo "not ok - NativeMemoryTracking must be off by default" >&2
+    return 1
+  fi
+  JAVA_NMT="summary"
+  if [ "$(java_tool_options 384m)" != "$(expected_java_options 384m) -XX:NativeMemoryTracking=summary" ]; then
+    echo "not ok - ROUGETHER_JAVA_NMT=summary must enable NativeMemoryTracking" >&2
+    return 1
+  fi
+  JAVA_NMT="detail"
+  if validate_memory_settings >/dev/null 2>&1; then
+    echo "not ok - unsupported NMT modes must be rejected" >&2
+    return 1
+  fi
+  JAVA_NMT="off"
+
+  JAVA_MAX_DIRECT_MEMORY="64 m"
+  if validate_memory_settings >/dev/null 2>&1; then
+    echo "not ok - malformed direct memory override must be rejected" >&2
+    return 1
+  fi
+  JAVA_MAX_DIRECT_MEMORY="64m"
+
+  BATCH_JAVA_MAX_HEAP="768m"
+  if validate_memory_settings >/dev/null 2>&1; then
+    echo "not ok - a heap equal to the container limit must be rejected" >&2
+    return 1
+  fi
+  BATCH_JAVA_MAX_HEAP="1g"
+  if validate_memory_settings >/dev/null 2>&1; then
+    echo "not ok - a heap above the container limit must be rejected" >&2
+    return 1
+  fi
+  BATCH_JAVA_MAX_HEAP="384m"
+  validate_memory_settings || { echo "not ok - default settings must validate" >&2; return 1; }
+  echo "ok - JVM options toggle NMT, cap direct memory, and reject heaps at the limit"
+}
+
+test_units_treat_docker_stop_as_success() {
+  reset_scenario "unit-success-exit"
+  write_units "registry/user:new" "registry/admin:new" "registry/batch:new"
+  write_blue_green_units
+
+  local unit
+  for unit in rougether-user-api.service rougether-admin-api.service rougether-batch.service \
+      rougether-user-api@.service rougether-admin-api@.service; do
+    assert_contains '^SuccessExitStatus=143$' "$SYSTEMD_DIR/$unit" \
+      "$unit must treat docker stop (exit 143) as a clean stop"
+  done
+  echo "ok - legacy and blue/green units treat docker stop as success"
+}
+
+test_batch_webex_alert_env_failure_keeps_current_file() {
+  reset_scenario "batch-webex-env-failure"
+  printf 'DB_PASSWORD=fake-db-password\nOPERATIONS_WEBEX_BOT_TOKEN=old-batch-token\n' > "$BATCH_RUNTIME_ENV"
+  chmod 600 "$BATCH_RUNTIME_ENV"
+  cp "$BATCH_RUNTIME_ENV" "$ENV_DIR/batch-before"
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=user-token\nOPERATIONS_WEBEX_ROOM_ID=user-room\n' >> "$USER_RUNTIME_ENV"
+
+  local exit_code=0
+  ( chmod() { return 1; }
+    refresh_batch_webex_alert_env
+  ) >/dev/null 2>&1 || exit_code="$?"
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "not ok - a failed step must make the batch Webex refresh fail" >&2
+    return 1
+  fi
+  assert_file_equal "$ENV_DIR/batch-before" "$BATCH_RUNTIME_ENV" \
+    "a failed batch Webex refresh must not replace the runtime env"
+  if [ -n "$(find "$ENV_DIR" -name '.batch.env.*' -o -name '.webex-bot-token.*')" ]; then
+    echo "not ok - a failed batch Webex refresh must remove its temporary files" >&2
+    return 1
+  fi
+  echo "ok - batch Webex refresh failure keeps the current runtime env"
+}
+
+test_deploy_lock_is_written_atomically() {
+  reset_scenario "deploy-lock"
+  begin_deploy_watch_suppression
+
+  if ! [[ "$(cat "$WATCH_STATE_DIR/deploy-in-progress")" =~ ^[0-9]+$ ]]; then
+    echo "not ok - deploy lock must hold the start epoch" >&2
+    return 1
+  fi
+  if [ -n "$(find "$WATCH_STATE_DIR" -name '.deploy-in-progress.*')" ]; then
+    echo "not ok - deploy lock must be moved into place from a temporary file" >&2
+    return 1
+  fi
+  end_deploy_watch_suppression
+  [ ! -f "$WATCH_STATE_DIR/deploy-in-progress" ] || { echo "not ok - deploy lock must be removed" >&2; return 1; }
+  echo "ok - deploy lock is written atomically and removed"
+}
+
+test_container_watch_retries_after_send_failure() {
+  setup_watch_fixture "watch-retry"
+  local batch_id
+  batch_id="$(printf 'd%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n' "$batch_id" > "$WATCH_FAKE_DIR/containers"
+  set_oom_kill_count "$batch_id" 0
+  printf 'rougether-batch.service loaded active running batch\n' > "$WATCH_FAKE_DIR/unit-list"
+  printf '0\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 3000000
+
+  : > "$WATCH_FAKE_DIR/curl-fail"
+  set_oom_kill_count "$batch_id" 1
+  printf '1\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 3000060
+  if [ "$(watch_alert_count)" -ne 0 ] || [ "$(grep -c '^FAILED ' "$WATCH_FAKE_DIR/curl-failures.log")" -ne 2 ]; then
+    echo "not ok - both alerts must be attempted while Webex is failing" >&2
+    return 1
+  fi
+  if [ "$(cat "$WATCH_STATE_DIR/oom/$batch_id")" != 0 ] \
+      || [ "$(cat "$WATCH_STATE_DIR/restarts/rougether-batch.service")" != 0 ]; then
+    echo "not ok - a failed send must keep the previous baselines" >&2
+    return 1
+  fi
+
+  rm -f "$WATCH_FAKE_DIR/curl-fail"
+  run_watch 3000120
+  if [ "$(watch_alert_count)" -ne 2 ]; then
+    echo "not ok - failed alerts must be retried on the next run" >&2
+    return 1
+  fi
+  if [ "$(cat "$WATCH_STATE_DIR/oom/$batch_id")" != 1 ] \
+      || [ "$(cat "$WATCH_STATE_DIR/restarts/rougether-batch.service")" != 1 ]; then
+    echo "not ok - baselines must advance once the alert is sent" >&2
+    return 1
+  fi
+  run_watch 3000180
+  if [ "$(watch_alert_count)" -ne 2 ]; then
+    echo "not ok - a delivered alert must not repeat" >&2
+    return 1
+  fi
+  echo "ok - container watch retries alerts after a send failure"
+}
+
+test_container_watch_keeps_oom_state_when_docker_ps_fails() {
+  setup_watch_fixture "watch-docker-fail"
+  local batch_id
+  batch_id="$(printf 'e%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n' "$batch_id" > "$WATCH_FAKE_DIR/containers"
+  set_oom_kill_count "$batch_id" 2
+  run_watch 4000000
+
+  : > "$WATCH_FAKE_DIR/docker-fail"
+  run_watch 4000060
+  if [ "$(cat "$WATCH_STATE_DIR/oom/$batch_id" 2>/dev/null)" != 2 ]; then
+    echo "not ok - docker ps failure must not delete OOM state" >&2
+    return 1
+  fi
+  assert_contains 'docker ps failed' "$WATCH_FAKE_DIR/watch.log" "docker ps failure must be logged"
+
+  rm -f "$WATCH_FAKE_DIR/docker-fail"
+  set_oom_kill_count "$batch_id" 3
+  run_watch 4000120
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - OOM detection must resume against the kept baseline" >&2
+    return 1
+  fi
+  echo "ok - container watch keeps OOM state when docker ps fails"
+}
+
+test_container_watch_alerts_unit_failed_during_deploy_after_unlock() {
+  setup_watch_fixture "watch-failed-under-lock"
+  printf 'rougether-batch.service loaded active running batch\n' > "$WATCH_FAKE_DIR/unit-list"
+  printf 'active\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.ActiveState"
+  printf 'enabled\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.UnitFileState"
+  printf '0\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 5000000
+
+  printf '%s\n' 5000030 > "$WATCH_STATE_DIR/deploy-in-progress"
+  printf 'failed\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.ActiveState"
+  run_watch 5000060
+  if [ "$(watch_alert_count)" -ne 0 ]; then
+    echo "not ok - a unit failing during a deploy must not alert while locked" >&2
+    return 1
+  fi
+
+  rm -f "$WATCH_STATE_DIR/deploy-in-progress"
+  run_watch 5000120
+  run_watch 5000180
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - a unit still failed after the deploy must alert exactly once" >&2
+    return 1
+  fi
+  assert_contains 'failed' "$WATCH_FAKE_DIR/curl-bodies.log" "failed alert must say the unit failed"
+  echo "ok - unit failures during a deploy alert once after unlock"
+}
+
+# 디스패치 블록은 placeholder 를 치환한 전체 스크립트를 가짜 호스트 명령과 함께 실행해 검증한다.
+setup_dispatch_fixture() {
+  local name="$1"
+  local deploy_mode="$2"
+
+  DISPATCH_DIR="$TEST_ROOT/$name"
+  DISPATCH_BIN="$DISPATCH_DIR/bin"
+  DISPATCH_LOG="$DISPATCH_DIR/host-calls.log"
+  mkdir -p "$DISPATCH_BIN"
+  : > "$DISPATCH_LOG"
+  sed -e "s|__DEPLOY_MODE__|$deploy_mode|g" -e 's|__ENVIRONMENT__|dev|g' \
+    -e 's|__[A-Z_]*__|test-value|g' "$DEPLOY_SCRIPT" > "$DISPATCH_DIR/deploy.sh"
+
+  local command_name
+  for command_name in systemctl docker aws curl dnf nginx; do
+    cat > "$DISPATCH_BIN/$command_name" <<EOF
+#!/usr/bin/env bash
+echo "$command_name \$*" >> "$DISPATCH_LOG"
+case "$command_name \$1" in
+  "systemctl enable") exit 1 ;;
+  "systemctl daemon-reload") exit 0 ;;
+esac
+[ "$command_name" = systemctl ] && exit 0
+exit 1
+EOF
+  done
+  # 첫 호스트 변경 직전(디스크 확인)에서 실패를 주입하고, 그 시점에 배포 잠금이 있었는지 기록한다.
+  cat > "$DISPATCH_BIN/df" <<EOF
+#!/usr/bin/env bash
+[ -f "$DISPATCH_DIR/watch/deploy-in-progress" ] && echo "lock-present-during-deploy" >> "$DISPATCH_LOG"
+echo "df \$*" >> "$DISPATCH_LOG"
+printf 'Filesystem 1024-blocks Used Available\n/dev/mock broken broken broken\n'
+EOF
+  chmod 755 "$DISPATCH_BIN"/*
+}
+
+run_dispatch() {
+  PATH="$DISPATCH_BIN:$PATH" \
+    ROUGETHER_SYSTEMD_DIR="$DISPATCH_DIR/systemd" \
+    ROUGETHER_WATCH_SCRIPT_PATH="$DISPATCH_DIR/libexec/container-watch.sh" \
+    ROUGETHER_WATCH_STATE_DIR="$DISPATCH_DIR/watch" \
+    bash "$DISPATCH_DIR/deploy.sh" > "$DISPATCH_DIR/output.log" 2>&1
+}
+
+test_dispatcher_rejects_invalid_override_before_host_changes() {
+  setup_dispatch_fixture "dispatch-invalid-override" legacy
+
+  local exit_code=0
+  ROUGETHER_ADMIN_JAVA_MAX_HEAP='384m -XX:+Bad' run_dispatch || exit_code="$?"
+
+  if [ "$exit_code" -ne 2 ]; then
+    echo "not ok - invalid memory override must exit 2 (got $exit_code)" >&2
+    return 1
+  fi
+  if [ -s "$DISPATCH_LOG" ] || [ -e "$DISPATCH_DIR/watch" ] || [ -e "$DISPATCH_DIR/systemd" ]; then
+    echo "not ok - invalid memory override must stop before touching the host" >&2
+    return 1
+  fi
+  assert_contains 'invalid memory setting' "$DISPATCH_DIR/output.log" "invalid override must be explained"
+  echo "ok - dispatcher rejects invalid overrides before host changes"
+}
+
+test_dispatcher_removes_deploy_lock_and_preserves_failure_code() {
+  setup_dispatch_fixture "dispatch-failure" legacy
+
+  local exit_code=0
+  run_dispatch || exit_code="$?"
+
+  if [ "$exit_code" -ne 1 ]; then
+    echo "not ok - a failed deploy must exit with the failing step's code (got $exit_code)" >&2
+    return 1
+  fi
+  assert_contains 'container watch install failed; deployment continues' "$DISPATCH_DIR/output.log" \
+    "watch install failure must not stop the deployment"
+  assert_contains 'cannot determine available disk space' "$DISPATCH_DIR/output.log" \
+    "deployment must continue past the watch install to the injected failure"
+  assert_contains '^lock-present-during-deploy$' "$DISPATCH_LOG" \
+    "deploy lock must exist while the deployment runs"
+  if [ -e "$DISPATCH_DIR/watch/deploy-in-progress" ]; then
+    echo "not ok - EXIT trap must remove the deploy lock after a failure" >&2
+    return 1
+  fi
+  [ -x "$DISPATCH_DIR/libexec/container-watch.sh" ] \
+    || { echo "not ok - watch script must be installed before the deploy runs" >&2; return 1; }
+  echo "ok - dispatcher removes the deploy lock and preserves the failure code"
+}
+
 test_legacy_units_cap_memory_and_pass_jvm_options
+test_jvm_options_toggle_nmt_and_reject_heap_at_limit
+test_units_treat_docker_stop_as_success
+test_batch_webex_alert_env_failure_keeps_current_file
+test_deploy_lock_is_written_atomically
+test_container_watch_retries_after_send_failure
+test_container_watch_keeps_oom_state_when_docker_ps_fails
+test_container_watch_alerts_unit_failed_during_deploy_after_unlock
+test_dispatcher_rejects_invalid_override_before_host_changes
+test_dispatcher_removes_deploy_lock_and_preserves_failure_code
 test_invalid_memory_override_is_rejected_before_writing_units
 test_batch_webex_alert_env_is_idempotent_and_keeps_value_on_invalid_source
 test_container_watch_install_is_idempotent
