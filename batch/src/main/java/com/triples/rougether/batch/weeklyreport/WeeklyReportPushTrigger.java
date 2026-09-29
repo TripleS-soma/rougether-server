@@ -21,7 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 // 주간 회고 push 트리거. 정본 발송 시각은 주가 끝난 뒤 첫 일요일 20:00 KST(WeeklyReportPolicy.PUSH_TIME)이며,
-// 그 시각에 서버가 죽어 있었으면 매시 정각·기동 시 다시 시도한다. 대상은 항상 "가장 최근에 끝난 일~토" 하나뿐이라
+// 그 시각에 서버가 죽어 있었으면 매시 2분·기동 시 다시 시도한다. 대상은 항상 "가장 최근에 끝난 일~토" 하나뿐이라
 // 오래 죽었다 살아나도 지난 주들의 뒤늦은 push 는 보내지 않고 자연 만료되며, 이미 COMPLETED 면
 // JobInstanceAlreadyCompleteException 으로 조용히 넘어간다. 이미 저장된 회고만 다루므로 LLM 가용성 게이트는 없다.
 @Slf4j
@@ -34,7 +34,7 @@ public class WeeklyReportPushTrigger {
     private final JobRepository jobRepository;
     private final Clock clock;
 
-    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 2 * * * *", zone = "Asia/Seoul")
     public void triggerHourly() {
         runForLatestCompletedWeek();
     }

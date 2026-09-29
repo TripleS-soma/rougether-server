@@ -55,7 +55,7 @@ public class RoomCobwebTrigger {
         sendPending();
     }
 
-    @Scheduled(cron = "0 */5 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 4/5 * * * *", zone = "Asia/Seoul")
     public void sendPending() {
         long cursor = 0;
         while (true) {

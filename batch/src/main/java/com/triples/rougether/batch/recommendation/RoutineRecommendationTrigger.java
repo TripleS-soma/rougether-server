@@ -20,9 +20,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 // 조정 추천 트리거(#329). 정본 실행 시각은 일요일 새벽(토요일 day-end 완료 직후)이며, 그 시각에 서버가 죽어
-// 있었거나 day-end 가 밀려 있었으면 매시 45분·기동 시 다시 시도한다. 대상 주는 "가장 최근에 끝난 일~토"라
+// 있었거나 day-end 가 밀려 있었으면 매시 47분·기동 시 다시 시도한다. 대상 주는 "가장 최근에 끝난 일~토"라
 // 어느 요일에 돌아도 같은 weekStart 로 수렴하고, 이미 COMPLETED 면 조용히 넘어간다.
-// 회고(매시 30분)·회고 push(매시 정각) 트리거와 분을 나눠 같은 시각 동시 기동을 피한다. LLM 무관이라 가용성 게이트 없음.
+// 회고(매시 30분)·회고 push(매시 2분) 트리거와 분을 나눠 같은 시각 동시 기동을 피한다. LLM 무관이라 가용성 게이트 없음.
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -33,7 +33,7 @@ public class RoutineRecommendationTrigger {
     private final DayEndCompletionChecker dayEndCompletionChecker;
     private final Clock clock;
 
-    @Scheduled(cron = "0 45 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 47 * * * *", zone = "Asia/Seoul")
     public void triggerHourly() {
         runForLatestCompletedWeek();
     }
