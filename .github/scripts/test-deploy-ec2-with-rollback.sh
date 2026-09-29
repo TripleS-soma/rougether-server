@@ -120,6 +120,18 @@ reset_scenario() {
   APPLE_PRIVATE_KEY_PARAMETER_NAME="/test/apple-private"
   APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER_NAME="/test/apple-enc"
   ADMIN_ORIGIN_SECRET_PARAMETER_NAME="/test/admin-origin"
+  WATCH_SCRIPT_PATH="$TEST_ROOT/$name/libexec/rougether/container-watch.sh"
+  WATCH_STATE_DIR="$TEST_ROOT/$name/var/lib/rougether/watch"
+  USER_MEMORY_LIMIT="1280m"
+  USER_JAVA_MAX_HEAP="512m"
+  ADMIN_MEMORY_LIMIT="768m"
+  ADMIN_JAVA_MAX_HEAP="384m"
+  BATCH_MEMORY_LIMIT="768m"
+  BATCH_JAVA_MAX_HEAP="384m"
+  JAVA_RESERVED_CODE_CACHE="128m"
+  JAVA_MAX_METASPACE="256m"
+  USER_MEMORY_LIMIT_KB=""
+  ADMIN_MEMORY_LIMIT_KB=""
 
   mkdir -p "$ENV_DIR" "$SYSTEMD_DIR" "$NGINX_CONFIG_DIR"
   printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\n' > "$USER_RUNTIME_ENV"
@@ -867,18 +879,26 @@ test_blue_green_units_bind_internal_ports_and_cap_memory() {
   assert_contains '--memory 1280m --memory-swap 1280m' \
     "$SYSTEMD_DIR/rougether-user-api@.service" \
     "user candidate must have a hard Docker memory cap without swap allowance"
-  assert_contains 'JAVA_TOOL_OPTIONS=-Xmx512m' \
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 512m)\"" \
     "$SYSTEMD_DIR/rougether-user-api@.service" \
-    "user JVM heap must stay below its container cap"
-  assert_contains '--network host --memory 640m --memory-swap 640m' \
+    "user JVM heap and off-heap areas must stay below its container cap"
+  assert_contains '--network host --memory 768m --memory-swap 768m' \
     "$SYSTEMD_DIR/rougether-admin-api@.service" \
     "admin slots must preserve host-network origin verification and cap memory"
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" \
+    "$SYSTEMD_DIR/rougether-admin-api@.service" \
+    "admin slots must carry the shared JVM options"
   assert_contains '--env-file /etc/rougether/admin-api.env --env SERVER_PORT=${ROUGETHER_HOST_PORT}' \
     "$SYSTEMD_DIR/rougether-admin-api@.service" \
     "admin slot port must override the legacy runtime env value"
-  assert_contains '--memory 640m --memory-swap 640m' \
+  assert_contains '--memory 768m --memory-swap 768m' \
     "$SYSTEMD_DIR/rougether-batch.service" \
     "single batch container must also have a hard memory cap"
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" \
+    "$SYSTEMD_DIR/rougether-batch.service" \
+    "batch must carry the shared JVM options"
+  assert_single_java_options_argument "$SYSTEMD_DIR/rougether-user-api@.service" "$(expected_java_options 512m)"
+  assert_single_java_options_argument "$SYSTEMD_DIR/rougether-admin-api@.service" "$(expected_java_options 384m)"
   echo "ok - blue/green units isolate candidate ports and cap memory"
 }
 
@@ -1043,6 +1063,7 @@ test_blue_green_orchestration_is_sequential_and_restarts_batch_once() {
     deploy_api_blue_green() { echo "deploy-api $1" >> "$calls"; }
     ensure_batch_runtime_env() { :; }
     refresh_llm_env() { :; }
+    refresh_batch_webex_alert_env() { :; }
     write_blue_green_state() { echo "state $1 $2" >> "$calls"; }
     systemctl() { echo "systemctl $*" >> "$calls"; }
     wait_health() { echo "health $1" >> "$calls"; }
@@ -1223,6 +1244,7 @@ EOF
     wait_health() { :; }
     ensure_batch_runtime_env() { :; }
     refresh_llm_env() { :; }
+    refresh_batch_webex_alert_env() { :; }
     finish_successful_deploy() { trap - ERR; }
     deploy_legacy
   )
@@ -1236,6 +1258,373 @@ EOF
   echo "ok - legacy emergency mode safely releases blue/green routing first"
 }
 
+expected_java_options() {
+  printf -- '-Xmx%s -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary' "$1"
+}
+
+# systemd 는 ExecStart 를 큰따옴표 인용 규칙으로 인자 분리한다. 공백이 든 JAVA_TOOL_OPTIONS 가 한 인자로 남는지 확인한다.
+assert_single_java_options_argument() {
+  local unit_file="$1"
+  local expected_options="$2"
+
+  if ! python3 - "$unit_file" "$expected_options" <<'PY'
+import shlex
+import sys
+
+unit_file, expected = sys.argv[1], sys.argv[2]
+with open(unit_file, encoding="utf-8") as handle:
+    exec_start = next(line for line in handle if line.startswith("ExecStart="))
+arguments = shlex.split(exec_start[len("ExecStart="):].strip())
+index = arguments.index("--env", arguments.index("--memory-swap"))
+raise SystemExit(0 if arguments[index + 1] == "JAVA_TOOL_OPTIONS=" + expected else 1)
+PY
+  then
+    echo "not ok - JAVA_TOOL_OPTIONS must be one quoted ExecStart argument in $unit_file" >&2
+    return 1
+  fi
+}
+
+test_legacy_units_cap_memory_and_pass_jvm_options() {
+  reset_scenario "legacy-units-memory"
+
+  write_units "registry/user:new" "registry/admin:new" "registry/batch:new"
+
+  assert_contains '--memory 1280m --memory-swap 1280m' "$SYSTEMD_DIR/rougether-user-api.service" \
+    "legacy user-api must have the same hard memory cap as blue/green"
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 512m)\"" "$SYSTEMD_DIR/rougether-user-api.service" \
+    "legacy user-api must carry the shared JVM options"
+  assert_contains '--network host --memory 768m --memory-swap 768m' "$SYSTEMD_DIR/rougether-admin-api.service" \
+    "legacy admin-api must have a hard memory cap"
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" "$SYSTEMD_DIR/rougether-admin-api.service" \
+    "legacy admin-api must carry the shared JVM options"
+  assert_contains '${ROUGETHER_ADMIN_API_IMAGE}' "$SYSTEMD_DIR/rougether-admin-api.service" \
+    "legacy admin-api image must stay a systemd variable"
+  assert_contains '--memory 768m --memory-swap 768m' "$SYSTEMD_DIR/rougether-batch.service" \
+    "legacy batch must have a hard memory cap"
+  assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" "$SYSTEMD_DIR/rougether-batch.service" \
+    "legacy batch must carry the shared JVM options"
+  assert_single_java_options_argument "$SYSTEMD_DIR/rougether-user-api.service" "$(expected_java_options 512m)"
+  assert_single_java_options_argument "$SYSTEMD_DIR/rougether-admin-api.service" "$(expected_java_options 384m)"
+  assert_single_java_options_argument "$SYSTEMD_DIR/rougether-batch.service" "$(expected_java_options 384m)"
+  assert_not_contains 'JAVA_TOOL_OPTIONS' "$USER_RUNTIME_ENV" \
+    "JVM options must not be written into the secret runtime env file"
+
+  if [ "$(memory_limit_kb admin-api)" != 786432 ] || [ "$(memory_limit_kb user-api)" != 1310720 ]; then
+    echo "not ok - memory preflight must derive KiB from the container caps" >&2
+    return 1
+  fi
+  if [ "$(ADMIN_MEMORY_LIMIT_KB=700000 memory_limit_kb admin-api)" != 700000 ]; then
+    echo "not ok - explicit KiB override must still win" >&2
+    return 1
+  fi
+  echo "ok - legacy units cap memory and pass JVM options like blue/green"
+}
+
+test_invalid_memory_override_is_rejected_before_writing_units() {
+  reset_scenario "invalid-memory-override"
+  ADMIN_JAVA_MAX_HEAP='384m -XX:+Bad'
+
+  if write_units "registry/user:new" "registry/admin:new" "registry/batch:new" >/dev/null 2>&1; then
+    echo "not ok - an invalid heap override must be rejected" >&2
+    return 1
+  fi
+  if write_blue_green_units >/dev/null 2>&1; then
+    echo "not ok - blue/green units must reject an invalid heap override" >&2
+    return 1
+  fi
+  if [ -f "$SYSTEMD_DIR/rougether-admin-api.service" ] || [ -f "$SYSTEMD_DIR/rougether-admin-api@.service" ]; then
+    echo "not ok - invalid overrides must not produce unit files" >&2
+    return 1
+  fi
+  echo "ok - invalid memory overrides are rejected before units are written"
+}
+
+test_batch_webex_alert_env_is_idempotent_and_keeps_value_on_invalid_source() {
+  reset_scenario "batch-webex-env"
+  printf 'SPRING_PROFILES_ACTIVE=mysql\nDB_PASSWORD=fake-db-password\nOPERATIONS_WEBEX_BOT_TOKEN=old-batch-token\n' > "$BATCH_RUNTIME_ENV"
+  chmod 600 "$BATCH_RUNTIME_ENV"
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=user-token\nOPERATIONS_WEBEX_ROOM_ID=user-room\nROUGETHER_ENVIRONMENT=dev\n' >> "$USER_RUNTIME_ENV"
+
+  refresh_batch_webex_alert_env
+  cp "$BATCH_RUNTIME_ENV" "$ENV_DIR/batch-after-first"
+  refresh_batch_webex_alert_env
+
+  assert_file_equal "$ENV_DIR/batch-after-first" "$BATCH_RUNTIME_ENV" \
+    "repeated batch Webex refresh must not change the file"
+  assert_contains '^OPERATIONS_WEBEX_BOT_TOKEN=user-token$' "$BATCH_RUNTIME_ENV" \
+    "batch must receive the user-api Webex token"
+  assert_contains '^OPERATIONS_WEBEX_ROOM_ID=user-room$' "$BATCH_RUNTIME_ENV" \
+    "batch must receive the user-api Webex room"
+  assert_contains '^ROUGETHER_ENVIRONMENT=dev$' "$BATCH_RUNTIME_ENV" \
+    "batch alerts must know the deployment environment"
+  assert_contains '^DB_PASSWORD=fake-db-password$' "$BATCH_RUNTIME_ENV" \
+    "batch secrets must be preserved"
+  if [ "$(grep -c '^OPERATIONS_WEBEX_BOT_TOKEN=' "$BATCH_RUNTIME_ENV")" -ne 1 ] \
+      || [ "$(grep -c '^$' "$BATCH_RUNTIME_ENV")" -ne 0 ]; then
+    echo "not ok - batch Webex values must not be duplicated or padded across deploys" >&2
+    return 1
+  fi
+
+  printf 'SPRING_PROFILES_ACTIVE=mysql\nOPERATIONS_WEBEX_BOT_TOKEN=bad token\nOPERATIONS_WEBEX_ROOM_ID=\n' > "$USER_RUNTIME_ENV"
+  refresh_batch_webex_alert_env 2>/dev/null
+  assert_contains '^OPERATIONS_WEBEX_BOT_TOKEN=user-token$' "$BATCH_RUNTIME_ENV" \
+    "invalid source token must keep the current batch token"
+  assert_contains '^OPERATIONS_WEBEX_ROOM_ID=user-room$' "$BATCH_RUNTIME_ENV" \
+    "empty source room must keep the current batch room"
+  assert_not_contains 'bad token' "$BATCH_RUNTIME_ENV" \
+    "invalid token must never enter the batch runtime env"
+  echo "ok - batch Webex alert env is idempotent and keeps values on invalid source"
+}
+
+test_container_watch_install_is_idempotent() {
+  reset_scenario "watch-install"
+  local calls="$ENV_DIR/systemctl-calls.log"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+
+  install_container_watch >/dev/null
+  local script_copy="$ENV_DIR/watch-script-copy"
+  cp "$WATCH_SCRIPT_PATH" "$script_copy"
+  : > "$calls"
+  install_container_watch >/dev/null
+  systemctl() { return 0; }
+
+  [ -x "$WATCH_SCRIPT_PATH" ] || { echo "not ok - watch script must be executable" >&2; return 1; }
+  assert_file_equal "$script_copy" "$WATCH_SCRIPT_PATH" "reinstall must keep the same watch script"
+  bash -n "$WATCH_SCRIPT_PATH" || { echo "not ok - installed watch script must be valid bash" >&2; return 1; }
+  assert_not_contains 'daemon-reload' "$calls" "unchanged watch units must not trigger daemon-reload"
+  assert_contains '^enable --now rougether-container-watch.timer$' "$calls" \
+    "every deploy must make sure the watch timer is enabled"
+  assert_contains '^OnUnitActiveSec=1min$' "$SYSTEMD_DIR/rougether-container-watch.timer" \
+    "watch must run every minute"
+  assert_contains "^ExecStart=$WATCH_SCRIPT_PATH$" "$SYSTEMD_DIR/rougether-container-watch.service" \
+    "watch service must run the installed script"
+  assert_contains '^Environment=ROUGETHER_WATCH_ENVIRONMENT=dev$' "$SYSTEMD_DIR/rougether-container-watch.service" \
+    "watch alerts must carry the environment name"
+  assert_not_contains 'OPERATIONS_WEBEX_BOT_TOKEN=' "$SYSTEMD_DIR/rougether-container-watch.service" \
+    "watch unit must not embed the Webex token"
+  if [ -n "$(find "$(dirname "$WATCH_SCRIPT_PATH")" "$SYSTEMD_DIR" -name '.*' -type f)" ]; then
+    echo "not ok - idempotent install must not leave temporary files" >&2
+    return 1
+  fi
+
+  printf '# locally modified\n' >> "$WATCH_SCRIPT_PATH"
+  : > "$calls"
+  systemctl() { echo "$*" >> "$calls"; return 0; }
+  install_container_watch >/dev/null
+  systemctl() { return 0; }
+  assert_file_equal "$script_copy" "$WATCH_SCRIPT_PATH" "drifted watch script must be restored"
+  assert_contains '^daemon-reload$' "$calls" "changed watch files must reload systemd"
+  echo "ok - container watch install is idempotent"
+}
+
+# 감시 스크립트는 별도 프로세스로 돈다. docker/systemctl/journalctl/curl 은 PATH 앞의 가짜 명령으로 대체한다.
+setup_watch_fixture() {
+  local name="$1"
+  reset_scenario "$name"
+  systemctl() { return 0; }
+  install_container_watch >/dev/null
+
+  WATCH_FAKE_DIR="$TEST_ROOT/$name/fake"
+  WATCH_FAKE_BIN="$WATCH_FAKE_DIR/bin"
+  WATCH_CGROUP_ROOT="$TEST_ROOT/$name/cgroup"
+  mkdir -p "$WATCH_FAKE_BIN" "$WATCH_FAKE_DIR/units" "$WATCH_CGROUP_ROOT/system.slice"
+  : > "$WATCH_FAKE_DIR/containers"
+  : > "$WATCH_FAKE_DIR/unit-list"
+  : > "$WATCH_FAKE_DIR/journal"
+  : > "$WATCH_FAKE_DIR/curl-calls.log"
+  printf 'OPERATIONS_WEBEX_BOT_TOKEN=watch-secret-token\nOPERATIONS_WEBEX_ROOM_ID=watch-room\n' >> "$USER_RUNTIME_ENV"
+
+  cat > "$WATCH_FAKE_BIN/docker" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = ps ] && cat "$WATCH_FAKE_DIR/containers"
+EOF
+  cat > "$WATCH_FAKE_BIN/systemctl" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  list-units) cat "$WATCH_FAKE_DIR/unit-list" ;;
+  show) cat "$WATCH_FAKE_DIR/units/$5.$3" 2>/dev/null ;;
+esac
+EOF
+  cat > "$WATCH_FAKE_BIN/journalctl" <<'EOF'
+#!/usr/bin/env bash
+cat "$WATCH_FAKE_DIR/journal"
+EOF
+  # 인자는 그대로 기록하고, -H @file 로 받은 헤더는 따로 보관해 토큰이 인자로 새지 않았는지 확인한다.
+  cat > "$WATCH_FAKE_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "ARGS $*" >> "$WATCH_FAKE_DIR/curl-calls.log"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -H) case "$2" in @*) cat "${2#@}" >> "$WATCH_FAKE_DIR/curl-headers.log" ;; esac; shift ;;
+    --data-binary) case "$2" in @*) cat "${2#@}" >> "$WATCH_FAKE_DIR/curl-bodies.log"; echo >> "$WATCH_FAKE_DIR/curl-bodies.log" ;; esac; shift ;;
+  esac
+  shift
+done
+exit 0
+EOF
+  chmod 755 "$WATCH_FAKE_BIN"/*
+}
+
+run_watch() {
+  local now="$1"
+  WATCH_FAKE_DIR="$WATCH_FAKE_DIR" \
+    PATH="$WATCH_FAKE_BIN:$PATH" \
+    ROUGETHER_WATCH_NOW="$now" \
+    ROUGETHER_WATCH_CGROUP_ROOT="$WATCH_CGROUP_ROOT" \
+    ROUGETHER_WATCH_STATE_DIR="$WATCH_STATE_DIR" \
+    ROUGETHER_WATCH_RUNTIME_ENV="$USER_RUNTIME_ENV" \
+    ROUGETHER_WATCH_ENVIRONMENT=dev \
+    ROUGETHER_WATCH_COOLDOWN_SECONDS=1800 \
+    bash "$WATCH_SCRIPT_PATH" 2>> "$WATCH_FAKE_DIR/watch.log"
+}
+
+watch_alert_count() {
+  grep -c '^ARGS ' "$WATCH_FAKE_DIR/curl-calls.log" || true
+}
+
+set_oom_kill_count() {
+  local container_id="$1"
+  local count="$2"
+  mkdir -p "$WATCH_CGROUP_ROOT/system.slice/docker-$container_id.scope"
+  printf 'low 0\nhigh 0\nmax 12\noom 3\noom_kill %s\noom_group_kill 0\n' "$count" \
+    > "$WATCH_CGROUP_ROOT/system.slice/docker-$container_id.scope/memory.events"
+}
+
+test_container_watch_detects_oom_kill_increase_with_cooldown() {
+  setup_watch_fixture "watch-oom"
+  local batch_id
+  batch_id="$(printf 'b%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n' "$batch_id" > "$WATCH_FAKE_DIR/containers"
+  set_oom_kill_count "$batch_id" 2
+
+  run_watch 1000000
+  if [ "$(watch_alert_count)" -ne 0 ]; then
+    echo "not ok - first watch run must record existing OOM counts as a baseline" >&2
+    return 1
+  fi
+
+  set_oom_kill_count "$batch_id" 3
+  run_watch 1000060
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - oom_kill increase must send one Webex alert" >&2
+    return 1
+  fi
+  assert_contains 'rougether-batch' "$WATCH_FAKE_DIR/curl-bodies.log" "OOM alert must name the container"
+  assert_contains '\[dev\]' "$WATCH_FAKE_DIR/curl-bodies.log" "OOM alert must name the environment"
+  assert_contains 'KST' "$WATCH_FAKE_DIR/curl-bodies.log" "OOM alert must include the time"
+  assert_contains '"roomId": "watch-room"' "$WATCH_FAKE_DIR/curl-bodies.log" "OOM alert must target the operations room"
+  assert_contains '^Authorization: Bearer watch-secret-token$' "$WATCH_FAKE_DIR/curl-headers.log" \
+    "Webex token must be sent through the header file"
+  assert_not_contains 'watch-secret-token' "$WATCH_FAKE_DIR/curl-calls.log" \
+    "Webex token must never appear in curl arguments"
+  assert_not_contains 'watch-secret-token' "$WATCH_FAKE_DIR/watch.log" \
+    "Webex token must never appear in watch logs"
+
+  set_oom_kill_count "$batch_id" 4
+  run_watch 1000120
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - repeated OOM kill within cooldown must not alert again" >&2
+    return 1
+  fi
+
+  set_oom_kill_count "$batch_id" 5
+  run_watch 1001900
+  if [ "$(watch_alert_count)" -ne 2 ]; then
+    echo "not ok - OOM kill after cooldown must alert again" >&2
+    return 1
+  fi
+
+  # 재기동으로 새 id 가 뜨면 새 컨테이너는 0부터 세고, 사라진 컨테이너 상태는 정리한다.
+  local new_id
+  new_id="$(printf 'c%.0s' $(seq 1 64))"
+  printf '%s rougether-batch\n' "$new_id" > "$WATCH_FAKE_DIR/containers"
+  set_oom_kill_count "$new_id" 0
+  run_watch 1001960
+  if [ -f "$WATCH_STATE_DIR/oom/$batch_id" ] || [ ! -f "$WATCH_STATE_DIR/oom/$new_id" ]; then
+    echo "not ok - watch state must follow the running container ids" >&2
+    return 1
+  fi
+  if [ -n "$(find "$WATCH_STATE_DIR" -name '.webex-*' -type f)" ]; then
+    echo "not ok - Webex header and body temp files must be removed" >&2
+    return 1
+  fi
+  echo "ok - container watch detects oom_kill increases with cooldown"
+}
+
+test_container_watch_alerts_restarts_but_not_during_deploy() {
+  setup_watch_fixture "watch-restart"
+  printf 'rougether-batch.service loaded active running Rougether batch container\n' > "$WATCH_FAKE_DIR/unit-list"
+  printf 'rougether-container-watch.service loaded inactive dead watch\n' >> "$WATCH_FAKE_DIR/unit-list"
+  printf 'active\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.ActiveState"
+  printf 'enabled\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.UnitFileState"
+  printf '0\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  printf '7\n' > "$WATCH_FAKE_DIR/units/rougether-container-watch.service.NRestarts"
+
+  run_watch 2000000
+  printf '1\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  printf 'rougether-batch.service: Main process exited, code=exited, status=137/n/a\nrougether-batch.service: Failed with result '"'"'exit-code'"'"'.\n' \
+    > "$WATCH_FAKE_DIR/journal"
+  run_watch 2000060
+
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - an automatic restart must send exactly one alert" >&2
+    return 1
+  fi
+  assert_contains 'rougether-batch.service' "$WATCH_FAKE_DIR/curl-bodies.log" "restart alert must name the unit"
+  assert_contains 'status=137' "$WATCH_FAKE_DIR/curl-bodies.log" "restart alert must include the exit status"
+  assert_contains 'OOM kill(exit 137)' "$WATCH_FAKE_DIR/curl-bodies.log" "exit 137 must be flagged as a likely OOM kill"
+  assert_not_contains 'rougether-container-watch' "$WATCH_FAKE_DIR/curl-bodies.log" "watch must ignore its own unit"
+
+  # 배포 중에는 재시작·실패를 알리지 않고 기준값만 갱신한다.
+  begin_deploy_watch_suppression
+  printf '%s\n' 2000100 > "$WATCH_STATE_DIR/deploy-in-progress"
+  printf '4\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 2003000
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - restarts during a deploy must not alert" >&2
+    return 1
+  fi
+  end_deploy_watch_suppression
+  run_watch 2003060
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - deploy-time restarts must not alert after the deploy finishes" >&2
+    return 1
+  fi
+
+  # 수동 restart 로 카운터가 0이 되면 알리지 않는다.
+  printf '0\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 2003120
+  if [ "$(watch_alert_count)" -ne 1 ]; then
+    echo "not ok - a restart counter reset must not alert" >&2
+    return 1
+  fi
+
+  # 낡은 배포 잠금(1시간 초과)은 무시한다.
+  printf '%s\n' 2000000 > "$WATCH_STATE_DIR/deploy-in-progress"
+  printf '1\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.NRestarts"
+  run_watch 2010000
+  if [ "$(watch_alert_count)" -ne 2 ]; then
+    echo "not ok - a stale deploy lock must not silence alerts" >&2
+    return 1
+  fi
+
+  # enabled 유닛이 failed 로 바뀌면 한 번 알린다(disabled 슬롯의 failed 는 무시).
+  printf 'failed\n' > "$WATCH_FAKE_DIR/units/rougether-batch.service.ActiveState"
+  run_watch 2010060
+  run_watch 2010120
+  if [ "$(grep -c 'failed' "$WATCH_FAKE_DIR/curl-bodies.log")" -lt 1 ] || [ "$(watch_alert_count)" -ne 3 ]; then
+    echo "not ok - an enabled unit entering failed must alert once" >&2
+    return 1
+  fi
+  echo "ok - container watch alerts restarts but stays quiet during deploys"
+}
+
+test_legacy_units_cap_memory_and_pass_jvm_options
+test_invalid_memory_override_is_rejected_before_writing_units
+test_batch_webex_alert_env_is_idempotent_and_keeps_value_on_invalid_source
+test_container_watch_install_is_idempotent
+test_container_watch_detects_oom_kill_increase_with_cooldown
+test_container_watch_alerts_restarts_but_not_during_deploy
 test_ssm_failure_keeps_existing_credentials
 test_prune_preserves_rollback_tags_and_checks_free_space
 test_prune_fails_when_free_space_is_still_too_low
