@@ -361,6 +361,35 @@ test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag() {
   echo "ok - bots flag refresh is idempotent and validates the value"
 }
 
+test_market_engine_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag() {
+  reset_scenario "market-engine-env-refresh"
+  printf 'MARKET_ENGINE_ENABLED=false\n' >> "$USER_RUNTIME_ENV"
+
+  MARKET_ENGINE_ENABLED="true"
+  refresh_market_engine_env
+  refresh_market_engine_env
+
+  assert_contains '^MARKET_ENGINE_ENABLED=true$' "$USER_RUNTIME_ENV" \
+    "market engine flag must be written to the user-api runtime env"
+  if [ "$(grep -c '^MARKET_ENGINE_ENABLED=' "$USER_RUNTIME_ENV")" -ne 1 ]; then
+    echo "not ok - market engine flag must not be duplicated across deploys" >&2
+    return 1
+  fi
+
+  MARKET_ENGINE_ENABLED="maybe"
+  refresh_market_engine_env
+  assert_contains '^MARKET_ENGINE_ENABLED=true$' "$USER_RUNTIME_ENV" \
+    "invalid market engine flag must keep the current runtime value"
+  assert_not_contains 'maybe' "$USER_RUNTIME_ENV" \
+    "invalid market engine flag must never enter the runtime env"
+
+  MARKET_ENGINE_ENABLED="false"
+  refresh_market_engine_env
+  assert_contains '^MARKET_ENGINE_ENABLED=false$' "$USER_RUNTIME_ENV" \
+    "market engine flag can be turned off again"
+  echo "ok - market engine flag refresh is idempotent and validates the value"
+}
+
 test_social_auth_refresh_updates_existing_runtime_env() {
   reset_scenario "social-auth-refresh"
   cat >> "$USER_RUNTIME_ENV" <<'EOF'
@@ -1226,6 +1255,7 @@ test_batch_env_bootstrap_is_idempotent
 test_batch_env_wires_firebase_when_credentials_present
 test_admin_origin_secret_refresh_is_fail_closed
 test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
+test_market_engine_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
 test_blue_green_slot_mapping_and_state_validation
 test_blue_green_units_bind_internal_ports_and_cap_memory
 test_memory_preflight_failure_does_not_start_candidate
