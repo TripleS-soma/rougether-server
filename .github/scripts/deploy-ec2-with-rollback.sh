@@ -20,6 +20,9 @@ WEBEX_ROOM_ID="__WEBEX_ROOM_ID__"
 ENVIRONMENT="__ENVIRONMENT__"
 # 동거 봇(#307~#310) 활성 여부 — user-api.env 의 ROUGETHER_BOTS_ENABLED 로 내려간다(워크플로우 vars.ROUGETHER_BOTS_ENABLED, dev 기본 true)
 BOTS_ENABLED="__BOTS_ENABLED__"
+# 거래소 매칭 엔진(#401·#402) 활성 여부 — user-api.env 의 MARKET_ENGINE_ENABLED 로 내려간다(워크플로우 vars.MARKET_ENGINE_ENABLED, dev 기본 true).
+# 모든 user-api 컨테이너가 같은 값을 받고, 리스를 가진 컨테이너 하나만 체결한다(blue/green 전환 중에도 펜싱이 이중 체결을 막음).
+MARKET_ENGINE_ENABLED="__MARKET_ENGINE_ENABLED__"
 DEPLOY_MODE="__DEPLOY_MODE__"
 
 ENV_DIR="/etc/rougether"
@@ -417,6 +420,27 @@ refresh_bots_env() {
   temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
   awk '!/^ROUGETHER_BOTS_ENABLED=/' "$USER_RUNTIME_ENV" > "$temporary_env"
   printf '\nROUGETHER_BOTS_ENABLED=%s\n' "$BOTS_ENABLED" >> "$temporary_env"
+  chmod 600 "$temporary_env"
+  mv -f "$temporary_env" "$USER_RUNTIME_ENV"
+}
+
+# 거래소 매칭 엔진 활성 플래그를 매 배포 user-api.env 에 반영한다(멱등). 값이 true/false 가 아니면 기존 값을 유지한다 —
+# 엔진 스레드·리스 heartbeat·만료 스케줄러가 기동 시 이 플래그로 켜지므로 user-api 재기동 전에 써야 한다.
+refresh_market_engine_env() {
+  local temporary_env
+
+  if [ ! -f "$USER_RUNTIME_ENV" ]; then
+    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+    return 1
+  fi
+  case "$MARKET_ENGINE_ENABLED" in
+    true|false) ;;
+    *) echo "MARKET_ENGINE_ENABLED value '$MARKET_ENGINE_ENABLED' is not true/false; keeping the current runtime value" >&2; return 0 ;;
+  esac
+
+  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
+  awk '!/^MARKET_ENGINE_ENABLED=/' "$USER_RUNTIME_ENV" > "$temporary_env"
+  printf '\nMARKET_ENGINE_ENABLED=%s\n' "$MARKET_ENGINE_ENABLED" >> "$temporary_env"
   chmod 600 "$temporary_env"
   mv -f "$temporary_env" "$USER_RUNTIME_ENV"
 }
@@ -1671,7 +1695,8 @@ prepare_runtime_configuration() {
       || ! refresh_webex_alert_env \
       || ! refresh_admin_origin_secret_env \
       || ! refresh_llm_env "$USER_RUNTIME_ENV" \
-      || ! refresh_bots_env; then
+      || ! refresh_bots_env \
+      || ! refresh_market_engine_env; then
     if ! restore_firebase_credentials; then
       echo "Firebase credential restore failed; preserving backup before exit" >&2
     fi
