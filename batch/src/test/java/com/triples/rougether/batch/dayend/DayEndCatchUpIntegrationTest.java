@@ -3,8 +3,15 @@ package com.triples.rougether.batch.dayend;
 import com.triples.rougether.batch.support.KstMidnightGuard;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import com.triples.rougether.batch.alert.BatchFailureAlertNotifier;
 import com.triples.rougether.batch.config.BatchJdbcConfig;
+import com.triples.rougether.batch.recovery.StaleJobExecutionRecovery;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.routine.entity.AuthType;
@@ -25,11 +32,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.JobInstance;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.StepExecution;
 import org.springframework.batch.infrastructure.item.ExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -41,6 +50,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(classes = DayEndCatchUpIntegrationTest.TestConfig.class)
 @ExtendWith(KstMidnightGuard.class)
@@ -52,7 +62,7 @@ class DayEndCatchUpIntegrationTest {
     @EnableJpaRepositories("com.triples.rougether.domain")
     @EnableJpaAuditing
     @Import({BatchJdbcConfig.class, RoutineDayEndJobConfig.class,
-            DayEndCatchUpPlanner.class, RoutineDayEndTrigger.class})
+            DayEndCatchUpPlanner.class, RoutineDayEndTrigger.class, StaleJobExecutionRecovery.class})
     static class TestConfig {
 
         @Bean
@@ -64,8 +74,14 @@ class DayEndCatchUpIntegrationTest {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final LocalDate YESTERDAY = LocalDate.now(KST).minusDays(1);
 
+    private static final String STEP_NAME = "routineDayEndFailStep";
+
+    @MockitoBean
+    private BatchFailureAlertNotifier alertNotifier;
     @Autowired
     private RoutineDayEndTrigger trigger;
+    @Autowired
+    private StaleJobExecutionRecovery recovery;
     @Autowired
     private JobRepository jobRepository;
     @Autowired
@@ -177,6 +193,92 @@ class DayEndCatchUpIntegrationTest {
             assertThat(logs).hasSize(1);
             assertThat(logs.getFirst().getStatus()).isEqualTo(RoutineLogStatus.FAILED);
         }
+    }
+
+    @Test
+    void 죽은_STARTED_실행은_막히고_알림되며_정리_후_catch_up이_그_날짜를_다시_처리한다() {
+        seedExecution(YESTERDAY.minusDays(1), BatchStatus.COMPLETED);
+        JobExecution dead = seedRunningExecution(RoutineDayEndJobConfig.JOB_NAME,
+                targetDateParams(YESTERDAY), BatchStatus.STARTED);
+
+        // 정리 전 - 같은 instance 가 실행 중으로 남아 재실행이 막히고 운영 알림이 1회 호출됨
+        trigger.triggerDayEnd();
+        assertThat(lastStatusOf(YESTERDAY)).isEqualTo(BatchStatus.STARTED);
+        verify(alertNotifier, times(1)).notifyFailure(
+                eq(RoutineDayEndJobConfig.JOB_NAME + "|" + YESTERDAY), anyString(), anyString());
+
+        assertThat(recovery.recoverStaleExecutions()).isEqualTo(1);
+
+        JobExecution recovered = jobRepository.getJobExecution(dead.getId());
+        assertThat(recovered.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(recovered.getExitStatus().getExitCode()).isEqualTo(ExitStatus.FAILED.getExitCode());
+        assertThat(recovered.getExitStatus().getExitDescription()).contains("batch 기동 시 정리");
+        assertThat(recovered.getEndTime()).isNotNull();
+        StepExecution recoveredStep = recovered.getStepExecutions().iterator().next();
+        assertThat(recoveredStep.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(recoveredStep.getExitStatus().getExitCode()).isEqualTo(ExitStatus.FAILED.getExitCode());
+        assertThat(recoveredStep.getEndTime()).isNotNull();
+
+        trigger.catchUpOnStartup();
+
+        JobInstance instance = jobRepository.getJobInstance(
+                RoutineDayEndJobConfig.JOB_NAME, targetDateParams(YESTERDAY));
+        assertThat(jobRepository.getJobExecutions(instance)).hasSize(2);
+        assertThat(lastStatusOf(YESTERDAY)).isEqualTo(BatchStatus.COMPLETED);
+        verify(alertNotifier, times(1)).notifyFailure(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void 정리는_모든_job의_실행중_상태만_FAILED로_바꾸고_완료_실패_실행은_건드리지_않는다() {
+        seedExecution(YESTERDAY.minusDays(2), BatchStatus.COMPLETED);
+        seedExecution(YESTERDAY.minusDays(1), BatchStatus.FAILED);
+        JobExecution starting = seedRunningExecution("reminderJob", runParams(1), BatchStatus.STARTING);
+        JobExecution stopping = seedRunningExecution("eveningDigestJob", runParams(2), BatchStatus.STOPPING);
+        JobExecution started = seedRunningExecution("weeklyReportJob", runParams(3), BatchStatus.STARTED);
+        List<String> untouchedBefore = snapshotOf(YESTERDAY.minusDays(2), YESTERDAY.minusDays(1));
+
+        assertThat(recovery.recoverStaleExecutions()).isEqualTo(3);
+
+        for (JobExecution dead : List.of(starting, stopping, started)) {
+            JobExecution recovered = jobRepository.getJobExecution(dead.getId());
+            assertThat(recovered.getStatus()).isEqualTo(BatchStatus.FAILED);
+            assertThat(recovered.getEndTime()).isNotNull();
+        }
+        assertThat(snapshotOf(YESTERDAY.minusDays(2), YESTERDAY.minusDays(1))).isEqualTo(untouchedBefore);
+        // 두 번째 정리는 남은 실행 중 상태가 없어 no-op
+        assertThat(recovery.recoverStaleExecutions()).isZero();
+        verify(alertNotifier, never()).notifyFailure(anyString(), anyString(), anyString());
+    }
+
+    // 실행 중에 프로세스가 죽은 상태 재현 - job·step 모두 끝나지 않은 채 남음
+    private JobExecution seedRunningExecution(String jobName, JobParameters params, BatchStatus status) {
+        JobInstance instance = jobRepository.createJobInstance(jobName, params);
+        JobExecution execution = jobRepository.createJobExecution(instance, params, new ExecutionContext());
+        execution.setStatus(status);
+        execution.setStartTime(LocalDateTime.now());
+        jobRepository.update(execution);
+        StepExecution step = jobRepository.createStepExecution(STEP_NAME, execution);
+        step.setStatus(BatchStatus.STARTED);
+        step.setStartTime(LocalDateTime.now());
+        jobRepository.update(step);
+        return execution;
+    }
+
+    private JobParameters runParams(long runId) {
+        return new JobParametersBuilder().addLong("run.id", runId).toJobParameters();
+    }
+
+    // 상태·종료 시각·version 스냅샷 - 정리가 행을 다시 쓰면 version 이 올라가 달라짐
+    private List<String> snapshotOf(LocalDate... targetDates) {
+        List<String> rows = new ArrayList<>();
+        for (LocalDate date : targetDates) {
+            JobInstance instance = jobRepository.getJobInstance(
+                    RoutineDayEndJobConfig.JOB_NAME, targetDateParams(date));
+            JobExecution execution = jobRepository.getLastJobExecution(instance);
+            rows.add(execution.getId() + "|" + execution.getStatus() + "|" + execution.getEndTime()
+                    + "|" + execution.getVersion() + "|" + execution.getLastUpdated());
+        }
+        return rows;
     }
 
     // 대상 날짜 이전부터 존재한 DAILY 루틴 - created_at은 auditing이 now로 채워 네이티브로 당김

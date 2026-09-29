@@ -3,9 +3,16 @@ package com.triples.rougether.batch.dayend;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.triples.rougether.batch.alert.BatchFailureAlertNotifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +22,8 @@ import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
+import org.springframework.batch.core.ExitStatus;
+import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobOperator;
 
 // 실행 중 실패 시 이후 날짜를 건너뛰는 중단 분기는 실제 job 실패 유발이 어려워 단위 수준으로 검증
@@ -27,7 +36,9 @@ class RoutineDayEndTriggerTest {
     private final JobOperator jobOperator = mock(JobOperator.class);
     private final Job job = mock(Job.class);
     private final DayEndCatchUpPlanner planner = mock(DayEndCatchUpPlanner.class);
-    private final RoutineDayEndTrigger trigger = new RoutineDayEndTrigger(jobOperator, job, planner);
+    private final BatchFailureAlertNotifier alertNotifier = mock(BatchFailureAlertNotifier.class);
+    private final RoutineDayEndTrigger trigger =
+            new RoutineDayEndTrigger(jobOperator, job, planner, alertNotifier);
 
     private final List<String> startedDates = new ArrayList<>();
 
@@ -67,6 +78,44 @@ class RoutineDayEndTriggerTest {
         trigger.triggerDayEnd();
 
         assertThat(startedDates).containsExactly(D1.toString(), D2.toString(), D3.toString());
+        verify(alertNotifier, never()).notifyFailure(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void 날짜_실행이_실패하면_그_날짜로_운영_알림을_한_번_호출한다() throws Exception {
+        stubStart(date -> executionWith(
+                date.equals(D2.toString()) ? BatchStatus.FAILED : BatchStatus.COMPLETED));
+
+        trigger.triggerDayEnd();
+
+        verify(alertNotifier, times(1)).notifyFailure(
+                eq(RoutineDayEndJobConfig.JOB_NAME + "|" + D2), anyString(), contains(D2.toString()));
+        verify(alertNotifier, times(1)).notifyFailure(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void 이미_실행중_예외로_실패해도_알림을_호출한다() throws Exception {
+        stubStart(date -> {
+            throw new JobExecutionAlreadyRunningException("죽은 실행이 남아 있음");
+        });
+
+        trigger.triggerDayEnd();
+
+        assertThat(startedDates).containsExactly(D1.toString());
+        verify(alertNotifier, times(1)).notifyFailure(
+                eq(RoutineDayEndJobConfig.JOB_NAME + "|" + D1), anyString(),
+                contains("JobExecutionAlreadyRunningException"));
+    }
+
+    @Test
+    void 알림_호출이_예외를_던져도_트리거는_예외없이_끝난다() throws Exception {
+        stubStart(date -> executionWith(BatchStatus.FAILED));
+        doThrow(new IllegalStateException("알림 오류"))
+                .when(alertNotifier).notifyFailure(anyString(), anyString(), anyString());
+
+        trigger.triggerDayEnd();
+
+        assertThat(startedDates).containsExactly(D1.toString());
     }
 
     private interface StartBehavior {
@@ -85,6 +134,8 @@ class RoutineDayEndTriggerTest {
     private JobExecution executionWith(BatchStatus status) {
         JobExecution execution = mock(JobExecution.class);
         when(execution.getStatus()).thenReturn(status);
+        when(execution.getExitStatus()).thenReturn(
+                status == BatchStatus.COMPLETED ? ExitStatus.COMPLETED : ExitStatus.FAILED);
         return execution;
     }
 }
