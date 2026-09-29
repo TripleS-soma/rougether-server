@@ -978,8 +978,24 @@ load_blue_green_state() {
     fi
   elif [ -f "$NGINX_CONFIG_FILE" ] \
       && grep -Eq '^[[:space:]]*listen[[:space:]]+8080|^[[:space:]]*listen[[:space:]]+8081' "$NGINX_CONFIG_FILE"; then
-    echo "Nginx owns a fixed API port but deploy state has no active slot" >&2
-    return 1
+    # legacy cutover 는 nginx 를 멈추기만 하던 시절이 있어 고정 포트 설정이 디스크에 남아 있을 수 있다.
+    # nginx 가 실제로 떠 있을 때만 legacy 고정 포트와 충돌하므로 그때만 막고, 멈춰 있으면 남은 설정으로 보고 진행한다.
+    if systemctl is-active --quiet nginx; then
+      echo "Nginx owns a fixed API port but deploy state has no active slot" >&2
+      return 1
+    fi
+    echo "stale Nginx fixed-port config found while Nginx is stopped; legacy deploy retires it" >&2
+  fi
+}
+
+# legacy 는 컨테이너가 8080/8081 을 직접 잡는다. nginx 를 멈추기만 하면 enabled 상태라 재부팅 시 nginx 가
+# 먼저 포트를 잡아 legacy 컨테이너가 뜨지 못하고, 남은 설정은 다음 legacy 배포의 상태 검증을 막는다.
+# 그래서 nginx 를 끄고(disable) 설정을 conf.d 가 읽지 않는 이름으로 옮긴다. blue/green 복귀 시에는
+# apply_nginx_routing 이 설정을 새로 쓰고 nginx 를 다시 enable 한다.
+retire_nginx_routing() {
+  systemctl disable --now nginx >/dev/null 2>&1 || systemctl stop nginx >/dev/null 2>&1 || true
+  if [ -f "$NGINX_CONFIG_FILE" ]; then
+    mv -f "$NGINX_CONFIG_FILE" "$NGINX_CONFIG_FILE.legacy-disabled"
   fi
 }
 
@@ -1842,7 +1858,7 @@ rollback() {
   fi
 
   if [ "$legacy_from_blue_green" = true ]; then
-    systemctl stop nginx >/dev/null 2>&1 || true
+    retire_nginx_routing || true
     stop_slot user-api "$active_user_color"
     stop_slot admin-api "$active_admin_color"
   fi
@@ -1951,9 +1967,11 @@ deploy_legacy() {
   # Emergency compatibility path. Normal deployments use deploy_blue_green.
   if [ "$legacy_from_blue_green" = true ]; then
     legacy_cutover_started=true
-    systemctl stop nginx
+    retire_nginx_routing
     stop_slot user-api "$active_user_color"
     stop_slot admin-api "$active_admin_color"
+  elif [ -f "$NGINX_CONFIG_FILE" ]; then
+    retire_nginx_routing
   fi
   systemctl restart rougether-user-api rougether-admin-api
   wait_health user-api http://127.0.0.1:8080/api/v1/health

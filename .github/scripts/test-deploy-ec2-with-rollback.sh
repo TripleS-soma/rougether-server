@@ -876,6 +876,39 @@ EOF
   echo "ok - blue/green state validates color and port pairs"
 }
 
+test_legacy_state_tolerates_stopped_nginx_leftover_and_retires_it() {
+  reset_scenario "legacy-nginx-leftover"
+  cat > "$STATE_FILE" <<'EOF'
+USER_API_IMAGE=registry/user:old
+ADMIN_API_IMAGE=registry/admin:old
+BATCH_API_IMAGE=registry/batch:old
+DEPLOYED_SHA=old-release
+EOF
+  # 실제 rougether.conf 처럼 listen 이 줄 머리에 오는 고정 포트 설정(blue/green 시절에 쓰인 것)
+  printf 'server {\n    listen 8080;\n}\nserver {\n    listen 8081;\n}\n' > "$NGINX_CONFIG_FILE"
+  local calls_file="$TEST_ROOT/legacy-nginx-leftover/systemctl.log"
+  : > "$calls_file"
+
+  # nginx 가 멈춰 있으면 legacy 고정 포트와 충돌하지 않으므로 남은 설정이 있어도 상태를 읽는다.
+  if ! ( systemctl() { [ "$1" = is-active ] && return 3; return 0; }; load_blue_green_state ) >/dev/null 2>&1; then
+    echo "not ok - stopped nginx with a leftover fixed-port config must not block legacy state" >&2
+    return 1
+  fi
+  # nginx 가 떠 있으면 실제 포트 충돌이므로 계속 막는다.
+  if ( systemctl() { return 0; }; load_blue_green_state ) >/dev/null 2>&1; then
+    echo "not ok - running nginx that owns a fixed port without an active slot must fail closed" >&2
+    return 1
+  fi
+
+  ( systemctl() { echo "$*" >> "$calls_file"; return 0; }; retire_nginx_routing )
+  assert_contains '^disable --now nginx$' "$calls_file" "legacy must disable nginx so it cannot grab 8080 after reboot"
+  [ ! -e "$NGINX_CONFIG_FILE" ] && [ -f "$NGINX_CONFIG_FILE.legacy-disabled" ] \
+    || { echo "not ok - leftover nginx config must move out of conf.d includes" >&2; return 1; }
+  ( systemctl() { return 0; }; load_blue_green_state ) >/dev/null 2>&1 \
+    || { echo "not ok - retired config must not block a later deploy even if nginx runs" >&2; return 1; }
+  echo "ok - legacy tolerates a stopped nginx leftover and retires it"
+}
+
 test_blue_green_units_bind_internal_ports_and_cap_memory() {
   reset_scenario "blue-green-units"
   write_blue_green_units
@@ -1256,7 +1289,7 @@ EOF
     deploy_legacy
   )
 
-  assert_before 'systemctl stop nginx' 'systemctl restart rougether-user-api rougether-admin-api' \
+  assert_before 'systemctl disable --now nginx' 'systemctl restart rougether-user-api rougether-admin-api' \
     "$calls" "legacy mode must release Nginx fixed ports before starting legacy containers"
   assert_before 'stop-slot user-api blue' 'systemctl restart rougether-user-api rougether-admin-api' \
     "$calls" "legacy mode must stop active user slot before fixed-port restart"
@@ -2328,6 +2361,7 @@ test_admin_origin_secret_refresh_is_fail_closed
 test_bots_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
 test_market_engine_env_refresh_is_idempotent_and_keeps_value_on_invalid_flag
 test_blue_green_slot_mapping_and_state_validation
+test_legacy_state_tolerates_stopped_nginx_leftover_and_retires_it
 test_blue_green_units_bind_internal_ports_and_cap_memory
 test_memory_preflight_failure_does_not_start_candidate
 test_candidate_health_precedes_initial_proxy_cutover
