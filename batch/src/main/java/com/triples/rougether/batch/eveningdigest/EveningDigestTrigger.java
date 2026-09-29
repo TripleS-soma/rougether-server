@@ -33,7 +33,7 @@ public class EveningDigestTrigger {
     private final Clock clock;
     private final UserRepository users;
 
-    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 1 * * * *", zone = "Asia/Seoul")
     public void triggerHourly() {
         runForToday();
     }

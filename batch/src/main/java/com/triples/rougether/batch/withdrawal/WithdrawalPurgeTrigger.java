@@ -29,8 +29,8 @@ public class WithdrawalPurgeTrigger {
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawalPurgeService purgeService;
 
-    // 정각 잡(리마인더 5분 주기·데이엔드/미션 만료 정각)과 겹치지 않게 매시 30분
-    @Scheduled(cron = "0 30 * * * *", zone = "Asia/Seoul")
+    // 리마인더(5분 배수)·주간 회고(30분)와 겹치지 않게 매시 38분 (분 배정은 SchedulingConfig 참고)
+    @Scheduled(cron = "0 38 * * * *", zone = "Asia/Seoul")
     public void purgeWithdrawnUsers() {
         Timestamp cutoff = Timestamp.from(Instant.now().minus(ACCESS_TOKEN_DRAIN));
         List<Long> targetIds = jdbcTemplate.queryForList("""

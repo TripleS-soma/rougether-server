@@ -27,7 +27,7 @@ public class RoutineDayEndTrigger {
     private final DayEndCatchUpPlanner dayEndCatchUpPlanner;
     private final BatchFailureAlertNotifier alertNotifier;
 
-    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 3 * * * *", zone = "Asia/Seoul")
     public void triggerDayEnd() {
         runPendingDates();
     }
@@ -84,7 +84,7 @@ public class RoutineDayEndTrigger {
             alertNotifier.notifyFailure(
                     RoutineDayEndJobConfig.JOB_NAME + "|" + targetDate,
                     "하루 마감(" + RoutineDayEndJobConfig.JOB_NAME + ") 실패",
-                    "targetDate=" + targetDate + ", " + reason + " - 매시 정각 재시도");
+                    "targetDate=" + targetDate + ", " + reason + " - 매시 3분 재시도");
         } catch (RuntimeException e) {
             log.warn("하루 마감 실패 알림 호출 실패 - targetDate={}", targetDate, e);
         }

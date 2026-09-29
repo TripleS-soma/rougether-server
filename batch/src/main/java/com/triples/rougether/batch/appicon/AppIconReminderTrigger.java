@@ -31,7 +31,7 @@ public class AppIconReminderTrigger {
     private final AppIconReminderService reminderService;
     private final Clock clock;
 
-    @Scheduled(cron = "0 */30 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 12,42 * * * *", zone = "Asia/Seoul")
     @EventListener(ApplicationReadyEvent.class)
     public void run() {
         Instant now = clock.instant();
