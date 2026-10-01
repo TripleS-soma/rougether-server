@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 신고</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/asset-foundry}">Asset Foundry</a>
+            <a th:href="@{/catalog}">카탈로그</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/accessory-render-profiles}">악세사리 관리</a>
+            <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/weekly-reports}">AI 회고</a>
+            <a th:href="@{/recommendations}">AI 추천</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}">버그 제보</a>
+            <a th:href="@{/content-reports}" class="active">신고</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide">
+        <div class="upload-card">
+            <div class="upload-head">
+                <h2>콘텐츠 신고</h2>
+                <p>유저가 신고한 피드 게시물·댓글과 거래소 가구입니다. 숨김은 게시물·댓글을 삭제하고 가구 거래를 정지하며,
+                    같은 대상의 대기 신고를 함께 닫습니다. 작성자·신고자에게 알림은 보내지 않습니다.</p>
+            </div>
+
+            <div class="slot-toolbar">
+                <select id="statusFilter" class="slot-select">
+                    <option value="RECEIVED">검토 대기</option>
+                    <option value="ACTIONED">숨김 처리</option>
+                    <option value="DISMISSED">종료</option>
+                    <option value="">전체 상태</option>
+                </select>
+                <button type="button" class="btn-ghost" id="prev">이전</button>
+                <button type="button" class="btn-ghost" id="next">다음</button>
+                <span class="slot-count" id="count"></span>
+            </div>
+
+            <div class="alert alert-error" id="error" hidden></div>
+
+            <table class="slot-table">
+                <thead>
+                <tr>
+                    <th>대상</th>
+                    <th>내용 미리보기</th>
+                    <th>작성자</th>
+                    <th>사유 / 설명</th>
+                    <th>상태</th>
+                    <th>처리</th>
+                    <th>신고일</th>
+                </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
+        const TYPES = { FEED_POST: '게시물', FEED_COMMENT: '댓글', MARKET_ASSET: '거래소 가구' };
+        const REASONS = { SPAM: '스팸', ABUSE: '욕설·괴롭힘', SEXUAL: '선정성', VIOLENCE: '폭력·위협',
+            PERSONAL_INFO: '개인정보', COPYRIGHT: '저작권', OTHER: '기타' };
+        const STATUSES = { RECEIVED: '검토 대기', ACTIONED: '숨김 처리', DISMISSED: '종료' };
+        const SIZE = 20;
+        const tbody = document.getElementById('rows');
+        const countEl = document.getElementById('count');
+        const errorBox = document.getElementById('error');
+        const statusFilter = document.getElementById('statusFilter');
+        let page = 0;
+        let total = 0;
+        statusFilter.addEventListener('change', () => { page = 0; load(); });
+        document.getElementById('prev').addEventListener('click', () => { if (page > 0) { page--; load(); } });
+        document.getElementById('next').addEventListener('click', () => {
+            if ((page + 1) * SIZE < total) { page++; load(); }
+        });
+
+        load();
+
+        async function load() {
+            hideError();
+            const params = new URLSearchParams({ page, size: SIZE });
+            if (statusFilter.value) params.set('status', statusFilter.value);
+            try {
+                const res = await fetch('/admin/reports?' + params);
+                if (!res.ok) {
+                    throw new Error(await errorMessage(res));
+                }
+                const body = await res.json();
+                total = body.totalElements;
+                render(body.items);
+            } catch (err) {
+                showError('목록 조회 실패: ' + err.message);
+            }
+        }
+
+        function render(items) {
+            tbody.replaceChildren(...items.map(buildRow));
+            countEl.textContent = '총 ' + total + '건 · ' + (page + 1) + '페이지';
+        }
+
+        function cell(text) {
+            const td = document.createElement('td');
+            td.textContent = text ?? '-';
+            return td;
+        }
+
+        function buildRow(item) {
+            const tr = document.createElement('tr');
+            const target = item.target || {};
+            const targetLabel = (TYPES[item.targetType] || item.targetType) + ' #' + item.targetId
+                + (item.targetType === 'FEED_COMMENT' && target.postId ? ' (글 #' + target.postId + ')' : '');
+
+            const previewCell = document.createElement('td');
+            const text = document.createElement('div');
+            text.className = 'slot-name';
+            text.textContent = target.removed ? '(삭제·정지됨) ' + (target.text || '') : (target.text || '-');
+            previewCell.appendChild(text);
+            (target.feedImageIds || []).forEach((imageId) => {
+                const url = '/admin/reports/feed-images/' + imageId;
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                const img = document.createElement('img');
+                img.className = 'slot-thumb';
+                img.loading = 'lazy';
+                img.alt = '피드 사진';
+                img.src = url;
+                link.appendChild(img);
+                previewCell.appendChild(link);
+            });
+            if (target.assetKey) {
+                const key = document.createElement('div');
+                key.className = 'slot-key';
+                key.textContent = target.assetKey;
+                previewCell.appendChild(key);
+            }
+
+            const owner = item.targetOwnerUserId
+                ? (item.targetOwnerNickname ?? '(닉네임 없음)') + ' #' + item.targetOwnerUserId : '(탈퇴)';
+
+            const reasonCell = document.createElement('td');
+            const reason = document.createElement('div');
+            reason.className = 'slot-name';
+            reason.textContent = REASONS[item.reason] || item.reason;
+            const detail = document.createElement('div');
+            detail.className = 'slot-key';
+            detail.textContent = item.detail || '';
+            reasonCell.append(reason, detail);
+
+            const actionCell = document.createElement('td');
+            if (item.status === 'RECEIVED') {
+                actionCell.append(actionButton(item, 'HIDE', '숨김'), actionButton(item, 'DISMISS', '종료'));
+            } else {
+                actionCell.textContent = item.resolvedAt
+                    ? new Date(item.resolvedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-';
+            }
+
+            tr.append(cell(targetLabel), previewCell, cell(owner), reasonCell,
+                cell(STATUSES[item.status] || item.status), actionCell,
+                cell(new Date(item.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })));
+            return tr;
+        }
+
+        function actionButton(item, action, label) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn-ghost';
+            button.textContent = label;
+            button.addEventListener('click', () => resolve(item, action, button));
+            return button;
+        }
+
+        async function resolve(item, action, button) {
+            const confirmText = action === 'HIDE'
+                ? '이 콘텐츠를 숨길까요? 게시물·댓글은 삭제되고 가구는 거래가 정지됩니다. 되돌릴 수 없습니다.'
+                : '조치 없이 신고를 종료할까요?';
+            if (!confirm(confirmText)) return;
+            button.disabled = true;
+            hideError();
+            try {
+                const res = await fetch('/admin/reports/' + item.reportId + '/resolve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+                    body: JSON.stringify({ action })
+                });
+                if (!res.ok) {
+                    throw new Error(await errorMessage(res));
+                }
+                await load();
+            } catch (err) {
+                showError('처리 실패: ' + err.message);
+                button.disabled = false;
+            }
+        }
+
+        async function errorMessage(response) {
+            try {
+                const body = await response.json();
+                return body.message || ('HTTP ' + response.status);
+            } catch {
+                return 'HTTP ' + response.status;
+            }
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.hidden = false;
+        }
+
+        function hideError() {
+            errorBox.hidden = true;
+        }
+    </script>
+</body>
+</html>

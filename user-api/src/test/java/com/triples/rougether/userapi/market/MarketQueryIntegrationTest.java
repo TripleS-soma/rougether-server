@@ -139,7 +139,7 @@ class MarketQueryIntegrationTest {
         assertThat(query.getAsset(buyer.getId(), assetId).lastTradePrice()).isEqualTo(30);
         assertThat(query.trades(assetId, 0, 20).items()).singleElement()
                 .satisfies(t -> assertThat(t.price()).isEqualTo(30));
-        AssetCard card = cardOf(query.listAssets(0, 20));
+        AssetCard card = cardOf(query.listAssets(creator.getId(), 0, 20));
         assertThat(card.bestAskPrice()).isEqualTo(40);
         assertThat(card.askQuantity()).isEqualTo(2);
         assertThat(card.lastTradePrice()).isEqualTo(30);
@@ -153,7 +153,7 @@ class MarketQueryIntegrationTest {
         Long suspended = issue(newUser("민수", 0), 3);
         jdbc.update("update market_assets set status = 'SUSPENDED' where id = ?", suspended);
 
-        MarketAssetListResponse list = query.listAssets(0, 20);
+        MarketAssetListResponse list = query.listAssets(creator.getId(), 0, 20);
 
         assertThat(list.items()).extracting(AssetCard::assetId).containsExactly(later, assetId);
         assertThat(list.totalElements()).isEqualTo(2);
@@ -184,7 +184,7 @@ class MarketQueryIntegrationTest {
 
         jdbc.update("update market_assets set creator_user_id = null where id = ?", assetId);
         assertThat(query.getAsset(creator.getId(), assetId).creatorNickname()).isNull();
-        assertThat(cardOf(query.listAssets(0, 20)).creatorNickname()).isNull();
+        assertThat(cardOf(query.listAssets(creator.getId(), 0, 20)).creatorNickname()).isNull();
     }
 
     @Test
@@ -206,6 +206,28 @@ class MarketQueryIntegrationTest {
             assertThat(o.name()).isEqualTo("고양이 소파");
         });
         assertThat(query.myOrders(creator.getId(), MyMarketOrderStatus.OPEN, 0, 20).items()).isEmpty();
+    }
+
+    @Test
+    void 차단한_제작자의_종목은_차단한_사람의_목록에서만_빠지고_상세는_그대로다() {
+        User blockedCreator = newUser("철수", 0);
+        Long blockedAsset = issue(blockedCreator, 3);
+        User viewer = newUser(null, 100);
+        jdbc.update("insert into user_blocks (blocker_user_id, blocked_user_id, created_at) values (?, ?, ?)",
+                viewer.getId(), blockedCreator.getId(), java.sql.Timestamp.from(NOW));
+        try {
+            MarketAssetListResponse forViewer = query.listAssets(viewer.getId(), 0, 20);
+            assertThat(forViewer.items()).extracting(AssetCard::assetId).containsExactly(assetId);
+            assertThat(forViewer.totalElements()).isEqualTo(1);
+            // 한 방향: 다른 회원의 목록에는 그대로 나옴
+            assertThat(query.listAssets(creator.getId(), 0, 20).items()).extracting(AssetCard::assetId)
+                    .containsExactly(blockedAsset, assetId);
+            // 상세는 차단과 무관하게 조회됨(보유 가구·대기 주문 화면 유지)
+            assertThat(query.getAsset(viewer.getId(), blockedAsset).assetId()).isEqualTo(blockedAsset);
+        } finally {
+            jdbc.update("delete from user_blocks where blocker_user_id = ?", viewer.getId());
+        }
+        assertThat(query.listAssets(viewer.getId(), 0, 20).totalElements()).isEqualTo(2);
     }
 
     @Test

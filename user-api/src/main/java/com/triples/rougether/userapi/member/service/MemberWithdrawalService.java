@@ -19,6 +19,8 @@ import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.minigame.repository.MinigameBestScoreRepository;
 import com.triples.rougether.domain.minigame.repository.MinigameRunRepository;
+import com.triples.rougether.domain.moderation.repository.ContentReportRepository;
+import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestRepository;
 import com.triples.rougether.domain.notification.digest.repository.DailyIncompleteDigestTargetRepository;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
@@ -68,6 +70,8 @@ public class MemberWithdrawalService {
     private final UserGoalRepository userGoalRepository;
     private final MinigameRunRepository minigameRunRepository;
     private final MinigameBestScoreRepository minigameBestScoreRepository;
+    private final UserBlockRepository userBlockRepository;
+    private final ContentReportRepository contentReportRepository;
     private final RoutineRepository routineRepository;
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
@@ -126,6 +130,10 @@ public class MemberWithdrawalService {
         // 탈퇴자의 플레이 기록과 전체 유저 랭킹 기록도 즉시 파기함.
         minigameRunRepository.deleteAllByUserId(userId);
         minigameBestScoreRepository.deleteAllByUserId(userId);
+        // 신고·차단(#399): 양방향 차단 row 와 탈퇴자가 한 신고를 지움. 탈퇴자 콘텐츠에 대한 신고는
+        // 작성자 스냅샷과 함께 운영자 대기열에 남김.
+        userBlockRepository.deleteAllInvolving(userId);
+        contentReportRepository.deleteAllByReporterUserId(userId);
         // FCM 토큰 삭제 — 잔여 push 경로 차단. clearAutomatically 라 반드시 마지막 순서 유지:
         // 위 bulk soft delete 이후 PC에 남은 stale 루틴/투두/카테고리를 여기서 함께 비움.
         userDeviceTokenRepository.deleteAllByUserId(userId);

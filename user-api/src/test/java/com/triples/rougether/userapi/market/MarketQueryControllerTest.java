@@ -48,7 +48,7 @@ class MarketQueryControllerTest {
 
     @Test
     void 목록은_기본_페이지로_조회한다() throws Exception {
-        when(marketQueryService.listAssets(0, 20)).thenReturn(new MarketAssetListResponse(List.of(), 0, 20, 0));
+        when(marketQueryService.listAssets(7L, 0, 20)).thenReturn(new MarketAssetListResponse(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/v1/market/assets"))
                 .andExpect(status().isOk())
@@ -63,7 +63,7 @@ class MarketQueryControllerTest {
         mockMvc.perform(get("/api/v1/market/assets").param("size", "101")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/v1/market/assets").param("page", "-1")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/v1/market/assets/1/trades").param("size", "0")).andExpect(status().isBadRequest());
-        verify(marketQueryService, never()).listAssets(anyInt(), anyInt());
+        verify(marketQueryService, never()).listAssets(anyLong(), anyInt(), anyInt());
         verify(marketQueryService, never()).trades(anyLong(), anyInt(), anyInt());
     }
 

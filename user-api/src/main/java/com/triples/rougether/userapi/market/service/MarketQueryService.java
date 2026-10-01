@@ -61,8 +61,9 @@ public class MarketQueryService {
         this.userItemRepository = userItemRepository;
     }
 
-    public MarketAssetListResponse listAssets(int page, int size) {
-        Page<MarketAsset> assets = assetRepository.findByStatusOrderByIdDesc(MarketAssetStatus.ACTIVE,
+    // 요청자가 차단한 제작자의 종목은 목록·totalElements 에서 빠짐(#399). 상세는 차단과 무관.
+    public MarketAssetListResponse listAssets(Long viewerId, int page, int size) {
+        Page<MarketAsset> assets = assetRepository.findListedFor(viewerId, MarketAssetStatus.ACTIVE,
                 PageRequest.of(page, size));
         List<Long> assetIds = assets.getContent().stream().map(MarketAsset::getId).toList();
         Map<Long, Item> items = itemsById(assets.getContent().stream().map(MarketAsset::getItemId).toList());

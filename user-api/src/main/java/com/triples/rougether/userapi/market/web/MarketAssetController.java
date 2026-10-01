@@ -40,18 +40,21 @@ public class MarketAssetController {
 
     @Operation(summary = "거래소 종목 목록 조회",
             description = "거래 중인(ACTIVE) 종목을 최근 상장순으로 한 페이지씩 조회합니다. 종목마다 가장 싼 판매 가격, "
-                    + "판매 대기 수량, 최근 체결가를 함께 내려줍니다. 미지정 시 page=0, size=20 으로 조회합니다.")
+                    + "판매 대기 수량, 최근 체결가를 함께 내려줍니다. 내가 차단한 회원이 만든 종목은 목록과 totalElements 에서 빠집니다. "
+                    + "미지정 시 page=0, size=20 으로 조회합니다.")
     @GetMapping
     public MarketAssetListResponse list(
+            @CurrentUser AuthUser user,
             @Parameter(description = "페이지 번호 (0부터)") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기 (1~100)") @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return marketQueryService.listAssets(page, size);
+        return marketQueryService.listAssets(user.id(), page, size);
     }
 
     @Operation(summary = "거래소 종목 상세 조회",
             description = "종목 정보와 호가를 조회합니다. 호가는 대기 중인 주문의 남은 수량을 가격대별로 합산하며, "
                     + "판매 호가(asks)는 싼 가격부터, 구매 호가(bids)는 비싼 가격부터 각 최대 10단계를 내려줍니다. "
-                    + "owned 는 내가 이 가구를 인벤토리에 보유 중인지(판매 등록으로 맡긴 것은 제외), isCreator 는 내가 제작자인지입니다.")
+                    + "owned 는 내가 이 가구를 인벤토리에 보유 중인지(판매 등록으로 맡긴 것은 제외), isCreator 는 내가 제작자인지입니다. "
+                    + "차단한 회원이 만든 종목도 상세는 조회됩니다(보유 가구·대기 주문 화면 유지).")
     @GetMapping("/{assetId}")
     public MarketAssetResponse detail(@CurrentUser AuthUser user,
                                       @Parameter(description = "종목 ID. 종목 목록 응답의 assetId 값")

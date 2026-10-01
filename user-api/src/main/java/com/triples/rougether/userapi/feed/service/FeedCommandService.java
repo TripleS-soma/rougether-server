@@ -4,6 +4,7 @@ import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.feed.entity.*;
 import com.triples.rougether.domain.feed.repository.*;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.userapi.feed.dto.*;
 import static com.triples.rougether.userapi.feed.error.FeedErrorCode.*;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
@@ -28,6 +29,7 @@ public class FeedCommandService {
     private final FeedImageRepository images;
     private final FeedLikeRepository likes;
     private final FeedCommentRepository comments;
+    private final UserBlockRepository blocks;
     private final BannedWordChecker bannedWords;
     private final NotificationService notifications;
     private final Clock clock;
@@ -77,6 +79,7 @@ public class FeedCommandService {
     public void like(Long userId, Long postId, boolean liked) {
         User user = access.lockActive(userId);
         FeedPost post = lockVisible(postId);
+        requireNotBlocked(userId, post.getAuthor().getId());
         Optional<FeedLike> previous = likes.findByPostIdAndUserId(postId, userId);
         if (liked && previous.isEmpty()) likes.save(new FeedLike(post, user));
         if (!liked) previous.ifPresent(likes::delete);
@@ -85,6 +88,7 @@ public class FeedCommandService {
         Long authorId = posts.findAuthorId(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
         User user = access.lockCommentParticipants(userId, authorId);
         FeedPost post = lockVisible(postId);
+        requireNotBlocked(userId, authorId);
         if (request.clientCommentId() == null) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 500, false);
         String requestHash = hash(content);
@@ -97,7 +101,9 @@ public class FeedCommandService {
         }
         FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(), requestHash, content));
         // 댓글과 알림 내역을 함께 커밋하고 push만 기존 AFTER_COMMIT 경로로 발송함. 재시도·본인 댓글은 제외함.
-        if (!authorId.equals(userId)) notifications.send(authorId, NotificationMessages.feedComment(), postId);
+        // 게시물 작성자가 댓글 작성자를 차단했으면 알림을 만들지 않음(#399).
+        if (!authorId.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(authorId, userId))
+            notifications.send(authorId, NotificationMessages.feedComment(), postId);
         return FeedCommentResponse.of(comment, userId);
     }
     public void deleteComment(Long userId, Long postId, Long commentId) {
@@ -112,6 +118,10 @@ public class FeedCommandService {
         FeedPost post = posts.findForUpdate(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
         if (post.getDeletedAt() != null || post.getAuthor().isDeleted()) throw new BusinessException(FEED_POST_NOT_FOUND);
         return post;
+    }
+    // 차단한 작성자의 글은 조회와 같게 404로 막음(#399).
+    private void requireNotBlocked(Long viewer, Long authorId) {
+        if (blocks.existsByBlockerUserIdAndBlockedUserId(viewer, authorId)) throw new BusinessException(FEED_POST_NOT_FOUND);
     }
     private void requireOwner(Long author, Long user) {
         if (!author.equals(user)) throw new BusinessException(FEED_FORBIDDEN);
