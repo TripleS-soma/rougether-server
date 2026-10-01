@@ -12,6 +12,7 @@ import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
+import com.triples.rougether.domain.member.entity.RefreshTokenRevokeReason;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
@@ -100,7 +101,7 @@ public class MemberWithdrawalService {
         // 개인정보 즉시 파기(익명화). 이하 bulk 연산의 flush에 함께 실려 나감.
         user.anonymize();
         refreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(userId)
-                .forEach(token -> token.revoke(now));
+                .forEach(token -> token.revoke(now, RefreshTokenRevokeReason.WITHDRAWAL));
         // 연동 삭제로 (provider, provider_user_id) unique가 풀려 재로그인 = 신규 가입(재가입 허용).
         oauthAccountRepository.deleteAllByUser(user);
         // 집 도메인 정리(엔티티 dirty 단계) — 신청 철회·멤버십 LEFT·정원 감소·소유권 승계/집 해체.

@@ -14,9 +14,17 @@ import com.triples.rougether.domain.member.entity.RefreshToken;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.userapi.auth.dto.TokenResponse;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -24,12 +32,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
-// 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·재사용을 검증함.
+// 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·유예·재사용(family 단위)을 검증함.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AuthSecurityIntegrationTest {
@@ -44,6 +53,10 @@ class AuthSecurityIntegrationTest {
     private TokenService tokenService;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private AuthService authService;
 
     @Test
     void 토큰_없이_보호자원_접근하면_401_과_code_를_준다() throws Exception {
@@ -117,19 +130,123 @@ class AuthSecurityIntegrationTest {
         String r2 = JsonPath.read(refreshed.getResponse().getContentAsString(), "$.refreshToken");
         assertThat(r2).isNotBlank().isNotEqualTo(r1);
 
-        // 3) 회전된 r1 재사용 → 401
-        mockMvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"refreshToken\":\"" + r1 + "\"}"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_REFRESH_TOKEN_INVALID"));
+        // 3) 회전된 지 60초 안의 r1 재제출 = 응답 유실 재시도 → 200, 새 쌍 r3. 받지 못한 r2 는 밀려남(SUPERSEDED)
+        String r3 = refreshOk(r1);
+        assertThat(r3).isNotEqualTo(r2);
+        expectSuperseded(r2);
 
-        // 4) 재사용 감지로 r2 까지 폐기됨 → r2 도 무효
+        // 4) 같은 회원의 다른 기기(별도 로그인 = 별도 family)
+        GeneratedRefreshToken otherDevice = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(
+                RefreshToken.issue(user, otherDevice.tokenHash(), otherDevice.expiresAt()));
+
+        // 5) 유예(60초)가 지난 r1 재사용 → 401, 그 기기(family)의 r3 까지 폐기됨
+        backdateRevokedAt(r1, Duration.ofMinutes(2));
+        expectRefreshInvalid(r1);
+        expectRefreshInvalid(r3);
+
+        // 6) 다른 기기 토큰은 살아있음
+        refreshOk(otherDevice.raw());
+    }
+
+    @Test
+    void 같은_refresh_를_동시에_두_번_보내도_둘_다_성공하고_family_에는_살아있는_토큰이_하나만_남는다() throws Exception {
+        User user = userRepository.save(User.signUp());
+        GeneratedRefreshToken first = tokenService.generateRefreshToken();
+        RefreshToken firstToken = refreshTokenRepository.save(
+                RefreshToken.issue(user, first.tokenHash(), first.expiresAt()));
+        String familyId = firstToken.getFamilyId();
+        GeneratedRefreshToken otherDevice = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.issue(user, otherDevice.tokenHash(), otherDevice.expiresAt()));
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<TokenResponse>> results = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return authService.refresh(first.raw());
+                }));
+            }
+            start.countDown();
+            // 예전에는 진 쪽이 재사용으로 판정돼 회원 토큰 전체가 폐기됐음. 이제 줄을 서서 뒤 요청이 유예 재발급을 받음.
+            for (Future<TokenResponse> result : results) {
+                assertThat(result.get(10, TimeUnit.SECONDS).refreshToken()).isNotBlank();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        Integer activeInFamily = jdbcTemplate.queryForObject(
+                "select count(*) from refresh_tokens where family_id = ? and revoked_at is null",
+                Integer.class, familyId);
+        assertThat(activeInFamily).isEqualTo(1);
+        refreshOk(otherDevice.raw());
+    }
+
+    @Test
+    void 로그아웃한_refresh_를_다시_보내면_그_family_만_폐기되고_다른_기기는_유지된다() throws Exception {
+        User user = userRepository.save(User.signUp());
+        GeneratedRefreshToken device = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.issue(user, device.tokenHash(), device.expiresAt()));
+        GeneratedRefreshToken otherDevice = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.issue(user, otherDevice.tokenHash(), otherDevice.expiresAt()));
+
+        String rotated = refreshOk(device.raw());
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + rotated + "\"}"))
+                .andExpect(status().is2xxSuccessful());
+
+        // 로그아웃 사유는 유예 대상이 아님 → 방금이어도 401
+        expectRefreshInvalid(rotated);
+        refreshOk(otherDevice.raw());
+    }
+
+    @Test
+    void 레거시_family_없는_폐기_토큰_재사용은_회원_토큰을_전부_폐기한다() throws Exception {
+        User user = userRepository.save(User.signUp());
+        GeneratedRefreshToken legacy = tokenService.generateRefreshToken();
+        RefreshToken legacyToken = RefreshToken.issueInFamily(user, legacy.tokenHash(), legacy.expiresAt(), null);
+        legacyToken.revoke(Instant.now(), null);
+        refreshTokenRepository.save(legacyToken);
+        GeneratedRefreshToken otherDevice = tokenService.generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.issue(user, otherDevice.tokenHash(), otherDevice.expiresAt()));
+
+        expectRefreshInvalid(legacy.raw());
+        expectRefreshInvalid(otherDevice.raw());
+    }
+
+    private String refreshOk(String raw) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + raw + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.refreshToken");
+    }
+
+    private void expectRefreshInvalid(String raw) throws Exception {
         mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"refreshToken\":\"" + r2 + "\"}"))
+                        .content("{\"refreshToken\":\"" + raw + "\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REFRESH_TOKEN_INVALID"));
+    }
+
+    // 유예 재발급이 받지 못한 후속 토큰을 SUPERSEDED 로 밀어냈는지 확인함.
+    private void expectSuperseded(String raw) {
+        Integer revoked = jdbcTemplate.queryForObject(
+                "select count(*) from refresh_tokens where token_hash = ? and revoke_reason = 'SUPERSEDED'",
+                Integer.class, tokenService.hashRefreshToken(raw));
+        assertThat(revoked).isEqualTo(1);
+    }
+
+    // 시간대 변환을 피하려고 DB 안에서 상대값으로 당김(Instant 저장 시간대와 JDBC Timestamp 시간대가 다를 수 있음).
+    private void backdateRevokedAt(String raw, Duration ago) {
+        jdbcTemplate.update("update refresh_tokens set revoked_at = revoked_at - INTERVAL ? SECOND where token_hash = ?",
+                ago.toSeconds(), tokenService.hashRefreshToken(raw));
     }
 
     @Test
@@ -156,7 +273,8 @@ class AuthSecurityIntegrationTest {
         Instant afterRotate = userRepository.findById(userId).orElseThrow().getLastAccessedAt();
         assertThat(afterRotate).isAfter(seeded);
 
-        // 2) 회전된 r1 재사용(reuse 감지→전체 revoke) → 401, last_accessed_at 미갱신
+        // 2) 유예가 지난 r1 재사용(reuse 감지→family 폐기) → 401, last_accessed_at 미갱신
+        backdateRevokedAt(r1, Duration.ofMinutes(2));
         mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"" + r1 + "\"}"))

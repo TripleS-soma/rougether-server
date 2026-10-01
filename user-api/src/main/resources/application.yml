@@ -48,6 +48,8 @@ jwt:
   secret: ${JWT_SECRET:local-dev-only-secret-change-in-prod-hs256-needs-32-bytes-min}
   access-ttl: 30m
   refresh-ttl: 14d
+  # 회전된 refresh 재제출을 응답 유실 재시도로 보고 재발급하는 유예(mobile #1388). 밖이면 그 기기(family)만 폐기.
+  refresh-reuse-grace: ${JWT_REFRESH_REUSE_GRACE:60s}
 
 # 브라우저 클라이언트 허용 출처(CORS). 웹앱(app.rougether.com)과 로컬 expo 웹(8081). 네이티브 앱은 무관함.
 cors:

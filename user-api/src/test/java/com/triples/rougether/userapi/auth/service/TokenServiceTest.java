@@ -22,7 +22,7 @@ class TokenServiceTest {
 
     private static final String SECRET = "token-service-test-secret-key-32bytes-minimum-hs256!!";
     private final TokenService tokenService =
-            new TokenService(new JwtProperties(SECRET, Duration.ofMinutes(30), Duration.ofDays(14)));
+            new TokenService(new JwtProperties(SECRET, Duration.ofMinutes(30), Duration.ofDays(14), null));
 
     @Test
     void access_토큰_발급_후_파싱하면_userId_와_role_을_돌려준다() {
