@@ -31,6 +31,11 @@ public class ChatQueryService {
         return snapshot(room);
     }
 
+    // 소켓 쓰기 직전 호출하며 이전 페이지 조회의 멤버십 스냅샷을 재사용하지 않음.
+    public void requireReadable(Long userId, Long roomId) {
+        access.requireReadable(requireRoom(roomId), userId);
+    }
+
     public ChatMessageListResponse messages(Long userId, Long roomId, Long before, Long after, int size) {
         if (size < 1 || size > 100 || (before != null && before <= 0) || (after != null && after < 0)
                 || (before != null && after != null)) throw new BusinessException(ChatErrorCode.CHAT_INPUT_INVALID);

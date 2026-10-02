@@ -2,21 +2,18 @@ package com.triples.rougether.userapi.chat.realtime;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.chat.dto.ChatMessageResponse;
 import com.triples.rougether.userapi.chat.dto.ChatRoomResponse;
 import com.triples.rougether.userapi.chat.service.ChatQueryService;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,17 +26,18 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import tools.jackson.databind.ObjectMapper;
 
-// 쓰기는 인증된 HTTP API가 담당하고 소켓은 최신 방 상태를 알림. 본문은 순서 커서로 복구함.
+// 쓰기는 HTTP 트랜잭션으로 처리하고 커밋 후 소켓 본문 전달을 즉시 시작함.
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ChatSocketHandler extends TextWebSocketHandler {
+    private static final int PAGE_SIZE = 50;
+    private static final long SEND_TIMEOUT_MS = 3000;
     private final ChatQueryService query;
     private final TokenService tokens;
     private final ObjectMapper mapper;
     private final Clock clock;
     private final Map<String, Connection> connections = new ConcurrentHashMap<>();
-    private final Set<Long> dirtyRooms = ConcurrentHashMap.newKeySet();
     private long nextReconcile;
     private final ThreadPoolExecutor outbound = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS,
             new ArrayBlockingQueue<>(256), Thread.ofPlatform().daemon().name("chat-send-", 0).factory());
@@ -52,7 +50,7 @@ public class ChatSocketHandler extends TextWebSocketHandler {
         }
         session.setTextMessageSizeLimit(8192);
         connections.put(session.getId(), new Connection(
-                new ConcurrentWebSocketSessionDecorator(session, 3000, 16384), clock.millis()));
+                new ConcurrentWebSocketSessionDecorator(session, (int) SEND_TIMEOUT_MS, 16384), clock.millis()));
     }
 
     @Override
@@ -60,8 +58,7 @@ public class ChatSocketHandler extends TextWebSocketHandler {
         Connection connection = connections.get(session.getId());
         if (connection == null) return;
         try {
-            if (connection.subscription != null || message.getPayloadLength() > 8192
-                    || clock.millis() - connection.openedAt >= 10000) {
+            if (message.getPayloadLength() > 8192 || clock.millis() - connection.openedAt >= 10000) {
                 close(connection, CloseStatus.POLICY_VIOLATION);
                 return;
             }
@@ -72,17 +69,17 @@ public class ChatSocketHandler extends TextWebSocketHandler {
                 return;
             }
             Long userId = tokens.parseAccessToken(request.accessToken()).id();
-            ChatRoomResponse state = query.get(userId, request.roomId());
             synchronized (this) {
                 long count = connections.values().stream().filter(c -> c.subscription != null
                         && c.subscription.userId().equals(userId)).count();
-                if (count >= 10) {
+                if (connection.subscription != null || count >= 10) {
                     close(connection, CloseStatus.POLICY_VIOLATION);
                     return;
                 }
-                send(connection, "READY", state);
-                connection.subscription = new Subscription(userId, request.roomId(), request.accessToken());
+                connection.subscription = new Subscription(userId, request.roomId(), request.accessToken(),
+                        Boolean.TRUE.equals(request.includeMessages()));
             }
+            requestSync(connection);
         } catch (BusinessException | IllegalArgumentException e) {
             close(connection, CloseStatus.POLICY_VIOLATION);
         } catch (tools.jackson.core.JacksonException e) {
@@ -93,73 +90,111 @@ public class ChatSocketHandler extends TextWebSocketHandler {
     }
 
     public void changed(Long roomId) {
-        // 구독자가 없는 방 알림을 쌓지 않음.
-        if (connections.values().stream().anyMatch(c -> c.subscription != null
-                && c.subscription.roomId().equals(roomId))) dirtyRooms.add(roomId);
+        for (Connection connection : connections.values()) {
+            var subscription = connection.subscription;
+            if (subscription != null && subscription.roomId().equals(roomId)) requestSync(connection);
+        }
     }
 
-    // 전용 스케줄러를 사용해 다른 도메인의 배치와 소켓 IO를 분리함.
-    @Scheduled(fixedDelay = 250, scheduler = "chatScheduler")
+    // 주기는 장애 복구·연결 정리에만 사용함. 정상 커밋/Redis 알림은 changed에서 즉시 처리함.
+    @Scheduled(fixedDelay = 1000, scheduler = "chatScheduler")
     public void flush() {
         long now = clock.millis();
         boolean reconcile = now >= nextReconcile;
         if (reconcile) nextReconcile = now + 5000;
-        Map<Long, List<Connection>> byRoom = new HashMap<>();
         for (Connection connection : connections.values()) {
-            Subscription subscription = connection.subscription;
-            if (subscription == null) {
+            long started = connection.sendStartedAt;
+            if (started >= 0 && now - started >= SEND_TIMEOUT_MS) {
+                close(connection, CloseStatus.SESSION_NOT_RELIABLE);
+            } else if (connection.subscription == null) {
                 if (now - connection.openedAt >= 10000) close(connection, CloseStatus.POLICY_VIOLATION);
-            } else {
-                byRoom.computeIfAbsent(subscription.roomId(), ignored -> new ArrayList<>()).add(connection);
-            }
-        }
-        dirtyRooms.retainAll(byRoom.keySet());
-        for (var entry : byRoom.entrySet()) {
-            boolean changed = dirtyRooms.remove(entry.getKey());
-            if (!reconcile && !changed) continue;
-            try {
-                // 방마다 한 번 읽고 현재 구성원에게만 보냄. 탈퇴·강퇴·삭제·봇은 수신 불가함.
-                ChatRoomResponse state = query.liveSnapshot(entry.getKey());
-                for (Connection connection : entry.getValue()) {
-                    try {
-                        var subscription = connection.subscription;
-                        tokens.parseAccessToken(subscription.accessToken());
-                        if (!state.includes(subscription.userId())) close(connection, CloseStatus.POLICY_VIOLATION);
-                        else send(connection, "ROOM_UPDATED", state);
-                    } catch (BusinessException e) {
-                        close(connection, CloseStatus.POLICY_VIOLATION);
-                    }
-                }
-            } catch (BusinessException e) {
-                entry.getValue().forEach(c -> close(c, CloseStatus.POLICY_VIOLATION));
-            } catch (Exception e) {
-                // DB/IO 장애 시 내용을 보내지 않고 다음 동기화에서 재시도함.
-                dirtyRooms.add(entry.getKey());
-                log.warn("채팅 상태 동기화 실패: roomId={}", entry.getKey());
+            } else if (reconcile) {
+                requestSync(connection);
             }
         }
     }
 
-    private void send(Connection connection, String type, ChatRoomResponse room) {
-        // 느린 소켓이 상태 조회/다른 방 수신을 막지 않게 송신 작업을 유한 큐로 분리함.
-        // 중간 상태가 합쳐져도 다음 5초 동기화와 메시지 커서 조회로 복구할 수 있음.
-        if (!connection.sending.compareAndSet(false, true)) return;
+    private void requestSync(Connection connection) {
+        if (!active(connection)) return;
+        // 신호는 합쳐도 본문은 버리지 않음. 작업 중 도착한 신호는 종료 직후 다시 처리함.
+        connection.pending.set(true);
+        if (!connection.running.compareAndSet(false, true)) return;
         try {
-            outbound.execute(() -> {
-                try {
-                    if (connection.session.isOpen()) connection.session.sendMessage(
-                            new TextMessage(mapper.writeValueAsString(new Update(type, room))));
-                    else connections.remove(connection.session.getId());
-                } catch (Exception e) {
-                    close(connection, CloseStatus.SESSION_NOT_RELIABLE);
-                } finally {
-                    connection.sending.set(false);
-                }
-            });
+            outbound.execute(() -> synchronize(connection));
         } catch (RejectedExecutionException e) {
-            connection.sending.set(false);
+            connection.running.set(false);
             close(connection, CloseStatus.SERVICE_OVERLOAD);
         }
+    }
+
+    private void synchronize(Connection connection) {
+        connection.pending.set(false);
+        try {
+            if (!active(connection)) return;
+            var subscription = connection.subscription;
+            tokens.parseAccessToken(subscription.accessToken());
+            ChatRoomResponse state = query.get(subscription.userId(), subscription.roomId());
+            if (!connection.ready) {
+                // READY 시점 이전 기록은 HTTP로 조회함. 이후 커밋은 이 순서부터 이어 보냄.
+                connection.sentSequence = state.lastSequence();
+                Object ready = subscription.includeMessages() ? new Ready("READY", state, true)
+                        : new Update("READY", state);
+                if (send(connection, ready)) connection.ready = true;
+                return;
+            }
+            if (subscription.includeMessages() && state.lastSequence() > connection.sentSequence) {
+                var page = query.messages(subscription.userId(), subscription.roomId(), null,
+                        connection.sentSequence, PAGE_SIZE);
+                for (ChatMessageResponse message : page.items()) {
+                    if (message.sequence() != connection.sentSequence + 1) {
+                        close(connection, CloseStatus.SESSION_NOT_RELIABLE);
+                        return;
+                    }
+                    if (!send(connection, new MessageCreated("MESSAGE_CREATED", message))) return;
+                    // 소켓 쓰기 완료 위치이며 클라이언트의 수신/읽음 확인으로 간주하지 않음.
+                    connection.sentSequence = message.sequence();
+                }
+                state = page.room();
+                if (page.hasNext()) {
+                    // 한 연결이 작업 스레드를 독점하지 않도록 한 페이지 후 대기열 뒤로 보냄.
+                    connection.pending.set(true);
+                    return;
+                }
+            }
+            // 본문보다 상태를 먼저 알리면 프론트가 불필요한 HTTP 복구를 시작하므로 마지막에 보냄.
+            send(connection, new Update("ROOM_UPDATED", state));
+        } catch (BusinessException e) {
+            close(connection, CloseStatus.POLICY_VIOLATION);
+        } catch (IOException e) {
+            close(connection, CloseStatus.SESSION_NOT_RELIABLE);
+        } catch (Exception e) {
+            log.warn("채팅 소켓 동기화 실패: roomId={}", connection.subscription.roomId());
+            close(connection, CloseStatus.SERVER_ERROR);
+        } finally {
+            connection.running.set(false);
+            if (connection.pending.get()) requestSync(connection);
+        }
+    }
+
+    private boolean send(Connection connection, Object event) throws IOException {
+        if (!active(connection)) return false;
+        var subscription = connection.subscription;
+        // 앞선 소켓 쓰기가 지연되는 동안 탈퇴/강퇴/토큰 만료가 발생할 수 있어 프레임마다 재검사함.
+        query.requireReadable(subscription.userId(), subscription.roomId());
+        tokens.parseAccessToken(subscription.accessToken());
+        if (!active(connection)) return false;
+        TextMessage message = new TextMessage(mapper.writeValueAsString(event));
+        connection.sendStartedAt = clock.millis();
+        try {
+            connection.session.sendMessage(message);
+            return active(connection);
+        } finally {
+            connection.sendStartedAt = -1;
+        }
+    }
+
+    private boolean active(Connection connection) {
+        return connections.get(connection.session.getId()) == connection && connection.session.isOpen();
     }
 
     @Override
@@ -174,7 +209,7 @@ public class ChatSocketHandler extends TextWebSocketHandler {
     }
 
     private void close(Connection connection, CloseStatus status) {
-        connections.remove(connection.session.getId());
+        if (!connections.remove(connection.session.getId(), connection)) return;
         try { connection.session.close(status); } catch (IOException ignored) { }
     }
 
@@ -187,11 +222,17 @@ public class ChatSocketHandler extends TextWebSocketHandler {
     private static class Connection {
         final WebSocketSession session;
         final long openedAt;
+        final AtomicBoolean running = new AtomicBoolean();
+        final AtomicBoolean pending = new AtomicBoolean();
         volatile Subscription subscription;
-        final AtomicBoolean sending = new AtomicBoolean();
+        volatile long sendStartedAt = -1;
+        boolean ready;
+        long sentSequence;
         Connection(WebSocketSession session, long openedAt) { this.session = session; this.openedAt = openedAt; }
     }
-    private record Subscription(Long userId, Long roomId, String accessToken) {}
-    public record Subscribe(String type, Long roomId, String accessToken) {}
+    private record Subscription(Long userId, Long roomId, String accessToken, boolean includeMessages) {}
+    public record Subscribe(String type, Long roomId, String accessToken, Boolean includeMessages) {}
+    public record Ready(String type, ChatRoomResponse room, boolean includeMessages) {}
     public record Update(String type, ChatRoomResponse room) {}
+    public record MessageCreated(String type, ChatMessageResponse message) {}
 }
