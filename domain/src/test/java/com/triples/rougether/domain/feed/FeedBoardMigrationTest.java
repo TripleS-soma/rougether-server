@@ -22,7 +22,7 @@ class FeedBoardMigrationTest {
                     + "values (1, ?, ?, '기존 글', current_timestamp, current_timestamp)";
             String hash = "a".repeat(64);
             jdbc.update(insert, "before-migration", hash);
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V82__add_feed_board_type.sql"));
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V83__add_feed_board_type.sql"));
             jdbc.update(insert, "old-client-after-migration", hash);
             assertThat(jdbc.queryForList("select board_type from feed_posts", String.class))
                     .containsExactly("VERIFICATION", "VERIFICATION");
