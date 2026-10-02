@@ -23,10 +23,13 @@ public class FeedQueryService {
     private final FeedCommentRepository comments;
 
     public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size) {
+        return list(viewer, authorId, cursor, size, null);
+    }
+    public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size, FeedBoardType boardType) {
         access.active(viewer);
         validatePage(cursor, size);
         if (authorId != null && authorId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
-        List<FeedPost> found = posts.findPage(viewer, authorId, cursor, PageRequest.of(0, size + 1));
+        List<FeedPost> found = posts.findPage(viewer, authorId, cursor, boardType, PageRequest.of(0, size + 1));
         boolean more = found.size() > size;
         List<FeedPost> page = more ? found.subList(0, size) : found;
         return new FeedPageResponse<>(render(viewer, page), more ? page.getLast().getId() : null, more);
@@ -66,7 +69,7 @@ public class FeedQueryService {
         return page.stream().map(p -> new FeedPostResponse(p.getId(), FeedAuthorResponse.of(p.getAuthor()),
                 p.getContent(), byPost.getOrDefault(p.getId(), List.of()), likeCounts.getOrDefault(p.getId(), 0L),
                 commentCounts.getOrDefault(p.getId(), 0L), liked.contains(p.getId()), p.getAuthor().getId().equals(viewer),
-                p.getCreatedAt(), p.getUpdatedAt())).toList();
+                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType())).toList();
     }
     private Map<Long, Long> counts(List<FeedCount> counts) {
         return counts.stream().collect(Collectors.toMap(FeedCount::getPostId, FeedCount::getTotal));

@@ -36,15 +36,18 @@ public class FeedCommandService {
 
     public Long create(Long userId, FeedCreateRequest request) {
         User user = access.lockActive(userId);
-        List<Long> imageIds = request.imageIds();
-        if (request.clientPostId() == null || imageIds == null || imageIds.isEmpty() || imageIds.size() > 10
+        FeedBoardType boardType = request.boardType() == null ? FeedBoardType.VERIFICATION : request.boardType();
+        List<Long> imageIds = request.imageIds() == null ? List.of() : request.imageIds();
+        if (request.clientPostId() == null || imageIds.size() > 10
+                || (boardType == FeedBoardType.VERIFICATION && imageIds.isEmpty())
                 || imageIds.stream().anyMatch(id -> id == null || id <= 0)
                 || new HashSet<>(imageIds).size() != imageIds.size()) throw new BusinessException(FEED_INPUT_INVALID);
-        String content = text(request.content(), 2000, true);
+        String content = text(request.content(), 2000, !imageIds.isEmpty());
+        // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함.
         String requestHash = hash(content + "\u0000" + imageIds);
         FeedPost previous = posts.findByAuthorIdAndClientPostId(userId, request.clientPostId().toString()).orElse(null);
         if (previous != null) {
-            if (!previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null)
+            if (previous.getBoardType() != boardType || !previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null)
                 throw new BusinessException(FEED_REQUEST_CONFLICT);
             return previous.getId();
         }
@@ -56,7 +59,7 @@ public class FeedCommandService {
                     || !image.getExpiresAt().isAfter(clock.instant())) throw new BusinessException(FEED_IMAGE_UNAVAILABLE);
             selected.put(id, image);
         }
-        FeedPost post = posts.save(FeedPost.create(user, request.clientPostId().toString(), requestHash, content));
+        FeedPost post = posts.save(FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType));
         for (int i = 0; i < imageIds.size(); i++) selected.get(imageIds.get(i)).attach(post, i);
         return post.getId();
     }
@@ -65,7 +68,8 @@ public class FeedCommandService {
         FeedPost post = lockVisible(postId);
         requireOwner(post.getAuthor().getId(), userId);
         if (content == null) throw new BusinessException(FEED_INPUT_INVALID);
-        post.updateContent(text(content, 2000, true));
+        boolean emptyAllowed = post.getBoardType() == FeedBoardType.VERIFICATION || images.existsByPostId(postId);
+        post.updateContent(text(content, 2000, emptyAllowed));
     }
     public void delete(Long userId, Long postId) {
         access.lockActive(userId);

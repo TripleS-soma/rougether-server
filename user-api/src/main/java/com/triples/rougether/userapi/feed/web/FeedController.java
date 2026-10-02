@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.feed.web;
 
+import com.triples.rougether.domain.feed.entity.FeedBoardType;
 import com.triples.rougether.userapi.feed.dto.*;
 import com.triples.rougether.userapi.feed.service.*;
 import com.triples.rougether.userapi.global.security.AuthUser;
@@ -13,7 +14,7 @@ import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-@Tag(name = "Feed", description = "전체 회원 공개 사진 피드")
+@Tag(name = "Feed", description = "자유게시판·인증게시판 공개 피드")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/feed")
@@ -22,20 +23,21 @@ public class FeedController {
     private final FeedCommandService commands;
     private final FeedImageService images;
 
-    @Operation(summary = "전체 또는 작성자별 최신 피드", description = "authorId 생략은 전체 피드, 지정하면 해당 회원 게시물입니다.")
+    @Operation(summary = "전체 또는 작성자별 최신 피드", description = "boardType=FREE 또는 VERIFICATION으로 게시판을 선택합니다. 생략하면 전체 피드이며 authorId로 작성자를 함께 지정할 수 있습니다.")
     @GetMapping("/posts")
     public FeedPageResponse<FeedPostResponse> list(@CurrentUser AuthUser user,
             @RequestParam(required = false) @Positive Long authorId,
             @RequestParam(required = false) @Positive Long cursor,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
-        return query.list(user.id(), authorId, cursor, size);
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size,
+            @RequestParam(required = false) FeedBoardType boardType) {
+        return query.list(user.id(), authorId, cursor, size, boardType);
     }
     @Operation(summary = "게시물 상세")
     @GetMapping("/posts/{postId}")
     public FeedPostResponse get(@CurrentUser AuthUser user, @PathVariable @Positive Long postId) {
         return query.get(user.id(), postId);
     }
-    @Operation(summary = "게시물 등록", description = "업로드한 imageId를 표시 순서로 전달합니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
+    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장이 필요합니다. boardType 생략은 VERIFICATION입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
     @PostMapping("/posts")
     @ResponseStatus(HttpStatus.CREATED)
     public FeedPostResponse create(@CurrentUser AuthUser user, @Valid @RequestBody FeedCreateRequest request) {
