@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.feed.repository.*;
+import com.triples.rougether.domain.feed.entity.FeedBoardType;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.auth.service.TokenService;
@@ -105,6 +106,7 @@ class FeedIntegrationTest {
         var created = mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
                 .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(req)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.mine").value(true))
+                .andExpect(jsonPath("$.boardType").value("VERIFICATION"))
                 .andExpect(jsonPath("$.author.userId").value(owner)).andReturn().getResponse();
         long id = mapper.readTree(created.getContentAsString()).path("postId").asLong();
         String path = "/api/v1/feed/posts/" + id;
@@ -313,6 +315,109 @@ class FeedIntegrationTest {
         cleanup.image(imageId);
         assertThat(imageRows.findById(imageId)).isEmpty();
         assertThat(objects).isEmpty();
+    }
+
+    @Test void 자유게시판은_사진없이_작성하고_본문수정과_기존반응을_사용한다() throws Exception {
+        Long owner = user(), viewer = user();
+        String body = """
+                {"clientPostId":"%s","boardType":"FREE","content":"  자유로운 이야기  "}
+                """.formatted(UUID.randomUUID());
+        var response = mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.boardType").value("FREE"))
+                .andExpect(jsonPath("$.content").value("자유로운 이야기"))
+                .andExpect(jsonPath("$.images").isEmpty()).andReturn().getResponse();
+        long id = mapper.readTree(response.getContentAsString()).path("postId").asLong();
+        mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.postId").value(id));
+        mvc.perform(patch("/api/v1/feed/posts/" + id).header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\" \"}"))
+                .andExpect(status().isBadRequest());
+        error(() -> commands.update(viewer, id, "다른 사람 수정"), "FEED_FORBIDDEN");
+        commands.update(owner, id, "수정한 자유글");
+        commands.like(viewer, id, true);
+        commands.comment(viewer, id, new FeedCommentRequest(UUID.randomUUID(), "공감해요"));
+        var post = query.get(viewer, id);
+        assertThat(post.content()).isEqualTo("수정한 자유글");
+        assertThat(post.boardType()).isEqualTo(FeedBoardType.FREE);
+        assertThat(post.likeCount()).isEqualTo(1);
+        assertThat(post.commentCount()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from notification where user_id=? and ref_id=? and type='FEED_COMMENT'",
+                Long.class, owner, id)).isEqualTo(1);
+        commands.delete(owner, id);
+        error(() -> query.get(viewer, id), "FEED_POST_NOT_FOUND");
+    }
+
+    @Test void 게시판별_필수내용과_알수없는_종류를_HTTP에서_검증한다() throws Exception {
+        Long owner = user();
+        for (String fields : List.of(
+                "\"boardType\":\"FREE\",\"content\":\"  \",\"imageIds\":[]",
+                "\"boardType\":\"VERIFICATION\",\"content\":\"사진 없음\"",
+                "\"content\":\"종류 생략도 사진 필수\",\"imageIds\":[]",
+                "\"boardType\":\"UNKNOWN\",\"content\":\"잘못된 종류\"")) {
+            mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"clientPostId\":\"" + UUID.randomUUID() + "\"," + fields + "}"))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(get("/api/v1/feed/posts").param("boardType", "UNKNOWN").header("Authorization", auth(owner)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void 게시판필터는_작성자와_커서조건을_함께_적용하고_생략하면_통합조회한다() throws Exception {
+        Long owner = user(), viewer = user();
+        Long first = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "첫 자유글", null, FeedBoardType.FREE));
+        Long verification = createPost(owner);
+        Long second = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "둘째 자유글", List.of(), FeedBoardType.FREE));
+        commands.create(viewer, new FeedCreateRequest(UUID.randomUUID(), "다른 작성자", null, FeedBoardType.FREE));
+        var page = query.list(viewer, owner, null, 1, FeedBoardType.FREE);
+        assertThat(page.items()).extracting(FeedPostResponse::postId).containsExactly(second);
+        assertThat(page.hasNext()).isTrue();
+        var next = query.list(viewer, owner, page.nextCursor(), 1, FeedBoardType.FREE);
+        assertThat(next.items()).extracting(FeedPostResponse::postId).containsExactly(first);
+        assertThat(next.hasNext()).isFalse();
+        assertThat(next.nextCursor()).isNull();
+        assertThat(query.list(viewer, owner, null, 20).items()).extracting(FeedPostResponse::postId)
+                .containsExactly(second, verification, first);
+        mvc.perform(get("/api/v1/feed/posts").param("boardType", "VERIFICATION")
+                        .param("authorId", owner.toString()).header("Authorization", auth(viewer)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].postId").value(verification))
+                .andExpect(jsonPath("$.items[0].boardType").value("VERIFICATION"));
+        commands.delete(owner, second);
+        assertThat(query.list(viewer, owner, null, 20, FeedBoardType.FREE).items())
+                .extracting(FeedPostResponse::postId).containsExactly(first);
+    }
+
+    @Test void 구버전_재시도_hash를_유지하며_같은_UUID로_게시판을_바꿀수없다() throws Exception {
+        Long owner = user(); var legacy = request(owner, "기존 사진글");
+        Long id = commands.create(owner, legacy);
+        String oldHash = HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest((legacy.content() + "\u0000" + legacy.imageIds()).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertThat(posts.findById(id).orElseThrow().getRequestHash()).isEqualTo(oldHash);
+        commands.update(owner, id, "수정된 내용");
+        assertThat(commands.create(owner, new FeedCreateRequest(legacy.clientPostId(), legacy.content(),
+                legacy.imageIds(), FeedBoardType.VERIFICATION))).isEqualTo(id);
+        assertThat(query.get(owner, id).content()).isEqualTo("수정된 내용");
+        error(() -> commands.create(owner, new FeedCreateRequest(legacy.clientPostId(), legacy.content(),
+                legacy.imageIds(), FeedBoardType.FREE)), "FEED_REQUEST_CONFLICT");
+        var free = new FeedCreateRequest(UUID.randomUUID(), "자유글", null, FeedBoardType.FREE);
+        Long freeId = commands.create(owner, free);
+        assertThat(commands.create(owner, new FeedCreateRequest(free.clientPostId(), free.content(), List.of(), FeedBoardType.FREE)))
+                .isEqualTo(freeId);
+        commands.delete(owner, freeId);
+        error(() -> commands.create(owner, free), "FEED_REQUEST_CONFLICT");
+    }
+
+    @Test void 사진이_있는_자유글은_빈본문을_허용하되_이미지소유권을_검사한다() throws Exception {
+        Long owner = user(), other = user(); Long imageId = images.upload(owner, photo()).imageId();
+        error(() -> commands.create(other, new FeedCreateRequest(UUID.randomUUID(), "", List.of(imageId), FeedBoardType.FREE)),
+                "FEED_IMAGE_UNAVAILABLE");
+        Long id = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "", List.of(imageId), FeedBoardType.FREE));
+        commands.update(owner, id, " ");
+        assertThat(query.get(other, id).content()).isEmpty();
+        assertThat(query.get(other, id).images()).hasSize(1);
     }
 
     private <T> List<T> concurrent(int count, Callable<T> task) throws Exception {

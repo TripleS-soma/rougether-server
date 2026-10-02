@@ -18,12 +18,17 @@ public class FeedPost extends BaseEntity {
     @JoinColumn(name = "author_id", nullable = false) private User author;
     @Column(name = "client_post_id", nullable = false, length = 36) private String clientPostId;
     @Column(name = "request_hash", nullable = false, length = 64) private String requestHash;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "board_type", nullable = false, length = 20) private FeedBoardType boardType;
     @Column(nullable = false, length = 2000) private String content;
     @Column(name = "deleted_at") private Instant deletedAt;
 
     public static FeedPost create(User author, String clientPostId, String hash, String content) {
+        return create(author, clientPostId, hash, content, FeedBoardType.VERIFICATION);
+    }
+    public static FeedPost create(User author, String clientPostId, String hash, String content, FeedBoardType boardType) {
         FeedPost post = new FeedPost();
-        post.author = author; post.clientPostId = clientPostId; post.requestHash = hash; post.content = content;
+        post.author = author; post.clientPostId = clientPostId; post.requestHash = hash; post.content = content; post.boardType = boardType;
         return post;
     }
     public void updateContent(String content) { this.content = content; }

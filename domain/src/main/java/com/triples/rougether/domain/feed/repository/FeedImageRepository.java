@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface FeedImageRepository extends JpaRepository<FeedImage, Long> {
+    boolean existsByPostId(Long postId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from FeedImage i where i.id = :id")
     Optional<FeedImage> findForUpdate(@Param("id") Long id);

@@ -136,6 +136,20 @@ class ModerationIntegrationTest {
     }
 
     @Test
+    void 자유게시판도_신고와_차단을_적용하고_차단해제하면_다시_보인다() {
+        var free = com.triples.rougether.domain.feed.entity.FeedBoardType.FREE;
+        Long owner = user(), viewer = user();
+        Long postId = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "자유글", List.of(), free));
+        reports.reportFeedPost(viewer, postId, reason(ContentReportReason.SPAM));
+        blocks.block(viewer, owner);
+        assertThat(query.list(viewer, owner, null, 20, free).items()).isEmpty();
+        error(() -> query.get(viewer, postId), "FEED_POST_NOT_FOUND");
+        error(() -> commands.like(viewer, postId, true), "FEED_POST_NOT_FOUND");
+        blocks.unblock(viewer, owner);
+        assertThat(query.list(viewer, owner, null, 20, free).items()).extracting(FeedPostResponse::postId).containsExactly(postId);
+    }
+
+    @Test
     void 재신고는_처음_신고를_201로_돌려주고_사유는_처음_값을_유지한다() throws Exception {
         Long owner = user(), reporter = user(), postId = feedPost(owner);
         String body = "{\"reason\":\"ABUSE\",\"detail\":\"  욕설이 있어요  \"}";
