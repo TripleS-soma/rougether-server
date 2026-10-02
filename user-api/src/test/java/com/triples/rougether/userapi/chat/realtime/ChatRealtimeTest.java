@@ -35,7 +35,7 @@ class ChatRealtimeTest {
             handler.afterConnectionEstablished(socket);
             when(clock.millis()).thenReturn(10000L);
             handler.flush();
-            verify(socket).close(CloseStatus.POLICY_VIOLATION);
+            verify(socket, timeout(1000)).close(CloseStatus.POLICY_VIOLATION);
             verifyNoInteractions(query);
             verify(socket, never()).sendMessage(any());
         } finally { handler.shutdown(); }
@@ -48,7 +48,6 @@ class ChatRealtimeTest {
         var clock = mock(Clock.class);
         when(token.parseAccessToken("valid-token")).thenReturn(new AuthUser(1L, MemberRole.NORMAL));
         when(query.get(1L, 3L)).thenReturn(state);
-        when(query.liveSnapshot(3L)).thenReturn(state);
         var handler = new ChatSocketHandler(query, token, JsonMapper.builder().build(), clock);
         var socket = session("expiring");
         try {
@@ -58,7 +57,7 @@ class ChatRealtimeTest {
             verify(socket, timeout(1000)).sendMessage(any(TextMessage.class));
             when(token.parseAccessToken("valid-token")).thenThrow(new BusinessException(AuthErrorCode.INVALID_TOKEN));
             handler.flush();
-            verify(socket).close(CloseStatus.POLICY_VIOLATION);
+            verify(socket, timeout(1000)).close(CloseStatus.POLICY_VIOLATION);
             verify(socket, times(1)).sendMessage(any());
         } finally { handler.shutdown(); }
     }
@@ -82,7 +81,7 @@ class ChatRealtimeTest {
         var clock = mock(Clock.class);
         when(token.parseAccessToken("token")).thenReturn(new AuthUser(1L, MemberRole.NORMAL));
         when(query.get(1L, 3L)).thenReturn(state);
-        when(query.liveSnapshot(3L)).thenReturn(new ChatRoomResponse(3L, ChatRoomType.HOUSE, 2L, 9, state.readers()));
+
         var handler = new ChatSocketHandler(query, token, JsonMapper.builder().build(), clock);
         var socket = session("recover");
         try {
@@ -90,6 +89,7 @@ class ChatRealtimeTest {
             handler.handleTextMessage(socket, new TextMessage(
                     "{\"type\":\"SUBSCRIBE\",\"roomId\":3,\"accessToken\":\"token\"}"));
             verify(socket, timeout(1000)).sendMessage(any());
+            when(query.get(1L, 3L)).thenReturn(new ChatRoomResponse(3L, ChatRoomType.HOUSE, 2L, 9, state.readers()));
             when(clock.millis()).thenReturn(5000L);
             handler.flush();
             verify(socket, timeout(1000)).sendMessage(argThat(message -> message.getPayload().toString().contains("\"lastSequence\":9")));

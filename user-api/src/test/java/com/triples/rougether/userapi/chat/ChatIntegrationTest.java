@@ -299,6 +299,10 @@ class ChatIntegrationTest {
             owner.await(node -> node.path("type").asString().equals("READY"));
             member.await(node -> node.path("type").asString().equals("READY"));
             send(f, f.owner(), "실시간");
+            JsonNode body = member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"));
+            assertThat(body.path("message").path("content").asString()).isEqualTo("실시간");
+            assertThat(body.path("message").path("sequence").asLong()).isEqualTo(1);
+            assertThat(body.path("message").path("unreadCount").asLong()).isEqualTo(1);
             member.await(node -> node.path("room").path("lastSequence").asLong() == 1);
             owner.await(node -> node.path("room").path("lastSequence").asLong() == 1);
             commands.read(f.member(), f.room(), 1);
@@ -310,11 +314,76 @@ class ChatIntegrationTest {
             membershipCommands.kick(f.owner(), f.house(), f.membership());
             send(f, f.owner(), "강퇴 후");
             assertThat(member.closed.get(10, TimeUnit.SECONDS)).isEqualTo(1008);
+            assertThat(member.events).noneMatch(event -> event.contains("강퇴 후"));
             assertThat(query.messages(f.owner(), f.room(), null, 1L, 50).items()).hasSize(1);
         }
         try (Socket outsider = connect(f.outsider(), f.room())) {
             assertThat(outsider.closed.get(10, TimeUnit.SECONDS)).isEqualTo(1008);
             assertThat(outsider.events).isEmpty();
+        }
+    }
+
+    @Test
+    void 롤백_본문은_소켓에_노출되지_않고_다음_커밋부터_전달된다() throws Exception {
+        Fixture f = fixture();
+        try (Socket member = connect(f.member(), f.room())) {
+            member.await(node -> node.path("type").asString().equals("READY"));
+            tx.executeWithoutResult(status -> {
+                send(f, f.owner(), "롤백 본문");
+                status.setRollbackOnly();
+            });
+            send(f, f.owner(), "커밋 본문");
+            JsonNode body = member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"));
+            assertThat(body.path("message").path("sequence").asLong()).isEqualTo(1);
+            assertThat(body.path("message").path("content").asString()).isEqualTo("커밋 본문");
+            assertThat(query.messages(f.member(), f.room(), null, 0L, 50).items())
+                    .extracting(ChatMessageResponse::content).containsExactly("커밋 본문");
+        }
+    }
+
+    @Test
+    void 동시_커밋도_소켓에서_연속_순서로_수신하고_멱등_재시도는_중복을_만들지_않는다() throws Exception {
+        Fixture f = fixture();
+        try (Socket member = connect(f.member(), f.room()); var executor = Executors.newFixedThreadPool(6)) {
+            member.await(node -> node.path("type").asString().equals("READY"));
+            List<Future<ChatMessageResponse>> futures = new ArrayList<>();
+            for (int i = 0; i < 6; i++) {
+                Long sender = i % 2 == 0 ? f.owner() : f.member();
+                futures.add(executor.submit(() -> send(f, sender, "동시 본문")));
+            }
+            for (var future : futures) future.get(20, TimeUnit.SECONDS);
+            for (long sequence = 1; sequence <= 6; sequence++) {
+                JsonNode body = member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"));
+                assertThat(body.path("message").path("sequence").asLong()).isEqualTo(sequence);
+            }
+            ChatMessageResponse first = futures.getFirst().get();
+            commands.send(f.owner(), f.room(), new ChatSendRequest(UUID.fromString(first.clientMessageId()), first.content()));
+            send(f, f.owner(), "다음 본문");
+            assertThat(member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"))
+                    .path("message").path("sequence").asLong()).isEqualTo(7);
+        }
+    }
+
+    @Test
+    void 재접속_시_HTTP_누락_복구와_새_본문_수신을_합칠_수_있다() throws Exception {
+        Fixture f = fixture();
+        try (Socket member = connect(f.member(), f.room())) {
+            member.await(node -> node.path("type").asString().equals("READY"));
+            send(f, f.owner(), "첫 본문");
+            assertThat(member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"))
+                    .path("message").path("sequence").asLong()).isEqualTo(1);
+        }
+        send(f, f.owner(), "오프라인 둘");
+        send(f, f.owner(), "오프라인 셋");
+        try (Socket member = connect(f.member(), f.room())) {
+            assertThat(member.await(node -> node.path("type").asString().equals("READY"))
+                    .path("room").path("lastSequence").asLong()).isEqualTo(3);
+            send(f, f.owner(), "재연결 후 본문");
+            assertThat(member.await(node -> node.path("type").asString().equals("MESSAGE_CREATED"))
+                    .path("message").path("sequence").asLong()).isEqualTo(4);
+            var recovered = query.messages(f.member(), f.room(), null, 1L, 50);
+            assertThat(recovered.items()).extracting(ChatMessageResponse::sequence).containsExactly(2L, 3L, 4L);
+            assertThat(readSequence(recovered.room(), f.member())).isZero();
         }
     }
 
@@ -324,7 +393,7 @@ class ChatIntegrationTest {
                 .header("Origin", "https://app.rougether.com")
                 .buildAsync(URI.create("ws://localhost:" + port + "/api/v1/chat/ws"), listener).get(10, TimeUnit.SECONDS);
         listener.socket.sendText(mapper.writeValueAsString(Map.of("type", "SUBSCRIBE", "roomId", room,
-                "accessToken", tokens.issueAccessToken(user, MemberRole.NORMAL))), true).join();
+                "accessToken", tokens.issueAccessToken(user, MemberRole.NORMAL), "includeMessages", true)), true).join();
         return listener;
     }
 
@@ -341,13 +410,16 @@ class ChatIntegrationTest {
             return null;
         }
         public CompletionStage<?> onClose(WebSocket webSocket, int code, String reason) { closed.complete(code); return null; }
-        void await(Predicate<JsonNode> predicate) throws Exception {
+        JsonNode await(Predicate<JsonNode> predicate) throws Exception {
             long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
             while (System.nanoTime() < deadline) {
                 String event = events.poll(500, TimeUnit.MILLISECONDS);
-                if (event != null && predicate.test(mapper.readTree(event))) return;
+                if (event != null) {
+                    JsonNode node = mapper.readTree(event);
+                    if (predicate.test(node)) return node;
+                }
             }
-            fail("기대한 채팅 소켓 이벤트가 오지 않음");
+            throw new AssertionError("기대한 채팅 소켓 이벤트가 오지 않음");
         }
         public void close() { if (socket != null) socket.abort(); }
     }
