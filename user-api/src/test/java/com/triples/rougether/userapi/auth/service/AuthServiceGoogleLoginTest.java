@@ -58,7 +58,7 @@ class AuthServiceGoogleLoginTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, tokenService,
-                new RefreshTokenReuseGuard(refreshTokenRepository), kakaoApiClient, kakaoLoginHandler,
+                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, kakaoLoginHandler,
                 googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
                 appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }

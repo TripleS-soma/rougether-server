@@ -5,6 +5,7 @@ import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.RefreshToken;
+import com.triples.rougether.domain.member.entity.RefreshTokenRevokeReason;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -31,7 +32,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
-    private final RefreshTokenReuseGuard refreshTokenReuseGuard;
+    private final RefreshTokenRotator refreshTokenRotator;
     private final KakaoApiClient kakaoApiClient;
     private final KakaoLoginHandler kakaoLoginHandler;
     private final GoogleTokenVerifier googleTokenVerifier;
@@ -130,40 +131,11 @@ public class AuthService {
         }
     }
 
-    @Transactional
+    // 트랜잭션은 RefreshTokenRotator 가 소유함. 거부(재사용 감지 폐기 포함)가 커밋된 뒤에 여기서 401 로 변환함.
     public TokenResponse refresh(String rawRefreshToken) {
         String hash = tokenService.hashRefreshToken(rawRefreshToken);
-        RefreshToken stored = refreshTokenRepository.findByTokenHash(hash)
+        return refreshTokenRotator.rotate(hash, Instant.now())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID));
-
-        Instant now = Instant.now();
-        if (stored.isRevoked()) {
-            refreshTokenReuseGuard.revokeAllActive(stored.getUser().getId(), now);
-            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
-        }
-        if (stored.isExpired(now)) {
-            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
-        }
-        // 탈퇴 회원 잔여 토큰 방어: 탈퇴 트랜잭션의 전량 폐기와 동시에 회전돼 살아남은 토큰도 여기서 거부됨.
-        if (stored.getUser().isDeleted()) {
-            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
-        }
-
-        // 회전: 원자적 조건부 폐기. 동시 회전에 진 경우(영향행 0) = 이미 폐기됨 → 재사용과 동일 취급.
-        int revoked = refreshTokenRepository.revokeIfActive(stored.getId(), now);
-        if (revoked == 0) {
-            refreshTokenReuseGuard.revokeAllActive(stored.getUser().getId(), now);
-            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
-        }
-
-        User user = stored.getUser();
-        // 정상 회전 성공 시에만 마지막 접속 시각 갱신(reuse 감지→전체 revoke 경로 제외).
-        // dirty checking 대신 targeted UPDATE 로 동시 refresh 경합·불필요한 전체 row 갱신을 피함.
-        // 주의: bulk UPDATE 는 영속성 컨텍스트를 우회하므로 이후 이 트랜잭션에서 user.getLastAccessedAt() 를 읽으면 옛값이다.
-        userRepository.updateLastAccessedAt(user.getId(), now);
-        String accessToken = tokenService.issueAccessToken(user.getId(), MemberRole.NORMAL);
-        String refreshToken = issueRefreshToken(user);
-        return new TokenResponse(accessToken, refreshToken);
     }
 
     @Transactional
@@ -171,7 +143,7 @@ public class AuthService {
         String hash = tokenService.hashRefreshToken(rawRefreshToken);
         // 없어도 조용히 성공(idempotent).
         refreshTokenRepository.findByTokenHash(hash)
-                .ifPresent(token -> token.revoke(Instant.now()));
+                .ifPresent(token -> token.revoke(Instant.now(), RefreshTokenRevokeReason.LOGOUT));
     }
 
     private String issueRefreshToken(User user) {

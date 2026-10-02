@@ -58,7 +58,7 @@ public class AuthController {
         return authService.appleLogin(request.idToken(), request.authorizationCode(), request.allowsNewAccount());
     }
 
-    @Operation(summary = "토큰 재발급", description = "refresh token으로 access/refresh token을 재발급합니다. refresh token은 1회용으로, 재발급에 사용한 토큰은 즉시 폐기되고 새 refresh token으로 교체됩니다(rotation). 이후 요청에는 응답으로 받은 새 토큰 쌍을 사용합니다. access token 유효기간은 30분, refresh token 유효기간은 14일입니다.")
+    @Operation(summary = "토큰 재발급", description = "refresh token으로 access/refresh token을 재발급합니다. refresh token은 1회용으로, 재발급에 사용한 토큰은 즉시 폐기되고 새 refresh token으로 교체됩니다(rotation). 이후 요청에는 응답으로 받은 새 토큰 쌍을 사용합니다. 회전된 지 60초 안에 같은 토큰을 다시 보내면 응답을 못 받은 재시도로 보고 새 쌍을 다시 발급합니다. 그 밖에 폐기된 토큰을 다시 보내면 재사용으로 보고 그 기기(로그인 세션)의 토큰만 폐기한 뒤 401 AUTH_REFRESH_TOKEN_INVALID를 반환합니다(다른 기기는 유지). access token 유효기간은 30분, refresh token 유효기간은 14일입니다.")
     @SecurityRequirements
     @PostMapping("/refresh")
     public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
