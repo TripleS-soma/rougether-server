@@ -32,6 +32,7 @@ public class FeedCommandService {
     private final UserBlockRepository blocks;
     private final BannedWordChecker bannedWords;
     private final NotificationService notifications;
+    private final FeedRoutineLinks routineLinks;
     private final Clock clock;
 
     public Long create(Long userId, FeedCreateRequest request) {
@@ -42,15 +43,23 @@ public class FeedCommandService {
                 || (boardType == FeedBoardType.VERIFICATION && imageIds.isEmpty())
                 || imageIds.stream().anyMatch(id -> id == null || id <= 0)
                 || new HashSet<>(imageIds).size() != imageIds.size()) throw new BusinessException(FEED_INPUT_INVALID);
+        FeedRoutineCompletionRequest completion = request.routineCompletion();
+        if (boardType == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 2000, !imageIds.isEmpty());
-        // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함.
-        String requestHash = hash(content + "\u0000" + imageIds);
+        // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함. 루틴 연결은 있을 때만 hash에 덧붙임.
+        String hashed = content + "\u0000" + imageIds;
+        if (completion != null) hashed += "\u0000routine:" + completion.routineId() + ":" + completion.date();
+        String requestHash = hash(hashed);
         FeedPost previous = posts.findByAuthorIdAndClientPostId(userId, request.clientPostId().toString()).orElse(null);
         if (previous != null) {
             if (previous.getBoardType() != boardType || !previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null)
                 throw new BusinessException(FEED_REQUEST_CONFLICT);
             return previous.getId();
         }
+        // 재시도 판정 뒤에 검사함 — 연결 규칙 도입 전에 등록된 인증글의 재시도도 원래 결과를 돌려받음
+        if (boardType == FeedBoardType.VERIFICATION && completion == null)
+            throw new BusinessException(FEED_ROUTINE_COMPLETION_REQUIRED);
+        FeedRoutineLinks.Link link = completion == null ? null : routineLinks.verify(userId, completion);
         Map<Long, FeedImage> selected = new HashMap<>();
         // 업로드 ID 입력 순서와 무관하게 잠금 순서를 고정함. 표시 순서는 요청 순서를 유지함.
         for (Long id : imageIds.stream().sorted().toList()) {
@@ -59,17 +68,40 @@ public class FeedCommandService {
                     || !image.getExpiresAt().isAfter(clock.instant())) throw new BusinessException(FEED_IMAGE_UNAVAILABLE);
             selected.put(id, image);
         }
-        FeedPost post = posts.save(FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType));
+        FeedPost post = FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType);
+        if (link != null) post.linkRoutine(link.routineId(), link.date(), link.title());
+        post = posts.save(post);
         for (int i = 0; i < imageIds.size(); i++) selected.get(imageIds.get(i)).attach(post, i);
         return post.getId();
     }
     public void update(Long userId, Long postId, String content) {
+        update(userId, postId, new FeedUpdateRequest(content));
+    }
+    // 생략한 필드는 유지함. { content }만 보내는 구버전 요청은 기존 본문 수정과 같게 동작함.
+    public void update(Long userId, Long postId, FeedUpdateRequest request) {
         access.lockActive(userId);
         FeedPost post = lockVisible(postId);
         requireOwner(post.getAuthor().getId(), userId);
-        if (content == null) throw new BusinessException(FEED_INPUT_INVALID);
-        boolean emptyAllowed = post.getBoardType() == FeedBoardType.VERIFICATION || images.existsByPostId(postId);
-        post.updateContent(text(content, 2000, emptyAllowed));
+        FeedRoutineCompletionRequest completion = request.routineCompletion();
+        if (request.content() == null && request.boardType() == null && completion == null)
+            throw new BusinessException(FEED_INPUT_INVALID);
+        FeedBoardType target = request.boardType() == null ? post.getBoardType() : request.boardType();
+        if (target == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
+        boolean hasImages = images.existsByPostId(postId);
+        boolean switching = target != post.getBoardType();
+        // 사진은 수정할 수 없으므로 사진 없는 글은 인증게시판으로 옮길 수 없음
+        if (switching && target == FeedBoardType.VERIFICATION && !hasImages) throw new BusinessException(FEED_INPUT_INVALID);
+        boolean emptyAllowed = target == FeedBoardType.VERIFICATION || hasImages;
+        String content = request.content() == null ? null : text(request.content(), 2000, emptyAllowed);
+        // 본문을 생략한 채 사진 없는 자유글이 되면 비어 있지 않은 기존 본문이 필요함
+        if (content == null && !emptyAllowed && post.getContent().isBlank()) throw new BusinessException(FEED_INPUT_INVALID);
+        if (switching && target == FeedBoardType.VERIFICATION && completion == null)
+            throw new BusinessException(FEED_ROUTINE_COMPLETION_REQUIRED);
+        FeedRoutineLinks.Link link = completion == null ? null : routineLinks.verify(userId, completion);
+        if (content != null) post.updateContent(content);
+        if (switching) post.changeBoard(target);
+        if (target == FeedBoardType.FREE) post.clearRoutine();
+        else if (link != null) post.linkRoutine(link.routineId(), link.date(), link.title());
     }
     public void delete(Long userId, Long postId) {
         access.lockActive(userId);

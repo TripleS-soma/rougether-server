@@ -37,17 +37,17 @@ public class FeedController {
     public FeedPostResponse get(@CurrentUser AuthUser user, @PathVariable @Positive Long postId) {
         return query.get(user.id(), postId);
     }
-    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장이 필요합니다. boardType 생략은 VERIFICATION입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
+    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장과 routineCompletion(본인 루틴의 KST 오늘~6일 전 완료 기록)이 필요합니다. FREE에는 routineCompletion을 보낼 수 없습니다. boardType 생략은 VERIFICATION입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
     @PostMapping("/posts")
     @ResponseStatus(HttpStatus.CREATED)
     public FeedPostResponse create(@CurrentUser AuthUser user, @Valid @RequestBody FeedCreateRequest request) {
         return query.get(user.id(), commands.create(user.id(), request));
     }
-    @Operation(summary = "내 게시물 본문 수정", description = "사진 교체·순서 변경은 지원하지 않습니다.")
+    @Operation(summary = "내 게시물 수정", description = "본문·게시판·연결 루틴을 바꿉니다. 생략한 필드는 유지합니다. VERIFICATION으로 바꾸려면 사진이 있는 글이어야 하고 routineCompletion이 필요합니다. FREE로 바꾸면 루틴 연결이 해제됩니다. 사진 교체·순서 변경은 지원하지 않습니다.")
     @PatchMapping("/posts/{postId}")
     public FeedPostResponse update(@CurrentUser AuthUser user, @PathVariable @Positive Long postId,
                                    @Valid @RequestBody FeedUpdateRequest request) {
-        commands.update(user.id(), postId, request.content());
+        commands.update(user.id(), postId, request);
         return query.get(user.id(), postId);
     }
     @Operation(summary = "내 게시물 삭제")

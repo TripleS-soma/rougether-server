@@ -69,7 +69,10 @@ public class FeedQueryService {
         return page.stream().map(p -> new FeedPostResponse(p.getId(), FeedAuthorResponse.of(p.getAuthor()),
                 p.getContent(), byPost.getOrDefault(p.getId(), List.of()), likeCounts.getOrDefault(p.getId(), 0L),
                 commentCounts.getOrDefault(p.getId(), 0L), liked.contains(p.getId()), p.getAuthor().getId().equals(viewer),
-                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType())).toList();
+                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType(), routine(p))).toList();
+    }
+    private static FeedRoutineResponse routine(FeedPost post) {
+        return post.hasRoutine() ? new FeedRoutineResponse(post.getRoutineId(), post.getRoutineTitle(), post.getRoutineDate()) : null;
     }
     private Map<Long, Long> counts(List<FeedCount> counts) {
         return counts.stream().collect(Collectors.toMap(FeedCount::getPostId, FeedCount::getTotal));

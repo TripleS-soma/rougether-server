@@ -29,6 +29,14 @@ class FeedBoardMigrationTest {
             assertThat(jdbc.queryForList("select request_hash from feed_posts", String.class)).containsExactly(hash, hash);
             jdbc.update("update feed_posts set board_type='FREE' where client_post_id='old-client-after-migration'");
             assertThat(jdbc.queryForObject("select count(*) from feed_posts where board_type='FREE'", Long.class)).isEqualTo(1);
+            // V84: 기존 글은 루틴 연결 없이 남고 백필하지 않음
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V84__add_feed_post_routine_link.sql"));
+            assertThat(jdbc.queryForObject("select count(*) from feed_posts where routine_id is null and routine_date is null "
+                    + "and routine_title is null", Long.class)).isEqualTo(2);
+            jdbc.update("update feed_posts set routine_id=5, routine_date=date '2026-10-04', routine_title=? "
+                    + "where client_post_id='before-migration'", "가".repeat(160));
+            assertThat(jdbc.queryForObject("select routine_date from feed_posts where routine_id=5", java.sql.Date.class))
+                    .hasToString("2026-10-04");
         }
     }
 }

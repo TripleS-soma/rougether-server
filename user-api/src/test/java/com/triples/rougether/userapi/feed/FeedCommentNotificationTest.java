@@ -54,7 +54,8 @@ class FeedCommentNotificationTest {
     Long post(Long owner) {
         var image = images.reserve(owner, 64, 64);
         images.complete(owner, image.id());
-        return commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "공개 게시물", List.of(image.id())));
+        return commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "공개 게시물", List.of(image.id()),
+                com.triples.rougether.domain.feed.entity.FeedBoardType.FREE));
     }
     FeedCommentRequest request() { return new FeedCommentRequest(UUID.randomUUID(), "댓글 원문은 알림 사본으로 남기지 않음"); }
     List<Map<String, Object>> inbox(Long owner) {
