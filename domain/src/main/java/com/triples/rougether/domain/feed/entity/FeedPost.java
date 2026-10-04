@@ -4,6 +4,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.support.BaseEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,6 +23,10 @@ public class FeedPost extends BaseEntity {
     @Column(name = "board_type", nullable = false, length = 20) private FeedBoardType boardType;
     @Column(nullable = false, length = 2000) private String content;
     @Column(name = "deleted_at") private Instant deletedAt;
+    // 인증글이 연결한 루틴 완료 기록. 제목은 연결 시점 스냅샷이라 루틴 이름 변경·삭제와 무관하게 유지함
+    @Column(name = "routine_id") private Long routineId;
+    @Column(name = "routine_date") private LocalDate routineDate;
+    @Column(name = "routine_title", length = 160) private String routineTitle;
 
     public static FeedPost create(User author, String clientPostId, String hash, String content) {
         return create(author, clientPostId, hash, content, FeedBoardType.VERIFICATION);
@@ -32,5 +37,11 @@ public class FeedPost extends BaseEntity {
         return post;
     }
     public void updateContent(String content) { this.content = content; }
-    public void delete(Instant now) { if (deletedAt == null) { deletedAt = now; content = ""; } }
+    public void changeBoard(FeedBoardType boardType) { this.boardType = boardType; }
+    public void linkRoutine(Long routineId, LocalDate routineDate, String routineTitle) {
+        this.routineId = routineId; this.routineDate = routineDate; this.routineTitle = routineTitle;
+    }
+    public void clearRoutine() { linkRoutine(null, null, null); }
+    public boolean hasRoutine() { return routineId != null; }
+    public void delete(Instant now) { if (deletedAt == null) { deletedAt = now; content = ""; clearRoutine(); } }
 }

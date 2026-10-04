@@ -8,6 +8,8 @@ public enum FeedErrorCode implements ErrorCode {
     FEED_IMAGE_NOT_FOUND("이미지를 찾을 수 없습니다.", 404),
     FEED_FORBIDDEN("본인이 작성한 내용만 변경할 수 있습니다.", 403),
     FEED_INPUT_INVALID("피드 입력값이 올바르지 않습니다.", 400),
+    FEED_ROUTINE_COMPLETION_REQUIRED("인증게시판 글에는 완료한 루틴을 연결해야 합니다.", 400),
+    FEED_ROUTINE_COMPLETION_INVALID("연결할 수 있는 루틴 완료 기록이 아닙니다.", 400),
     FEED_CONTENT_BANNED("사용할 수 없는 단어가 포함되어 있습니다.", 400),
     FEED_REQUEST_CONFLICT("같은 요청 식별자로 다른 내용이나 삭제된 내용을 등록할 수 없습니다.", 409),
     FEED_IMAGE_INVALID("사진은 JPEG 또는 PNG, 10MB 이하만 허용됩니다.", 400),

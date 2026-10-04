@@ -104,7 +104,8 @@ class ModerationIntegrationTest {
     Long feedPost(Long owner) {
         var image = images.reserve(owner, 64, 64);
         images.complete(owner, image.id());
-        return commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "공개 게시물", List.of(image.id())));
+        return commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "공개 게시물", List.of(image.id()),
+                com.triples.rougether.domain.feed.entity.FeedBoardType.FREE));
     }
 
     Long comment(Long author, Long postId) {

@@ -31,6 +31,6 @@ public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
     Optional<FeedPost> findVisible(@Param("id") Long id, @Param("viewer") Long viewer);
 
     @Modifying
-    @Query("update FeedPost p set p.content = '', p.deletedAt = :now where p.deletedAt is null and p.author.deletedAt is not null")
+    @Query("update FeedPost p set p.content = '', p.routineId = null, p.routineDate = null, p.routineTitle = null, p.deletedAt = :now where p.deletedAt is null and p.author.deletedAt is not null")
     int eraseWithdrawn(@Param("now") java.time.Instant now);
 }
