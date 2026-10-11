@@ -8,6 +8,7 @@ import com.triples.rougether.domain.notification.repository.NotificationReposito
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.message.NotificationContent;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,16 +75,26 @@ public class NotificationService {
                 notificationPushStatusService.markBlocked(event.notificationId());
                 return;
             }
-            if (event.type() == NotificationType.FEED_COMMENT && event.refId() != null) {
-                fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body(),
-                        Map.of("type", event.type().name(), "notificationId", event.notificationId().toString(),
-                                "postId", event.refId().toString()));
-            } else {
-                fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body());
-            }
+            fcmPushExecutor.push(event.notificationId(), event.userId(), event.title(), event.body(),
+                    pushData(event));
         } catch (Exception e) {
             log.warn("알림 push 제출 실패 - userId={}", event.userId(), e);
         }
+    }
+
+    // 푸시를 누른 앱이 알림함 카드와 같은 목적지로 가도록 type·notificationId·refId 를 싣는다
+    // (거래소 체결 → 내 주문, 구매 대기 → 종목 등). postId 는 refId 를 읽기 전 앱(피드 댓글)을 위한 호환 키.
+    static Map<String, String> pushData(NotificationCreatedEvent event) {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", event.type().name());
+        data.put("notificationId", event.notificationId().toString());
+        if (event.refId() != null) {
+            data.put("refId", event.refId().toString());
+            if (event.type() == NotificationType.FEED_COMMENT) {
+                data.put("postId", event.refId().toString());
+            }
+        }
+        return Map.copyOf(data);
     }
 
     public record NotificationCreatedEvent(Long notificationId, Long userId, NotificationType type,

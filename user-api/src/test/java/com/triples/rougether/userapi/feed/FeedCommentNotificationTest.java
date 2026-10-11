@@ -88,7 +88,8 @@ class FeedCommentNotificationTest {
         assertThat(row.get("body")).isEqualTo("내 게시물에 새 댓글이 달렸어요. 확인해 보세요!");
         Long notificationId = ((Number) row.get("id")).longValue();
         verify(push).push(notificationId, owner, "새 댓글이 달렸어요", row.get("body").toString(),
-                Map.of("type", "FEED_COMMENT", "notificationId", notificationId.toString(), "postId", id.toString()));
+                Map.of("type", "FEED_COMMENT", "notificationId", notificationId.toString(), "refId", id.toString(),
+                        "postId", id.toString()));
         verifyNoMoreInteractions(push);
         mvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + tokens.issueAccessToken(owner, MemberRole.NORMAL)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].type").value("FEED_COMMENT"))
