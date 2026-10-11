@@ -49,6 +49,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                                             @Param("body") String body,
                                             @Param("since") Instant since);
 
+    // 같은 대상(ref_id)으로 since 이후 보낸 알림이 있는지. 본문에 가격 등 바뀌는 값이 들어가 본문 dedup 이 안 통하는
+    // 알림용(거래소 구매 대기 등록 #432: 판매자·종목당 24시간 1회).
+    @Query("select (count(n) > 0) from Notification n "
+            + "where n.user.id = :userId and n.type = :type and n.refId = :refId "
+            + "and n.createdAt >= :since")
+    boolean existsByUserAndTypeAndRefIdSince(@Param("userId") Long userId,
+                                             @Param("type") NotificationType type,
+                                             @Param("refId") Long refId,
+                                             @Param("since") Instant since);
+
     // 전체 읽음 - 안 읽은 알림만 bulk update (삭제된 알림 제외)
     @Modifying
     @Query("update Notification n set n.isRead = true "

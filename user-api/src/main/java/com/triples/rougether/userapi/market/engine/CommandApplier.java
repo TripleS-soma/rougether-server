@@ -6,6 +6,7 @@ import com.triples.rougether.domain.market.entity.MarketAsset;
 import com.triples.rougether.domain.market.entity.MarketCommand;
 import com.triples.rougether.domain.market.entity.MarketEngineLease;
 import com.triples.rougether.domain.market.entity.MarketOrder;
+import com.triples.rougether.domain.market.entity.OrderSide;
 import com.triples.rougether.domain.market.entity.OrderSource;
 import com.triples.rougether.domain.market.entity.OrderStatus;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
@@ -45,13 +46,14 @@ public class CommandApplier {
     private final MarketAssetRepository assetRepository;
     private final TradeSettler settler;
     private final MarketLedger ledger;
+    private final MarketNotifier notifier;
     private final Clock clock;
     private final TransactionTemplate transaction;
     private final TransactionTemplate readOnly;
 
     public CommandApplier(MarketEngineLeaseRepository leaseRepository, MarketCommandRepository commandRepository,
                           MarketOrderRepository orderRepository, MarketAssetRepository assetRepository,
-                          TradeSettler settler, MarketLedger ledger, Clock clock,
+                          TradeSettler settler, MarketLedger ledger, MarketNotifier notifier, Clock clock,
                           PlatformTransactionManager transactionManager) {
         this.leaseRepository = leaseRepository;
         this.commandRepository = commandRepository;
@@ -59,6 +61,7 @@ public class CommandApplier {
         this.assetRepository = assetRepository;
         this.settler = settler;
         this.ledger = ledger;
+        this.notifier = notifier;
         this.clock = clock;
         this.transaction = new TransactionTemplate(transactionManager);
         this.readOnly = new TransactionTemplate(transactionManager);
@@ -147,6 +150,12 @@ public class CommandApplier {
         for (OrderBook.Fill fill : fills) {
             MarketOrder maker = orderRepository.findById(fill.makerOrderId()).orElseThrow();
             settler.settle(asset, taker, maker, fill.price(), fill.quantity(), seq, now);
+            notifier.makerFilled(maker, fill.price());
+        }
+        // 매수는 항상 1개(PlaceOrderRequest 검증)라 남았다면 전혀 체결되지 않고 호가창에 대기로 올라간 것(#432).
+        // 매수 수량 제한이 풀리면 부분 체결 후 잔량 대기도 여기에 걸리므로 다시 판단해야 함.
+        if (taker.getSide() == OrderSide.BUY && taker.isOpen()) {
+            notifier.bidPlaced(taker);
         }
         command.applied(taker.getId(), now);
     }

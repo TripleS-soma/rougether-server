@@ -67,6 +67,25 @@ public final class NotificationMessages {
                 korean.englishTitle(), englishName(senderNickname) + ": " + english);
     }
 
+    // 거래소(#432). 가격은 체결가(판매·구매 체결) 또는 구매 대기 가격. 가구명은 영어 번역이 없으면 원문.
+    public static NotificationContent marketSellFilled(String itemName, String englishItemName, int price) {
+        return new NotificationContent(NotificationType.MARKET_SELL_FILLED,
+                "가구가 팔렸어요", "'" + itemName + "'이(가) " + price + "코인에 팔렸어요.",
+                "Your furniture sold", "'" + englishItemName + "' sold for " + price + " coins.");
+    }
+
+    public static NotificationContent marketBuyFilled(String itemName, String englishItemName, int price) {
+        return new NotificationContent(NotificationType.MARKET_BUY_FILLED,
+                "구매가 체결됐어요", "'" + itemName + "'을(를) " + price + "코인에 샀어요. 인벤토리를 확인해 보세요.",
+                "Your purchase went through", "You bought '" + englishItemName + "' for " + price + " coins. Check your inventory.");
+    }
+
+    public static NotificationContent marketBidPlaced(String itemName, String englishItemName, int price) {
+        return new NotificationContent(NotificationType.MARKET_BID_PLACED,
+                "구매 대기가 들어왔어요", "누군가 '" + itemName + "'을(를) " + price + "코인에 사고 싶어 해요.",
+                "Someone wants to buy", "Someone wants to buy '" + englishItemName + "' for " + price + " coins.");
+    }
+
     private static String englishName(String nickname) {
         return nickname == null || nickname.isBlank() ? "A neighbor" : nickname;
     }
