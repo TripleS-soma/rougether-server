@@ -86,6 +86,44 @@ class OpenAiFurnitureClientTest {
         assertThat(result.subjectJson()).contains("blue seat");
     }
 
+    @Test void 사진_거절의_사용자_안내_사유를_추출_결과에_보존() {
+        String reason = "두 대상이 비슷하게 보여 하나를 고르기 어려워요. 원하는 대상만 남도록 잘라주세요.";
+        String rejected = json.writeValueAsString(Map.of("furniture", false, "category", "",
+                "features", List.of(), "colors", List.of(), "rejectionReason", reason));
+        server.expect(requestTo("https://openai.test/v1/responses"))
+                .andExpect(jsonPath("$.text.format.schema.properties.rejectionReason.type").value("string"))
+                .andExpect(request -> assertThat(((org.springframework.mock.http.client.MockClientHttpRequest) request)
+                        .getBodyAsString()).contains("concise Korean explanation", "Do not guess a reason"))
+                .andRespond(withSuccess(message(rejected), MediaType.APPLICATION_JSON));
+        var result = client.extract(context.source(), "");
+        assertThat(result.furniture()).isFalse();
+        assertThat(json.readTree(result.subjectJson()).path("rejectionReason").asString()).isEqualTo(reason);
+    }
+
+    @Test void 허용된_사진은_거절사유를_특징과_생성입력에_남기지_않음() {
+        var response = (tools.jackson.databind.node.ObjectNode) json.readTree(SUBJECT);
+        response.put("rejectionReason", "");
+        server.expect(requestTo("https://openai.test/v1/responses"))
+                .andRespond(withSuccess(message(json.writeValueAsString(response)), MediaType.APPLICATION_JSON));
+        var result = client.extract(context.source(), "");
+        assertThat(result.furniture()).isTrue();
+        assertThat(json.readTree(result.subjectJson()).size()).isEqualTo(4);
+        assertThat(result.subjectJson()).doesNotContain("rejectionReason");
+    }
+
+    @Test void 형식이_틀리거나_너무긴_거절사유는_사용자에게_전달하지_않음() {
+        var rejected = new HashMap<String, Object>();
+        rejected.put("furniture", false); rejected.put("category", "");
+        rejected.put("features", List.of()); rejected.put("colors", List.of());
+        for (Object reason : List.of(123, "가".repeat(1001))) {
+            rejected.put("rejectionReason", reason);
+            server.expect(requestTo("https://openai.test/v1/responses"))
+                    .andRespond(withSuccess(message(json.writeValueAsString(rejected)), MediaType.APPLICATION_JSON));
+        }
+        assertThatThrownBy(() -> client.extract(context.source(), "")).hasMessage("INVALID_SUBJECT_OUTPUT");
+        assertThatThrownBy(() -> client.extract(context.source(), "")).hasMessage("INVALID_SUBJECT_OUTPUT");
+    }
+
     @Test void 특징이_없거나_거절된_사진은_이미지_API를_호출하지_않음() {
         var missing = new FurnitureAiClient.Context(context.source(), context.references(), null, "", "", "", null);
         assertThatThrownBy(() -> client.generate(missing, Action.GENERATE)).hasMessage("SUBJECT_FEATURES_UNAVAILABLE");
