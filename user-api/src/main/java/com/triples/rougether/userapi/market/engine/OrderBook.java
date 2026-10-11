@@ -105,6 +105,22 @@ public final class OrderBook {
         return fills;
     }
 
+    // 대기 주문의 남은 수량을 바꿈(#433 수량 수정). moveToBack 이면 같은 가격대 맨 뒤로 보내 대기 순서를 잃게 함.
+    public void amend(long assetId, long orderId, OrderSide side, int price, int remaining, boolean moveToBack) {
+        AssetBook book = books.get(assetId);
+        ArrayDeque<Resting> queue = book == null ? null : book.side(side).get(price);
+        Resting resting = queue == null ? null
+                : queue.stream().filter(r -> r.orderId == orderId).findFirst().orElse(null);
+        if (resting == null) {
+            throw new IllegalStateException("order " + orderId + " is not resting at " + price);
+        }
+        resting.remaining = remaining;
+        if (moveToBack) {
+            queue.remove(resting);
+            queue.addLast(resting);
+        }
+    }
+
     public void remove(long assetId, long orderId) {
         AssetBook book = books.get(assetId);
         if (book == null) {
