@@ -90,6 +90,12 @@ public class MarketOrderCommandService {
         return onceByRequestId(userId, requestId, same, () -> cancelInTransaction(userId, orderId, requestId, same));
     }
 
+    public MarketCommandAcceptedResponse amend(Long userId, Long orderId, String requestId, int quantity) {
+        Predicate<MarketCommand> same = existing -> existing.isSameAmend(orderId, quantity);
+        return onceByRequestId(userId, requestId, same,
+                () -> amendInTransaction(userId, orderId, requestId, quantity, same));
+    }
+
     // 같은 requestId 동시 요청이 사전 조회를 모두 통과하면 접수 INSERT(마지막 문장)의 유니크 위반으로 하나만 남음.
     // 위반 쪽은 에스크로까지 전부 롤백되고 먼저 들어간 접수를 돌려받음.
     private MarketCommandAcceptedResponse onceByRequestId(Long userId, String requestId, Predicate<MarketCommand> same,
@@ -193,6 +199,45 @@ public class MarketOrderCommandService {
         }
         MarketCommand command = saveCommand(MarketCommand.cancel(userId, requestId, order.getAssetId(), orderId,
                 clock.instant()));
+        return MarketCommandAcceptedResponse.from(command);
+    }
+
+    // 발행 재고 판매 주문 수량 수정(#433). 늘리는 만큼은 지금 발행 재고에서 미리 빼 두고(에스크로), 엔진이 처리 시점
+    // 수량으로 다시 정산함 — 같은 주문에 수정이 연달아 들어와도 재고 총량이 어긋나지 않음.
+    private MarketCommandAcceptedResponse amendInTransaction(Long userId, Long orderId, String requestId, int quantity,
+                                                             Predicate<MarketCommand> same) {
+        lockUser(userId);
+        var existing = marketCommandRepository.findByUserIdAndRequestId(userId, requestId);
+        if (existing.isPresent()) {
+            return replay(existing.get(), same);
+        }
+        MarketOrder order = marketOrderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new BusinessException(MarketErrorCode.ORDER_NOT_FOUND));
+        if (order.getStatus() != OrderStatus.OPEN) {
+            throw new BusinessException(MarketErrorCode.ORDER_NOT_OPEN);
+        }
+        if (order.getSource() != OrderSource.ISSUANCE) {
+            throw new BusinessException(MarketErrorCode.ORDER_NOT_AMENDABLE);
+        }
+        if (quantity == order.getQuantity()) {
+            throw new BusinessException(MarketErrorCode.AMEND_SAME_QUANTITY);
+        }
+        if (quantity <= order.getFilledQuantity()) {
+            throw new BusinessException(MarketErrorCode.AMEND_BELOW_FILLED);
+        }
+        // 발행 재고를 바꿀 수 있으므로 처음부터 잠금 조회(placeInTransaction 과 같은 이유)
+        MarketAsset asset = marketAssetRepository.findWithLockById(order.getAssetId())
+                .orElseThrow(() -> new BusinessException(MarketErrorCode.ASSET_NOT_FOUND));
+        if (asset.isSuspended()) {
+            throw new BusinessException(MarketErrorCode.ASSET_SUSPENDED);
+        }
+        Instant now = clock.instant();
+        int increase = Math.max(quantity - order.getQuantity(), 0);
+        if (increase > 0 && !asset.takeUnissued(increase, now)) {
+            throw new BusinessException(MarketErrorCode.INSUFFICIENT_SUPPLY);
+        }
+        MarketCommand command = saveCommand(MarketCommand.amend(userId, requestId, asset.getId(), orderId, quantity,
+                increase, now));
         return MarketCommandAcceptedResponse.from(command);
     }
 

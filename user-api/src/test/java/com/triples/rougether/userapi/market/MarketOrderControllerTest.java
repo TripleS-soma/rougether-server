@@ -99,6 +99,23 @@ class MarketOrderControllerTest {
     }
 
     @Test
+    void 수량_수정은_202를_반환하고_수량_범위를_검증한다() throws Exception {
+        when(commandService.amend(7L, 5L, REQUEST_ID, 4)).thenReturn(new MarketCommandAcceptedResponse(13L, CommandStatus.PENDING));
+
+        mockMvc.perform(post("/api/v1/market/orders/5/amend").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"" + REQUEST_ID + "\",\"quantity\":4}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.commandId").value(13));
+        for (String body : List.of("{\"requestId\":\"" + REQUEST_ID + "\",\"quantity\":0}",
+                "{\"requestId\":\"" + REQUEST_ID + "\",\"quantity\":11}",
+                "{\"requestId\":\"" + REQUEST_ID + "\"}", "{\"quantity\":4}")) {
+            mockMvc.perform(post("/api/v1/market/orders/5/amend").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+    }
+
+    @Test
     void 접수_결과를_조회한다() throws Exception {
         when(queryService.get(7L, 10L)).thenReturn(new MarketCommandResponse(10L, CommandStatus.REJECTED, "MARKET_SELF_TRADE", null));
 

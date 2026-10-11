@@ -115,6 +115,19 @@ public class MarketCommand {
         return command;
     }
 
+    // 발행 재고 판매 주문 수량 수정 접수(#433). quantity = 수정 후 주문 전체 수량(체결분 포함).
+    // escrowAmount = 접수 때 발행 재고에서 미리 뺀 수량(늘릴 때만, 줄이면 0). 엔진이 처리 시점 수량으로 정산함.
+    public static MarketCommand amend(Long userId, String requestId, Long assetId, Long targetOrderId, int quantity,
+                                      int escrowAmount, Instant now) {
+        MarketCommand command = pending(userId, requestId, CommandType.AMEND, assetId, now);
+        command.side = OrderSide.SELL;
+        command.source = OrderSource.ISSUANCE;
+        command.targetOrderId = targetOrderId;
+        command.quantity = quantity;
+        command.escrowAmount = escrowAmount;
+        return command;
+    }
+
     // 엔진이 처리 순서를 확정함(#401)
     public void stamp(long seq) {
         this.engineSeq = seq;
@@ -145,6 +158,12 @@ public class MarketCommand {
     // requestId 재요청 판정: 같은 주문의 취소인지
     public boolean isSameCancel(Long orderId) {
         return type == CommandType.CANCEL && orderId.equals(targetOrderId);
+    }
+
+    // requestId 재요청 판정: 같은 주문을 같은 수량으로 고치는지
+    public boolean isSameAmend(Long orderId, int quantity) {
+        return type == CommandType.AMEND && orderId.equals(targetOrderId) && this.quantity != null
+                && this.quantity == quantity;
     }
 
     private static MarketCommand pending(Long userId, String requestId, CommandType type, Long assetId, Instant now) {

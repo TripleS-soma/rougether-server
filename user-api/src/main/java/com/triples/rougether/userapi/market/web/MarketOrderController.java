@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.market.web;
 
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
+import com.triples.rougether.userapi.market.dto.AmendOrderRequest;
 import com.triples.rougether.userapi.market.dto.CancelOrderRequest;
 import com.triples.rougether.userapi.market.dto.MarketCommandAcceptedResponse;
 import com.triples.rougether.userapi.market.dto.MarketCommandResponse;
@@ -60,6 +61,20 @@ public class MarketOrderController {
                                                 @PathVariable Long orderId,
                                                 @Valid @RequestBody CancelOrderRequest request) {
         return marketOrderCommandService.cancel(user.id(), orderId, request.requestId());
+    }
+
+    @Operation(summary = "발행 재고 판매 주문 수량 수정 접수",
+            description = "대기 중(OPEN)인 내 발행 재고 판매 주문의 수량을 고칩니다. quantity는 수정 후 주문 전체 수량(이미 팔린 수량 포함)입니다. "
+                    + "줄이면 줄인 만큼 발행 재고로 돌아가고 대기 순서는 유지됩니다. 늘리면 늘린 만큼 발행 재고에서 빠지고 "
+                    + "같은 가격대의 맨 뒤로 갑니다. 보유분 판매·구매 주문은 수량이 1개로 고정이라 고칠 수 없습니다. "
+                    + "처리 결과는 응답의 commandId로 접수 결과 조회를 호출해 확인합니다. 같은 requestId로 다시 요청하면 기존 접수를 돌려줍니다.")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PostMapping("/orders/{orderId}/amend")
+    public MarketCommandAcceptedResponse amend(@CurrentUser AuthUser user,
+                                               @Parameter(description = "고칠 주문 ID. 내 주문 목록의 orderId 값")
+                                               @PathVariable Long orderId,
+                                               @Valid @RequestBody AmendOrderRequest request) {
+        return marketOrderCommandService.amend(user.id(), orderId, request.requestId(), request.quantity());
     }
 
     @Operation(summary = "주문 접수 결과 조회",

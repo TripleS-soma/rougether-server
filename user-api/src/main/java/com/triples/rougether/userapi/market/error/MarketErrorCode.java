@@ -18,7 +18,12 @@ public enum MarketErrorCode implements ErrorCode {
     ORDER_NOT_OPEN("MARKET_ORDER_NOT_OPEN", "이미 끝난 주문입니다.", 409),
     COMMAND_NOT_FOUND("MARKET_COMMAND_NOT_FOUND", "주문 접수 내역을 찾을 수 없습니다.", 404),
     REQUEST_CONFLICT("MARKET_REQUEST_CONFLICT", "같은 요청 ID에 다른 내용을 사용할 수 없습니다.", 409),
-    OWN_ORDER_CONFLICT("MARKET_OWN_ORDER_CONFLICT", "이 가구에 대기 중인 내 주문이 있어 반대 주문을 낼 수 없습니다.", 409);
+    OWN_ORDER_CONFLICT("MARKET_OWN_ORDER_CONFLICT", "이 가구에 대기 중인 내 주문이 있어 반대 주문을 낼 수 없습니다.", 409),
+    // 수량 수정(#433)
+    ORDER_NOT_AMENDABLE("MARKET_ORDER_NOT_AMENDABLE", "발행 재고 판매 주문만 수량을 고칠 수 있습니다.", 409),
+    AMEND_BELOW_FILLED("MARKET_AMEND_BELOW_FILLED", "이미 팔린 수량보다 많게 고쳐야 합니다.", 409),
+    // 지금 수량과 같은 수정은 입력 오류로 봄(공통 검증 오류와 같은 응답 코드)
+    AMEND_SAME_QUANTITY("VALIDATION_FAILED", "지금 수량과 다른 수량을 입력해 주세요.", 400);
 
     private final String code;
     private final String message;

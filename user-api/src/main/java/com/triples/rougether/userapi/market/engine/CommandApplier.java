@@ -33,6 +33,8 @@ public class CommandApplier {
     static final String SELF_TRADE = "MARKET_SELF_TRADE";
     static final String ASSET_SUSPENDED = "MARKET_ASSET_SUSPENDED";
     static final String ORDER_NOT_OPEN = "MARKET_ORDER_NOT_OPEN";
+    static final String AMEND_BELOW_FILLED = "MARKET_AMEND_BELOW_FILLED";
+    static final String INSUFFICIENT_SUPPLY = "MARKET_INSUFFICIENT_SUPPLY";
     static final String ENGINE_ERROR = "MARKET_ENGINE_ERROR";
     // 반복 실패 거절 중 환불까지 실패한 접수. 수동 대사 대상(reject_code 로 조회).
     static final String ENGINE_ERROR_UNREFUNDED = "MARKET_ENGINE_ERROR_UNREFUNDED";
@@ -81,6 +83,8 @@ public class CommandApplier {
             Instant now = clock.instant();
             if (command.getType() == CommandType.PLACE) {
                 place(command, seq, book, now);
+            } else if (command.getType() == CommandType.AMEND) {
+                amend(command, seq, book, now);
             } else {
                 close(command, book, now);
             }
@@ -160,6 +164,45 @@ public class CommandApplier {
         command.applied(taker.getId(), now);
     }
 
+    // 발행 재고 판매 주문 수량 수정(#433). 접수 뒤 다른 수정·체결이 먼저 처리됐을 수 있어 처리 시점 수량으로 정산함:
+    // 돌려줄 재고 = 접수 때 미리 뺀 수량 - (새 수량 - 현재 수량). 음수면 모자란 만큼 재고에서 더 뺌.
+    // 늘린 주문은 같은 가격대 맨 뒤로(engine_seq 를 이번 순번으로 바꿔 재적재 후에도 유지).
+    private void amend(MarketCommand command, long seq, OrderBook book, Instant now) {
+        MarketAsset asset = loadAsset(command.getAssetId(), true);
+        MarketOrder order = orderRepository.findById(command.getTargetOrderId()).orElse(null);
+        if (order == null || !order.isOpen() || !order.getUserId().equals(command.getUserId())
+                || order.getSource() != OrderSource.ISSUANCE) {
+            rejectAmend(command, asset, ORDER_NOT_OPEN, now);
+            return;
+        }
+        if (asset.isSuspended()) {
+            rejectAmend(command, asset, ASSET_SUSPENDED, now);
+            return;
+        }
+        int newQuantity = command.getQuantity();
+        if (newQuantity <= order.getFilledQuantity()) {
+            rejectAmend(command, asset, AMEND_BELOW_FILLED, now);
+            return;
+        }
+        int delta = newQuantity - order.getQuantity();
+        int giveBack = command.getEscrowAmount() - delta;
+        if (giveBack < 0 && !asset.takeUnissued(-giveBack, now)) {
+            rejectAmend(command, asset, INSUFFICIENT_SUPPLY, now);
+            return;
+        }
+        if (giveBack > 0) {
+            asset.returnUnissued(giveBack, now);
+        }
+        order.amendQuantity(newQuantity, seq, now);
+        book.amend(order.getAssetId(), order.getId(), order.getSide(), order.getPrice(), order.remaining(), delta > 0);
+        command.applied(order.getId(), now);
+    }
+
+    private void rejectAmend(MarketCommand command, MarketAsset lockedAsset, String code, Instant now) {
+        ledger.refundCommand(command, lockedAsset, now);
+        command.rejected(code, now);
+    }
+
     private void close(MarketCommand command, OrderBook book, Instant now) {
         MarketOrder order = orderRepository.findById(command.getTargetOrderId()).orElse(null);
         if (order == null || !order.isOpen() || !order.getUserId().equals(command.getUserId())) {
@@ -181,13 +224,16 @@ public class CommandApplier {
         }
         command.stamp(lease.nextSeq());
         Instant now = clock.instant();
-        if (refund && command.getType() == CommandType.PLACE) {
+        // 수량을 줄이는 수정 접수는 맡긴 것이 없음(escrow 0)
+        boolean escrowed = command.getType() == CommandType.PLACE
+                || (command.getType() == CommandType.AMEND && command.getEscrowAmount() > 0);
+        if (refund && escrowed) {
             MarketAsset asset = command.getSource() == OrderSource.ISSUANCE
                     ? loadAsset(command.getAssetId(), true) : null;
             ledger.refundCommand(command, asset, now);
         }
         // 취소·만료 접수는 맡긴 것이 없어 환불 실패가 성립하지 않음
-        boolean unrefunded = !refund && command.getType() == CommandType.PLACE;
+        boolean unrefunded = !refund && escrowed;
         command.rejected(unrefunded ? ENGINE_ERROR_UNREFUNDED : ENGINE_ERROR, now);
     }
 

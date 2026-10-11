@@ -51,7 +51,8 @@ public class MarketOrder {
     @Column(name = "price", nullable = false, updatable = false)
     private int price;
 
-    @Column(name = "quantity", nullable = false, updatable = false)
+    // 발행 재고 판매 주문은 수량 수정(#433)으로 바뀜
+    @Column(name = "quantity", nullable = false)
     private int quantity;
 
     @Column(name = "filled_quantity", nullable = false)
@@ -60,7 +61,8 @@ public class MarketOrder {
     @Column(name = "escrow_remaining", nullable = false)
     private int escrowRemaining;
 
-    @Column(name = "engine_seq", nullable = false, updatable = false)
+    // 호가창 안의 순서(재적재 정렬 기준). 수량을 늘리면 수정 접수 순번으로 바뀌어 같은 가격대 맨 뒤로 감(#433)
+    @Column(name = "engine_seq", nullable = false)
     private long engineSeq;
 
     @Enumerated(EnumType.STRING)
@@ -115,6 +117,21 @@ public class MarketOrder {
         this.escrowRemaining -= escrowUsed;
         if (remaining() == 0) {
             this.status = OrderStatus.FILLED;
+        }
+        this.updatedAt = now;
+    }
+
+    // 발행 재고 판매 주문 수량 수정(#433). 맡긴 수량(escrowRemaining)도 같은 만큼 바뀜.
+    // 늘리면 대기 순서를 잃으므로 호출 측이 새 처리 순번을 넘김.
+    public void amendQuantity(int newQuantity, long newEngineSeq, Instant now) {
+        if (source != OrderSource.ISSUANCE || status != OrderStatus.OPEN || newQuantity <= filledQuantity) {
+            throw new IllegalStateException("invalid amend for order " + id);
+        }
+        int delta = newQuantity - quantity;
+        this.quantity = newQuantity;
+        this.escrowRemaining += delta;
+        if (delta > 0) {
+            this.engineSeq = newEngineSeq;
         }
         this.updatedAt = now;
     }
