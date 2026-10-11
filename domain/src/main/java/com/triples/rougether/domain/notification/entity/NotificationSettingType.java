@@ -11,5 +11,7 @@ public enum NotificationSettingType {
     FEED,
     // 거래소 체결·구매 대기 알림(#432). 설정 화면에서 따로 끌 수 있게 별도 그룹.
     MARKET,
+    // 집 채팅 푸시(#435). 방별 음소거는 chat_read_states.push_muted 가 따로 맡음.
+    CHAT,
     SERVICE
 }

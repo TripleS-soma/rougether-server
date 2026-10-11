@@ -34,6 +34,7 @@ public class NotificationSettingService {
         apply(userId, NotificationSettingType.HOUSE, request.house());
         apply(userId, NotificationSettingType.FEED, request.feed());
         apply(userId, NotificationSettingType.MARKET, request.market());
+        apply(userId, NotificationSettingType.CHAT, request.chat());
         return toResponse(enabledByType(userId));
     }
 
@@ -75,6 +76,7 @@ public class NotificationSettingService {
                 isEnabled(enabled, NotificationSettingType.REMINDER),
                 isEnabled(enabled, NotificationSettingType.HOUSE),
                 isEnabled(enabled, NotificationSettingType.FEED),
-                isEnabled(enabled, NotificationSettingType.MARKET));
+                isEnabled(enabled, NotificationSettingType.MARKET),
+                isEnabled(enabled, NotificationSettingType.CHAT));
     }
 }

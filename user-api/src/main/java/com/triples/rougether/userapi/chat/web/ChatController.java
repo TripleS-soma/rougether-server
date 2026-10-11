@@ -2,6 +2,8 @@ package com.triples.rougether.userapi.chat.web;
 
 import com.triples.rougether.userapi.chat.dto.ChatMessageListResponse;
 import com.triples.rougether.userapi.chat.dto.ChatMessageResponse;
+import com.triples.rougether.userapi.chat.dto.ChatNotificationRequest;
+import com.triples.rougether.userapi.chat.dto.ChatNotificationResponse;
 import com.triples.rougether.userapi.chat.dto.ChatReadRequest;
 import com.triples.rougether.userapi.chat.dto.ChatRoomResponse;
 import com.triples.rougether.userapi.chat.dto.ChatSendRequest;
@@ -50,6 +52,17 @@ public class ChatController {
     public ChatMessageResponse send(@AuthenticationPrincipal AuthUser user, @PathVariable Long roomId,
                                     @Valid @RequestBody ChatSendRequest request) {
         return commands.send(user.id(), roomId, request);
+    }
+
+    @GetMapping("/chat/rooms/{roomId}/notification")
+    public ChatNotificationResponse notification(@AuthenticationPrincipal AuthUser user, @PathVariable Long roomId) {
+        return query.notification(user.id(), roomId);
+    }
+
+    @PutMapping("/chat/rooms/{roomId}/notification")
+    public ChatNotificationResponse changeNotification(@AuthenticationPrincipal AuthUser user, @PathVariable Long roomId,
+                                                       @Valid @RequestBody ChatNotificationRequest request) {
+        return commands.changePushMuted(user.id(), roomId, request.muted());
     }
 
     @PutMapping("/chat/rooms/{roomId}/read")

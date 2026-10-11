@@ -41,17 +41,17 @@ class NotificationSettingServiceTest {
 
         NotificationSettingResponse response = notificationSettingService.getSettings(userId);
 
-        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, true));
+        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, true, true));
     }
 
     @Test
     void 보낸_필드만_바뀌고_나머지는_켜짐이_유지된다() {
         NotificationSettingResponse response = notificationSettingService.updateSettings(
-                userId, new NotificationSettingUpdateRequest(null, null, false, null, null));
+                userId, new NotificationSettingUpdateRequest(null, null, false, null, null, null));
 
-        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, false, true, true));
+        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, false, true, true, true));
         assertThat(notificationSettingService.getSettings(userId))
-                .isEqualTo(new NotificationSettingResponse(true, true, false, true, true));
+                .isEqualTo(new NotificationSettingResponse(true, true, false, true, true, true));
         // off 로 바꾼 그룹만 행이 생김 - 나머지는 행 없음(=ON) 그대로.
         assertThat(notificationSettingRepository.findAllByUserId(userId))
                 .singleElement()
@@ -64,9 +64,9 @@ class NotificationSettingServiceTest {
     @Test
     void 거래소_알림만_끄면_거래소_타입_push만_막힌다() {
         NotificationSettingResponse response = notificationSettingService.updateSettings(
-                userId, new NotificationSettingUpdateRequest(null, null, null, null, false));
+                userId, new NotificationSettingUpdateRequest(null, null, null, null, false, null));
 
-        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, false));
+        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, false, true));
         assertThat(notificationSettingRepository.findAllByUserId(userId)).singleElement()
                 .satisfies(setting -> assertThat(setting.getType()).isEqualTo(NotificationSettingType.MARKET));
         for (NotificationType type : List.of(NotificationType.MARKET_SELL_FILLED, NotificationType.MARKET_BUY_FILLED,
@@ -78,12 +78,12 @@ class NotificationSettingServiceTest {
 
     @Test
     void 같은_그룹을_다시_켜면_행이_늘지_않고_갱신된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false, null, null, null));
 
         NotificationSettingResponse response = notificationSettingService.updateSettings(
-                userId, new NotificationSettingUpdateRequest(null, null, true, null, null));
+                userId, new NotificationSettingUpdateRequest(null, null, true, null, null, null));
 
-        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, true));
+        assertThat(response).isEqualTo(new NotificationSettingResponse(true, true, true, true, true, true));
         assertThat(notificationSettingRepository.findAllByUserId(userId))
                 .singleElement()
                 .satisfies(setting -> assertThat(setting.isEnabled()).isTrue());
@@ -91,7 +91,7 @@ class NotificationSettingServiceTest {
 
     @Test
     void 그룹을_끄면_소속_타입만_차단되고_다른_그룹은_허용된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, false, null, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, false, null, null, null, null));
 
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.ROUTINE_REMINDER)).isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.TODO_REMINDER)).isFalse();
@@ -103,7 +103,7 @@ class NotificationSettingServiceTest {
 
     @Test
     void 마스터를_끄면_그룹이_켜져있어도_전부_차단된다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, true, true, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, true, true, null, null, null));
 
         for (NotificationType type : NotificationType.values()) {
             assertThat(notificationSettingService.isPushAllowed(userId, type)).isFalse();
@@ -112,13 +112,13 @@ class NotificationSettingServiceTest {
 
     @Test
     void 마스터를_다시_켜면_이전_그룹_설정이_그대로_살아난다() {
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false, null, null));
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, null, null, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(null, null, false, null, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, null, null, null, null, null));
 
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(true, null, null, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(true, null, null, null, null, null));
 
         assertThat(notificationSettingService.getSettings(userId))
-                .isEqualTo(new NotificationSettingResponse(true, true, false, true, true));
+                .isEqualTo(new NotificationSettingResponse(true, true, false, true, true, true));
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.HOUSE_KICK)).isFalse();
         assertThat(notificationSettingService.isPushAllowed(userId, NotificationType.ROUTINE_REMINDER)).isTrue();
     }
@@ -126,10 +126,10 @@ class NotificationSettingServiceTest {
     @Test
     void 설정은_사용자별로_격리된다() {
         Long otherUserId = userRepository.save(User.signUp()).getId();
-        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, false, false, null, null));
+        notificationSettingService.updateSettings(userId, new NotificationSettingUpdateRequest(false, false, false, null, null, null));
 
         assertThat(notificationSettingService.getSettings(otherUserId))
-                .isEqualTo(new NotificationSettingResponse(true, true, true, true, true));
+                .isEqualTo(new NotificationSettingResponse(true, true, true, true, true, true));
         assertThat(notificationSettingService.isPushAllowed(otherUserId, NotificationType.HOUSE_KICK)).isTrue();
     }
 }

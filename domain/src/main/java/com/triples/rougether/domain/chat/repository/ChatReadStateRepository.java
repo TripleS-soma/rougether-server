@@ -13,6 +13,10 @@ import org.springframework.data.repository.query.Param;
 public interface ChatReadStateRepository extends JpaRepository<ChatReadState, Long> {
     List<ChatReadState> findByRoomIdAndUserIdIn(Long roomId, Collection<Long> userIds);
 
+    // 채팅 푸시 대상에서 뺄 사용자(#435)
+    @Query("select s.userId from ChatReadState s where s.roomId = :roomId and s.pushMuted = true")
+    List<Long> findPushMutedUserIds(@Param("roomId") Long roomId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from ChatReadState s where s.roomId = :roomId and s.userId = :userId")
     Optional<ChatReadState> findWithLock(@Param("roomId") Long roomId, @Param("userId") Long userId);

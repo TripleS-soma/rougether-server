@@ -8,6 +8,7 @@ import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.chat.repository.ChatReadStateRepository;
 import com.triples.rougether.domain.chat.repository.ChatRoomRepository;
 import com.triples.rougether.userapi.chat.dto.ChatMessageResponse;
+import com.triples.rougether.userapi.chat.dto.ChatNotificationResponse;
 import com.triples.rougether.userapi.chat.dto.ChatRoomResponse;
 import com.triples.rougether.userapi.chat.dto.ChatSendRequest;
 import com.triples.rougether.userapi.chat.error.ChatErrorCode;
@@ -55,6 +56,7 @@ public class ChatCommandService {
         ChatMessage message = messages.save(ChatMessage.send(room, sender, key, request.content(), clock.instant()));
         // 발신만으로 이전 메시지를 읽었다고 간주하지 않음. 화면에 표시된 지점은 read API로 명시함.
         events.publishEvent(new ChatRoomChanged(roomId));
+        events.publishEvent(new ChatMessageSent(message.getId()));
         return ChatMessageResponse.of(message, query.snapshot(room));
     }
 
@@ -66,6 +68,16 @@ public class ChatCommandService {
                 .orElseGet(() -> reads.save(ChatReadState.unread(roomId, userId)));
         if (state.advance(sequence)) events.publishEvent(new ChatRoomChanged(roomId));
         return query.snapshot(room);
+    }
+
+    // 방별 채팅 푸시 음소거(#435). 읽음 상태 행에 함께 저장하고, 행이 없으면 만듦(읽음 커서는 0 그대로).
+    public ChatNotificationResponse changePushMuted(Long userId, Long roomId, boolean muted) {
+        access.lockWriter(roomId, userId);
+        lockRoom(roomId);
+        ChatReadState state = reads.findWithLock(roomId, userId)
+                .orElseGet(() -> reads.save(ChatReadState.unread(roomId, userId)));
+        state.changePushMuted(muted);
+        return new ChatNotificationResponse(roomId, muted);
     }
 
     private ChatRoom lockRoom(Long roomId) {

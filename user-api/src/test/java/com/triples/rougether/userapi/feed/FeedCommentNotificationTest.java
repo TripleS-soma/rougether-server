@@ -151,11 +151,11 @@ class FeedCommentNotificationTest {
 
     @Test void 마스터_off는_feed_on보다_우선하고_집알림_off는_피드를_막지_않는다() {
         Long owner = user(), commenter = user(), id = post(owner);
-        settings.updateSettings(owner, new NotificationSettingUpdateRequest(false, null, null, true, null));
+        settings.updateSettings(owner, new NotificationSettingUpdateRequest(false, null, null, true, null, null));
         commands.comment(commenter, id, request());
         assertThat(inbox(owner).getFirst().get("push_status")).isEqualTo("BLOCKED");
         verifyNoInteractions(push);
-        settings.updateSettings(owner, new NotificationSettingUpdateRequest(true, false, false, null, null));
+        settings.updateSettings(owner, new NotificationSettingUpdateRequest(true, false, false, null, null, null));
         commands.comment(commenter, id, request());
         verify(push).push(anyLong(), eq(owner), anyString(), anyString(), anyMap());
         assertThat(inbox(owner)).hasSize(2);

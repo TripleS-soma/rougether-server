@@ -86,6 +86,18 @@ public final class NotificationMessages {
                 "Someone wants to buy", "Someone wants to buy '" + englishItemName + "' for " + price + " coins.");
     }
 
+    static final int CHAT_PREVIEW_LENGTH = 100;
+
+    // 집 채팅 새 메시지(#435). 알림함에 저장하지 않는 푸시 전용. 제목 = 집 이름, 본문 = 닉네임 + 앞 100자.
+    public static NotificationContent chatMessage(String houseName, String senderNickname, String content) {
+        // 글자(코드포인트) 단위로 자름 — UTF-16 단위로 자르면 경계의 이모지가 반쪽으로 남음
+        String preview = content.codePointCount(0, content.length()) > CHAT_PREVIEW_LENGTH
+                ? content.substring(0, content.offsetByCodePoints(0, CHAT_PREVIEW_LENGTH)) + "…" : content;
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": " + preview,
+                houseName, englishName(senderNickname) + ": " + preview);
+    }
+
     private static String englishName(String nickname) {
         return nickname == null || nickname.isBlank() ? "A neighbor" : nickname;
     }

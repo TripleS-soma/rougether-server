@@ -89,6 +89,13 @@ public class ChatSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    // 이 인스턴스에서 그 방을 구독 중인지(= 채팅 화면을 보는 중). 채팅 푸시 생략 판정용(#435).
+    // 인스턴스 메모리 기준이라 여러 인스턴스가 동시에 서비스하거나 배포 전환 중이면 틀릴 수 있음.
+    public boolean isWatching(Long userId, Long roomId) {
+        return connections.values().stream().map(c -> c.subscription).anyMatch(subscription -> subscription != null
+                && subscription.userId().equals(userId) && subscription.roomId().equals(roomId));
+    }
+
     public void changed(Long roomId) {
         for (Connection connection : connections.values()) {
             var subscription = connection.subscription;
