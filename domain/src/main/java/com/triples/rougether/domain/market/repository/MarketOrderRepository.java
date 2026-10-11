@@ -56,6 +56,12 @@ public interface MarketOrderRepository extends JpaRepository<MarketOrder, Long> 
             + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN group by o.assetId")
     List<MarketAskSummary> summarizeAsks(@Param("assetIds") Collection<Long> assetIds);
 
+    // 구매 대기 등록 알림(#432) 대상: 그 종목에 판매 대기 주문이 있는 회원(중복 제거)
+    @Query("select distinct o.userId from MarketOrder o where o.assetId = :assetId "
+            + "and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN")
+    List<Long> findOpenSellerIds(@Param("assetId") Long assetId);
+
     // 내 주문 목록: 상태 묶음(대기 / 종료)별 최신순
     Page<MarketOrder> findByUserIdAndStatusInOrderByIdDesc(Long userId, Collection<OrderStatus> statuses, Pageable page);
 
