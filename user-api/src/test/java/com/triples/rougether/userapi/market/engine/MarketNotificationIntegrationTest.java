@@ -234,7 +234,7 @@ class MarketNotificationIntegrationTest {
 
     @Test
     void 거래소_알림을_끄면_내역은_남고_push만_막힌다() {
-        settings.updateSettings(creator.getId(), new NotificationSettingUpdateRequest(null, null, null, null, false));
+        settings.updateSettings(creator.getId(), new NotificationSettingUpdateRequest(null, null, null, null, false, null));
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
         engine.runOnce();
@@ -248,7 +248,7 @@ class MarketNotificationIntegrationTest {
 
     @Test
     void 마스터를_끄면_거래소_알림_push도_막힌다() {
-        settings.updateSettings(creator.getId(), new NotificationSettingUpdateRequest(false, null, null, null, true));
+        settings.updateSettings(creator.getId(), new NotificationSettingUpdateRequest(false, null, null, null, true, null));
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
         engine.runOnce();

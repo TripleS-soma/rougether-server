@@ -1,14 +1,17 @@
 package com.triples.rougether.userapi.chat.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.chat.entity.ChatReadState;
 import com.triples.rougether.domain.chat.entity.ChatRoom;
 import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.chat.repository.ChatReadStateRepository;
 import com.triples.rougether.domain.chat.repository.ChatRoomRepository;
 import com.triples.rougether.userapi.chat.dto.ChatMessageListResponse;
+import com.triples.rougether.userapi.chat.dto.ChatNotificationResponse;
 import com.triples.rougether.userapi.chat.dto.ChatMessageResponse;
 import com.triples.rougether.userapi.chat.dto.ChatRoomResponse;
 import com.triples.rougether.userapi.chat.error.ChatErrorCode;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,15 @@ public class ChatQueryService {
         ChatRoom room = requireRoom(roomId);
         access.requireReadable(room, userId);
         return snapshot(room);
+    }
+
+    // 내 방별 채팅 푸시 음소거 상태(#435). 읽음 상태 행이 없으면 기본값(알림 받음).
+    public ChatNotificationResponse notification(Long userId, Long roomId) {
+        ChatRoom room = requireRoom(roomId);
+        access.requireReadable(room, userId);
+        boolean muted = reads.findByRoomIdAndUserIdIn(roomId, List.of(userId)).stream()
+                .anyMatch(ChatReadState::isPushMuted);
+        return new ChatNotificationResponse(roomId, muted);
     }
 
     // 소켓 쓰기 직전 호출하며 이전 페이지 조회의 멤버십 스냅샷을 재사용하지 않음.

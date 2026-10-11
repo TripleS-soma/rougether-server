@@ -23,12 +23,19 @@ public class ChatReadState {
     private Long userId;
     @Column(name = "last_read_sequence", nullable = false)
     private long lastReadSequence;
+    // 이 방 채팅 푸시를 끈 상태(#435). 읽음 커서와 무관함.
+    @Column(name = "push_muted", nullable = false)
+    private boolean pushMuted;
 
     public static ChatReadState unread(Long roomId, Long userId) {
         ChatReadState state = new ChatReadState();
         state.roomId = roomId;
         state.userId = userId;
         return state;
+    }
+
+    public void changePushMuted(boolean muted) {
+        this.pushMuted = muted;
     }
 
     public boolean advance(long sequence) {

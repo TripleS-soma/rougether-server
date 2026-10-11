@@ -24,7 +24,9 @@ public enum NotificationType {
     MARKET_SELL_FILLED(NotificationSettingType.MARKET),
     MARKET_BUY_FILLED(NotificationSettingType.MARKET),
     // 구매 주문이 호가창에 대기로 남으면 그 종목 판매 대기자 전원에게. refId=assetId
-    MARKET_BID_PLACED(NotificationSettingType.MARKET);
+    MARKET_BID_PLACED(NotificationSettingType.MARKET),
+    // 집 채팅 새 메시지(#435). 알림함에 저장하지 않는 푸시 전용 타입(설정 게이트 판정용).
+    CHAT_MESSAGE(NotificationSettingType.CHAT);
 
     // 소속 알림 설정 그룹. 생성자 인자라 새 타입 추가 시 그룹 지정이 컴파일 타임에 강제됨.
     private final NotificationSettingType settingType;
