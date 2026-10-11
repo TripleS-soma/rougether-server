@@ -51,20 +51,21 @@ class NotificationSettingControllerTest {
     void 설정_조회_응답_계약() throws Exception {
         authAsUser7();
         when(notificationSettingService.getSettings(7L))
-                .thenReturn(new NotificationSettingResponse(true, true, false, true));
+                .thenReturn(new NotificationSettingResponse(true, true, false, true, true));
 
         mockMvc.perform(get("/api/v1/users/me/notification-settings"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.all").value(true))
                 .andExpect(jsonPath("$.reminder").value(true))
-                .andExpect(jsonPath("$.house").value(false));
+                .andExpect(jsonPath("$.house").value(false))
+                .andExpect(jsonPath("$.market").value(true));
     }
 
     @Test
     void 부분_변경은_보낸_필드만_서비스로_전달되고_전체_설정을_응답한다() throws Exception {
         authAsUser7();
-        when(notificationSettingService.updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null)))
-                .thenReturn(new NotificationSettingResponse(true, true, false, true));
+        when(notificationSettingService.updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null, null)))
+                .thenReturn(new NotificationSettingResponse(true, true, false, true, true));
 
         mockMvc.perform(patch("/api/v1/users/me/notification-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -74,7 +75,22 @@ class NotificationSettingControllerTest {
                 .andExpect(jsonPath("$.reminder").value(true))
                 .andExpect(jsonPath("$.house").value(false));
 
-        verify(notificationSettingService).updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null));
+        verify(notificationSettingService).updateSettings(7L, new NotificationSettingUpdateRequest(null, null, false, null, null));
+    }
+
+    @Test
+    void 거래소_알림만_보내도_변경된다() throws Exception {
+        authAsUser7();
+        when(notificationSettingService.updateSettings(7L, new NotificationSettingUpdateRequest(null, null, null, null, false)))
+                .thenReturn(new NotificationSettingResponse(true, true, true, true, false));
+
+        mockMvc.perform(patch("/api/v1/users/me/notification-settings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"market\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.market").value(false));
+
+        verify(notificationSettingService).updateSettings(7L, new NotificationSettingUpdateRequest(null, null, null, null, false));
     }
 
     @Test
