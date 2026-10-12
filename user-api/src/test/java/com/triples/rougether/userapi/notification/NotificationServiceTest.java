@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,7 @@ import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
 import com.triples.rougether.userapi.notification.service.NotificationSettingService;
 import com.triples.rougether.userapi.notification.service.NotificationService.NotificationCreatedEvent;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -67,7 +69,7 @@ class NotificationServiceTest {
                 .isEqualTo(new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
         // push는 커밋 이후 리스너(onNotificationCreated)에서만 나가야 함 — send() 안에서 바로 호출되면 안 됨.
-        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -77,7 +79,20 @@ class NotificationServiceTest {
         notificationService.onNotificationCreated(
                 new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
-        verify(fcmPushExecutor).push(100L, 1L, "제목", "본문");
+        verify(fcmPushExecutor).push(100L, 1L, "제목", "본문",
+                Map.of("type", "HOUSE_KICK", "notificationId", "100"));
+    }
+
+    // 앱이 푸시를 누르면 알림함 카드와 같은 목적지로 간다 — 거래소 체결은 주문 id(refId)로 내 주문.
+    @Test
+    void push_데이터에_type_notificationId_refId를_싣는다() {
+        when(notificationSettingService.isPushAllowed(1L, NotificationType.MARKET_SELL_FILLED)).thenReturn(true);
+
+        notificationService.onNotificationCreated(
+                new NotificationCreatedEvent(101L, 1L, NotificationType.MARKET_SELL_FILLED, "제목", "본문", 55L));
+
+        verify(fcmPushExecutor).push(101L, 1L, "제목", "본문",
+                Map.of("type", "MARKET_SELL_FILLED", "notificationId", "101", "refId", "55"));
     }
 
     // push 제출이 실패해도(예: 비동기 큐 포화로 TaskRejectedException) AFTER_COMMIT 리스너 밖으로
@@ -86,7 +101,7 @@ class NotificationServiceTest {
     void push_제출이_실패해도_리스너는_예외를_전파하지_않는다() {
         when(notificationSettingService.isPushAllowed(1L, NotificationType.HOUSE_KICK)).thenReturn(true);
         doThrow(new TaskRejectedException("queue full"))
-                .when(fcmPushExecutor).push(100L, 1L, "제목", "본문");
+                .when(fcmPushExecutor).push(eq(100L), eq(1L), eq("제목"), eq("본문"), any());
 
         assertThatCode(() -> notificationService.onNotificationCreated(
                 new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null)))
@@ -101,7 +116,7 @@ class NotificationServiceTest {
                 new NotificationCreatedEvent(100L, 1L, NotificationType.HOUSE_KICK, "제목", "본문", null));
 
         verify(notificationPushStatusService).markBlocked(100L);
-        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -120,7 +135,7 @@ class NotificationServiceTest {
         verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(captor.capture());
         assertThat(captor.getAllValues().get(0).body()).isEqualTo("민지님: 잘하고 있어!");
         assertThat(captor.getAllValues().get(1).body()).isEqualTo("민지: You're doing great!");
-        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any(), any());
     }
 
     @Test

@@ -129,7 +129,7 @@ class MarketNotificationIntegrationTest {
             assertThat(n.get("body")).isEqualTo("'고양이 소파'이(가) 30코인에 팔렸어요."); // 체결가(먼저 걸린 가격)
         });
         assertThat(notes(buyer)).isEmpty(); // taker 는 접수 결과 조회로 앎
-        verify(fcm).push(any(), eq(creator.getId()), eq("가구가 팔렸어요"), eq("'고양이 소파'이(가) 30코인에 팔렸어요."));
+        verify(fcm).push(any(), eq(creator.getId()), eq("가구가 팔렸어요"), eq("'고양이 소파'이(가) 30코인에 팔렸어요."), any());
     }
 
     @Test
@@ -243,7 +243,7 @@ class MarketNotificationIntegrationTest {
 
         assertThat(notes(creator)).singleElement()
                 .satisfies(n -> assertThat(n.get("push_status")).isEqualTo("BLOCKED"));
-        verify(fcm, never()).push(any(), eq(creator.getId()), any(), any());
+        verify(fcm, never()).push(any(), eq(creator.getId()), any(), any(), any());
     }
 
     @Test

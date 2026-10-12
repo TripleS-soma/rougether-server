@@ -63,7 +63,7 @@ class NotificationPushGateTest {
     void 설정이_없으면_push가_나간다() {
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
-        verify(fcmPushExecutor).push(any(), eq(userId), eq("제목"), eq("본문"));
+        verify(fcmPushExecutor).push(any(), eq(userId), eq("제목"), eq("본문"), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
     }
 
@@ -73,7 +73,7 @@ class NotificationPushGateTest {
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
-        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any(), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
         assertThat(savedPushStatus()).isEqualTo("BLOCKED");
     }
@@ -86,7 +86,7 @@ class NotificationPushGateTest {
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_MEMBER_JOINED, "제목", "본문"));
 
-        verify(fcmPushExecutor, never()).push(any(), any(), any(), any());
+        verify(fcmPushExecutor, never()).push(any(), any(), any(), any(), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
         assertThat(savedPushStatus()).isEqualTo("BLOCKED");
     }
@@ -97,7 +97,7 @@ class NotificationPushGateTest {
 
         notificationService.send(userId, new NotificationContent(NotificationType.HOUSE_KICK, "제목", "본문"));
 
-        verify(fcmPushExecutor).push(any(), eq(userId), eq("제목"), eq("본문"));
+        verify(fcmPushExecutor).push(any(), eq(userId), eq("제목"), eq("본문"), any());
         assertThat(savedNotificationCount()).isEqualTo(1);
     }
 }
