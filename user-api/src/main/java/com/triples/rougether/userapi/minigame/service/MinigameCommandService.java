@@ -44,7 +44,7 @@ public class MinigameCommandService {
 
     public MinigameRunStartResponse start(Long userId, String gameCode, int rulesVersion) {
         catalog.requireGame(gameCode);
-        catalog.requireRulesVersion(rulesVersion);
+        catalog.requireRulesVersion(gameCode, rulesVersion);
         MinigameReplayVerifier verifier = replayRegistry.get(gameCode);
         User user = lockActivePlayer(userId);
         Instant now = kstClock.instant();
