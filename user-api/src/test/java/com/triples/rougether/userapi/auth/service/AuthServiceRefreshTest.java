@@ -64,7 +64,7 @@ class AuthServiceRefreshTest {
     private EmailProviderConflictGuard emailProviderConflictGuard;
 
     private AuthService authService;
-    private JwtProperties jwtProperties = new JwtProperties("secret", Duration.ofMinutes(30), Duration.ofDays(14), null);
+    private JwtProperties jwtProperties = new JwtProperties("secret", Duration.ofMinutes(30), Duration.ofDays(14), null, null);
 
     @BeforeEach
     void setUp() {
@@ -112,6 +112,68 @@ class AuthServiceRefreshTest {
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
         // 거부 경로에서는 마지막 접속 시각을 갱신하지 않음.
         verify(userRepository, never()).updateLastAccessedAt(anyLong(), any(Instant.class));
+    }
+
+    private RefreshToken tokenExpiringIn(User user, long id, String familyId, Duration left) {
+        RefreshToken token = RefreshToken.issueInFamily(user, "hash", Instant.now().plus(left), familyId);
+        ReflectionTestUtils.setField(token, "id", id);
+        return token;
+    }
+
+    // mobile #1388 후속 — 만료까지 넉넉하면(기본 7일 초과) 회전하지 않고 같은 refresh 를 돌려줌.
+    @Test
+    void 남은_기간이_넉넉하면_회전하지_않고_같은_refresh_와_새_access_를_준다() {
+        User user = userWithId(1L);
+        presented(tokenExpiringIn(user, 100L, "fam-a", Duration.ofDays(10)));
+        when(tokenService.issueAccessToken(eq(1L), any())).thenReturn("new-access");
+
+        TokenResponse response = authService.refresh("raw");
+
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.refreshToken()).isEqualTo("raw");
+        verify(refreshTokenRepository, never()).revokeIfActive(anyLong(), any(), any(), any());
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verify(tokenService, never()).generateRefreshToken();
+        // 정상 발급이므로 마지막 접속 시각은 갱신함.
+        verify(userRepository).updateLastAccessedAt(eq(1L), any(Instant.class));
+    }
+
+    @Test
+    void 남은_기간이_회전_기준_이하면_회전한다() {
+        User user = userWithId(1L);
+        presented(tokenExpiringIn(user, 100L, "fam-a", Duration.ofDays(7).minusMinutes(1)));
+        when(refreshTokenRepository.revokeIfActive(eq(100L), any(Instant.class),
+                eq(RefreshTokenRevokeReason.ROTATED), eq("fam-a"))).thenReturn(1);
+        stubIssue(1L);
+
+        TokenResponse response = authService.refresh("raw");
+
+        assertThat(response.refreshToken()).isEqualTo("new-raw");
+        assertThat(savedToken().getFamilyId()).isEqualTo("fam-a");
+    }
+
+    @Test
+    void 레거시_family_없는_토큰은_기간이_넉넉해도_회전해서_family_를_붙인다() {
+        User user = userWithId(1L);
+        presented(tokenExpiringIn(user, 100L, null, Duration.ofDays(10)));
+        when(refreshTokenRepository.revokeIfActive(eq(100L), any(Instant.class),
+                eq(RefreshTokenRevokeReason.ROTATED), anyString())).thenReturn(1);
+        stubIssue(1L);
+
+        TokenResponse response = authService.refresh("raw");
+
+        assertThat(response.refreshToken()).isEqualTo("new-raw");
+        assertThat(savedToken().getFamilyId()).isNotNull();
+    }
+
+    @Test
+    void 기간이_넉넉해도_탈퇴_회원의_토큰은_거부한다() {
+        User user = userWithId(1L);
+        ReflectionTestUtils.setField(user, "deletedAt", Instant.now());
+        presented(tokenExpiringIn(user, 100L, "fam-a", Duration.ofDays(10)));
+
+        assertRejected();
+        verify(tokenService, never()).issueAccessToken(anyLong(), any());
     }
 
     @Test
@@ -197,7 +259,7 @@ class AuthServiceRefreshTest {
 
     @Test
     void 유예_시간은_설정값을_따른다() {
-        jwtProperties = new JwtProperties("secret", Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofSeconds(5));
+        jwtProperties = new JwtProperties("secret", Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofSeconds(5), null);
         setUp();
         User user = userWithId(9L);
         RefreshToken rotated = token(user, 900L, "fam-a");

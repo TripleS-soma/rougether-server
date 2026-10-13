@@ -40,8 +40,9 @@ public class RefreshTokenRotator {
     private final TokenService tokenService;
     private final JwtProperties jwtProperties;
 
+    // rawRefreshToken: 회전하지 않을 때 그대로 돌려주는 원문(서버는 해시만 저장하므로 요청 값을 씀).
     @Transactional
-    public Optional<TokenResponse> rotate(String tokenHash, Instant now) {
+    public Optional<TokenResponse> rotate(String rawRefreshToken, String tokenHash, Instant now) {
         RefreshToken stored = refreshTokenRepository.findByTokenHashForUpdate(tokenHash).orElse(null);
         if (stored == null) {
             return Optional.empty();
@@ -55,6 +56,15 @@ public class RefreshTokenRotator {
         // 탈퇴 회원 잔여 토큰 방어: 탈퇴 트랜잭션의 전량 폐기와 동시에 회전돼 살아남은 토큰도 여기서 거부됨.
         if (stored.getUser().isDeleted()) {
             return Optional.empty();
+        }
+
+        // 만료까지 넉넉하면 회전하지 않음(mobile #1388 후속) — 같은 refresh 를 돌려주고 access 만 새로 줌.
+        // 1회용 회전은 응답을 못 받은 클라이언트(백그라운드 전환·통신 끊김)가 유예 뒤 옛 토큰으로 오면 재사용으로 몰려
+        // 로그아웃됐음. 카카오처럼 만료 임박 때만 회전하면 그 경로가 거의 사라짐. 레거시(family 없음)는 회전해서 family 를 붙임.
+        if (stored.getFamilyId() != null && !isNearExpiry(stored, now)) {
+            userRepository.updateLastAccessedAt(stored.getUser().getId(), now);
+            String accessToken = tokenService.issueAccessToken(stored.getUser().getId(), MemberRole.NORMAL);
+            return Optional.of(new TokenResponse(accessToken, rawRefreshToken));
         }
 
         // 레거시(V82 이전) 토큰은 회전 시점에 새 family 를 받음 — 자기 row 에도 기록해 이후 유예 판정이 가능해짐.
@@ -90,6 +100,11 @@ public class RefreshTokenRotator {
                     user.getId(), stored.getRevokeReason(), count);
         }
         return Optional.empty();
+    }
+
+    // 남은 유효기간이 회전 기준(기본 7일) 이하면 회전함.
+    private boolean isNearExpiry(RefreshToken stored, Instant now) {
+        return !stored.getExpiresAt().minus(jwtProperties.refreshRotateBefore()).isAfter(now);
     }
 
     // 회전 계열 사유로 폐기된 지 유예(기본 60초) 미만이면 응답 유실 재시도로 봄.

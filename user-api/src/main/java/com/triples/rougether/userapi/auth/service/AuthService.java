@@ -134,7 +134,7 @@ public class AuthService {
     // 트랜잭션은 RefreshTokenRotator 가 소유함. 거부(재사용 감지 폐기 포함)가 커밋된 뒤에 여기서 401 로 변환함.
     public TokenResponse refresh(String rawRefreshToken) {
         String hash = tokenService.hashRefreshToken(rawRefreshToken);
-        return refreshTokenRotator.rotate(hash, Instant.now())
+        return refreshTokenRotator.rotate(rawRefreshToken, hash, Instant.now())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID));
     }
 
