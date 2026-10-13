@@ -39,9 +39,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 전체 스택(보안 필터·실제 MySQL(Testcontainers)·Flyway)에서 인증 가드와 refresh 회전·유예·재사용(family 단위)을 검증함.
-// 이 클래스는 회전·재사용 감지 계약을 검증함 — 기간과 무관하게 매번 회전하도록 기준을 refresh TTL 로 둠(mobile #1388 후속).
-// 만료 임박 때만 회전하는 기본 동작은 AuthServiceRefreshTest 가 다룸.
-@SpringBootTest(properties = "jwt.refresh-rotate-before=14d")
+// 이 클래스는 회전·재사용 감지 계약을 검증함 — 기간과 무관하게 매번 회전하도록 기준을 refresh TTL(14일)보다 크게 둠(mobile #1388 후속).
+// 정확히 14일이면 안 됨: expires_at 이 초 단위 컬럼에 반올림 저장돼 갓 발급한 토큰의 남은 기간이 14일을 몇백 ms 넘을 수 있고,
+// 그러면 회전하지 않아 테스트가 밀리초에 따라 깨졌음(10/13 배포 CI, 로컬 3회 중 2회). 만료 임박 때만 회전하는 기본 동작은 AuthServiceRefreshTest 가 다룸.
+@SpringBootTest(properties = "jwt.refresh-rotate-before=15d")
 @AutoConfigureMockMvc
 class AuthSecurityIntegrationTest {
 
