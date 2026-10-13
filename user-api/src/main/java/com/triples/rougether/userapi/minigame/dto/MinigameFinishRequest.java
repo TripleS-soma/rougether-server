@@ -11,7 +11,8 @@ import java.util.List;
 
 public record MinigameFinishRequest(
         @NotNull @Min(1) @Max(18000) Integer ticks,
-        @Size(max = 600) List<@NotNull @Min(1) @Max(18000) Integer> jumpTicks,
+        // 게임별 입력 상한(러너 600 · 탑 쌓기 3,000)은 각 검증기가 강제함. 여기는 가장 큰 상한.
+        @Size(max = 3000) List<@NotNull @Min(1) @Max(18000) Integer> jumpTicks,
         @Size(max = 2000) List<@NotNull @Valid MinigameAction> actions) {
 
     public MinigameFinishRequest(Integer ticks, List<Integer> jumpTicks) {

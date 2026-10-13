@@ -209,8 +209,9 @@ class MinigameControllerTest {
     }
 
     @Test
-    void 점프_입력이_600개를_초과하면_400으로_거절한다() throws Exception {
-        String body = "{\"ticks\":18000,\"jumpTicks\":[" + "1,".repeat(600) + "1]}";
+    void 점프_입력이_3000개를_초과하면_400으로_거절한다() throws Exception {
+        // 탑 쌓기의 떨어뜨리기 상한 3,000이 DTO 상한임. 러너의 600 상한은 검증기가 강제함.
+        String body = "{\"ticks\":18000,\"jumpTicks\":[" + "1,".repeat(3000) + "1]}";
 
         mockMvc.perform(post(FINISH_PATH).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())

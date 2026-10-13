@@ -1,0 +1,69 @@
+{
+  "rulesVersion": 3,
+  "rules": {
+    "stageWidth": 1000,
+    "baseWidth": 600,
+    "perfectTolerance": 8,
+    "growStep": 20,
+    "growAfterStreak": 3,
+    "startSpeed": 6,
+    "maxSpeed": 18,
+    "layersPerSpeedUp": 5,
+    "inputCooldown": 6,
+    "maxTicks": 18000,
+    "maxDrops": 3000
+  },
+  "fixtures": [
+    {
+      "name": "no_input_limit",
+      "seed": 1,
+      "ticks": 18000,
+      "dropTicks": [],
+      "score": 0,
+      "layers": 0,
+      "endReason": "limit"
+    },
+    {
+      "name": "every_40_ticks_until_miss",
+      "seed": 7,
+      "ticks": 200,
+      "dropTicks": [40, 80, 120, 160, 200],
+      "score": 4,
+      "layers": 4,
+      "endReason": "miss"
+    },
+    {
+      "name": "perfect_30_then_reckless",
+      "seed": 42,
+      "ticks": 972,
+      "dropTicks": [
+        14, 83, 118, 187, 219, 265, 275, 324, 343, 373, 427, 437, 449, 486, 495, 539, 572, 618, 639,
+        679, 702, 718, 763, 786, 803, 837, 872, 880, 918, 932, 945, 954, 963, 972
+      ],
+      "score": 63,
+      "layers": 33,
+      "endReason": "miss"
+    },
+    {
+      "name": "trim_then_grow_back",
+      "seed": 2026,
+      "ticks": 18000,
+      "dropTicks": [
+        43, 92, 204, 223, 270, 339, 391, 446, 496, 545, 572, 617, 627, 660, 675, 737, 754, 785, 836,
+        842
+      ],
+      "score": 37,
+      "layers": 20,
+      "endReason": "limit"
+    },
+    {
+      "name": "mash_every_tick",
+      "seed": 99,
+      "ticks": 13,
+      "dropTicks": [1, 7, 13],
+      "score": 2,
+      "layers": 2,
+      "endReason": "miss"
+    }
+  ]
+}

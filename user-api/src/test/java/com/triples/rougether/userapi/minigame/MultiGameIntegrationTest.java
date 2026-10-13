@@ -290,6 +290,40 @@ class MultiGameIntegrationTest {
         assertThat(commandService.finish(player.getId(), MERGE, merge.getId(), MERGE_FINISH).score()).isEqualTo(8);
     }
 
+    // 탑 쌓기(mobile #1529): v3 세션만 발급하고, 떨어뜨린 틱을 jumpTicks로 받아 서버 점수로 랭킹에 반영함.
+    @Test
+    void 탑_쌓기는_v3로만_시작하고_떨어뜨린_틱을_재생한_점수로_최고점과_순위를_저장한다() {
+        User player = player("탑 쌓기");
+        String tower = MinigameCatalog.TOWER;
+        long before = runRepository.count();
+        for (int legacy : List.of(1, 2)) {
+            assertError(() -> commandService.start(player.getId(), tower, legacy),
+                    MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        }
+        assertError(() -> commandService.start(player.getId(), tower), MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        assertThat(runRepository.count()).isEqualTo(before);
+        var started = commandService.start(player.getId(), tower, 3);
+        assertThat(started.maxTicks()).isEqualTo(18_000);
+        assertThat(started.rulesVersion()).isEqualTo(3);
+
+        // 모바일 픽스처 every_40_ticks_until_miss: seed 7, 200틱에 다섯 번째 상자를 놓쳐 4점.
+        MinigameRun run = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                tower, 3, 7, now.minusSeconds(100), now.plusSeconds(1700)));
+        assertError(() -> commandService.finish(player.getId(), tower, run.getId(),
+                new MinigameFinishRequest(200, List.of(40, 44, 80))), MinigameErrorCode.INVALID_REPLAY);
+        assertError(() -> commandService.finish(player.getId(), tower, run.getId(), actions(200)),
+                MinigameErrorCode.INVALID_REPLAY);
+        assertUnfinishedWithoutBest(run, player.getId(), tower);
+
+        var finished = commandService.finish(player.getId(), tower, run.getId(),
+                new MinigameFinishRequest(200, List.of(40, 80, 120, 160, 200)));
+        assertThat(finished.score()).isEqualTo(4);
+        assertThat(finished.personalBest()).isTrue();
+        assertThat(finished.rank()).isEqualTo(1);
+        assertThat(bestScoreRepository.findByUserIdAndGameCode(player.getId(), tower).orElseThrow().getScore())
+                .isEqualTo(4);
+    }
+
     private User player(String nickname) {
         User user = User.signUp();
         user.changeNickname(nickname);
