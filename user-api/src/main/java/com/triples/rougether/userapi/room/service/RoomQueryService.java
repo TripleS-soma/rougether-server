@@ -5,6 +5,8 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
@@ -43,6 +45,7 @@ public class RoomQueryService {
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
+    private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
                             RoomSurfaceSlotRepository roomSurfaceSlotRepository,
@@ -51,7 +54,8 @@ public class RoomQueryService {
                             StreakRepository streakRepository,
                             UserCharacterRepository userCharacterRepository,
                             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
-                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
+                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
+                            UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -60,6 +64,7 @@ public class RoomQueryService {
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
+        this.userRepository = userRepository;
     }
 
     // lazy 생성 가능해야 하므로 readOnly 아님.
@@ -150,6 +155,7 @@ public class RoomQueryService {
                         selectedCharacter.getId());
         return RoomResponse.of(
                 room,
+                ownerBioOf(userId),
                 slots,
                 placements,
                 streak,
@@ -158,5 +164,10 @@ public class RoomQueryService {
                 accessories,
                 renderProfileQueryService.findFor(accessories),
                 roomCobwebRepository.findVisibleActive(userId).orElse(null));
+    }
+
+    // 방 주인의 한 줄 소개. 탈퇴 회원은 익명화로 이미 null 이라 별도 처리 없음.
+    private String ownerBioOf(Long userId) {
+        return userRepository.findById(userId).map(User::getBio).orElse(null);
     }
 }

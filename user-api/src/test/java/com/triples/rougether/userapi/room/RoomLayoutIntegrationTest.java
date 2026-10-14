@@ -197,4 +197,19 @@ class RoomLayoutIntegrationTest {
         assertThat(queried.layoutFormat()).isEqualTo(RoomLayoutFormat.SLOT_V1);
         assertThat(queried.placements()).isEmpty();
     }
+
+    @Test
+    void 내_방_조회와_저장_응답은_내_한_줄_소개를_같은_의미로_담는다() {
+        userRepository.findById(userId).orElseThrow().changeBio("아침형 인간 도전 중");
+
+        RoomResponse queried = roomQueryService.getMyRoom(userId);
+        RoomResponse slotSaved = roomCommandService.updateSlots(userId, new RoomSlotUpdateRequest(
+                List.of(new SlotAssignment("topLeft", chairOwned.getId()))));
+        RoomResponse layoutSaved = roomCommandService.updateLayout(userId, new RoomLayoutUpdateRequest(
+                slotSaved.layoutRevision(), List.of(), List.of(placement(chairOwned.getId(), "0.10", "0.10", 0))));
+
+        assertThat(queried.ownerBio()).isEqualTo("아침형 인간 도전 중");
+        assertThat(slotSaved.ownerBio()).isEqualTo("아침형 인간 도전 중");
+        assertThat(layoutSaved.ownerBio()).isEqualTo("아침형 인간 도전 중");
+    }
 }

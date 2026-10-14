@@ -25,9 +25,15 @@ import com.triples.rougether.userapi.global.i18n.CatalogNames;
 // GET /api/v1/rooms/me 응답: 방 성장 + 착용 캐릭터 + 슬롯 배치 + 자유배치 + 스트릭.
 // layoutFormat/layoutRevision/placements 는 자유배치 도입으로 추가된 additive 필드 — 구버전 앱은 무시하고 slots 만 쓴다.
 // characterUnlocked/characterUnlockLevel 은 앱이 highest_growth_level 을 모르므로 서버가 해금 판정을 내려 주는 additive 필드.
+// ownerBio 는 친구 방 소개 표시용 additive 필드. 이 응답을 쓰는 모든 경로(내 방 조회·저장, 집 멤버 방 조회)가
+// 같은 의미(방 주인 = roomUserId 의 한 줄 소개)로 채운다. 집 미리보기 렌더(RoomRenderResponse)에는 넣지 않는다.
 public record RoomResponse(
         @Schema(description = "방 소유자 회원 ID (방은 회원당 1개, userId 가 곧 방 식별자)", example = "1")
         Long roomUserId,
+        @Schema(description = "방 주인의 한 줄 소개(users.bio, 최대 100자). 같은 집 활성 구성원에게만 공개, "
+                + "비어 있으면 null. 내 방 조회·저장 응답에서는 내 소개, 집 멤버 방 조회에서는 그 구성원의 소개",
+                example = "아침형 인간 도전 중", nullable = true)
+        String ownerBio,
         @Schema(description = "방 성장 레벨 (첫 생성 시 0)", example = "1")
         int growthLevel,
         @Schema(description = "누적 방 성장 포인트. 실제 루틴·투두 완료 보상과 같은 양을 적립하고 완료 취소 시 회수",
@@ -62,7 +68,7 @@ public record RoomResponse(
         @Schema(description = "방 최근 변경 시각")
         Instant updatedAt) {
 
-    public static RoomResponse of(PersonalRoom room, List<RoomSurfaceSlot> slots,
+    public static RoomResponse of(PersonalRoom room, String ownerBio, List<RoomSurfaceSlot> slots,
                                   List<RoomItemPlacement> placements, Streak streak,
                                   LocalDate referenceDate,
                                   UserCharacter selectedCharacter,
@@ -78,6 +84,7 @@ public record RoomResponse(
                 .toList();
         return new RoomResponse(
                 room.getUserId(),
+                normalizeBio(ownerBio),
                 room.getGrowthLevel(),
                 room.getGrowthPoints(),
                 room.getPointsToNextLevel(),
@@ -91,6 +98,11 @@ public record RoomResponse(
                 RoomStreakResponse.of(streak, referenceDate),
                 RoomCobwebResponse.of(cobweb),
                 room.getUpdatedAt());
+    }
+
+    // 공백뿐인 소개는 소개 없음과 같게 null 로 내림. 저장값 자체는 건드리지 않음.
+    static String normalizeBio(String bio) {
+        return bio == null || bio.isBlank() ? null : bio;
     }
 
     public record RoomCobwebResponse(

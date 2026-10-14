@@ -51,6 +51,8 @@ public class HouseMemberActivityController {
                     + "본인(내 membershipId)도 조회할 수 있습니다. "
                     + "응답 형태는 내 방 조회(GET /api/v1/rooms/me)와 동일합니다 — 방 성장 레벨, 착용 캐릭터, "
                     + "벽지/바닥/배경(surface)·가구(positioned) 슬롯별 배치와 아이템 assetKey, 스트릭이 내려갑니다. "
+                    + "방 주인의 한 줄 소개(ownerBio)도 함께 내려가며, 소개가 비어 있거나 공백뿐이면 null 입니다 — "
+                    + "이 API 의 구성원 guard 를 통과한 같은 집 활성 구성원에게만 공개되고, 집 미리보기(memberRooms)·구성원 목록에는 포함하지 않습니다. "
                     + "대상 회원이 아직 방을 만들지 않았으면(내 방 화면 미방문) 404(ROOM_NOT_FOUND)를 반환합니다.")
     @GetMapping("/room")
     public RoomResponse getMemberRoom(
