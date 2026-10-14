@@ -118,6 +118,9 @@ public class MinigameCommandService {
         if (request.jumpTicks() != null) {
             // 러너의 기존 digest 형식을 유지해 업데이트 전 기록의 재전송도 동일하게 처리함.
             request.jumpTicks().forEach(tick -> canonical.append(tick).append(','));
+        } else if (request.picks() != null) {
+            canonical.append("picks:");
+            request.picks().forEach(pile -> canonical.append(pile).append(','));
         } else {
             canonical.append("actions:");
             request.actions().forEach(action -> canonical.append(action.tick()).append('=')

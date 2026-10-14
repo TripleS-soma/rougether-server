@@ -347,6 +347,55 @@ class MinigameControllerTest {
         ).map(body -> Arguments.of(gameCode, body)));
     }
 
+    @Test
+    void 털실_정리는_집은_더미_번호를_picks로_검증_서비스에_전달한다() throws Exception {
+        MinigameFinishRequest request = MinigameFinishRequest.ofPicks(4, List.of(0, 5, 2, 2));
+        when(minigameCommandService.finish(7L, "cat-yarn", RUN_ID, request))
+                .thenReturn(new MinigameFinishResponse(RUN_ID, 3, 3, true, 1, 1));
+
+        mockMvc.perform(post("/api/v1/minigames/cat-yarn/runs/{runId}/finish", RUN_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ticks":4,"picks":[0,5,2,2]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(3))
+                .andExpect(jsonPath("$.playCount").value(1));
+
+        verify(minigameCommandService).finish(7L, "cat-yarn", RUN_ID, request);
+    }
+
+    // picks는 0..5, 최대 2,000개이고 jumpTicks·actions와 함께 보낼 수 없음.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"ticks\":1,\"picks\":[-1]}",
+            "{\"ticks\":1,\"picks\":[6]}",
+            "{\"ticks\":1,\"picks\":[null]}",
+            "{\"ticks\":1,\"picks\":[0],\"jumpTicks\":[]}",
+            "{\"ticks\":1,\"picks\":[0],\"actions\":[]}",
+            "{\"ticks\":1,\"picks\":[],\"jumpTicks\":[],\"actions\":[]}"
+    })
+    void 범위_밖이거나_다른_입력과_함께_보낸_picks는_400으로_거절한다(String body) throws Exception {
+        mockMvc.perform(post("/api/v1/minigames/cat-yarn/runs/{runId}/finish", RUN_ID)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(minigameCommandService);
+    }
+
+    @Test
+    void 집기_입력이_2000개를_초과하면_400으로_거절한다() throws Exception {
+        String body = "{\"ticks\":2001,\"picks\":[" + "0,".repeat(2000) + "0]}";
+
+        mockMvc.perform(post("/api/v1/minigames/cat-yarn/runs/{runId}/finish", RUN_ID)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(minigameCommandService);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"cat-stairs", "cat-merge"})
     void 지원하지_않는_방향_문자열은_본문_해석_오류로_400을_반환한다(String gameCode) throws Exception {
