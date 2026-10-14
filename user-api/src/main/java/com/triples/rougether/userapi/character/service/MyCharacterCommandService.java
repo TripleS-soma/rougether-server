@@ -8,17 +8,20 @@ import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 착용(대표) 캐릭터 교체. 보유한 캐릭터로만 교체할 수 있고, 무료 지급은 온보딩 경로가 소유한다.
+// 착용(대표) 캐릭터 교체. 보유한 캐릭터로만, 방 레벨 10 달성 후에만 교체할 수 있고, 무료 지급은 온보딩 경로가 소유한다.
 @Service
 public class MyCharacterCommandService {
 
     private final UserCharacterRepository userCharacterRepository;
     private final UserRepository userRepository;
+    private final CharacterUnlockPolicy characterUnlockPolicy;
 
     public MyCharacterCommandService(UserCharacterRepository userCharacterRepository,
-                                     UserRepository userRepository) {
+                                     UserRepository userRepository,
+                                     CharacterUnlockPolicy characterUnlockPolicy) {
         this.userCharacterRepository = userCharacterRepository;
         this.userRepository = userRepository;
+        this.characterUnlockPolicy = characterUnlockPolicy;
     }
 
     // 동시 교체가 착용 2개를 만들지 않게 user 행 잠금으로 직렬화 (온보딩 선택과 동일 락 대상이라 상호 배제됨)
@@ -37,6 +40,10 @@ public class MyCharacterCommandService {
         }
 
         if (!target.isSelected()) {
+            // 착용 중인 캐릭터 재지정은 변경이 아니라 해금 전에도 성공함. 온보딩 첫 선택은 별도 경로라 영향 없음.
+            if (!characterUnlockPolicy.isUnlocked(userId)) {
+                throw new BusinessException(MemberErrorCode.CHARACTER_SWAP_LOCKED);
+            }
             userCharacterRepository.findByUserIdAndSelectedTrueAndDeletedAtIsNull(userId)
                     .ifPresent(UserCharacter::unselect);
             target.select();

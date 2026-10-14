@@ -98,10 +98,10 @@ class WalletHistoryRecordIntegrationTest {
                 userWalletRepository, streakRepository, dailyRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class), recorder,
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService, recorder,
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         walletQueryService = new WalletQueryService(userWalletRepository, walletHistoryRepository);
         user = userRepository.save(User.signUp());
         userId = user.getId();

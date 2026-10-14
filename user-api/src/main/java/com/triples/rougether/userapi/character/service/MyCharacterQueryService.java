@@ -5,19 +5,16 @@ import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
 import com.triples.rougether.userapi.character.dto.MyCharacterListResponse;
-import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 보유 캐릭터 조회. 획득 경로(온보딩 무료 1회·뽑기 지급)와 착용 변경은 각자의 도메인이 소유하고,
-// 목록 반환 전에 미지급 레벨 달성 보상을 같은 트랜잭션에서 보정함.
+// 보유 캐릭터 조회. 획득 경로(온보딩 무료 1회·뽑기 지급)와 착용 변경은 각자의 도메인이 소유함.
 @Service
 public class MyCharacterQueryService {
 
-    private final RoomGrowthService roomGrowthService;
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
@@ -25,17 +22,14 @@ public class MyCharacterQueryService {
     public MyCharacterQueryService(
             UserCharacterRepository userCharacterRepository,
             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
-            CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-            RoomGrowthService roomGrowthService) {
-        this.roomGrowthService = roomGrowthService;
+            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public MyCharacterListResponse getMyCharacters(Long userId) {
-        roomGrowthService.grantPendingReward(userId);
         List<UserCharacter> owned = userCharacterRepository.findOwnedWithCharacter(userId);
         if (owned.isEmpty()) {
             return MyCharacterListResponse.of(List.of(), Map.of(), Map.of());

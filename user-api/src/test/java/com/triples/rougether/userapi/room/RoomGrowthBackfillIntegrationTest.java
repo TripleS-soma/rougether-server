@@ -69,7 +69,7 @@ class RoomGrowthBackfillIntegrationTest {
     }
 
     @Test
-    void 삭제된_루틴과_투두의_실제보상도_합산하고_레벨5_모루를_중복없이_지급한다() throws Exception {
+    void 삭제된_루틴과_투두의_실제보상도_합산하고_레벨5여도_캐릭터는_지급하지_않는다() throws Exception {
         User user = user();
         Routine routine = routine(user);
         RoutineLog log = legacyRoutine(routine, 100);
@@ -82,8 +82,8 @@ class RoomGrowthBackfillIntegrationTest {
         assertRoom(user, 120, 5);
         assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM routine_logs WHERE id = ?", Integer.class, log.getId())).isEqualTo(100);
         assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM todos WHERE id = ?", Integer.class, todo.getId())).isEqualTo(20);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM user_characters WHERE user_id = ?", Integer.class, user.getId())).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT is_selected FROM user_characters WHERE user_id = ?", Boolean.class, user.getId())).isFalse();
+        // 모루 레벨 보상은 2026-10-14 제거함. 활성 카탈로그가 있어도 소급 도구가 지급하지 않음.
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM user_characters WHERE user_id = ?", Integer.class, user.getId())).isZero();
         assertThat(balance(user)).isEqualTo(7);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM wallet_histories", Integer.class)).isZero();
     }

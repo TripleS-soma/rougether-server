@@ -29,6 +29,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewardResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
+import com.triples.rougether.userapi.character.service.CharacterUnlockPolicy;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
@@ -68,6 +69,7 @@ public class GachaService {
     private final UserWalletRepository walletRepository;
     private final UserRepository userRepository;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    private final CharacterUnlockPolicy characterUnlockPolicy;
     private final Random random = new Random();
 
     public GachaService(GachaRepository gachaRepository,
@@ -76,7 +78,8 @@ public class GachaService {
                         UserCharacterRepository userCharacterRepository,
                         UserWalletRepository walletRepository,
                         UserRepository userRepository,
-                        WalletHistoryRecorder walletHistoryRecorder) {
+                        WalletHistoryRecorder walletHistoryRecorder,
+                        CharacterUnlockPolicy characterUnlockPolicy) {
         this.gachaRepository = gachaRepository;
         this.poolRepository = poolRepository;
         this.userItemRepository = userItemRepository;
@@ -84,6 +87,7 @@ public class GachaService {
         this.walletRepository = walletRepository;
         this.userRepository = userRepository;
         this.walletHistoryRecorder = walletHistoryRecorder;
+        this.characterUnlockPolicy = characterUnlockPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -161,13 +165,18 @@ public class GachaService {
         // 행 락으로 동시 뽑기의 이중 차감을 막는다.
         UserWallet wallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
-        if (wallet.getBalance() < cost) {
-            throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
-        }
-
         List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
                 .filter(entry -> isEligibleReward(gacha, entry))
                 .toList();
+        // 캐릭터가 나올 수 있는 머신은 방 레벨 10부터. 코인 차감 전에 막고, 방은 잠그지 않고 읽어 락 순서를 유지함.
+        // 잔액 부족보다 먼저 판정해 해금 전 사용자가 "코인을 모으면 된다"로 오해하지 않게 함. 미리보기는 열어 둠.
+        if (pool.stream().anyMatch(entry -> entry.getRewardType() == RewardType.CHARACTER)
+                && !characterUnlockPolicy.isUnlocked(userId)) {
+            throw new BusinessException(GachaErrorCode.CHARACTER_GACHA_LOCKED);
+        }
+        if (wallet.getBalance() < cost) {
+            throw new BusinessException(GachaErrorCode.INSUFFICIENT_COIN);
+        }
         if (pool.isEmpty()) {
             throw new BusinessException(GachaErrorCode.EMPTY_POOL);
         }

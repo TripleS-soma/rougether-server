@@ -72,7 +72,7 @@ class TodoCompletionServiceIntegrationTest {
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         // 코인은 dueDate가 오늘인 완료에만 지급되므로 기본 픽스처는 오늘 마감으로 만듦

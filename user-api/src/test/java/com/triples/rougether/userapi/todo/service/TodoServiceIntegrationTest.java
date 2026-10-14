@@ -78,7 +78,7 @@ class TodoServiceIntegrationTest {
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
 
@@ -330,7 +330,7 @@ class TodoServiceIntegrationTest {
         TodoService racingService = new TodoService(racing, categoryRepository, userRepository,
                 userWalletRepository, new DailyRewardService(routineLogRepository, todoRepository),
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
 
         assertThatThrownBy(() -> racingService.create(userId, imported("팀 회의(재동기화)", "evt-1")))
                 .isInstanceOf(BusinessException.class)

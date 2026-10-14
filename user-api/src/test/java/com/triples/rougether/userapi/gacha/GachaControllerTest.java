@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.gacha.entity.GachaCategory;
 import com.triples.rougether.userapi.auth.service.TokenService;
@@ -16,6 +17,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse.GachaRewardResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaResponse;
+import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import com.triples.rougether.userapi.gacha.web.GachaController;
 import com.triples.rougether.userapi.global.security.AuthUser;
@@ -157,5 +159,21 @@ class GachaControllerTest {
                 .andExpect(jsonPath("$.wallets[0].balance").value(750))
                 .andExpect(jsonPath("$.wallets[1].currencyType").value("DIAMOND"))
                 .andExpect(jsonPath("$.wallets[1].balance").value(30));
+    }
+
+    @Test
+    void 방레벨_10_전_캐릭터_뽑기는_403_GACHA_CHARACTER_LOCKED다() throws Exception {
+        when(currentUserArgumentResolver.supportsParameter(any())).thenReturn(true);
+        when(currentUserArgumentResolver.resolveArgument(any(), any(), any(), any()))
+                .thenReturn(new AuthUser(1L, null));
+        when(gachaService.draw(eq(1L), eq(10L), any()))
+                .thenThrow(new BusinessException(GachaErrorCode.CHARACTER_GACHA_LOCKED));
+
+        mockMvc.perform(post("/api/v1/gacha/10/draw")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"count\":1}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("GACHA_CHARACTER_LOCKED"))
+                .andExpect(jsonPath("$.message").value("방 레벨 10부터 캐릭터 뽑기를 할 수 있습니다."));
     }
 }

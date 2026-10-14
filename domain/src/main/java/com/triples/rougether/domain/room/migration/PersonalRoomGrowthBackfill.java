@@ -119,17 +119,6 @@ public class PersonalRoomGrowthBackfill {
             markRewards(connection, "UPDATE routine_logs SET growth_reward_amount = reward_amount WHERE id = ?", routines);
             markRewards(connection, "UPDATE todos SET growth_reward_amount = reward_amount WHERE id = ?", todos);
         }
-        // 에셋 준비가 완료되어 이미 활성화된 모루만 지급함. 대표 선택과 회수된 보유 이력은 보존함.
-        try (var statement = connection.prepareStatement("""
-                INSERT INTO user_characters (user_id, character_id, is_selected, acquired_at, created_at, updated_at)
-                SELECT r.user_id, c.id, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                FROM personal_rooms r JOIN characters c ON c.code = 'moru' AND c.is_active = TRUE
-                WHERE r.user_id = ? AND GREATEST(r.growth_level, r.highest_growth_level) >= 5
-                  AND NOT EXISTS (SELECT 1 FROM user_characters uc WHERE uc.user_id = r.user_id AND uc.character_id = c.id)
-                """)) {
-            statement.setLong(1, userId);
-            statement.executeUpdate();
-        }
         return points;
     }
 

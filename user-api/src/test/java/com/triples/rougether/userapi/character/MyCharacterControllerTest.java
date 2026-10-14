@@ -25,6 +25,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -134,5 +136,18 @@ class MyCharacterControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 방레벨_10_전_착용_교체는_403_CHARACTER_SWAP_LOCKED다() throws Exception {
+        when(myCharacterCommandService.select(7L, 3L))
+                .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_SWAP_LOCKED));
+
+        mockMvc.perform(put("/api/v1/me/characters/select")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":3}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CHARACTER_SWAP_LOCKED"))
+                .andExpect(jsonPath("$.message").value("방 레벨 10부터 캐릭터를 바꿀 수 있습니다."));
     }
 }

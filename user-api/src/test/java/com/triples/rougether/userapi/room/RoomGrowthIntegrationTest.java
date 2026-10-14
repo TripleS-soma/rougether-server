@@ -128,130 +128,58 @@ class RoomGrowthIntegrationTest {
         }
     }
 
+    // 모루 레벨 5 보상은 2026-10-14 제거함. 활성 카탈로그가 남아 있어도 어떤 경로로도 지급하지 않음.
     @Test
-    void 레벨5_직전에는_미지급하고_120포인트_도달시_한번만_지급한다() {
+    void 레벨5를_넘겨도_완료와_조회_어디서도_모루를_지급하지_않는다() {
         Character moru = character("moru", true);
-        seedGrowth(100, 4);
-        Long first = todo(today);
-        Long second = todo(today);
-        todoService.complete(user.getId(), first);
-        assertThat(moruCount(moru)).isZero();
-        todoService.complete(user.getId(), second);
-        assertThat(moruCount(moru)).isEqualTo(1);
-        assertThat(userCharacterRepository.findByUserIdAndCharacterIdAndDeletedAtIsNull(user.getId(), moru.getId())
-                .orElseThrow().isSelected()).isFalse();
-        todoService.cancelComplete(user.getId(), second);
-        assertRoom(110, 4);
-        assertThat(roomRepository.findById(user.getId()).orElseThrow().getHighestGrowthLevel()).isEqualTo(5);
-        todoService.complete(user.getId(), second);
-        assertThatThrownBy(() -> todoService.complete(user.getId(), second)).isInstanceOf(BusinessException.class);
-        myCharacterQueryService.getMyCharacters(user.getId());
-        assertThat(moruCount(moru)).isEqualTo(1);
-    }
-
-    @Test
-    void 루틴으로_레벨5를_달성해도_지급하고_기존_대표는_유지한다() {
-        Character starter = character("moru-test-starter", true);
-        Character moru = character("moru", true);
-        userCharacterRepository.save(UserCharacter.createSelected(user, starter));
         seedGrowth(110, 4);
+        todoService.complete(user.getId(), todo(today));
         completeRoutine(routine());
-        assertThat(moruCount(moru)).isEqualTo(1);
-        assertThat(userCharacterRepository.findByUserIdAndSelectedTrueAndDeletedAtIsNull(user.getId())
-                .orElseThrow().getCharacter().getId()).isEqualTo(starter.getId());
+        assertRoom(130, 5);
+        assertThat(roomRepository.findById(user.getId()).orElseThrow().getHighestGrowthLevel()).isEqualTo(5);
+        roomQueryService.getMyRoom(user.getId());
+        myCharacterQueryService.getMyCharacters(user.getId());
+        assertThat(moruCount(moru)).isZero();
     }
 
     @Test
-    void 한번에_5를_넘겨도_보상을_지급한다() {
+    void 한번에_여러_레벨을_올려도_캐릭터를_지급하지_않는다() {
         Character moru = character("moru", true);
         tx.executeWithoutResult(status -> {
             growthService.lockUser(user.getId());
             walletRepository.findWithLockByUserIdAndCurrencyType(user.getId(), CurrencyType.COIN).orElseThrow();
-            growthService.award(user.getId(), 200);
+            growthService.award(user.getId(), 400);
         });
-        assertThat(roomRepository.findById(user.getId()).orElseThrow().getGrowthLevel()).isGreaterThan(5);
-        assertThat(moruCount(moru)).isEqualTo(1);
-    }
-
-    @Test
-    void 미등록_동안_달성하고_취소해도_준비된_후_보유목록에서_지급한다() {
-        seedGrowth(110, 4);
-        Long todoId = todo(today);
-        todoService.complete(user.getId(), todoId);
-        todoService.cancelComplete(user.getId(), todoId);
-        Character moru = character("moru", false);
-        assertThat(myCharacterQueryService.getMyCharacters(user.getId()).items()).isEmpty();
-        jdbc.update("UPDATE characters SET is_active = true WHERE id = ?", moru.getId());
-        assertThat(myCharacterQueryService.getMyCharacters(user.getId()).items()).extracting("code")
-                .containsExactly("moru");
-        assertRoom(110, 4);
-        assertThat(moruCount(moru)).isEqualTo(1);
-    }
-
-    @Test
-    void 기존_레벨5_이상은_내방_조회로_보정하고_타인_조회는_지급하지_않는다() {
-        Character moru = character("moru", true);
-        seedGrowth(150, 6);
-        roomQueryService.getRoomOf(user.getId());
+        assertThat(roomRepository.findById(user.getId()).orElseThrow().getGrowthLevel()).isGreaterThanOrEqualTo(10);
         assertThat(moruCount(moru)).isZero();
-        roomQueryService.getMyRoom(user.getId());
-        roomQueryService.getMyRoom(user.getId());
-        assertThat(moruCount(moru)).isEqualTo(1);
     }
 
     @Test
-    void 동시_완료와_보유조회가_겹쳐도_모루는_한개만_지급된다() throws Exception {
-        Character moru = character("moru", true);
-        seedGrowth(110, 4);
-        Long todoId = todo(today);
-        Long routineId = routine();
-        concurrently(List.of(
-                () -> { todoService.complete(user.getId(), todoId); return true; },
-                () -> { completeRoutine(routineId); return true; },
-                () -> { myCharacterQueryService.getMyCharacters(user.getId()); return true; },
-                () -> { roomQueryService.getMyRoom(user.getId()); return true; }));
-        assertRoom(130, 5);
-        assertThat(moruCount(moru)).isEqualTo(1);
-    }
-
-    @Test
-    void 완료_트랜잭션이_실패하면_레벨달성_기록과_모루도_롤백한다() {
-        Character moru = character("moru", true);
+    void 완료_트랜잭션이_실패하면_레벨달성_기록도_롤백한다() {
         seedGrowth(110, 4);
         Long todoId = todo(today);
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
             todoService.complete(user.getId(), todoId);
-            assertThat(moruCount(moru)).isEqualTo(1);
+            assertThat(roomRepository.findWithLockById(user.getId()).orElseThrow().getHighestGrowthLevel())
+                    .isEqualTo(5);
             throw new IllegalStateException("실패 주입");
         })).isInstanceOf(IllegalStateException.class);
         assertRoom(110, 4);
         assertThat(roomRepository.findById(user.getId()).orElseThrow().getHighestGrowthLevel()).isEqualTo(4);
-        assertThat(moruCount(moru)).isZero();
         assertThat(balance()).isZero();
         assertThat(todoRepository.findById(todoId).orElseThrow().getStatus()).isNotEqualTo(TodoStatus.COMPLETED);
     }
 
+    // 과거에 모루를 받은 사용자의 보유 이력이 남아 있으므로 온보딩·뽑기 제외 규칙은 계속 유지함.
     @Test
-    void 이미_지급했다가_회수된_캐릭터를_조회로_되살리지_않는다() {
-        Character moru = character("moru", true);
-        seedGrowth(120, 5);
-        roomQueryService.getMyRoom(user.getId());
-        jdbc.update("UPDATE user_characters SET deleted_at = CURRENT_TIMESTAMP WHERE user_id = ?", user.getId());
-        assertThat(myCharacterQueryService.getMyCharacters(user.getId()).items()).isEmpty();
-        assertThat(moruCount(moru)).isEqualTo(1);
-    }
-
-    @Test
-    void 모루는_온보딩_무료선택에서_제외하고_보상_선취득해도_스타터권을_유지한다() {
+    void 모루는_온보딩_무료선택에서_제외하고_기존_보유자도_스타터권을_유지한다() {
         Character moru = character("moru", true);
         Character starter = character("moru-test-starter", true);
         assertThat(onboardingQueryService.getCharacters().items()).extracting("code").doesNotContain("moru");
         assertThatThrownBy(() -> onboardingCommandService.selectCharacter(user.getId(), moru.getId()))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> assertThat(ex.getErrorCode().code())
                         .isEqualTo("CHARACTER_NOT_OWNED"));
-        seedGrowth(120, 5);
-        myCharacterQueryService.getMyCharacters(user.getId());
-        onboardingCommandService.selectCharacter(user.getId(), moru.getId());
+        userCharacterRepository.save(UserCharacter.create(user, moru));
         onboardingCommandService.selectCharacter(user.getId(), starter.getId());
         assertThat(userCharacterRepository.findByUserIdAndDeletedAtIsNull(user.getId())).hasSize(2)
                 .filteredOn(UserCharacter::isSelected).hasSize(1)

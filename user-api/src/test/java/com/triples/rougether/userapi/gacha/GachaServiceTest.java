@@ -35,6 +35,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
+import com.triples.rougether.userapi.character.service.CharacterUnlockPolicy;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import java.time.Instant;
 import java.util.List;
@@ -61,6 +62,7 @@ class GachaServiceTest {
     @Mock private UserCharacterRepository userCharacterRepository;
     @Mock private UserRepository userRepository;
     @Mock private com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder walletHistoryRecorder;
+    @Mock private CharacterUnlockPolicy characterUnlockPolicy;
     @InjectMocks private GachaService gachaService;
 
     @BeforeEach
@@ -69,6 +71,8 @@ class GachaServiceTest {
         org.mockito.Mockito.lenient()
                 .when(userRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(Optional.of(mock(com.triples.rougether.domain.member.entity.User.class)));
+        // 해금 guard 자체는 아래 전용 테스트에서 검증함. 나머지 추첨 테스트는 해금된 사용자로 둠
+        org.mockito.Mockito.lenient().when(characterUnlockPolicy.isUnlocked(anyLong())).thenReturn(true);
     }
 
     private Gacha availableGacha() {
@@ -505,5 +509,46 @@ class GachaServiceTest {
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.COIN);
         assertThat(res.results().get(0).refundAmount()).isEqualTo(100);
+    }
+
+    @Test
+    void 방레벨_10_전이면_캐릭터_풀_뽑기를_거부하고_코인을_차감하지_않는다() {
+        Gacha g = activeGacha(500);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        GachaPoolEntry entry = mock(GachaPoolEntry.class);
+        when(entry.getRewardType()).thenReturn(RewardType.CHARACTER);
+        when(entry.getCharacter()).thenReturn(mock(Character.class));
+        when(poolRepository.findByGachaIdAndActiveIsTrue(10L)).thenReturn(List.of(entry));
+        when(characterUnlockPolicy.isUnlocked(1L)).thenReturn(false);
+
+        assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(6)))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(GachaErrorCode.CHARACTER_GACHA_LOCKED));
+        // 잔액 부족보다 먼저 판정하므로 잔액은 읽지도 않음
+        verify(wallet, never()).getBalance();
+        verify(wallet, never()).spend(anyInt());
+        verify(walletHistoryRecorder, never()).record(any(), anyInt(), any(), any(), any());
+        verify(userCharacterRepository, never()).save(any());
+    }
+
+    @Test
+    void 캐릭터가_없는_풀은_방레벨과_관계없이_뽑을_수_있다() {
+        Gacha g = activeGacha(25);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
+        UserWallet wallet = mock(UserWallet.class);
+        when(wallet.getBalance()).thenReturn(1000);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND)).thenReturn(Optional.empty());
+        singleItemPool(100L, 10L);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
+        when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
+
+        gachaService.draw(1L, 10L, new GachaDrawRequest(1));
+
+        verify(characterUnlockPolicy, never()).isUnlocked(anyLong());
+        verify(wallet).spend(25);
     }
 }

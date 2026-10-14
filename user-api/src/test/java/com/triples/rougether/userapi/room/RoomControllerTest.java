@@ -68,6 +68,8 @@ class RoomControllerTest {
                 5,
                 130L,
                 20,
+                false,
+                10,
                 RoomLayoutFormat.SLOT_V1,
                 0,
                 null,
@@ -84,6 +86,8 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.growthLevel").value(5))
                 .andExpect(jsonPath("$.growthPoints").value(130))
                 .andExpect(jsonPath("$.pointsToNextLevel").value(20))
+                .andExpect(jsonPath("$.characterUnlocked").value(false))
+                .andExpect(jsonPath("$.characterUnlockLevel").value(10))
                 .andExpect(jsonPath("$.layoutFormat").value("SLOT_V1"))
                 .andExpect(jsonPath("$.layoutRevision").value(0))
                 .andExpect(jsonPath("$.placements").isEmpty())
@@ -116,6 +120,8 @@ class RoomControllerTest {
                 5,
                 130L,
                 20,
+                false,
+                10,
                 RoomLayoutFormat.SLOT_V1,
                 0,
                 null,
@@ -151,6 +157,8 @@ class RoomControllerTest {
                 5,
                 130L,
                 20,
+                false,
+                10,
                 RoomLayoutFormat.FREE_V1,
                 4,
                 null,

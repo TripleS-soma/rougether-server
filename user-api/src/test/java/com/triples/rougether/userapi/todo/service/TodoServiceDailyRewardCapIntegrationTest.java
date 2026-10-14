@@ -71,7 +71,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, dailyRewardService,
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);

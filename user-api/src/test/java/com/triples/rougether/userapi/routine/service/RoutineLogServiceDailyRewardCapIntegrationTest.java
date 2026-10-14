@@ -83,7 +83,7 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class),
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
         persistWallet(user, 0);
