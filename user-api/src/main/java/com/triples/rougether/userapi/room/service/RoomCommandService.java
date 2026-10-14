@@ -5,6 +5,8 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomSlotType;
@@ -63,6 +65,7 @@ public class RoomCommandService {
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     private final StreakRepository streakRepository;
+    private final UserRepository userRepository;
 
     public RoomCommandService(PersonalRoomRepository personalRoomRepository,
                               RoomSurfaceSlotRepository roomSurfaceSlotRepository,
@@ -72,7 +75,8 @@ public class RoomCommandService {
                               UserCharacterRepository userCharacterRepository,
                               UserCharacterAccessoryRepository userCharacterAccessoryRepository,
                               CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                              StreakRepository streakRepository) {
+                              StreakRepository streakRepository,
+                              UserRepository userRepository) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -82,6 +86,7 @@ public class RoomCommandService {
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
         this.streakRepository = streakRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -273,6 +278,7 @@ public class RoomCommandService {
                         selectedCharacter.getId());
         return RoomResponse.of(
                 room,
+                userRepository.findById(userId).map(User::getBio).orElse(null),
                 slots,
                 placements,
                 streak,

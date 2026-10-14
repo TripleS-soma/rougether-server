@@ -26,6 +26,14 @@
 - 루틴(`routines.house_mission_id`)·카테고리(`categories.house_id`)의 집/단체미션 연동 값 검증(`HouseLinkValidator`)은 연동 대상 집의 ACTIVE 구성원만 통과시킵니다. 미션 삭제·집 탈퇴/강퇴 시 이 도메인의 트랜잭션(`HouseMissionService.delete`/`HouseMemberCommandService.leave·kick`)이 연동을 일괄 해제하며, 루틴·카테고리 데이터 자체는 삭제하지 않습니다. 상세는 [routine-todo.md](routine-todo.md) 구현 노트 참고.
 - `GET /api/v1/houses/{houseId}/preview`는 비구성원에게도 `missions` 요약과 진행도를 읽기 전용으로 제공합니다. 별도 미션 목록·상세·기여·보상 API의 ACTIVE 구성원 guard는 유지하며, 미리보기 응답에는 개인 기여값이나 실행 권한을 포함하지 않습니다.
 
+### 친구 방 한 줄 소개 (2026-10-14)
+
+- 제품 결정: 같은 집 구성원의 방을 열면 방 주인의 한 줄 소개(`users.bio`, 최대 100자)를 보여 줍니다. 그전에는 bio가 `GET /api/v1/me`에만 있었습니다.
+- `RoomResponse`에 nullable `ownerBio`를 추가했습니다. 이 DTO는 방을 표현하므로 `bio`라고 하면 방 설명으로 읽힐 수 있어, `roomUserId`가 가리키는 방 주인의 소개임을 이름에 드러냈습니다.
+- `RoomResponse`는 `GET /api/v1/rooms/me`, `PUT /api/v1/rooms/me/slots`, `PUT /api/v1/rooms/me/layout`, `GET /api/v1/houses/{houseId}/members/{membershipId}/room`이 함께 씁니다. 같은 필드가 경로마다 다른 의미가 되지 않도록 네 경로 모두 방 주인의 소개로 채웁니다(내 방 경로에서는 내 소개). 조회 경로는 `RoomQueryService`, 저장 경로는 `RoomCommandService`의 assemble에서 `users`를 PK로 한 번 더 읽습니다.
+- 비어 있거나 공백뿐인 소개는 응답에서 null로 내립니다. 저장값 자체는 바꾸지 않습니다. 탈퇴 회원은 익명화로 bio가 이미 null이고, 봇은 `BotSeedService`가 저장한 소개를 그대로 보여 줍니다.
+- 공개 범위는 멤버 방 조회의 기존 guard(집 존재, 요청자 ACTIVE 구성원, 대상 membership이 같은 집 ACTIVE)를 그대로 따릅니다. 비구성원 노출 자리인 집 미리보기 `memberRooms`(`RoomRenderResponse`)와 구성원 목록(`MemberSummary`)에는 넣지 않습니다.
+
 ### 방 자유배치 (free placement, #162)
 
 - 배치 데이터 정본은 `personal_rooms.layout_format`이 결정합니다 — `SLOT_V1`이면 `room_surface_slots`(11슬롯), `FREE_V1`이면 `room_item_placements`(+ surface 슬롯). 자유배치 첫 저장(`PUT /rooms/me/layout` 성공, 내용물 유무 무관) 시 그 방만 지연 전환되며 역방향 전환은 없습니다. 전환 후에도 기존 positioned 슬롯 row는 구버전 표시 fallback으로 남깁니다.

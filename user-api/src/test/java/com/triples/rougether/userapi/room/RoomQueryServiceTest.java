@@ -167,4 +167,51 @@ class RoomQueryServiceTest {
         assertThat(response.cobweb()).isNull();
         verify(roomCobwebRepository, never()).findVisibleActiveByRoomUserIdIn(any());
     }
+
+    private void stubEmptyRoom(Long userId) {
+        PersonalRoom room = mock(PersonalRoom.class);
+        when(room.getUserId()).thenReturn(userId);
+        when(personalRoomRepository.findById(userId)).thenReturn(Optional.of(room));
+        when(roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(roomItemPlacementRepository.findByRoomUserIdWithItem(userId)).thenReturn(List.of());
+        when(streakRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userCharacterRepository.findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId))
+                .thenReturn(Optional.empty());
+    }
+
+    @Test
+    void 타인_방_조회는_방_주인의_한_줄_소개를_담는다() {
+        Long ownerId = 6L;
+        stubEmptyRoom(ownerId);
+        User owner = mock(User.class);
+        when(owner.getBio()).thenReturn("아침형 인간 도전 중");
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+
+        RoomResponse response = roomQueryService.getRoomOf(ownerId);
+
+        assertThat(response.roomUserId()).isEqualTo(ownerId);
+        assertThat(response.ownerBio()).isEqualTo("아침형 인간 도전 중");
+    }
+
+    @Test
+    void 공백뿐인_소개는_null_로_내린다() {
+        Long ownerId = 7L;
+        stubEmptyRoom(ownerId);
+        User owner = mock(User.class);
+        when(owner.getBio()).thenReturn(" \t ");
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+
+        assertThat(roomQueryService.getRoomOf(ownerId).ownerBio()).isNull();
+    }
+
+    @Test
+    void 내_방_조회는_내_소개를_담고_소개가_없으면_null() {
+        Long userId = 8L;
+        stubEmptyRoom(userId);
+        User me = mock(User.class);
+        when(me.getBio()).thenReturn(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(me));
+
+        assertThat(roomQueryService.getMyRoom(userId).ownerBio()).isNull();
+    }
 }

@@ -65,6 +65,7 @@ class RoomControllerTest {
         authAsUser1();
         RoomResponse response = new RoomResponse(
                 1L,
+                "아침형 인간 도전 중",
                 5,
                 130L,
                 20,
@@ -83,6 +84,7 @@ class RoomControllerTest {
         mockMvc.perform(get("/api/v1/rooms/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roomUserId").value(1))
+                .andExpect(jsonPath("$.ownerBio").value("아침형 인간 도전 중"))
                 .andExpect(jsonPath("$.growthLevel").value(5))
                 .andExpect(jsonPath("$.growthPoints").value(130))
                 .andExpect(jsonPath("$.pointsToNextLevel").value(20))
@@ -117,6 +119,7 @@ class RoomControllerTest {
         authAsUser1();
         RoomResponse response = new RoomResponse(
                 1L,
+                null,
                 5,
                 130L,
                 20,
@@ -154,6 +157,7 @@ class RoomControllerTest {
         authAsUser1();
         RoomResponse response = new RoomResponse(
                 1L,
+                null,
                 5,
                 130L,
                 20,

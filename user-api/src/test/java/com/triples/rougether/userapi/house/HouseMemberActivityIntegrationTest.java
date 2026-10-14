@@ -125,6 +125,60 @@ class HouseMemberActivityIntegrationTest {
     }
 
     @Test
+    void 같은_집_멤버의_방에는_방_주인의_한_줄_소개가_담긴다() {
+        Fixture f = fixture();
+        f.viewer().changeBio("요청자 소개");
+        f.target().changeBio("아침형 인간 도전 중");
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+
+        RoomResponse response = activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId());
+
+        // 요청자가 아니라 방 주인(대상 구성원)의 소개
+        assertThat(response.ownerBio()).isEqualTo("아침형 인간 도전 중");
+    }
+
+    @Test
+    void 방_주인의_소개가_비었거나_공백뿐이면_ownerBio_는_null() {
+        Fixture f = fixture();
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+
+        assertThat(activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId()).ownerBio()).isNull();
+
+        f.target().changeBio("   ");
+        em.flush();
+        assertThat(activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId()).ownerBio()).isNull();
+    }
+
+    @Test
+    void 집_멤버가_아니면_방과_소개를_읽을_수_없다() {
+        Fixture f = fixture();
+        f.target().changeBio("아침형 인간 도전 중");
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+        User stranger = userRepository.save(User.signUp("activity-bio-stranger@rougether.dev"));
+
+        assertThatThrownBy(() -> activityService.getMemberRoom(
+                stranger.getId(), f.house().getId(), f.targetMembershipId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
+    }
+
+    @Test
+    void 집을_떠난_구성원의_방과_소개는_읽을_수_없다() {
+        Fixture f = fixture();
+        f.target().changeBio("아침형 인간 도전 중");
+        personalRoomRepository.save(PersonalRoom.create(f.target()));
+        f.targetMembership().leave();
+
+        assertThatThrownBy(() -> activityService.getMemberRoom(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MEMBER_NOT_FOUND));
+    }
+
+    @Test
     void 하루를_건너뛰어_끊긴_구성원의_스트릭은_타인_방에서_0으로_보인다() {
         Fixture f = fixture();
         personalRoomRepository.save(PersonalRoom.create(f.target()));
