@@ -35,7 +35,6 @@ public class RoomQueryService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    private final RoomGrowthService roomGrowthService;
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final RoomItemPlacementRepository roomItemPlacementRepository;
@@ -52,9 +51,7 @@ public class RoomQueryService {
                             StreakRepository streakRepository,
                             UserCharacterRepository userCharacterRepository,
                             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
-                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                            RoomGrowthService roomGrowthService) {
-        this.roomGrowthService = roomGrowthService;
+                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -68,7 +65,6 @@ public class RoomQueryService {
     // lazy 생성 가능해야 하므로 readOnly 아님.
     @Transactional
     public RoomResponse getMyRoom(Long userId) {
-        roomGrowthService.grantPendingReward(userId);
         PersonalRoom room = personalRoomRepository.findById(userId)
                 .orElseGet(() -> {
                     // 첫 조회와 첫 완료가 겹쳐도 같은 방을 재사용함. locking read 로 최신 생성 결과를 읽음.

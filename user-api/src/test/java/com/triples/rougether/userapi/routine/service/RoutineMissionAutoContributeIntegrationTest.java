@@ -115,7 +115,7 @@ class RoutineMissionAutoContributeIntegrationTest {
                 new DailyRewardService(routineLogRepository, todoRepository),
                 new TransactionTemplate(transactionManager), houseMissionService,
                 new WalletHistoryRecorder(walletHistoryRepository),
-                new RoomGrowthService(personalRoomRepository, userRepository, characterRepository, userCharacterRepository));
+                new RoomGrowthService(personalRoomRepository, userRepository));
 
         user = userRepository.save(User.signUp());
         userId = user.getId();

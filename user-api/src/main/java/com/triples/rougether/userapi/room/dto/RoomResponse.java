@@ -13,6 +13,7 @@ import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.userapi.character.dto.CharacterAnimations;
 import com.triples.rougether.userapi.character.dto.EquippedAccessoryResponse;
+import com.triples.rougether.userapi.character.service.CharacterUnlockPolicy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,6 +24,7 @@ import com.triples.rougether.userapi.global.i18n.CatalogNames;
 
 // GET /api/v1/rooms/me 응답: 방 성장 + 착용 캐릭터 + 슬롯 배치 + 자유배치 + 스트릭.
 // layoutFormat/layoutRevision/placements 는 자유배치 도입으로 추가된 additive 필드 — 구버전 앱은 무시하고 slots 만 쓴다.
+// characterUnlocked/characterUnlockLevel 은 앱이 highest_growth_level 을 모르므로 서버가 해금 판정을 내려 주는 additive 필드.
 public record RoomResponse(
         @Schema(description = "방 소유자 회원 ID (방은 회원당 1개, userId 가 곧 방 식별자)", example = "1")
         Long roomUserId,
@@ -34,6 +36,13 @@ public record RoomResponse(
         @Schema(description = "다음 방 레벨까지 남은 포인트. 레벨 L에서 다음 레벨에 필요한 구간 포인트는 20 + 2 × L",
                 example = "12")
         long pointsToNextLevel,
+        @Schema(description = "캐릭터 뽑기·교체 해금 여부(방 레벨 10 달성 기준). 현재 레벨과 최고 달성 레벨 중 큰 값이 "
+                + "characterUnlockLevel 이상이면 true — 완료 취소로 레벨이 내려가도 해금은 유지됨",
+                example = "false", requiredMode = Schema.RequiredMode.REQUIRED)
+        boolean characterUnlocked,
+        @Schema(description = "캐릭터 뽑기·교체가 해금되는 방 레벨. 안내 문구에 하드코딩하지 말고 이 값을 사용",
+                example = "10", requiredMode = Schema.RequiredMode.REQUIRED)
+        int characterUnlockLevel,
         @Schema(description = "배치 데이터 정본. SLOT_V1 이면 slots, FREE_V1 이면 placements(+ surface 슬롯)가 정본. "
                 + "SLOT_V1 방은 새 앱이 슬롯을 고정 좌표로 변환해 표시", example = "FREE_V1")
         RoomLayoutFormat layoutFormat,
@@ -72,6 +81,8 @@ public record RoomResponse(
                 room.getGrowthLevel(),
                 room.getGrowthPoints(),
                 room.getPointsToNextLevel(),
+                CharacterUnlockPolicy.isUnlocked(room),
+                CharacterUnlockPolicy.CHARACTER_UNLOCK_LEVEL,
                 room.getLayoutFormat(),
                 room.getLayoutRevision(),
                 RoomCharacterResponse.of(selectedCharacter, accessories, renderProfiles),

@@ -8,7 +8,8 @@ public enum GachaErrorCode implements ErrorCode {
     GACHA_INACTIVE("GACHA_INACTIVE", "현재 운영 중이 아닌 뽑기입니다.", 409),
     INVALID_DRAW_COUNT("GACHA_INVALID_DRAW_COUNT", "뽑기 횟수는 1 또는 6만 가능합니다.", 400),
     INSUFFICIENT_COIN("GACHA_INSUFFICIENT_COIN", "코인이 부족합니다.", 409),
-    EMPTY_POOL("GACHA_EMPTY_POOL", "뽑기 풀이 비어 있습니다.", 409);
+    EMPTY_POOL("GACHA_EMPTY_POOL", "뽑기 풀이 비어 있습니다.", 409),
+    CHARACTER_GACHA_LOCKED("GACHA_CHARACTER_LOCKED", "방 레벨 10부터 캐릭터 뽑기를 할 수 있습니다.", 403);
 
     private final String code;
     private final String message;

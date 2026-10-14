@@ -46,7 +46,6 @@ class RoomQueryServiceTest {
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
-    @Mock private com.triples.rougether.userapi.room.service.RoomGrowthService roomGrowthService;
     @InjectMocks private RoomQueryService roomQueryService;
 
     @Test

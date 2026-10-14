@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -52,6 +53,7 @@ class CharacterAccessoryIntegrationTest {
     @Autowired private ThemeRepository themeRepository;
     @Autowired private ItemRepository itemRepository;
     @Autowired private UserItemRepository userItemRepository;
+    @Autowired private JdbcTemplate jdbc;
 
     private User user;
     private UserCharacter cat;
@@ -107,6 +109,12 @@ class CharacterAccessoryIntegrationTest {
         characterAccessoryCommandService.equip(user.getId(), cat.getId(), sunglasses.getId());
         characterAccessoryCommandService.equip(user.getId(), bear.getId(), glasses.getId());
 
+        // 착용 교체는 방 레벨 10부터 해금됨
+        jdbc.update("""
+                INSERT INTO personal_rooms (user_id, growth_level, growth_points, highest_growth_level,
+                                            layout_format, layout_revision, updated_at)
+                VALUES (?, 10, 290, 10, 'SLOT_V1', 0, CURRENT_TIMESTAMP)
+                """, user.getId());
         myCharacterCommandService.select(user.getId(), bear.getCharacter().getId());
         myCharacterCommandService.select(user.getId(), cat.getCharacter().getId());
 

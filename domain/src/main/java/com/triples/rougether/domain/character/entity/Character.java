@@ -66,7 +66,8 @@ public class Character implements com.triples.rougether.domain.i18n.LocalizedNam
         this.active = active;
     }
 
-    // 모루는 개인 방 레벨 달성으로 획득함. 카탈로그의 대소문자 차이도 우회로 허용하지 않음.
+    // 모루는 과거 개인 방 레벨 5 보상이었음(2026-10-14 지급 중단·비활성화, V87). 이미 받은 보유 이력이 남아 있어
+    // 온보딩 무료 선택권 판정·뽑기 풀·봇 지급에서 계속 제외함. 카탈로그의 대소문자 차이도 우회로 허용하지 않음.
     public boolean isRoomLevelReward() {
         return MORU_CODE.equalsIgnoreCase(code);
     }
