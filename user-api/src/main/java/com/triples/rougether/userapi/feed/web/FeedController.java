@@ -37,13 +37,13 @@ public class FeedController {
     public FeedPostResponse get(@CurrentUser AuthUser user, @PathVariable @Positive Long postId) {
         return query.get(user.id(), postId);
     }
-    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장과 routineCompletion(본인 루틴의 KST 오늘~6일 전 완료 기록)이 필요합니다. FREE에는 routineCompletion을 보낼 수 없습니다. boardType 생략은 VERIFICATION입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
+    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장과 routineCompletion(본인 루틴의 KST 오늘~6일 전 완료 기록)이 필요합니다. FREE에는 routineCompletion을 보낼 수 없습니다. minigameRecord(본인의 끝난 미니게임 판 runId)는 FREE 전용이며 점수·순위·최고 기록 여부·달성 시각은 서버가 게시 시점에 고정합니다. VERIFICATION이나 routineCompletion과 함께 보내면 FEED_INPUT_INVALID, 연결할 수 없는 판이면 FEED_MINIGAME_RECORD_INVALID입니다. boardType 생략은 VERIFICATION이며, minigameRecord가 있으면 FREE입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
     @PostMapping("/posts")
     @ResponseStatus(HttpStatus.CREATED)
     public FeedPostResponse create(@CurrentUser AuthUser user, @Valid @RequestBody FeedCreateRequest request) {
         return query.get(user.id(), commands.create(user.id(), request));
     }
-    @Operation(summary = "내 게시물 수정", description = "본문·게시판·연결 루틴을 바꿉니다. 생략한 필드는 유지합니다. VERIFICATION으로 바꾸려면 사진이 있는 글이어야 하고 routineCompletion이 필요합니다. FREE로 바꾸면 루틴 연결이 해제됩니다. 사진 교체·순서 변경은 지원하지 않습니다.")
+    @Operation(summary = "내 게시물 수정", description = "본문·게시판·연결 루틴을 바꿉니다. 생략한 필드는 유지합니다. VERIFICATION으로 바꾸려면 사진이 있는 글이어야 하고 routineCompletion이 필요합니다. FREE로 바꾸면 루틴 연결이 해제됩니다. 미니게임 기록은 수정으로 붙이거나 바꿀 수 없고 유지되며, 기록이 있는 글은 VERIFICATION으로 바꿀 수 없습니다(FEED_INPUT_INVALID). 사진 교체·순서 변경은 지원하지 않습니다.")
     @PatchMapping("/posts/{postId}")
     public FeedPostResponse update(@CurrentUser AuthUser user, @PathVariable @Positive Long postId,
                                    @Valid @RequestBody FeedUpdateRequest request) {

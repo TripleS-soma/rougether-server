@@ -33,11 +33,15 @@ public class FeedCommandService {
     private final BannedWordChecker bannedWords;
     private final NotificationService notifications;
     private final FeedRoutineLinks routineLinks;
+    private final FeedMinigameRecords minigameRecords;
     private final Clock clock;
 
     public Long create(Long userId, FeedCreateRequest request) {
         User user = access.lockActive(userId);
-        FeedBoardType boardType = request.boardType() == null ? FeedBoardType.VERIFICATION : request.boardType();
+        FeedMinigameRecordRequest record = request.minigameRecord();
+        // 게임 기록은 자유글 전용이라 게시판 생략 + 기록 연결은 FREE로 봄. 그 외 생략은 기존대로 VERIFICATION
+        FeedBoardType boardType = request.boardType() != null ? request.boardType()
+                : record != null ? FeedBoardType.FREE : FeedBoardType.VERIFICATION;
         List<Long> imageIds = request.imageIds() == null ? List.of() : request.imageIds();
         if (request.clientPostId() == null || imageIds.size() > 10
                 || (boardType == FeedBoardType.VERIFICATION && imageIds.isEmpty())
@@ -45,10 +49,12 @@ public class FeedCommandService {
                 || new HashSet<>(imageIds).size() != imageIds.size()) throw new BusinessException(FEED_INPUT_INVALID);
         FeedRoutineCompletionRequest completion = request.routineCompletion();
         if (boardType == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
+        if (record != null && (boardType != FeedBoardType.FREE || completion != null)) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 2000, !imageIds.isEmpty());
         // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함. 루틴 연결은 있을 때만 hash에 덧붙임.
         String hashed = content + "\u0000" + imageIds;
         if (completion != null) hashed += "\u0000routine:" + completion.routineId() + ":" + completion.date();
+        if (record != null) hashed += "\u0000minigame:" + record.runId();
         String requestHash = hash(hashed);
         FeedPost previous = posts.findByAuthorIdAndClientPostId(userId, request.clientPostId().toString()).orElse(null);
         if (previous != null) {
@@ -60,6 +66,7 @@ public class FeedCommandService {
         if (boardType == FeedBoardType.VERIFICATION && completion == null)
             throw new BusinessException(FEED_ROUTINE_COMPLETION_REQUIRED);
         FeedRoutineLinks.Link link = completion == null ? null : routineLinks.verify(userId, completion);
+        FeedMinigameRecords.Snapshot snapshot = record == null ? null : minigameRecords.snapshot(userId, record);
         Map<Long, FeedImage> selected = new HashMap<>();
         // 업로드 ID 입력 순서와 무관하게 잠금 순서를 고정함. 표시 순서는 요청 순서를 유지함.
         for (Long id : imageIds.stream().sorted().toList()) {
@@ -70,6 +77,8 @@ public class FeedCommandService {
         }
         FeedPost post = FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType);
         if (link != null) post.linkRoutine(link.routineId(), link.date(), link.title());
+        if (snapshot != null) post.attachMinigameRecord(snapshot.runId(), snapshot.gameCode(), snapshot.score(),
+                snapshot.rank(), snapshot.personalBest(), snapshot.achievedAt());
         post = posts.save(post);
         for (int i = 0; i < imageIds.size(); i++) selected.get(imageIds.get(i)).attach(post, i);
         return post.getId();
@@ -87,6 +96,8 @@ public class FeedCommandService {
             throw new BusinessException(FEED_INPUT_INVALID);
         FeedBoardType target = request.boardType() == null ? post.getBoardType() : request.boardType();
         if (target == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
+        // 게임 기록은 수정으로 붙이거나 바꿀 수 없고, 기록이 있는 글은 인증게시판으로 옮길 수 없음
+        if (post.hasMinigameRecord() && target == FeedBoardType.VERIFICATION) throw new BusinessException(FEED_INPUT_INVALID);
         boolean hasImages = images.existsByPostId(postId);
         boolean switching = target != post.getBoardType();
         // 사진은 수정할 수 없으므로 사진 없는 글은 인증게시판으로 옮길 수 없음

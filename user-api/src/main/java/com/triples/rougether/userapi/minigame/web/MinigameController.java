@@ -48,7 +48,7 @@ public class MinigameController {
         return commandService.start(user.id(), gameCode, rulesVersion);
     }
 
-    @Operation(summary = "플레이 기록 제출", description = "게임별 점프 또는 방향 입력을 서버에서 재생해 점수를 계산합니다. 같은 기록 재제출은 멱등합니다.")
+    @Operation(summary = "플레이 기록 제출", description = "게임별 점프 또는 방향 입력을 서버에서 재생해 점수를 계산합니다. 같은 기록 재제출은 멱등합니다. playCount는 이 게임을 끝낸 판 수(이번 판 포함)입니다.")
     @PostMapping("/{gameCode}/runs/{runId}/finish")
     public MinigameFinishResponse finish(@CurrentUser AuthUser user, @PathVariable String gameCode,
                                          @PathVariable String runId, @Valid @RequestBody MinigameFinishRequest request) {

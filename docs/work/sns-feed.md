@@ -23,6 +23,18 @@
 - 수정: `boardType`·`routineCompletion`·`content` 모두 선택이며 생략은 유지입니다. 셋 다 생략하면 `FEED_INPUT_INVALID`. 인증게시판으로 옮기려면 사진이 있어야 하고(`FEED_INPUT_INVALID`) 연결이 필요합니다(`FEED_ROUTINE_COMPLETION_REQUIRED`). 자유게시판으로 옮기면 연결을 해제합니다. 인증글로 남으면서 `routineCompletion`을 보내면 교체합니다. 게시판을 바꾼 뒤 원래 등록 요청을 같은 UUID로 재전송하면 게시판 비교 때문에 409입니다.
 - 앱의 구버전(연결 없이 인증글 등록)은 V84 배포 후 400을 받습니다. 피드는 앱에서 내부 채널에만 열려 있어 스토어 사용자 영향은 없다는 전제입니다.
 
+## 자유글 미니게임 기록 카드 (V89)
+
+제품 오너 결정(2026-10-14): 랭킹 미니게임에서 개인 최고 기록을 세우고 그 게임을 10판 이상 끝낸 사용자에게 앱이 자유게시판 공유를 제안합니다. 글에는 앱이 직접 그리는 기록 카드(게임·점수·작성자 본인 순위)가 붙습니다. 숫자는 클라이언트가 보내지 않고 서버가 판 기록에서 읽어 고정합니다. 10판 조건과 제안 시점 판단은 앱 몫이며 서버는 게시 조건으로 검사하지 않습니다(완료 응답의 `playCount`만 제공).
+
+- 등록 요청: `minigameRecord: { runId }`(`FeedMinigameRecordRequest`, 선택). 자유게시판 전용입니다. `boardType`을 생략하고 이 값을 보내면 `FREE`로 등록합니다(기록이 없을 때의 생략 기본값 `VERIFICATION`은 그대로). `VERIFICATION`과 함께 보내거나 `routineCompletion`과 함께 보내면 `FEED_INPUT_INVALID`(400)입니다. 본문 규칙은 바뀌지 않아 사진 없는 기록 글도 본문이 필요합니다(앱은 대체 문구를 항상 보냄).
+- 검증(`FeedMinigameRecords`): 판이 작성자 본인 것이고 완료(`finished_at` 존재)돼야 합니다. 완료된 판은 서버 리플레이 검증을 통과한 판뿐입니다. 없는 판·남의 판·끝나지 않은 판은 판 존재 여부를 드러내지 않게 모두 `FEED_MINIGAME_RECORD_INVALID`(400, "연결할 수 없는 게임 기록입니다.")입니다. 같은 판을 여러 글에 연결하는 것은 막지 않습니다.
+- 스냅샷: 게시 시점에 `gameCode`, `score`(그 판의 검증 점수), `rank`(작성자의 그 게임 현재 최고점 기준 순위 = 최고점보다 높은 활성 회원 수 + 1, 랭킹 화면과 같은 공동 순위 기준, 최고점 행이 없으면 null), `personalBest`(그 판 점수가 게시 시점 작성자 최고점과 같은지), `achievedAt`(판 완료 시각)을 `feed_posts`의 `minigame_*` 컬럼에 저장합니다. 이후 랭킹이 바뀌어도 카드 값은 바뀌지 않습니다. 판 행은 탈퇴 정리로 지워질 수 있어 FK를 두지 않습니다.
+- 재시도: 기록이 있으면 요청 hash에 `\u0000minigame:{runId}`를 덧붙여 같은 UUID로 다른 판을 보내면 409입니다. 기록 없는 요청의 hash 형식은 그대로입니다.
+- 수정: `FeedUpdateRequest`에는 기록 필드가 없어 수정으로 붙이거나 바꿀 수 없습니다. 기록이 있는 글을 `VERIFICATION`으로 옮기면 `FEED_INPUT_INVALID`입니다. 그 밖의 수정은 기록을 유지합니다.
+- 응답: 목록·상세·등록·수정의 `FeedPostResponse.minigameRecord`(`FeedMinigameRecordResponse`, 없으면 null) = `{ gameCode: string, score: int, rank: int|null, personalBest: boolean, achievedAt: ISO instant }`.
+- 삭제·탈퇴: 루틴 연결과 같게 글 삭제와 탈퇴자 글 정리(`eraseWithdrawn`) 때 카드 값 컬럼을 비웁니다. `minigame_run_id`는 요청 hash처럼 재시도 판정용으로 남깁니다.
+
 ## 구조
 
 - `domain.feed`: 게시물·사진·좋아요·댓글 entity/repository, `V79__add_feed.sql` 신규 4개 테이블.

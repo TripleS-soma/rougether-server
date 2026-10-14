@@ -133,7 +133,7 @@ class MinigameControllerTest {
     void 종료_요청은_인증_사용자와_입력을_전달하고_검증된_점수와_순위를_반환한다() throws Exception {
         MinigameFinishRequest request = new MinigameFinishRequest(800, List.of(50, 130));
         when(minigameCommandService.finish(7L, GAME_CODE, RUN_ID, request))
-                .thenReturn(new MinigameFinishResponse(RUN_ID, 133, 133, true, 2));
+                .thenReturn(new MinigameFinishResponse(RUN_ID, 133, 133, true, 2, 10));
 
         mockMvc.perform(post(FINISH_PATH)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -145,7 +145,8 @@ class MinigameControllerTest {
                 .andExpect(jsonPath("$.score").value(133))
                 .andExpect(jsonPath("$.bestScore").value(133))
                 .andExpect(jsonPath("$.personalBest").value(true))
-                .andExpect(jsonPath("$.rank").value(2));
+                .andExpect(jsonPath("$.rank").value(2))
+                .andExpect(jsonPath("$.playCount").value(10));
 
         verify(minigameCommandService).finish(7L, GAME_CODE, RUN_ID, request);
     }
@@ -154,7 +155,7 @@ class MinigameControllerTest {
     void 점프하지_않은_종료_기록도_검증_서비스로_전달한다() throws Exception {
         MinigameFinishRequest request = new MinigameFinishRequest(400, List.of());
         when(minigameCommandService.finish(7L, GAME_CODE, RUN_ID, request))
-                .thenReturn(new MinigameFinishResponse(RUN_ID, 66, 133, false, 2));
+                .thenReturn(new MinigameFinishResponse(RUN_ID, 66, 133, false, 2, 11));
 
         mockMvc.perform(post(FINISH_PATH)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -275,7 +276,7 @@ class MinigameControllerTest {
         MinigameFinishRequest request = new MinigameFinishRequest(180, null,
                 List.of(new MinigameAction(1, MinigameDirection.LEFT)));
         when(minigameCommandService.finish(7L, gameCode, RUN_ID, request))
-                .thenReturn(new MinigameFinishResponse(RUN_ID, 10, 20, false, 3));
+                .thenReturn(new MinigameFinishResponse(RUN_ID, 10, 20, false, 3, 2));
 
         mockMvc.perform(post("/api/v1/minigames/{gameCode}/runs/{runId}/finish", gameCode, RUN_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -300,7 +301,7 @@ class MinigameControllerTest {
                 new MinigameAction(40, MinigameDirection.UP),
                 new MinigameAction(60, MinigameDirection.DOWN)));
         when(minigameCommandService.finish(7L, "cat-merge", RUN_ID, request))
-                .thenReturn(new MinigameFinishResponse(RUN_ID, 40, 40, true, 1));
+                .thenReturn(new MinigameFinishResponse(RUN_ID, 40, 40, true, 1, 1));
 
         mockMvc.perform(post("/api/v1/minigames/cat-merge/runs/{runId}/finish", RUN_ID)
                         .contentType(MediaType.APPLICATION_JSON)
