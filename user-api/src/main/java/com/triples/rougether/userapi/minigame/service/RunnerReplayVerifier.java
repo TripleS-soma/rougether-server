@@ -27,7 +27,7 @@ public class RunnerReplayVerifier implements MinigameReplayVerifier {
 
     @Override
     public void validateInput(MinigameFinishRequest request) {
-        if (request == null || request.actions() != null) {
+        if (request == null || request.actions() != null || request.picks() != null) {
             throw invalidReplay();
         }
         validateInput(request.ticks(), request.jumpTicks());

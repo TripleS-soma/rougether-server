@@ -18,7 +18,7 @@ class MinigameCatalogTest {
     void 기본_목록은_v1을_유지하고_명시적으로_v2를_선택할_수_있다() {
         assertThat(catalog.list().items()).hasSize(3).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(1));
         assertThat(catalog.list(2).items()).hasSize(3).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(2));
-        assertThat(catalog.list(3).items()).hasSize(4).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(3));
+        assertThat(catalog.list(3).items()).hasSize(5).allSatisfy(item -> assertThat(item.rulesVersion()).isEqualTo(3));
         assertThat(catalog.list(1).items()).isEqualTo(catalog.list().items());
     }
 
@@ -35,8 +35,8 @@ class MinigameCatalogTest {
         }
         assertThat(catalog.list(3).items()).extracting(MinigameListResponse.Item::gameCode)
                 .containsExactly(MinigameCatalog.RUNNER, MinigameCatalog.STAIRS, MinigameCatalog.MERGE,
-                        MinigameCatalog.TOWER);
-        assertThat(catalog.list(3).items()).last().satisfies(item -> {
+                        MinigameCatalog.TOWER, MinigameCatalog.YARN);
+        assertThat(catalog.list(3).items().get(3)).satisfies(item -> {
             assertThat(item.name()).isEqualTo("고양이 탑 쌓기");
             assertThat(item.description()).isEqualTo("흔들리는 상자를 딱 맞춰 쌓아 올려요.");
         });
@@ -47,6 +47,26 @@ class MinigameCatalogTest {
         assertThatThrownBy(() -> catalog.requireRulesVersion("unknown", 3))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(MinigameErrorCode.GAME_NOT_FOUND));
+    }
+
+    // 털실 정리(mobile #1563)도 v3에서 생겨 구 앱 목록에는 없고 v3로만 시작함.
+    @Test
+    void 털실_정리는_v3_목록의_마지막에만_보이고_v3로만_시작할_수_있다() {
+        for (int rulesVersion : new int[] {1, 2}) {
+            assertThat(catalog.list(rulesVersion).items()).extracting(MinigameListResponse.Item::gameCode)
+                    .doesNotContain(MinigameCatalog.YARN);
+            assertThatThrownBy(() -> catalog.requireRulesVersion(MinigameCatalog.YARN, rulesVersion))
+                    .isInstanceOfSatisfying(BusinessException.class, exception -> assertThat(exception.getErrorCode())
+                            .isEqualTo(MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED));
+        }
+        assertThat(catalog.list(3).items()).last().satisfies(item -> {
+            assertThat(item.gameCode()).isEqualTo("cat-yarn");
+            assertThat(item.name()).isEqualTo("고양이 털실 정리");
+            assertThat(item.description()).isEqualTo("털실을 같은 색 바구니에 담아 방 그림을 채워요.");
+            assertThat(item.rulesVersion()).isEqualTo(3);
+        });
+        catalog.requireGame(MinigameCatalog.YARN);
+        catalog.requireRulesVersion(MinigameCatalog.YARN, 3);
     }
 
     @ParameterizedTest

@@ -324,6 +324,73 @@ class MultiGameIntegrationTest {
                 .isEqualTo(4);
     }
 
+    // 털실 정리(mobile #1563): v3 세션만 발급하고 maxTicks는 집기 한도 2,000. picks를 재생한 점수로 최고점·순위·판 수를 저장함.
+    @Test
+    void 털실_정리는_v3로만_시작하고_집기_기록을_재생한_점수로_최고점과_판_수를_저장한다() {
+        User player = player("털실 정리");
+        String yarn = MinigameCatalog.YARN;
+        long before = runRepository.count();
+        for (int legacy : List.of(1, 2)) {
+            assertError(() -> commandService.start(player.getId(), yarn, legacy),
+                    MinigameErrorCode.RULES_VERSION_NOT_SUPPORTED);
+        }
+        assertThat(runRepository.count()).isEqualTo(before);
+        var started = commandService.start(player.getId(), yarn, 3);
+        assertThat(started.maxTicks()).isEqualTo(2_000);
+        assertThat(started.rulesVersion()).isEqualTo(3);
+
+        // 모바일 픽스처 saved_early: seed 777, 12번 집고 직접 마쳐 42점.
+        List<Integer> savedEarly = List.of(2, 2, 2, 2, 3, 3, 4, 4, 0, 0, 0, 0);
+        MinigameRun first = yarnRun(player, 777);
+        assertError(() -> commandService.finish(player.getId(), yarn, first.getId(),
+                new MinigameFinishRequest(12, List.of(1, 2))), MinigameErrorCode.INVALID_REPLAY);
+        assertError(() -> commandService.finish(player.getId(), yarn, first.getId(), actions(12,
+                new MinigameAction(1, MinigameDirection.LEFT))), MinigameErrorCode.INVALID_REPLAY);
+        assertError(() -> commandService.finish(player.getId(), yarn, first.getId(),
+                MinigameFinishRequest.ofPicks(11, savedEarly)), MinigameErrorCode.INVALID_REPLAY);
+        assertUnfinishedWithoutBest(first, player.getId(), yarn);
+
+        var finished = commandService.finish(player.getId(), yarn, first.getId(),
+                MinigameFinishRequest.ofPicks(12, savedEarly));
+        assertThat(finished.score()).isEqualTo(42);
+        assertThat(finished.personalBest()).isTrue();
+        assertThat(finished.rank()).isEqualTo(1);
+        assertThat(finished.playCount()).isEqualTo(1);
+        // 같은 입력 재전송은 최초 영수증, 다른 입력은 409.
+        assertThat(commandService.finish(player.getId(), yarn, first.getId(),
+                MinigameFinishRequest.ofPicks(12, savedEarly))).isEqualTo(finished);
+        assertError(() -> commandService.finish(player.getId(), yarn, first.getId(),
+                MinigameFinishRequest.ofPicks(1, List.of(2))), MinigameErrorCode.RUN_ALREADY_FINISHED);
+
+        // 모바일 픽스처 random_until_full_b: 대기열이 가득 차 19번째 집기에서 끝나 53점. 끝난 뒤 덧붙인 집기는 거부.
+        List<Integer> full = List.of(5, 0, 5, 3, 3, 2, 5, 1, 4, 4, 2, 4, 1, 1, 3, 4, 2, 2, 1);
+        MinigameRun second = yarnRun(player, 2147483647);
+        List<Integer> extra = new ArrayList<>(full);
+        extra.add(0);
+        assertError(() -> commandService.finish(player.getId(), yarn, second.getId(),
+                MinigameFinishRequest.ofPicks(extra.size(), extra)), MinigameErrorCode.INVALID_REPLAY);
+        var best = commandService.finish(player.getId(), yarn, second.getId(),
+                MinigameFinishRequest.ofPicks(full.size(), full));
+        assertThat(best.score()).isEqualTo(53);
+        assertThat(best.bestScore()).isEqualTo(53);
+        assertThat(best.personalBest()).isTrue();
+        assertThat(best.playCount()).isEqualTo(2);
+        assertThat(bestScoreRepository.findByUserIdAndGameCode(player.getId(), yarn).orElseThrow().getScore())
+                .isEqualTo(53);
+        assertThat(queryService.leaderboard(player.getId(), yarn).myEntry().score()).isEqualTo(53);
+
+        // 다른 게임에 picks를 보내면 거부함.
+        MinigameRun tower = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                MinigameCatalog.TOWER, 3, 7, now.minusSeconds(100), now.plusSeconds(1700)));
+        assertError(() -> commandService.finish(player.getId(), MinigameCatalog.TOWER, tower.getId(),
+                MinigameFinishRequest.ofPicks(1, List.of(0))), MinigameErrorCode.INVALID_REPLAY);
+    }
+
+    private MinigameRun yarnRun(User player, int seed) {
+        return runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                MinigameCatalog.YARN, 3, seed, now.minusSeconds(100), now.plusSeconds(1700)));
+    }
+
     private User player(String nickname) {
         User user = User.signUp();
         user.changeNickname(nickname);
