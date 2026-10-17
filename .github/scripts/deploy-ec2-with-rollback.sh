@@ -771,7 +771,8 @@ prune_unused_docker_images() {
   fi
 
   local prune_exit_code=0
-  docker image prune -a -f || prune_exit_code="$?"
+  # 주기 실행 사이에는 컨테이너가 없는 AI 워커 이미지도 다음 기동을 위해 보존함.
+  docker image prune -a -f --filter 'label!=com.rougether.role=ai-user-worker' || prune_exit_code="$?"
 
   # 동일 image ID에 여러 SHA tag가 있으면 prune이 실행 중 이미지의 deploy-state tag도
   # 제거할 수 있다. 컨테이너가 보존한 image ID에 롤백 tag를 즉시 복원한다.
@@ -1366,7 +1367,7 @@ server {
 }
 
 server {
-    listen 127.0.0.1:8082;
+    listen 127.0.0.1:38082;
     client_max_body_size 512k;
     access_log off;
 
@@ -1374,6 +1375,7 @@ server {
         proxy_pass http://rougether_user_api;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
+        proxy_set_header Host \$host;
         proxy_read_timeout 60s;
     }
 

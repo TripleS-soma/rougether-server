@@ -170,7 +170,7 @@ class Worker:
                 self.control(f"/memory/{episode['jobId']}/ack", {"success": False,
                     "revoked": isinstance(error, HTTPError) and error.code == 409})
             else:
-                self.control(f"/memory/{episode['jobId']}/ack", {"success": True})
+                self.control(f"/memory/{episode['jobId']}/ack", {"success": True, "revoked": False})
 
     def run(self):
         deadline = time.monotonic() + self.settings.max_seconds

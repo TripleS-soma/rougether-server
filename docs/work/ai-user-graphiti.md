@@ -96,7 +96,7 @@ docker compose --env-file ai-user-worker/.env -f ai-user-worker/compose.yml run 
 
 `deploy/ai-service/deploy.py`는 기존 SSM runtime의 `env`에 AI 설정이 있을 때 전용 Docker network와 Neo4j 영속 volume을 준비한다. Neo4j 포트는 호스트에 공개하지 않는다. FastAPI 후보가 기존 공급자 smoke와 기억 inventory를 통과한 뒤 TLS 경로를 전환한다. 기억 요청의 proxy 제한과 이전 슬롯 drain은 최대 190초를 허용한다.
 
-워커는 API 호스트에 배치한다. 공개 user-api Nginx는 `/internal/`을 404로 차단하고, `127.0.0.1:8082`에 AI 제어 경로만 제공한다. 워커는 host network의 loopback 제어 API와 기존 사설 TLS AI API에 접속하며, 별도 CA를 읽기 전용으로 마운트한다. 운영 systemd unit은 Docker CLI를 직접 사용하므로 Docker Compose plugin이 필요 없다.
+워커는 API 호스트에 배치한다. 공개 user-api Nginx는 `/internal/`을 404로 차단하고, `127.0.0.1:38082`에 AI 제어 경로만 제공한다. 배치의 기존 health port `8082`와 구분한다. 워커는 host network의 loopback 제어 API와 기존 사설 TLS AI API에 접속하며, 별도 CA를 읽기 전용으로 마운트한다. 운영 systemd unit은 Docker CLI를 직접 사용하므로 Docker Compose plugin이 필요 없다. 주기 실행 사이의 워커 이미지는 전용 label로 배포 전 이미지 정리에서 보존한다.
 
 SSM `/rougether-dev/ai/client`에 `AI_USERS_ENABLED=true`와 32자 이상 `AI_USERS_CONTROL_TOKEN`을 추가한 후 다음 명령으로 검토한 소스와 설정을 전송한다. 기본 설치는 timer를 활성화하지 않는다. 새 user-api 배포와 시드, runtime 활성화 및 수동 한 차례 실행을 확인한 뒤 `--enable`을 사용한다.
 

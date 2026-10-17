@@ -33,7 +33,7 @@ def install(enable=False):
     ca = base64.b64decode(config['AI_SERVICE_CA_CERTIFICATE_BASE64'], validate=True).decode()
     write(folder / 'ai-ca.crt', ca, 0o644)
     values = {
-        'AI_USER_CONTROL_URL': 'http://127.0.0.1:8082', 'AI_USER_CONTROL_TOKEN': token,
+        'AI_USER_CONTROL_URL': 'http://127.0.0.1:38082', 'AI_USER_CONTROL_TOKEN': token,
         'AI_USER_SERVICE_URL': config['AI_SERVICE_BASE_URL'],
         'AI_USER_SERVICE_TOKEN': config['AI_SERVICE_TOKEN'],
         'AI_USER_MAX_JOBS': '10', 'AI_USER_MAX_SECONDS': '600', 'AI_USER_MEMORY_BATCH_LIMIT': '10',

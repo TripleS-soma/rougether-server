@@ -39,6 +39,9 @@ class FakeHttp:
             raise OSError("response lost")
         if url.endswith("/memory/pending"):
             return self.pending
+        if url.endswith("/ack") and set(body) != {"success", "revoked"}:
+            # Spring record의 두 primitive 필드는 HTTP 본문에 모두 필요함.
+            raise HTTPError(url, 400, "invalid acknowledgement contract", {}, None)
         return {}
 
 
@@ -123,6 +126,8 @@ class WorkerTest(unittest.TestCase):
         http.pending = [{"jobId": 7, "aiUserId": 1, "body": "synthetic"}]
         Worker(self.settings(), http).run()
         self.assertTrue(any(url.endswith("/memory/7/ack") and body["success"] for url,body,_ in http.calls))
+        ack = next(body for url, body, _ in http.calls if url.endswith("/memory/7/ack"))
+        self.assertEqual(ack, {"success": True, "revoked": False})
         self.assertFalse(any(url.endswith("/execute") for url,_,_ in http.calls))
 
     def test_bootstrap_gates_keep_human_action_choices(self):

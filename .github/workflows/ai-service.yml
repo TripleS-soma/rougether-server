@@ -100,6 +100,9 @@ jobs:
         run: |
           docker build -f ai-user-worker/Dockerfile -t rougether-ai-users:contract .
           docker run --rm --network none --read-only rougether-ai-users:contract python -c 'from worker import Worker, Settings; from rougether_ai.ai_user_policy import code_plan'
+          docker image inspect --format '{{index .Config.Labels "com.rougether.role"}}' rougether-ai-users:contract | grep -Fx ai-user-worker
+      - name: Real Nginx private control and batch port coexistence
+        run: python3 qa/ai-user-memory/nginx_control.py
       - name: Real Neo4j memory isolation and long recall
         run: ai-service/.venv/bin/python qa/ai-user-memory/run.py
 
