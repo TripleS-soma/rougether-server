@@ -1,5 +1,6 @@
 """합성 상태로만 SNS 자발적 선택을 검증함. 명시 실행 시 Claude를 최대 4회 호출함."""
 import asyncio
+import copy
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ def fixture(key,user,candidates,actions,preference):
     return {"aiUserId":user,"personaKey":key,"persona":preference,"profile":{"nickname":"합성 검증 캐릭터","bio":"작은 기록에 관심이 있어요"},
             "source":{"type":"SOCIAL_BROWSE"},"date":"2026-10-17","localTime":"20:30:00",
             "onboarding":{"goals":[1],"selectedCharacterId":1},"actions":actions,
-            "social":{"allowedActions":actions,"candidates":candidates,"recentActions":[],"firstPost":True,"preference":preference},
+            "social":{"allowedActions":actions,"candidates":copy.deepcopy(candidates),"recentActions":[],"firstPost":True,"preference":preference},
             "today":{"categories":[{"routines":[{"id":1,"title":"앱에 읽을 주제 메모하기","completed":True,"authType":"CHECK"}]}]},
             "recentOwnActivity":[{"action":"ROUTINE_CREATE","title":"앱에 읽을 주제 메모하기"}]}
 
@@ -36,6 +37,9 @@ async def run():
     results=[]
     try:
         for state in fixtures:
+            if len(results) in (1,3) and results[0]["plan"]["action"]=="FEED_COMMENT":
+                state["social"]["candidates"][0]["recentComments"]=[{"commentId":201,"authorUserId":227,
+                    "content":results[0]["plan"]["payload"]["content"]}]
             plan=await service.decide(DecisionRequest(aiUserId=state["aiUserId"],state=state))
             if plan["action"] in ("FEED_COMMENT","FEED_LIKE"):
                 assert plan["payload"]["postId"]==101,"unobserved post target"
