@@ -92,7 +92,8 @@ public class AiUserSocialActivity {
         if (candidates.isEmpty()) unavailable="NO_CANDIDATE";
         if (postBlock==AiUserWaitReason.COOLDOWN || commentBlock==AiUserWaitReason.COOLDOWN || likeBlock==AiUserWaitReason.COOLDOWN)
             unavailable="COOLDOWN";
-        state.put("unavailableReason",unavailable);
+        // 가능한 행동이 남았을 때 대기 사유를 보내면 모델이 방문 전체의 제한으로 해석함.
+        if (actions.size()==1) state.put("unavailableReason",unavailable);
         return new Context(state,List.copyOf(references));
     }
 

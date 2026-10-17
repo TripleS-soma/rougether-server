@@ -140,6 +140,24 @@ class AiUserRuntimeIntegrationTest {
         assertThat(realAction).isNotNull();
     }
 
+    @Test void availableSocialActionsDoNotCarryAVisitWideRejectionReason() {
+        User human=quietHuman();
+        quietPost(human,"작은 기록을 시작할 때 어떤 기준을 정하시나요?");
+        var first=beginSocial(ais.getFirst());
+        var initial=mapper.valueToTree(control.snapshot(first.id(),first.owner(),first.fencingToken())).path("social");
+        assertThat(initial.path("postAvailable").asBoolean()).isTrue();
+        assertThat(initial.path("firstPost").asBoolean()).isTrue();
+        assertThat(initial.has("unavailableReason")).isFalse();
+        control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_POST,
+                mapper.readTree("{\"boardType\":\"FREE\",\"content\":\"기록을 작게 나눠볼 계획이에요\",\"imageIds\":[]}"),"");
+        var next=beginSocial(first.userId());
+        var partial=mapper.valueToTree(control.snapshot(next.id(),next.owner(),next.fencingToken())).path("social");
+        assertThat(partial.path("postAvailable").asBoolean()).isFalse();
+        assertThat(partial.path("commentAvailable").asBoolean()).isTrue();
+        assertThat(partial.path("allowedActions").toString()).contains("FEED_COMMENT");
+        assertThat(partial.has("unavailableReason")).isFalse();
+    }
+
     @Test void socialPostIsCommittedOnceAndDailyLimitProducesRecordedWait() {
         var first=beginSocial(ais.getFirst());
         var payload=mapper.readTree("{\"boardType\":\"FREE\",\"content\":\"오늘은 앱에서 기록할 작은 계획부터 정했어요\",\"imageIds\":[],\"topic\":\"첫 기록 계획\"}");
