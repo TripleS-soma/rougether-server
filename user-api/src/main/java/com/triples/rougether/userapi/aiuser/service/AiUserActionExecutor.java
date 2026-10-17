@@ -93,6 +93,7 @@ public class AiUserActionExecutor {
             case WAIT -> "WAIT";
             case FEED_POST -> {
                 var p = mapper.createObjectNode().setAll((tools.jackson.databind.node.ObjectNode) payload);
+                p.remove("topic");
                 p.put("clientPostId", key.toString());
                 yield feed.create(user, dto(p, FeedCreateRequest.class));
             }

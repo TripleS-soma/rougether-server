@@ -1,12 +1,37 @@
 package com.triples.rougether.userapi.aiuser.service;
 
 import java.util.List;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 
 public final class AiPersonas {
     private AiPersonas() {}
     public record Persona(String key, String nickname, String bio, String instructions) {}
     public static boolean isAwake(String key,int hour) {
         return key.equals("steady-walk") || key.equals("restart-morning") ? hour>=7 && hour<22 : hour>=10 && hour<24;
+    }
+    public static List<LocalTime> socialVisits(String key) {
+        return switch (key) {
+            case "steady-walk" -> List.of(LocalTime.of(10,15),LocalTime.of(20,15));
+            case "steady-read" -> List.of(LocalTime.of(13,15),LocalTime.of(21,15));
+            case "restart-morning" -> List.of(LocalTime.of(11,15),LocalTime.of(20,15));
+            case "restart-focus" -> List.of(LocalTime.of(15,15),LocalTime.of(21,15));
+            case "observe-garden", "observe-note" -> List.of(LocalTime.of(20,15));
+            case "social-cheer" -> List.of(LocalTime.of(11,15),LocalTime.of(15,15),LocalTime.of(19,15),LocalTime.of(22,15));
+            case "social-evening" -> List.of(LocalTime.of(13,15),LocalTime.of(18,15),LocalTime.of(20,15),LocalTime.of(23,15));
+            default -> List.of(LocalTime.of(14,15),LocalTime.of(21,15));
+        };
+    }
+    // 같은 회차가 겹쳐도 별도 계정으로 예약하고, 지나간 방문을 한꺼번에 재생하지 않음.
+    public static Instant nextSocialVisit(String key,long user,Instant after) {
+        var zone=ZoneId.of("Asia/Seoul");
+        var date=after.atZone(zone).toLocalDate();
+        for (int day=0;day<2;day++) for (var time:socialVisits(key)) {
+            var candidate=date.plusDays(day).atTime(time).atZone(zone).toInstant().plusSeconds(user%10*45);
+            if (candidate.isAfter(after)) return candidate;
+        }
+        throw new IllegalStateException("Missing social visit window");
     }
     public static List<Persona> all() {
         return List.of(

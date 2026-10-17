@@ -87,7 +87,8 @@ public class AiUserMemoryProjection {
                 boolean includeAction=true;
                 for (var ref:decode(row.get("context_sources"),AiUserObserver.SourceReference[].class)) {
                     if (!observer.accessible(user,ref.type(),ref.id())) { includeAction=false; break; }
-                    if (!ref.type().equals("SCHEDULE")) sources.add(new Source(ref.type(),ref.id(),fingerprint(ref.type(),ref.id())));
+                    if (!ref.type().equals("SCHEDULE") && !ref.type().equals("SOCIAL_BROWSE"))
+                        sources.add(new Source(ref.type(),ref.id(),fingerprint(ref.type(),ref.id())));
                 }
                 for (var ref:decode(row.get("memory_sources"),Source[].class)) {
                     if (!valid(user,ref)) { includeAction=false; break; }

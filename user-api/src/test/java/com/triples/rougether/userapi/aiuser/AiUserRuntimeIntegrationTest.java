@@ -114,6 +114,159 @@ class AiUserRuntimeIntegrationTest {
         tx.executeWithoutResult(s -> activity.insertBatchIfActiveUsers(List.of(human.getId(),ais.getFirst()),date));
         assertThat(activity.findRecordedActiveUserIds(List.of(human.getId(),ais.getFirst()),date)).containsExactly(human.getId());
     }
+
+    @Test void socialVisitsAreSeparateIdempotentAndWaitsDoNotConsumeActionBudget() {
+        var now=Instant.parse("2026-10-17T11:20:00Z");
+        var scheduled=new AiUserJobs(jdbc,Clock.fixed(now,ZoneOffset.UTC),aiUserProperties);
+        jdbc.update("UPDATE ai_user_profiles SET next_run_at=?,next_social_at=NULL",java.sql.Timestamp.from(now.plusSeconds(3600)));
+        tx.executeWithoutResult(s -> scheduled.schedule());
+        int initial=jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type='SOCIAL_BROWSE'",Integer.class);
+        assertThat(initial).isPositive();
+        tx.executeWithoutResult(s -> scheduled.schedule());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type='SOCIAL_BROWSE'",Integer.class)).isEqualTo(initial);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type='SCHEDULE'",Integer.class)).isZero();
+        jdbc.update("DELETE FROM ai_user_jobs");
+        for (int i=0;i<17;i++) {
+            scheduled.enqueue(ais.getFirst(),"wait-budget-"+i,20,"SOCIAL_BROWSE",null);
+            var job=tx.execute(s -> scheduled.claim("wait-budget"));
+            assertThat(job).isNotNull();
+            jdbc.update("UPDATE ai_user_jobs SET action_name='WAIT',status='DONE',wait_reason='NO_NEW_TOPIC',finished_at=? WHERE id=?",
+                    java.sql.Timestamp.from(now),job.id());
+            jdbc.update("UPDATE ai_user_runtime SET current_job_id=NULL,lease_owner=NULL,lease_until=NULL");
+        }
+        scheduled.enqueue(ais.getFirst(),"after-waits",20,"SOCIAL_BROWSE",null);
+        var realAction=tx.execute(s -> scheduled.claim("real-action"));
+        assertThat(realAction).isNotNull();
+    }
+
+    @Test void socialPostIsCommittedOnceAndDailyLimitProducesRecordedWait() {
+        var first=beginSocial(ais.getFirst());
+        var payload=mapper.readTree("{\"boardType\":\"FREE\",\"content\":\"오늘은 앱에서 기록할 작은 계획부터 정했어요\",\"imageIds\":[],\"topic\":\"첫 기록 계획\"}");
+        String receipt=control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_POST,payload,"첫 계획을 공유함");
+        assertThat(control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_POST,payload,"재시도"))
+                .isEqualTo(receipt);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=?",Integer.class,first.userId())).isEqualTo(1);
+        var second=beginSocial(first.userId());
+        control.execute(second.id(),second.owner(),second.fencingToken(),AiUserActionExecutor.Action.FEED_POST,
+                mapper.readTree("{\"boardType\":\"FREE\",\"content\":\"두 번째 글은 제한돼야 함\",\"imageIds\":[]}"),"게시했다고 남기면 안 됨");
+        assertThat(jdbc.queryForMap("SELECT action_name,wait_reason FROM ai_user_jobs WHERE id=?",second.id()))
+                .containsEntry("action_name","WAIT").containsEntry("wait_reason","DAILY_LIMIT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_memories WHERE job_id=?",Integer.class,second.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=?",Integer.class,first.userId())).isEqualTo(1);
+        assertThat(memoryProjection.pending(10)).anySatisfy(export -> {
+            assertThat(export.get("jobId")).isEqualTo(first.id());
+            assertThat(export.get("body").toString()).contains("SOCIAL_BROWSE");
+        });
+    }
+
+    @Test void proactiveCommentsAreUniquePerAccountAndGloballyBoundedButHumanReplyIsAllowed() {
+        User human=quietHuman();
+        long post=quietPost(human,"독서 기록을 주제별로 정리하는 방법이 궁금해요");
+        var first=beginSocial(ais.getFirst());
+        var payload=mapper.readTree("{\"postId\":"+post+",\"content\":\"기록을 주제로 나누면 다시 찾기 좋겠네요\"}");
+        control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"");
+        jdbc.update("UPDATE ai_user_social_actions SET created_at=?",java.sql.Timestamp.from(Instant.now().minusSeconds(1900)));
+        var duplicate=beginSocial(first.userId());
+        control.execute(duplicate.id(),duplicate.owner(),duplicate.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"");
+        assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,duplicate.id())).isEqualTo("RECENT_PARTICIPATION");
+        var second=beginSocial(ais.get(1));
+        control.execute(second.id(),second.owner(),second.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.readTree("{\"postId\":"+post+",\"content\":\"저는 분류할 주제부터 작게 정해보려고요\"}"),"");
+        jobs.enqueue(ais.get(2),"crowd-check",10,"SCHEDULE",null);
+        var crowded=jobs.claim("crowd-check");
+        control.execute(crowded.id(),crowded.owner(),crowded.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.readTree("{\"postId\":"+post+",\"content\":\"세 번째 선제 댓글\"}"),"");
+        assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,crowded.id())).isEqualTo("RECENT_PARTICIPATION");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND proactive=TRUE",Integer.class,post)).isEqualTo(2);
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"분류 기준을 두 가지로 시작해볼까요?"));
+        var reply=jobs.claim("human-first");
+        assertThat(reply.sourceType()).isEqualTo("FEED_COMMENT");
+        control.snapshot(reply.id(),reply.owner(),reply.fencingToken());
+        control.execute(reply.id(),reply.owner(),reply.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.readTree("{\"postId\":"+post+",\"content\":\"네, 두 가지면 유지하기에도 부담이 덜하겠어요\"}"),"");
+        assertThat(jdbc.queryForObject("SELECT proactive FROM ai_user_social_actions WHERE job_id=?",Boolean.class,reply.id())).isFalse();
+    }
+
+    @Test void socialContextIncludesOldPostAndCommentsAndRevocationPreventsWriting() {
+        User human=quietHuman();
+        long post=quietPost(human,"방 꾸미기 전에 어떤 가구부터 고르면 좋을까요?");
+        jdbc.update("UPDATE feed_posts SET created_at=? WHERE id=?",java.sql.Timestamp.from(Instant.now().minusSeconds(172800)),post);
+        jobs.setEnabled(false);
+        var comment=feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"작은 책상부터 보고 있어요"));
+        jobs.setEnabled(true);
+        var job=beginSocial(ais.getFirst());
+        var snapshot=mapper.writeValueAsString(control.snapshot(job.id(),job.owner(),job.fencingToken()));
+        assertThat(snapshot).contains("recentComments","작은 책상부터 보고 있어요");
+        assertThat(jdbc.queryForObject("SELECT context_sources FROM ai_user_jobs WHERE id=?",String.class,job.id()))
+                .contains("FEED_COMMENT",comment.commentId().toString());
+        feed.delete(human.getId(),post);
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.readTree("{\"postId\":"+post+",\"content\":\"삭제된 글에는 쓰면 안 됨\"}"),""))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE job_id=?",Integer.class,job.id())).isZero();
+    }
+
+    @Test void copiedPostIsRejectedAfterDailyWindowAndCommentDailyLimitIsIndependent() {
+        long ai=ais.getFirst();
+        var first=beginSocial(ai);
+        var postPayload=mapper.readTree("{\"boardType\":\"FREE\",\"content\":\"기록을 작게 나눠볼 계획이에요\",\"imageIds\":[]}");
+        control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_POST,postPayload,"");
+        jdbc.update("UPDATE ai_user_social_actions SET created_at=?",java.sql.Timestamp.from(Instant.now().minusSeconds(172800)));
+        var copy=beginSocial(ai);
+        control.execute(copy.id(),copy.owner(),copy.fencingToken(),AiUserActionExecutor.Action.FEED_POST,postPayload,"");
+        assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,copy.id())).isEqualTo("RECENT_PARTICIPATION");
+        User human=quietHuman();
+        var posts=new ArrayList<Long>();
+        for(int i=0;i<4;i++) posts.add(quietPost(human,"기록 방법에 대한 질문 "+i));
+        Collections.reverse(posts);
+        for(int i=0;i<4;i++) {
+            var job=beginSocial(ai);
+            control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                    mapper.readTree("{\"postId\":"+posts.get(i)+",\"content\":\"주제 "+i+"에 대한 구체적인 반응\"}"),"");
+            if(i==3) assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,job.id())).isEqualTo("DAILY_LIMIT");
+            jdbc.update("UPDATE ai_user_social_actions SET created_at=? WHERE action_name='FEED_COMMENT'",java.sql.Timestamp.from(Instant.now().minusSeconds(1900)));
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=? AND action_name='FEED_COMMENT'",Integer.class,ai)).isEqualTo(3);
+    }
+
+    @Test void socialCommentsAreLatestAndExcludeAuthorsWhoBlockedTheAi() {
+        User human=quietHuman(),blocked=quietHuman();
+        long post=quietPost(human,"최근 댓글과 차단 관계를 검증하는 글");
+        jobs.setEnabled(false);
+        var comments=new ArrayList<FeedCommentResponse>();
+        for(int i=0;i<4;i++) comments.add(feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"공개 댓글 "+i)));
+        feed.comment(blocked.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"차단한 작성자의 원문은 전달하면 안 됨"));
+        jobs.setEnabled(true);
+        long ai=ais.getFirst();
+        jdbc.update("INSERT INTO user_blocks(blocker_user_id,blocked_user_id,created_at) VALUES (?,?,CURRENT_TIMESTAMP)",blocked.getId(),ai);
+        try {
+            var job=beginSocial(ai);
+            var snapshot=mapper.valueToTree(control.snapshot(job.id(),job.owner(),job.fencingToken()));
+            var seen=snapshot.path("social").path("candidates").get(0).path("recentComments");
+            assertThat(seen.size()).isEqualTo(3);
+            assertThat(seen.get(0).path("commentId").asLong()).isEqualTo(comments.getLast().commentId());
+            assertThat(snapshot.toString()).doesNotContain("차단한 작성자의 원문");
+        } finally { jdbc.update("DELETE FROM user_blocks WHERE blocker_user_id=? AND blocked_user_id=?",blocked.getId(),ai); }
+    }
+
+    private AiUserJobs.Job beginSocial(long user) {
+        jobs.enqueue(user,"social-test:"+UUID.randomUUID(),20,"SOCIAL_BROWSE",null);
+        var job=jobs.claim("social-test");
+        assertThat(job.userId()).isEqualTo(user);
+        control.snapshot(job.id(),job.owner(),job.fencingToken());
+        return job;
+    }
+    private User quietHuman() {
+        User human=tx.execute(s -> users.saveAndFlush(User.signUp()));
+        createdHumans.add(human.getId());
+        return human;
+    }
+    private long quietPost(User human,String content) {
+        jobs.setEnabled(false);
+        Long post=feed.create(human.getId(),new FeedCreateRequest(UUID.randomUUID(),content,List.of(),FeedBoardType.FREE));
+        jobs.setEnabled(true);
+        return post;
+    }
     @Test void onlyOneConcurrentWorkerAndHumanJobWins() throws Exception {
         jobs.enqueue(ais.getFirst(),"scheduled",10,"SCHEDULE",null);
         jobs.enqueue(ais.get(1),"human",100,"SCHEDULE",null);
@@ -354,8 +507,8 @@ class AiUserRuntimeIntegrationTest {
     @Test void periodicLimitLeavesRoomForHumanJobs() {
         Long ai=ais.getFirst();
         var now=java.sql.Timestamp.from(Instant.now());
-        for(int i=0;i<16;i++) jdbc.update("INSERT INTO ai_user_jobs(user_id,job_key,priority,source_type,status,ready_at,created_at,finished_at) "
-                + "VALUES (?,? ,10,'SCHEDULE','DONE',?,?,?)",ai,"quota:"+i,now,now,now);
+        for(int i=0;i<16;i++) jdbc.update("INSERT INTO ai_user_jobs(user_id,job_key,priority,source_type,status,action_name,ready_at,created_at,finished_at) "
+                + "VALUES (?,? ,10,'SCHEDULE','DONE','ROUTINE_CREATE',?,?,?)",ai,"quota:"+i,now,now,now);
         jobs.enqueue(ai,"periodic-over-limit",10,"SCHEDULE",null);
         assertThat(jobs.claim("limited")).isNull();
         jobs.enqueue(ai,"human-reserved-quota",100,"SCHEDULE",null);

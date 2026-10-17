@@ -16,6 +16,7 @@ public class AiUserControlService {
     private final AiUserActionExecutor executor;
     private final ObjectMapper mapper;
     private final AiUserMemoryProjection memoryProjection;
+    private final AiUserSocialActivity social;
     private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional(isolation=Isolation.READ_COMMITTED)
@@ -32,12 +33,20 @@ public class AiUserControlService {
         observer.requireContextAccessible(job);
         memoryProjection.requireMemorySources(job);
         observer.requireResponseTarget(job,action,payload);
+        var rejected=social.reject(job,action,payload);
+        if (rejected!=null) {
+            action=AiUserActionExecutor.Action.WAIT;
+            payload=mapper.createObjectNode().put("reason",rejected.name());
+            memory="";
+        }
         // 사전 관찰 엔티티를 버려 기존 서비스의 잠금 조회가 최신 room sequence/post 상태를 다시 읽게 함.
         entityManager.clear();
         Object result=executor.execute(job,action,payload);
+        social.record(job,action,payload,result);
         String receipt=mapper.writeValueAsString(result);
         memoryProjection.recordAction(job,action.name(),payload);
         jobs.finish(job,receipt,memory);
+        jobs.bringForwardSocialVisit(job,action);
         return receipt;
     }
 }
