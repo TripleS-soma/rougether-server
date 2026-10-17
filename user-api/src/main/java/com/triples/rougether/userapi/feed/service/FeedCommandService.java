@@ -24,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class FeedCommandService {
+    private com.triples.rougether.userapi.aiuser.service.AiUserEvents aiEvents;
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureAiEvents(com.triples.rougether.userapi.aiuser.service.AiUserEvents events) { aiEvents = events; }
     private final FeedAccess access;
     private final FeedPostRepository posts;
     private final FeedImageRepository images;
@@ -72,6 +75,7 @@ public class FeedCommandService {
         if (link != null) post.linkRoutine(link.routineId(), link.date(), link.title());
         post = posts.save(post);
         for (int i = 0; i < imageIds.size(); i++) selected.get(imageIds.get(i)).attach(post, i);
+        if (aiEvents != null) aiEvents.post(user, post.getId());
         return post.getId();
     }
     public void update(Long userId, Long postId, String content) {
@@ -136,6 +140,7 @@ public class FeedCommandService {
             return FeedCommentResponse.of(previous, userId);
         }
         FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(), requestHash, content));
+        if (aiEvents != null) aiEvents.comment(user, postId, comment.getId());
         // 댓글과 알림 내역을 함께 커밋하고 push만 기존 AFTER_COMMIT 경로로 발송함. 재시도·본인 댓글은 제외함.
         // 게시물 작성자가 댓글 작성자를 차단했으면 알림을 만들지 않음(#399).
         if (!authorId.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(authorId, userId))

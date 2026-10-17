@@ -46,7 +46,7 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
             + "r.status as status, r.appliedRoutineId as appliedRoutineId, "
             + "r.createdAt as createdAt, r.actedAt as actedAt, r.expiresAt as expiresAt "
             + "from RoutineRecommendation r join r.user u "
-            + "where r.createdAt >= :from and u.deletedAt is null and u.bot = false")
+            + "where r.createdAt >= :from and u.deletedAt is null and u.bot = false and u.ai = false")
     List<RecommendationFunnelRow> findFunnelRowsCreatedAfter(@Param("from") Instant from);
 
     // HOLDOUT 실험 지표(#342)는 해당 실험이 만드는 룰 기반 요일 조정 추천만 귀속한다. 기존 관리자
@@ -56,7 +56,7 @@ public interface RoutineRecommendationRepository extends JpaRepository<RoutineRe
             + "r.createdAt as createdAt, r.actedAt as actedAt, r.expiresAt as expiresAt "
             + "from RoutineRecommendation r join r.user u "
             + "where r.createdAt >= :from and r.recType = :recType and r.source = :source "
-            + "and u.deletedAt is null and u.bot = false")
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
     List<RecommendationFunnelRow> findExperimentFunnelRowsCreatedAfter(
             @Param("from") Instant from,
             @Param("recType") RecommendationType recType,

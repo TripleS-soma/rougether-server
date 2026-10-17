@@ -61,6 +61,10 @@ public class User extends BaseEntity {
     @Column(name = "bot_key", length = 40)
     private String botKey;
 
+    // 가상 사용자: 기존 동거 봇과 별개이며 사람 KPI와 로그인에서 제외함.
+    @Column(name = "is_ai", nullable = false)
+    private boolean ai;
+
     private User(String email) {
         this.email = email;
     }
@@ -85,6 +89,18 @@ public class User extends BaseEntity {
     // 동거 봇 계정. oauth 계정·이메일 없이 서버가 만들며 닉네임·bio 는 프로필 카탈로그가 채운다.
     public static User bot(String botKey, String nickname, String bio) {
         return new User(botKey, nickname, bio);
+    }
+
+    public static User ai(String nickname, String bio) {
+        User user = new User();
+        user.ai = true;
+        user.nickname = nickname;
+        user.bio = bio;
+        return user;
+    }
+
+    public boolean isHuman() {
+        return !bot && !ai;
     }
 
     // 마지막 접속(토큰 발급) 시각 기록. 로그인과 refresh 정상 회전 시 갱신됨.

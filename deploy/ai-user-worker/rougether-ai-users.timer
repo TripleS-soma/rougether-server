@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ten AI users in bounded batches during KST daytime
+
+[Timer]
+OnCalendar=*-*-* 08..23:00,30:00 Asia/Seoul
+RandomizedDelaySec=60
+Persistent=false
+Unit=rougether-ai-users.service
+
+[Install]
+WantedBy=timers.target

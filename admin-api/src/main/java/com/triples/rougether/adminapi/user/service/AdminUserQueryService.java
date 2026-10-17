@@ -68,7 +68,7 @@ public class AdminUserQueryService {
     public AdminUserSummaryResponse getSummary() {
         Instant now = Instant.now();
         Instant sevenDaysAgo = now.minus(Duration.ofDays(RECENT_WINDOW_DAYS));
-        // 동거 봇(#308)은 요약 KPI 에서 제외 — 봇 목록은 accountStatus=BOT 으로 따로 본다.
+        // 사람 KPI에서 동거 봇·AI 계정을 제외하고 각각 BOT/AI 목록에서 조회한다.
         long activeUsers = userRepository.countByDeletedAtIsNullAndBotFalse();
         return AdminUserSummaryResponse.of(
                 activeUsers,
@@ -135,8 +135,9 @@ public class AdminUserQueryService {
                                long activeRoutineCount,
                                long activeHouseCount,
                                long recentCompletionCount) {
-        AdminUserAccountStatus accountStatus = user.isBot()
-                ? AdminUserAccountStatus.BOT
+        AdminUserAccountStatus accountStatus = user.isAi()
+                ? AdminUserAccountStatus.AI
+                : user.isBot() ? AdminUserAccountStatus.BOT
                 : user.isDeleted() ? AdminUserAccountStatus.WITHDRAWN : AdminUserAccountStatus.ACTIVE;
         return new AdminUserRow(
                 user.getId(),

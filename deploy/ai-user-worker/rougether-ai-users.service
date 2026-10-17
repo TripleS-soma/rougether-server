@@ -1,0 +1,10 @@
+[Unit]
+Description=Rougether AI user sequential burst
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/rougether-server/ai-user-worker
+ExecStart=/usr/bin/docker compose --env-file .env run --rm worker
+TimeoutStartSec=16min

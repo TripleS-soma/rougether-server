@@ -94,7 +94,7 @@ public class ChatPushNotifier {
                     || !settings.isPushAllowed(userId, NotificationType.CHAT_MESSAGE)) {
                 continue;
             }
-            users.findById(userId).filter(user -> !user.isBot()).ifPresent(user -> {
+            users.findById(userId).filter(user -> !user.isBot() && !user.isAi()).ifPresent(user -> {
                 NotificationContent localized = content.localized(user.getLanguage());
                 fcm.pushWithoutRecord(userId, localized.title(), localized.body(), data);
             });

@@ -17,7 +17,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    @Query("select distinct u.timeZone from User u where u.deletedAt is null and u.bot = false order by u.timeZone")
+    @Query("select distinct u.timeZone from User u where u.deletedAt is null and u.bot = false and u.ai = false order by u.timeZone")
     List<String> findActiveTimeZones();
 
     // refresh 회전 성공 시 마지막 접속 시각만 targeted update.
@@ -38,21 +38,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByIdAndBotTrue(Long id);
 
+    boolean existsByIdAndAiTrue(Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
     // 어드민 관측 요약(#308): 동거 봇은 KPI 에서 제외한다.
+    @Query("select count(u) from User u where u.deletedAt is null and u.bot = false and u.ai = false")
     long countByDeletedAtIsNullAndBotFalse();
 
-    long countByDeletedAtIsNullAndBotFalseAndCreatedAtGreaterThanEqual(Instant createdAt);
+    @Query("select count(u) from User u where u.deletedAt is null and u.bot = false and u.ai = false and u.createdAt >= :createdAt")
+    long countByDeletedAtIsNullAndBotFalseAndCreatedAtGreaterThanEqual(@Param("createdAt") Instant createdAt);
 
-    long countByDeletedAtIsNullAndBotFalseAndLastAccessedAtGreaterThanEqual(Instant lastAccessedAt);
+    @Query("select count(u) from User u where u.deletedAt is null and u.bot = false and u.ai = false and u.lastAccessedAt >= :lastAccessedAt")
+    long countByDeletedAtIsNullAndBotFalseAndLastAccessedAtGreaterThanEqual(@Param("lastAccessedAt") Instant lastAccessedAt);
 
     // 온보딩 완료 계약: 목표 1개 이상 + 삭제되지 않은 대표 캐릭터 존재. 동거 봇은 시드가 이 조건을 채우므로 제외한다.
     // 전체 유저마다 두 EXISTS를 평가하지 않고 대표 캐릭터 보유 유저에서 시작해 요약 조회 비용을 줄임.
     @Query("select count(distinct uc.user.id) from UserCharacter uc "
-            + "where uc.user.deletedAt is null and uc.user.bot = false "
+            + "where uc.user.deletedAt is null and uc.user.bot = false and uc.user.ai = false "
             + "and uc.selected = true and uc.deletedAt is null "
             + "and exists (select ug.id from UserGoal ug where ug.user = uc.user)")
     long countOnboardingCompletedUsers();
@@ -69,10 +74,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "(:query is null "
             + "  or lower(u.email) like lower(concat('%', :query, '%')) "
             + "  or lower(u.nickname) like lower(concat('%', :query, '%'))) "
-            + "and ((:accountStatus = 'ALL' and u.bot = false) "
-            + "  or (:accountStatus = 'ACTIVE' and u.deletedAt is null and u.bot = false) "
-            + "  or (:accountStatus = 'WITHDRAWN' and u.deletedAt is not null and u.bot = false) "
-            + "  or (:accountStatus = 'BOT' and u.bot = true)) "
+            + "and ((:accountStatus = 'ALL' and u.bot = false and u.ai = false) "
+            + "  or (:accountStatus = 'ACTIVE' and u.deletedAt is null and u.bot = false and u.ai = false) "
+            + "  or (:accountStatus = 'WITHDRAWN' and u.deletedAt is not null and u.bot = false and u.ai = false) "
+            + "  or (:accountStatus = 'AI' and u.ai = true) or (:accountStatus = 'BOT' and u.bot = true)) "
             + "and (:neverAccessed = false or u.lastAccessedAt is null) "
             + "and (:accessedAfter is null or u.lastAccessedAt >= :accessedAfter) "
             + "and (:onboardingStatus = 'ALL' "
@@ -104,7 +109,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             select u from User u
             where u.id > :afterUserId
               and u.deletedAt is null
-              and u.bot = false
+              and u.bot = false and u.ai = false
               and u.timeZone = :timeZone
               and not exists (
                 select 1 from DailyIncompleteDigest d

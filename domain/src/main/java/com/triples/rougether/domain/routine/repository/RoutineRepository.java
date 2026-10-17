@@ -95,7 +95,7 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
 
     @Query("select r from Routine r join fetch r.user "
             + "where r.status = :status and r.scheduledTime = :scheduledTime and r.deletedAt is null "
-            + "and r.user.bot = false and r.user.deletedAt is null and r.user.timeZone = :timeZone "
+            + "and r.user.bot = false and r.user.ai = false and r.user.deletedAt is null and r.user.timeZone = :timeZone "
             + "and r.id > :cursorId "
             + "and not exists (select 1 from RoutineLog l "
             + "  where l.routine = r and l.routineDate = :date "

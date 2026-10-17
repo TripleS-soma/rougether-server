@@ -5,5 +5,6 @@ public enum AdminUserAccountStatus {
     ALL,
     ACTIVE,
     WITHDRAWN,
-    BOT
+    BOT,
+    AI
 }

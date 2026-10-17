@@ -159,6 +159,7 @@
                         <option value="ACTIVE">활성</option>
                         <option value="WITHDRAWN">탈퇴</option>
                         <option value="BOT">봇</option>
+                        <option value="AI">AI 계정</option>
                         <option value="ALL">전체</option>
                     </select>
                 </label>
@@ -415,7 +416,7 @@
             const status = document.createElement('span');
             status.className = 'observation-status observation-status--' + user.accountStatus.toLowerCase();
             status.textContent = user.accountStatus === 'ACTIVE' ? '활성'
-                : user.accountStatus === 'BOT' ? '봇' : '탈퇴';
+                : user.accountStatus === 'BOT' ? '봇' : user.accountStatus === 'AI' ? 'AI 계정' : '탈퇴';
             statusCell.append(status);
             tr.append(statusCell);
 

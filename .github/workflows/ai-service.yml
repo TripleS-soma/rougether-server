@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'ai-service/**'
+      - 'ai-user-worker/**'
+      - 'qa/ai-user-memory/**'
+      - 'deploy/ai-user-worker/**'
       - 'infra/llm/**'
       - 'qa/ai-service-contract/**'
       - 'deploy/ai-service/**'
@@ -14,6 +17,9 @@ on:
     branches: [main]
     paths:
       - 'ai-service/**'
+      - 'ai-user-worker/**'
+      - 'qa/ai-user-memory/**'
+      - 'deploy/ai-user-worker/**'
       - 'infra/llm/**'
       - 'qa/ai-service-contract/**'
       - 'deploy/ai-service/**'
@@ -57,7 +63,7 @@ jobs:
 
   docker-build:
     name: AI service Docker build
-    needs: test
+    needs: [test, memory-contract]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -69,11 +75,38 @@ jobs:
           platforms: linux/amd64
           push: false
           tags: rougether-ai:pr-${{ github.sha }}
+          build-args: AI_USER_MEMORY=true
+
+  memory-contract:
+    name: Graphiti Neo4j and bounded worker contracts
+    runs-on: ubuntu-latest
+    env:
+      AI_USER_EMBEDDING_CACHE: /tmp/rougether-models
+      GRAPHITI_TELEMETRY_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked memory dependencies
+        run: |
+          python -m pip install uv==0.10.12
+          uv sync --directory ai-service --frozen --extra memory
+      - name: Prepare public local embedding model
+        run: ai-service/.venv/bin/python ai-service/download_memory_model.py
+      - name: API and worker tests without paid providers
+        run: ai-service/.venv/bin/python -m pytest ai-service/tests ai-user-worker -q
+      - name: Worker image includes shared action policy
+        run: |
+          docker build -f ai-user-worker/Dockerfile -t rougether-ai-users:contract .
+          docker run --rm --network none --read-only rougether-ai-users:contract python -c 'from worker import Worker, Settings; from rougether_ai.ai_user_policy import code_plan'
+      - name: Real Neo4j memory isolation and long recall
+        run: ai-service/.venv/bin/python qa/ai-user-memory/run.py
 
   publish:
     name: Publish AI service
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: [test, docker-build]
+    needs: [test, docker-build, memory-contract]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -105,6 +138,7 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
+          build-args: AI_USER_MEMORY=true
           tags: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}:${{ github.sha }}
       - name: Resolve immutable image
         id: image

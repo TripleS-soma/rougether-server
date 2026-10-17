@@ -19,6 +19,7 @@ class Settings:
     embedding_concurrency: int = 2
     max_request_bytes: int = 524288
     max_response_bytes: int = 16777216
+    ai_users_enabled: bool = False
 
     def __post_init__(self):
         if len(self.service_token) < 32 or any(not 33 <= ord(c) <= 126 for c in self.service_token):
@@ -55,4 +56,5 @@ class Settings:
             max_retries=int(os.environ.get("AI_MAX_RETRIES", "2")),
             chat_concurrency=int(os.environ.get("AI_CHAT_CONCURRENCY", "2")),
             embedding_concurrency=int(os.environ.get("AI_EMBEDDING_CONCURRENCY", "2")),
+            ai_users_enabled=os.environ.get("AI_USERS_ENABLED", "false").lower() == "true",
         )

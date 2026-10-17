@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // service-token 검증은 기본 OFF인 AiUserController가 수행함. 일반 JWT로 대체 불가.
+                        .requestMatchers("/internal/ai-users/**").permitAll()
                         // 각 컨트롤러에서 Apple 서명 또는 Google Pub/Sub OIDC를 검증함.
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/billing/notifications/apple", "/api/v1/billing/notifications/google").permitAll()
