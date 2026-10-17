@@ -36,11 +36,15 @@ PR Gate의 기존 `Gradle test` 검사 이름은 집계 게이트로 유지한�
 4. 영수증의 소스 트리 해시가 현재 main의 전체 Git 트리와 같다. 커밋 SHA는 달라도 파일, 설정, 워크플로가 모두 같아야 한다.
 5. 실제 GitHub 커밋 객체의 트리도 같고, 검증한 커밋은 해당 PR head이거나 그 head를 부모로 갖는 병합 커밋이다.
 6. 영수증의 실행 ID, 실행 시도, 이미지 아티팩트 ID가 일치한다.
-7. 다운로드한 이미지 아카이브 체크섬, 세 이미지 ID, 소스 트리 라벨, 모듈 라벨, linux/amd64 아키텍처가 모두 맞는다.
+7. 다운로드한 이미지 아카이브 체크섬, 세 이미지 config/manifest ID, 소스 트리 라벨, 모듈 라벨, linux/amd64 아키텍처가 모두 맞는다.
 
 1~6을 확인할 수 없으면 전체 검증과 이미지 생성을 새로 수행한다. 7의 무결성 확인이 실패하면 AWS 자격 증명을 받기 전에 배포를 실패시킨다. 손상된 이미지를 대신 배포하거나 검사를 생략하지 않는다.
 
-직접 push, 병합 중 다른 변경의 유입, fork PR, 누락 또는 만료된 아티팩트는 새 검증 경로로 간다. 수동 실행의 `force_verification=true`로 재사용을 끄고 전체 검증할 수도 있다. 일부 작업만 재실행해 현재 실행 시도의 아티팩트가 완성되지 않았다면 전체 작업을 다시 실행해야 한다.
+직접 push, 병합 중 다른 변경의 유입, fork PR, 누락 또는 만료된 아티팩트는 새 검증 경로로 간다. JAR, 이미지와 영수증은 1일, 테스트 보고서는 7일 보관한다. 수동 실행의 `force_verification=true`로 재사용을 끄고 전체 검증할 수도 있다. 일부 작업만 재실행해 현재 실행 시도의 아티팩트가 완성되지 않았다면 전체 작업을 다시 실행해야 한다.
+
+### Docker 저장소 종류에 따른 이미지 ID
+
+실제 GitHub 아카이브를 Docker Desktop에 불러오는 검증에서 classic 저장소의 config digest와 containerd 저장소의 manifest digest가 서로 다른 ID로 표시되는 것을 확인했다. 아카이브 전체 체크섬을 먼저 검사하고, 내부 config의 해시와 그 config를 가리키는 OCI manifest의 해시를 직접 계산해 동일 이미지의 두 표현만 허용한다. 다른 이미지의 ID나 manifest 바이트 변조는 거부한다. CI에서도 이미지 생성 후 save/load 왕복을 검사한 다음에만 영수증을 게시한다.
 
 ## 배포 보장
 
@@ -62,3 +66,5 @@ PR 워크플로는 AWS 자격 증명을 받지 않는다. main에서는 영수�
 - [기존 PR Gate](https://github.com/TripleS-soma/rougether-server/actions/runs/39032643065), [기존 main 배포](https://github.com/TripleS-soma/rougether-server/actions/runs/39033706906).
 - [GitHub immutable artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts), [다른 실행의 아티팩트 다운로드](https://github.com/actions/download-artifact).
 - [Gradle 테스트 클래스 필터와 보고서](https://docs.gradle.org/current/userguide/java_testing.html).
+
+Docker ID 차이 근거: [Moby #51934](https://github.com/moby/moby/issues/51934), [Docker image load](https://docs.docker.com/reference/cli/docker/image/load/).

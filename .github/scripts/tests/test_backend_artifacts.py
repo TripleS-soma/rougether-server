@@ -1,5 +1,8 @@
 import importlib.util
 import json
+import hashlib
+import io
+import tarfile
 from pathlib import Path
 import tempfile
 import unittest
@@ -85,17 +88,60 @@ class ReceiptTest(unittest.TestCase):
                 return json.dumps([{'Id': data['images'][module], 'Os': 'linux', 'Architecture': 'amd64',
                                     'Config': {'Labels': {'com.rougether.source-tree': TREE,
                                                           'com.rougether.module': module}}}])
-            with patch.object(ci, 'git', return_value=TREE), patch.object(ci.subprocess, 'run') as load, \
+            with patch.object(ci, 'archive_identities', return_value={m: {data['images'][m]} for m in ci.MODULES}), \
+                    patch.object(ci, 'git', return_value=TREE), patch.object(ci.subprocess, 'run') as load, \
                     patch.object(ci.subprocess, 'check_output', side_effect=inspect) as inspection:
                 ci.load_bundle(args)
                 self.assertEqual(inspection.call_count, 3)
                 load.assert_called_once()
             broken = json.loads(inspect(['docker', ci.image_tag('user-api')]))
             broken[0]['Architecture'] = 'arm64'
-            with patch.object(ci, 'git', return_value=TREE), patch.object(ci.subprocess, 'run'), \
+            with patch.object(ci, 'archive_identities', return_value={m: {data['images'][m]} for m in ci.MODULES}), \
+                    patch.object(ci, 'git', return_value=TREE), patch.object(ci.subprocess, 'run'), \
                     patch.object(ci.subprocess, 'check_output', return_value=json.dumps(broken)):
                 with self.assertRaisesRegex(ValueError, 'identity mismatch'):
                     ci.load_bundle(args)
+
+
+class ArchiveIdentityTest(unittest.TestCase):
+    def make_archive(self, path, corrupt=False):
+        manifest, index, expected = [], [], {}
+        with tarfile.open(path, 'w') as archive:
+            def add(name, body):
+                data = json.dumps(body, sort_keys=True).encode()
+                member = tarfile.TarInfo(name); member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+                return 'sha256:' + hashlib.sha256(data).hexdigest()
+            for module in ci.MODULES:
+                config = {'config': {'Labels': {'com.rougether.module': module}}}
+                raw = json.dumps(config, sort_keys=True).encode()
+                config_id = 'sha256:' + hashlib.sha256(raw).hexdigest()
+                config_path = 'blobs/sha256/' + config_id.split(':')[1]
+                add(config_path, config)
+                image = {'schemaVersion': 2, 'config': {'digest': config_id}, 'layers': []}
+                raw = json.dumps(image, sort_keys=True).encode()
+                image_id = 'sha256:' + hashlib.sha256(raw).hexdigest()
+                add('blobs/sha256/' + image_id.split(':')[1], {'corrupt': True} if corrupt else image)
+                manifest.append({'Config': config_path, 'RepoTags': [ci.image_tag(module)], 'Layers': []})
+                index.append({'digest': image_id})
+                expected[module] = {config_id, image_id}
+            add('manifest.json', manifest)
+            add('index.json', {'manifests': index})
+        return expected
+
+    def test_classic_and_containerd_ids_are_bound_to_same_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'images.tar'
+            expected = self.make_archive(path)
+            self.assertEqual(ci.archive_identities(path), expected)
+            self.assertTrue(expected['user-api'].isdisjoint(expected['batch']))
+
+    def test_wrong_manifest_digest_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'images.tar'
+            self.make_archive(path, corrupt=True)
+            with self.assertRaisesRegex(ValueError, 'digest mismatch'):
+                ci.archive_identities(path)
 
 
 class ResolutionTest(unittest.TestCase):

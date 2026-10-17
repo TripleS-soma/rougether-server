@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import tarfile
 
 MODULES = ('user-api', 'admin-api', 'batch')
 SCHEMA = 1
@@ -115,16 +116,52 @@ def create_receipt(args):
     Path(args.receipt).write_text(json.dumps(receipt, indent=2) + '\n')
 
 
+
+def archive_identities(path):
+    # classic store는 config digest, containerd store는 manifest digest를 ID로 반환함.
+    # 같은 검증된 config를 가리키는 아카이브 내부 해시만 허용함.
+    with tarfile.open(path) as archive:
+        manifest = json.load(archive.extractfile('manifest.json'))
+        identities = {}
+        by_config = {}
+        for module in MODULES:
+            matches = [item for item in manifest if image_tag(module) in item.get('RepoTags', [])]
+            if len(matches) != 1:
+                raise ValueError(f'archive module mismatch: {module}')
+            config = archive.extractfile(matches[0]['Config']).read()
+            config_id = 'sha256:' + hashlib.sha256(config).hexdigest()
+            identities[module] = {config_id}
+            by_config[config_id] = module
+        if 'index.json' in archive.getnames():
+            index = json.load(archive.extractfile('index.json'))
+            for descriptor in index.get('manifests', []):
+                image_id = descriptor.get('digest', '')
+                if not re.fullmatch(r'sha256:[0-9a-f]{64}', image_id):
+                    raise ValueError('invalid archive manifest digest')
+                raw = archive.extractfile('blobs/sha256/' + image_id.split(':')[1]).read()
+                if 'sha256:' + hashlib.sha256(raw).hexdigest() != image_id:
+                    raise ValueError('archive manifest digest mismatch')
+                image = json.loads(raw)
+                module = by_config.get(image.get('config', {}).get('digest'))
+                if module:
+                    identities[module].add(image_id)
+        return identities
+
+
 def load_bundle(args):
     receipt = json.loads(Path(args.receipt).read_text())
     validate_receipt(receipt, git('rev-parse', 'HEAD^{tree}'), args.run_id, args.attempt, args.artifact_id)
     if digest(args.archive) != receipt['archive_sha256']:
         raise ValueError('image archive checksum mismatch')
+    identities = archive_identities(args.archive)
+    for module in MODULES:
+        if receipt['images'][module] not in identities[module]:
+            raise ValueError(f'archive image identity mismatch: {module}')
     subprocess.run(['docker', 'image', 'load', '--input', args.archive], check=True)
     for module in MODULES:
         details = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image_tag(module)], text=True))[0]
         labels = details['Config'].get('Labels') or {}
-        if (details['Id'] != receipt['images'][module]
+        if (details['Id'] not in identities[module]
                 or labels.get('com.rougether.source-tree') != receipt['source_tree']
                 or labels.get('com.rougether.module') != module
                 or details.get('Os') != 'linux' or details.get('Architecture') != 'amd64'):

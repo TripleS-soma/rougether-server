@@ -85,7 +85,7 @@ jobs:
         with:
           name: backend-jars-${{ matrix.group }}-${{ github.run_attempt }}
           path: ci-jars/
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
 
   images:
@@ -122,17 +122,23 @@ jobs:
           name: backend-images-${{ github.run_attempt }}
           path: bundle/images.tar
           compression-level: 1
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
       - name: Bind receipt to source tree, run attempt and image artifact
         env:
           ARTIFACT_ID: ${{ steps.bundle.outputs.artifact-id }}
         run: python3 .github/scripts/backend_artifacts.py receipt --artifact-id "$ARTIFACT_ID"
+      - name: Verify image archive round trip before publishing receipt
+        env:
+          ARTIFACT_ID: ${{ steps.bundle.outputs.artifact-id }}
+        run: |
+          python3 .github/scripts/backend_artifacts.py load \
+            --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
       - name: Upload validation receipt
         id: receipt
         uses: actions/upload-artifact@v4
         with:
           name: backend-receipt-${{ github.run_attempt }}
           path: bundle/manifest.json
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
