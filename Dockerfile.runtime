@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1.7
+# CI에서 전체 테스트와 함께 만든 JAR만 런타임 이미지에 포함함.
+FROM eclipse-temurin:25-jre
+ARG APP_MODULE
+ARG SOURCE_TREE
+LABEL com.rougether.source-tree=${SOURCE_TREE}
+LABEL com.rougether.module=${APP_MODULE}
+WORKDIR /app
+COPY jars/${APP_MODULE}/app.jar /app/app.jar
+EXPOSE 8080 8081 8082
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

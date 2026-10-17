@@ -1,0 +1,138 @@
+name: Backend verification and images
+
+on:
+  workflow_call:
+    outputs:
+      artifact-id:
+        value: ${{ jobs.images.outputs.artifact-id }}
+      receipt-id:
+        value: ${{ jobs.images.outputs.receipt-id }}
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Gradle ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: user-api-0
+            tasks: ':user-api:test :user-api:bootJar'
+            shard: '-PciShardIndex=0 -PciShardCount=2'
+            jars: 'user-api'
+          - group: user-api-1
+            tasks: ':user-api:test'
+            shard: '-PciShardIndex=1 -PciShardCount=2'
+            jars: ''
+          - group: other-modules
+            tasks: 'test compileJava :admin-api:bootJar :batch:bootJar -x :user-api:test'
+            shard: ''
+            jars: 'admin-api batch'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Test CI and deployment contracts
+        if: matrix.group == 'other-modules'
+        run: |
+          python3 -m unittest discover -s .github/scripts/tests -v
+          bash -n deploy/scripts/bootstrap-blue-green-router.sh
+          bash deploy/scripts/test-bootstrap-blue-green-router.sh
+          bash .github/scripts/test-deploy-ec2-with-rollback.sh
+          bash .github/scripts/test-promote-ecr-dev-tags.sh
+          bash .github/scripts/test-runtime-env-helpers.sh
+          bash .github/scripts/test-wait-for-ssm-command.sh
+          bash .github/scripts/test-asset-privacy.sh
+          bash .github/scripts/test-admin-cloudfront.sh
+          python3 -m unittest discover -s deploy/terraform/monitoring/lambda/tests
+      - name: Run all assigned tests and package tested JARs
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --console=plain --profile ${{ matrix.tasks }} ${{ matrix.shard }}
+      - name: Summarize suite durations and test identities
+        if: always()
+        run: python3 .github/scripts/ci_test_report.py --output ci-test-report.json
+      - name: Upload timing and JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests-${{ matrix.group }}-${{ github.run_attempt }}
+          path: |
+            **/build/test-results/test/TEST-*.xml
+            **/build/reports/profile/**
+            ci-test-report.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Collect tested JARs
+        if: matrix.jars != ''
+        env:
+          MODULES: ${{ matrix.jars }}
+        run: |
+          for module in $MODULES; do
+            mkdir -p "ci-jars/jars/$module"
+            mapfile -t jars < <(find "$module/build/libs" -maxdepth 1 -name '*.jar' ! -name '*-plain.jar')
+            test "${#jars[@]}" -eq 1
+            cp "${jars[0]}" "ci-jars/jars/$module/app.jar"
+          done
+      - uses: actions/upload-artifact@v4
+        if: matrix.jars != ''
+        with:
+          name: backend-jars-${{ matrix.group }}-${{ github.run_attempt }}
+          path: ci-jars/
+          retention-days: 7
+          if-no-files-found: error
+
+  images:
+    name: Package verified backend images
+    needs: tests
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.bundle.outputs.artifact-id }}
+      receipt-id: ${{ steps.receipt.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: backend-jars-*-${{ github.run_attempt }}
+          merge-multiple: true
+          path: build/ci-images
+      - uses: docker/setup-buildx-action@v4
+      - name: Build runtime images once from tested JARs
+        run: |
+          source_tree=$(git rev-parse 'HEAD^{tree}')
+          for module in user-api admin-api batch; do
+            docker buildx build --platform linux/amd64 --load \
+              --file Dockerfile.runtime --build-arg APP_MODULE="$module" \
+              --build-arg SOURCE_TREE="$source_tree" \
+              --tag "rougether-$module:verified-ci" build/ci-images
+          done
+          mkdir -p bundle
+          docker image save --output bundle/images.tar \
+            rougether-user-api:verified-ci rougether-admin-api:verified-ci rougether-batch:verified-ci
+      - name: Upload immutable image bundle
+        id: bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-images-${{ github.run_attempt }}
+          path: bundle/images.tar
+          compression-level: 1
+          retention-days: 7
+          if-no-files-found: error
+      - name: Bind receipt to source tree, run attempt and image artifact
+        env:
+          ARTIFACT_ID: ${{ steps.bundle.outputs.artifact-id }}
+        run: python3 .github/scripts/backend_artifacts.py receipt --artifact-id "$ARTIFACT_ID"
+      - name: Upload validation receipt
+        id: receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-receipt-${{ github.run_attempt }}
+          path: bundle/manifest.json
+          retention-days: 7
+          if-no-files-found: error
