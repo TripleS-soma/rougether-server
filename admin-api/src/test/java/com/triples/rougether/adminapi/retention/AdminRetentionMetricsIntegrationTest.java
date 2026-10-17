@@ -235,9 +235,15 @@ class AdminRetentionMetricsIntegrationTest {
                 .andExpect(jsonPath("$.northStar.registeredUserCount").value(0));
         mockMvc.perform(get("/users"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("리텐션·핵심 행동 KPI")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("/admin/retention/metrics")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("가입일별 exact-day Retention")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"retentionComparison\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"retentionTrendChart\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("src=\"/js/user-metrics.js\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/css/user-metrics.css\"")));
+        mockMvc.perform(get("/js/user-metrics.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/admin/retention/metrics?cohortDays=")));
+        mockMvc.perform(get("/css/user-metrics.css"))
+                .andExpect(status().isOk());
     }
 
     private User user(String email, LocalDate signupDate) {

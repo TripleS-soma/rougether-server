@@ -10,6 +10,7 @@
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <link rel="stylesheet" th:href="@{/css/user-metrics.css}">
 </head>
 <body class="app-body">
     <header class="app-header">
@@ -39,32 +40,33 @@
         </div>
     </header>
 
-    <main class="app-main app-main--wide observation-main">
-        <section class="upload-card">
+    <main class="app-main app-main--wide observation-main user-metrics-page">
+        <section class="upload-card metrics-dashboard" aria-labelledby="dashboardTitle">
             <div class="upload-head observation-head">
                 <div>
                     <span class="observation-eyebrow">OPERATIONS</span>
-                    <h2>유저 운영 관측</h2>
-                    <p>가입 이후 온보딩·핵심 행동·집 참여까지의 활성화 상태를 확인합니다.</p>
+                    <h2 id="dashboardTitle">유저 지표 한눈에 보기</h2>
+                    <p>회원 현황, 가입 이후 재방문과 루틴 수행을 함께 확인합니다.</p>
                 </div>
                 <button type="button" class="btn-ghost" id="refresh">새로고침</button>
             </div>
 
-            <div class="observation-grid" aria-label="최근 7일 유저 요약">
+            <div class="metrics-status" id="summaryStatus" role="status">회원 요약을 불러오는 중입니다.</div>
+            <div class="observation-grid" aria-label="회원 현황 요약">
                 <article class="observation-metric">
                     <span>활성 회원</span>
                     <strong id="activeUsers">—</strong>
-                    <small>탈퇴 회원 제외</small>
+                    <small>계정 기준 · 탈퇴·봇 제외</small>
                 </article>
                 <article class="observation-metric">
                     <span>최근 7일 가입</span>
                     <strong id="newUsersLast7Days">—</strong>
-                    <small>현재 활성 회원 기준</small>
+                    <small>최근 168시간 · 현재 회원 기준</small>
                 </article>
                 <article class="observation-metric">
                     <span>최근 7일 인증 접속</span>
                     <strong id="recentlyAccessedLast7Days">—</strong>
-                    <small>로그인·refresh 기반</small>
+                    <small>최근 168시간 · 로그인·토큰 재발급</small>
                 </article>
                 <article class="observation-metric observation-metric--accent">
                     <span>온보딩 완료율</span>
@@ -72,80 +74,133 @@
                     <small id="onboardingCompletedUsers">목표 + 대표 캐릭터</small>
                 </article>
             </div>
+            <p class="metrics-timestamp" id="summaryGeneratedAt">요약 조회 중…</p>
 
             <div class="observation-note">
                 <strong>지표 기준</strong>
-                <span>최근 인증 접속은 실시간 온라인 상태가 아니라 로그인·토큰 재발급 시각입니다. 루틴·투두 내용은 노출하지 않고 건수만 집계합니다.
-                    동거 봇은 요약과 활성/탈퇴/전체 목록에서 제외되며 계정 상태 "봇"으로만 조회됩니다.</span>
+                <span>활성 회원은 탈퇴하지 않은 현재 회원 수입니다. 최근 인증 접속은 로그인·토큰 재발급 시각으로 확인합니다.
+                    회원 요약의 7일은 최근 168시간, 아래 행동 지표의 7일은 KST 달력 일자 기준입니다. 동거 봇은 지표에서 제외합니다.</span>
             </div>
 
-            <div class="observation-result-head">
-                <strong>리텐션·핵심 행동 KPI</strong>
-                <span class="slot-count" id="retentionAsOf">KST 기준일 조회 중</span>
-            </div>
-            <div class="observation-grid" aria-label="리텐션과 북극성 지표">
-                <article class="observation-metric">
-                    <span>D1 Retention</span>
-                    <strong id="retentionD1">—</strong>
-                    <small id="retentionD1Formula">exact-day 인증 활동</small>
-                </article>
-                <article class="observation-metric">
-                    <span>D7 Retention</span>
-                    <strong id="retentionD7">—</strong>
-                    <small id="retentionD7Formula">exact-day 인증 활동</small>
-                </article>
-                <article class="observation-metric">
-                    <span>D30 Retention</span>
-                    <strong id="retentionD30">—</strong>
-                    <small id="retentionD30Formula">exact-day 인증 활동</small>
-                </article>
-                <article class="observation-metric observation-metric--accent">
-                    <span>주 3일 루틴 완료자</span>
-                    <strong id="northStarRate">—</strong>
-                    <small id="northStarFormula">최근 7일 completed_at 기준</small>
-                </article>
-            </div>
+            <div id="metricsDashboard" aria-busy="true">
+                <div class="metrics-heading">
+                    <div>
+                        <h3>재방문과 핵심 행동</h3>
+                        <p>기간 선택은 재방문 지표와 가입일별 그래프에 적용됩니다.</p>
+                    </div>
+                    <label class="metrics-period" for="cohortDays">
+                        <span>가입 코호트 기간</span>
+                        <select id="cohortDays" class="observation-select">
+                            <option value="35" selected>최근 35일 가입</option>
+                            <option value="60">최근 60일 가입</option>
+                            <option value="90">최근 90일 가입</option>
+                        </select>
+                    </label>
+                </div>
+                <p class="metrics-timestamp" id="retentionAsOf">KST 기준일 조회 중</p>
+                <p class="metrics-timestamp" id="metricsGeneratedAt">지표 조회 중…</p>
+                <div class="metrics-status" id="metricsStatus" role="status">행동 지표를 불러오는 중입니다.</div>
 
-            <div class="observation-note">
-                <strong>북극성·비교 기준</strong>
-                <span>북극성 분모는 활동 여부와 무관한 탈퇴·봇 제외 전체 가입자입니다. 분자는 최근 7개 KST 일자 중
-                    실제 루틴 완료일이 3일 이상인 사용자입니다.
-                    공동군은 현재 미삭제 집에 다른 ACTIVE 비봇 사용자가 있는 사용자이며, 나머지는 개인군입니다.
-                    <em id="completionFinalizedNote">완료율 확정 범위 확인 중…</em></span>
-            </div>
+                <div class="metrics-overview">
+                    <article class="metrics-card">
+                        <h4>가입 후 재방문율</h4>
+                        <p>가입 1·7·30일 뒤, 정확히 해당 날짜에 인증 활동한 비율입니다.<br>분모는 선택 기간에서 각 일차에 도달한 현재 회원입니다.</p>
+                        <div id="retentionComparison"></div>
+                    </article>
+                    <article class="metrics-card metrics-card--north-star">
+                        <h4>주 3일 루틴 완료자</h4>
+                        <p>최근 7개 KST 일자 중 루틴 완료일이 3일 이상인 회원.<br>분모는 활동 여부와 무관한 현재 전체 가입자입니다.</p>
+                        <div id="northStarChart"></div>
+                        <p id="northStarPeriod">최근 7개 KST 일자</p>
+                    </article>
+                </div>
 
-            <div class="slot-table-wrap">
-                <table class="slot-table observation-table">
-                    <thead>
-                    <tr>
-                        <th>현재 세그먼트</th>
-                        <th>사용자</th>
-                        <th>30일 완료율</th>
-                        <th>평균 현재 스트릭</th>
-                        <th>30일 재시작률</th>
-                    </tr>
-                    </thead>
-                    <tbody id="retentionSegmentRows"></tbody>
-                </table>
-            </div>
+                <div class="metrics-trends">
+                    <article class="metrics-card">
+                        <h4>가입일별 현재 회원</h4>
+                        <p>가입일 기준 분포 · 탈퇴·봇 제외 · 단위 명</p>
+                        <div id="signupChart"></div>
+                    </article>
+                    <article class="metrics-card">
+                        <h4>가입 코호트별 재방문 추이</h4>
+                        <p>가로축은 가입일(KST), 세로축은 재방문율(0~100%)입니다.</p>
+                        <div class="metrics-legend" aria-label="재방문 그래프 범례">
+                            <span><i class="metrics-legend-symbol" style="color:#6366f1" aria-hidden="true">●</i>D1 · 실선</span>
+                            <span><i class="metrics-legend-symbol" style="color:#0d9488" aria-hidden="true">■</i>D7 · 긴 점선</span>
+                            <span><i class="metrics-legend-symbol" style="color:#a16207" aria-hidden="true">◆</i>D30 · 짧은 점선</span>
+                        </div>
+                        <div id="retentionTrendChart"></div>
+                    </article>
+                </div>
 
-            <div class="observation-result-head">
-                <strong>가입일별 exact-day Retention</strong>
-                <span class="slot-count">아직 D1·D7·D30에 도달하지 않은 코호트는 —로 표시</span>
+                <div class="metrics-heading">
+                    <div>
+                        <h3>개인군과 공동군 비교</h3>
+                        <p>완료율·재시작률은 최근 30일, 스트릭은 현재 기준입니다. 가입 코호트 기간과 독립적으로 집계합니다.</p>
+                    </div>
+                </div>
+                <div class="metrics-segment-members" id="segmentMembers"></div>
+                <div class="metrics-segments">
+                    <article class="metrics-card">
+                        <h4>루틴 완료율</h4>
+                        <p>완료 / (완료 + 실패) 건수 · 오늘 제외</p>
+                        <div id="completionSegmentChart"></div>
+                        <p id="completionPeriod">확정 범위 조회 중</p>
+                    </article>
+                    <article class="metrics-card">
+                        <h4>루틴 재시작률</h4>
+                        <p>완료 후 3일 이상 쉬었던 회원 중 다시 완료한 비율</p>
+                        <div id="restartSegmentChart"></div>
+                        <p id="restartPeriod">최근 30일 기준</p>
+                    </article>
+                    <article class="metrics-card">
+                        <h4>평균 현재 스트릭</h4>
+                        <p>현재 연속 수행일 합계 / 각 군의 현재 회원수 · 단위 일</p>
+                        <div id="streakSegmentChart"></div>
+                        <p id="streakPeriod">현재 스트릭 기준</p>
+                    </article>
+                </div>
+
+                <div class="observation-note">
+                    <strong>비교 기준</strong>
+                    <span>공동군은 현재 운영 중인 집에 다른 회원과 함께 참여한 회원, 나머지는 개인군입니다. 탈퇴 회원과 봇은 제외합니다.
+                        비율의 대상이 없으면 ‘대상 없음’, 아직 관측 일차에 도달하지 않은 코호트는 ‘미도달’로 표시합니다.
+                        <em id="completionFinalizedNote">완료율 확정 범위 조회 중…</em></span>
+                </div>
+
+                <details class="metrics-details">
+                    <summary>집계 상세 보기 · 분자 / 분모와 관측 기간</summary>
+                    <div class="metrics-details-content">
+                        <h4>현재 세그먼트 상세</h4>
+                        <div class="slot-table-wrap" tabindex="0" role="region" aria-label="세그먼트 집계 상세, 가로 스크롤 가능">
+                            <table class="slot-table observation-table">
+                                <thead><tr>
+                                    <th scope="col">현재 세그먼트</th><th scope="col">회원</th><th scope="col">30일 완료율</th>
+                                    <th scope="col">평균 현재 스트릭</th><th scope="col">30일 재시작률</th>
+                                </tr></thead>
+                                <tbody id="retentionSegmentRows"></tbody>
+                            </table>
+                        </div>
+                        <h4>가입일별 재방문 상세</h4>
+                        <div class="slot-table-wrap" tabindex="0" role="region" aria-label="가입 코호트 집계 상세, 가로 스크롤 가능">
+                            <table class="slot-table observation-table">
+                                <caption>미도달은 관측 전, 0.0%는 도달한 회원 중 재방문이 0명인 경우입니다.</caption>
+                                <thead><tr>
+                                    <th scope="col">가입일 (KST)</th><th scope="col">현재 회원</th><th scope="col">D1</th>
+                                    <th scope="col">D7</th><th scope="col">D30</th>
+                                </tr></thead>
+                                <tbody id="retentionCohortRows"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
             </div>
-            <div class="slot-table-wrap">
-                <table class="slot-table observation-table">
-                    <thead>
-                    <tr>
-                        <th>가입일 (KST)</th>
-                        <th>가입자</th>
-                        <th>D1</th>
-                        <th>D7</th>
-                        <th>D30</th>
-                    </tr>
-                    </thead>
-                    <tbody id="retentionCohortRows"></tbody>
-                </table>
+        </section>
+
+        <section class="upload-card user-operations" aria-labelledby="userOperationsTitle">
+            <div class="upload-head">
+                <h2 id="userOperationsTitle">사용자 조회 및 운영</h2>
+                <p>검색과 필터는 아래 사용자 목록에만 적용됩니다. 루틴·투두는 건수만 표시하며, 봇은 계정 상태 ‘봇’으로 조회할 수 있습니다.</p>
             </div>
 
             <div class="observation-filters">
@@ -192,7 +247,7 @@
             <div class="alert alert-error" id="error" hidden></div>
             <div class="alert alert-ok" id="notice" hidden></div>
 
-            <div class="slot-table-wrap">
+            <div class="slot-table-wrap" tabindex="0" role="region" aria-label="사용자 운영 목록, 가로 스크롤 가능">
                 <table class="slot-table observation-table">
                     <thead>
                     <tr>
@@ -221,6 +276,7 @@
         </section>
     </main>
 
+    <script th:src="@{/js/user-metrics.js}"></script>
     <script>
         const PAGE_SIZE = 20;
         const KST_DATE_TIME = new Intl.DateTimeFormat('ko-KR', {
@@ -244,122 +300,7 @@
         let total = 0;
         let characterOptions = [];
 
-        Promise.all([loadSummary(), loadRetentionMetrics(), loadCharacters()]).then(load);
-
-        async function loadSummary() {
-            try {
-                const res = await fetch('/admin/users/summary');
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const summary = await res.json();
-                document.getElementById('activeUsers').textContent = summary.activeUsers.toLocaleString();
-                document.getElementById('newUsersLast7Days').textContent = summary.newUsersLast7Days.toLocaleString();
-                document.getElementById('recentlyAccessedLast7Days').textContent =
-                    summary.recentlyAccessedLast7Days.toLocaleString();
-                document.getElementById('onboardingCompletionRate').textContent =
-                    summary.onboardingCompletionRate.toFixed(1) + '%';
-                document.getElementById('onboardingCompletedUsers').textContent =
-                    summary.onboardingCompletedUsers.toLocaleString() + '명 완료';
-            } catch (err) {
-                showError('요약 조회 중 오류: ' + err.message);
-            }
-        }
-
-        async function loadRetentionMetrics() {
-            try {
-                const res = await fetch('/admin/retention/metrics?cohortDays=35');
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const metrics = await res.json();
-                renderRetentionCard('retentionD1', 'retentionD1Formula', metrics.retention.d1);
-                renderRetentionCard('retentionD7', 'retentionD7Formula', metrics.retention.d7);
-                renderRetentionCard('retentionD30', 'retentionD30Formula', metrics.retention.d30);
-                document.getElementById('northStarRate').textContent =
-                    metrics.northStar.percentage.toFixed(1) + '%';
-                document.getElementById('northStarFormula').textContent =
-                    metrics.northStar.qualifiedUserCount.toLocaleString() + ' / 가입자 ' +
-                    metrics.northStar.registeredUserCount.toLocaleString() + '명 · ' +
-                    periodText(metrics.northStar.period);
-                document.getElementById('retentionAsOf').textContent =
-                    'KST ' + metrics.asOfDate + ' 기준 · 코호트 ' +
-                    metrics.cohortPeriod.fromDate + ' ~ ' + metrics.cohortPeriod.toDate;
-                // 완료율 분모는 day-end 확정일까지만 집계됨 - 확정 정보가 없는 환경은 미확정 혼입 가능성을 알림.
-                document.getElementById('completionFinalizedNote').textContent =
-                    metrics.dayEndFinalizedThroughDate
-                        ? '완료율은 day-end 확정일 ' + metrics.dayEndFinalizedThroughDate + '까지만 집계합니다.'
-                        : '완료율: day-end 확정 정보 없음 - 미확정 날짜가 포함될 수 있습니다.';
-                renderSegmentRows(metrics.segments);
-                renderCohortRows(metrics.retentionCohorts);
-            } catch (err) {
-                showError('리텐션 KPI 조회 중 오류: ' + err.message);
-            }
-        }
-
-        function renderRetentionCard(valueId, formulaId, metric) {
-            document.getElementById(valueId).textContent = metric.percentage.toFixed(1) + '%';
-            document.getElementById(formulaId).textContent =
-                metric.returnedUserCount.toLocaleString() + ' / ' +
-                metric.eligibleUserCount.toLocaleString() + '명';
-        }
-
-        function renderSegmentRows(segments) {
-            const labels = { OVERALL: '전체', PERSONAL: '개인군', SHARED: '공동군' };
-            const rows = segments.map(metric => {
-                const row = document.createElement('tr');
-                row.append(
-                    textCell(labels[metric.segment] ?? metric.segment),
-                    metricCell(metric.userCount),
-                    textCell(rateFormula(metric.completionRate,
-                        metric.completionRate.completedLogCount, metric.completionRate.decidedLogCount)),
-                    textCell(metric.currentStreak.average.toFixed(1) + '일 (' +
-                        metric.currentStreak.currentStreakSum.toLocaleString() + ' / ' +
-                        metric.currentStreak.userCount.toLocaleString() + '명)'),
-                    textCell(rateFormula(metric.restartRate,
-                        metric.restartRate.restartedUserCount, metric.restartRate.gapExperiencedUserCount))
-                );
-                return row;
-            });
-            document.getElementById('retentionSegmentRows').replaceChildren(...rows);
-        }
-
-        function renderCohortRows(cohorts) {
-            const rows = cohorts.map(cohort => {
-                const row = document.createElement('tr');
-                row.append(
-                    textCell(cohort.cohortDate),
-                    metricCell(cohort.cohortUserCount),
-                    textCell(retentionPointText(cohort.d1)),
-                    textCell(retentionPointText(cohort.d7)),
-                    textCell(retentionPointText(cohort.d30))
-                );
-                return row;
-            });
-            const tbody = document.getElementById('retentionCohortRows');
-            if (rows.length === 0) {
-                const row = document.createElement('tr');
-                const cell = document.createElement('td');
-                cell.colSpan = 5;
-                cell.className = 'observation-empty';
-                cell.textContent = '조회 기간에 가입 코호트가 없습니다.';
-                row.append(cell);
-                tbody.replaceChildren(row);
-            } else {
-                tbody.replaceChildren(...rows);
-            }
-        }
-
-        function retentionPointText(point) {
-            if (!point) return '—';
-            return point.percentage.toFixed(1) + '% (' + point.returnedUserCount.toLocaleString() +
-                '/' + point.eligibleUserCount.toLocaleString() + ')';
-        }
-
-        function rateFormula(metric, numerator, denominator) {
-            return metric.percentage.toFixed(1) + '% (' + numerator.toLocaleString() + '/' +
-                denominator.toLocaleString() + ') · ' + periodText(metric.period);
-        }
-
-        function periodText(period) {
-            return period.fromDate + ' ~ ' + period.toDate;
-        }
+        Promise.all([window.AdminUserMetrics.refresh(), loadCharacters()]).then(load);
 
         async function load() {
             try {
@@ -607,8 +548,7 @@
         [accountStatusInput, activityInput, onboardingInput].forEach(select =>
             select.addEventListener('change', reloadFromFirstPage));
         document.getElementById('refresh').addEventListener('click', () => {
-            loadSummary();
-            loadRetentionMetrics();
+            window.AdminUserMetrics.refresh();
             load();
         });
         document.getElementById('prev').addEventListener('click', () => {
