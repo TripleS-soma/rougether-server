@@ -15,10 +15,18 @@ result = subprocess.check_output(['aws', 'ssm', 'get-parameter', '--name', '/rou
 config = json.loads(json.loads(result)['Parameter']['Value'])
 allowed = {'AI_SERVICE_ENABLED', 'AI_SERVICE_BASE_URL', 'AI_SERVICE_TOKEN', 'AI_SERVICE_TIMEOUT',
            'AI_SERVICE_ALLOW_INSECURE_HTTP', 'AI_SERVICE_CA_CERTIFICATE_BASE64'}
-if set(config) != allowed or any(not isinstance(v, str) or '\n' in v or '\r' in v for v in config.values()):
+optional = {'AI_USERS_ENABLED', 'AI_USERS_CONTROL_TOKEN'}
+if not allowed.issubset(config) or set(config) - allowed - optional or any(not isinstance(v, str) or '\n' in v or '\r' in v for v in config.values()):
     raise SystemExit('Invalid AI client configuration')
 if config['AI_SERVICE_ENABLED'] not in ('true', 'false') or config['AI_SERVICE_ALLOW_INSECURE_HTTP'] != 'false':
     raise SystemExit('Invalid activation or TLS configuration')
+if config.get('AI_USERS_ENABLED', 'false') not in ('true', 'false'):
+    raise SystemExit('Invalid AI user activation')
+if config.get('AI_USERS_ENABLED') == 'true' and (len(config.get('AI_USERS_CONTROL_TOKEN', '')) < 32
+        or not all(33 <= ord(c) <= 126 for c in config['AI_USERS_CONTROL_TOKEN'])):
+    raise SystemExit('Invalid AI user control token')
+if app == 'batch':
+    config = {key: value for key, value in config.items() if key not in optional}
 url = urllib.parse.urlparse(config['AI_SERVICE_BASE_URL'])
 if url.scheme != 'https' or not url.hostname or url.username or url.query or url.fragment or url.path:
     raise SystemExit('HTTPS origin required')
@@ -28,7 +36,7 @@ backup = path.with_suffix('.env.before-ai')
 if not backup.exists():
     backup.write_text(original)
     backup.chmod(0o600)
-lines = [line for line in original.splitlines() if line.split('=', 1)[0] not in allowed]
+lines = [line for line in original.splitlines() if line.split('=', 1)[0] not in allowed | optional]
 lines.extend(key + '=' + value for key, value in config.items())
 temporary = path.with_suffix('.env.ai-tmp')
 temporary.write_text('\n'.join(lines) + '\n')

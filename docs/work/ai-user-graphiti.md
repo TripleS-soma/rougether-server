@@ -90,6 +90,23 @@ docker compose --env-file ai-user-worker/.env -f ai-user-worker/compose.yml run 
 
 정기 실행은 `deploy/ai-user-worker/rougether-ai-users.service`와 `.timer`를 호스트 경로에 맞춰 설치한다. 기본 설치 경로는 `/opt/rougether-server`, 시간대는 Asia/Seoul이다. timer 기본 실행 시각은 08:00부터 23:30까지 30분 간격이고 60초 이내 지연을 허용한다. 본 구현에서는 timer 설치나 활성화, AWS 생성, 계정 시드와 운영 활성화를 자동 실행하지 않았다.
 
+### 운영 배포 구성
+
+기존 AI 전용 EC2의 2GB 메모리는 이 구성에 부족하다. 메모리 기능을 활성화하는 독립 배포는 8GB 이상 호스트만 허용하며, FastAPI 2GB와 Neo4j 3GB를 각각 제한한다. 새 FastAPI 후보와 기존 슬롯이 함께 떠도 메모리 여유를 남긴다. Terraform의 실제 `instance_type`도 해당 호스트 크기로 유지해야 한다.
+
+`deploy/ai-service/deploy.py`는 기존 SSM runtime의 `env`에 AI 설정이 있을 때 전용 Docker network와 Neo4j 영속 volume을 준비한다. Neo4j 포트는 호스트에 공개하지 않는다. FastAPI 후보가 기존 공급자 smoke와 기억 inventory를 통과한 뒤 TLS 경로를 전환한다. 기억 요청의 proxy 제한과 이전 슬롯 drain은 최대 190초를 허용한다.
+
+워커는 API 호스트에 배치한다. 공개 user-api Nginx는 `/internal/`을 404로 차단하고, `127.0.0.1:8082`에 AI 제어 경로만 제공한다. 워커는 host network의 loopback 제어 API와 기존 사설 TLS AI API에 접속하며, 별도 CA를 읽기 전용으로 마운트한다. 운영 systemd unit은 Docker CLI를 직접 사용하므로 Docker Compose plugin이 필요 없다.
+
+SSM `/rougether-dev/ai/client`에 `AI_USERS_ENABLED=true`와 32자 이상 `AI_USERS_CONTROL_TOKEN`을 추가한 후 다음 명령으로 검토한 소스와 설정을 전송한다. 기본 설치는 timer를 활성화하지 않는다. 새 user-api 배포와 시드, runtime 활성화 및 수동 한 차례 실행을 확인한 뒤 `--enable`을 사용한다.
+
+```bash
+AWS_PROFILE=rougether-isb python3 deploy/ai-user-worker/run-install.py API_INSTANCE_ID
+AWS_PROFILE=rougether-isb python3 deploy/ai-user-worker/run-install.py API_INSTANCE_ID --enable
+```
+
+설치기는 기존 SSM client 설정으로 user-api env를 갱신하되 직접 재시작하지 않는다. Spring 배포를 이어서 수행해야 새 설정이 반영된다. Claude 키는 AI runtime SecureString에만 저장하고 worker와 API 호스트에 배포하지 않는다.
+
 ## 검증
 
 ```bash

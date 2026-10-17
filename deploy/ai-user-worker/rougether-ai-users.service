@@ -6,5 +6,6 @@ After=docker.service network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/rougether-server/ai-user-worker
-ExecStart=/usr/bin/docker compose --env-file .env run --rm worker
+ExecStart=/usr/bin/docker run --rm --name rougether-ai-users --init --network host --read-only --memory 256m --memory-swap 256m --cpus 0.5 --pids-limit 32 --cap-drop ALL --security-opt no-new-privileges:true --env-file /opt/rougether-server/ai-user-worker/.env --env SSL_CERT_FILE=/run/ai-ca.crt --mount type=bind,src=/opt/rougether-server/ai-user-worker/ai-ca.crt,dst=/run/ai-ca.crt,readonly --log-opt max-size=5m --log-opt max-file=3 rougether-ai-users:local
+ExecStop=-/usr/bin/docker stop --time 20 rougether-ai-users
 TimeoutStartSec=16min
