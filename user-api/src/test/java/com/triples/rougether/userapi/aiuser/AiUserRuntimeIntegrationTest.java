@@ -60,6 +60,7 @@ class AiUserRuntimeIntegrationTest {
     @Autowired AdminRetentionMetricRepository retention;
     @Autowired UserDailyActivityRepository activity;
     @Autowired FeedCommandService feed;
+    @Autowired com.triples.rougether.userapi.feed.service.FeedQueryService feedQuery;
     @Autowired com.triples.rougether.userapi.chat.service.ChatCommandService chat;
     @Autowired com.triples.rougether.userapi.house.service.HouseJoinService joins;
     @Autowired AuthService auth;
@@ -219,14 +220,24 @@ class AiUserRuntimeIntegrationTest {
         var posts=new ArrayList<Long>();
         for(int i=0;i<4;i++) posts.add(quietPost(human,"기록 방법에 대한 질문 "+i));
         Collections.reverse(posts);
-        for(int i=0;i<4;i++) {
+        for(int i=0;i<3;i++) {
             var job=beginSocial(ai);
             control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
                     mapper.readTree("{\"postId\":"+posts.get(i)+",\"content\":\"주제 "+i+"에 대한 구체적인 반응\"}"),"");
-            if(i==3) assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,job.id())).isEqualTo("DAILY_LIMIT");
             jdbc.update("UPDATE ai_user_social_actions SET created_at=? WHERE action_name='FEED_COMMENT'",java.sql.Timestamp.from(Instant.now().minusSeconds(1900)));
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=? AND action_name='FEED_COMMENT'",Integer.class,ai)).isEqualTo(3);
+        // 자정 직전/직후에도 테스트가 같은 일일 구간을 검증하도록 기록과 판정 시각을 고정함.
+        var fixedNow=Instant.parse("2026-10-17T06:00:00Z");
+        jdbc.update("UPDATE ai_user_social_actions SET created_at=? WHERE action_name='FEED_COMMENT'",java.sql.Timestamp.from(fixedNow.minusSeconds(3600)));
+        var fourth=beginSocial(ai);
+        var fixedSocial=new AiUserSocialActivity(jdbc,feedQuery,Clock.fixed(fixedNow,ZoneOffset.UTC));
+        var reason=tx.execute(s -> {
+            jobs.requireClaim(fourth.id(),fourth.owner(),fourth.fencingToken());
+            return fixedSocial.reject(fourth,AiUserActionExecutor.Action.FEED_COMMENT,
+                    mapper.readTree("{\"postId\":"+posts.get(3)+",\"content\":\"네 번째 선제 댓글\"}"));
+        });
+        assertThat(reason).isEqualTo(AiUserWaitReason.DAILY_LIMIT);
     }
 
     @Test void socialCommentsAreLatestAndExcludeAuthorsWhoBlockedTheAi() {
