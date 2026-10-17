@@ -1338,6 +1338,10 @@ server {
     listen 8080;
     client_max_body_size 40m;
 
+    location ^~ /internal/ {
+        return 404;
+    }
+
     location = /api/v1/chat/ws {
         proxy_pass http://rougether_user_api;
         proxy_http_version 1.1;
@@ -1358,6 +1362,23 @@ server {
         proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
         proxy_request_buffering off;
         proxy_read_timeout 120s;
+    }
+}
+
+server {
+    listen 127.0.0.1:8082;
+    client_max_body_size 512k;
+    access_log off;
+
+    location /internal/ai-users/ {
+        proxy_pass http://rougether_user_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_read_timeout 60s;
+    }
+
+    location / {
+        return 404;
     }
 }
 EOF

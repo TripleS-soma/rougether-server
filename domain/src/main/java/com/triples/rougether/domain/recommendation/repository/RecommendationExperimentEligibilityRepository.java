@@ -25,7 +25,7 @@ public interface RecommendationExperimentEligibilityRepository
             + "and e.cohortWeekStart between :fromWeekStart and :toWeekStart "
             + "and e.cohortWeekStart = (select min(first.cohortWeekStart) "
             + "  from RecommendationExperimentEligibility first where first.assignment = a) "
-            + "and u.deletedAt is null and u.bot = false")
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
     List<RecommendationExperimentEligibilityRow> findActiveHumanRows(
             @Param("experimentKey") String experimentKey,
             @Param("fromWeekStart") LocalDate fromWeekStart,

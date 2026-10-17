@@ -35,6 +35,20 @@ public class TokenService {
     private final Duration accessTtl;
     private final Duration refreshTtl;
     private final SecureRandom secureRandom = new SecureRandom();
+    private com.triples.rougether.domain.member.repository.UserRepository users;
+    // AI 식별은 생성 뒤 불변이므로 일반 요청마다 같은 사용자 분류를 DB에 조회하지 않음.
+    private final java.util.concurrent.ConcurrentHashMap<Long,Boolean> aiClassification = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void configureUsers(com.triples.rougether.domain.member.repository.UserRepository repository) { users = repository; }
+
+    private void requireNonAi(Long userId) {
+        if (users != null) {
+            if (aiClassification.size() >= 4096) aiClassification.clear();
+            if (aiClassification.computeIfAbsent(userId, users::existsByIdAndAiTrue))
+                throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
+        }
+    }
 
     public TokenService(JwtProperties properties) {
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
@@ -43,6 +57,7 @@ public class TokenService {
     }
 
     public String issueAccessToken(Long userId, MemberRole role) {
+        requireNonAi(userId);
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
@@ -66,6 +81,7 @@ public class TokenService {
                 throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
             }
             Long userId = Long.valueOf(claims.getSubject());
+            requireNonAi(userId);
             MemberRole role = parseRole(claims.get(ROLE_CLAIM, String.class));
             return new AuthUser(userId, role);
         } catch (JwtException | IllegalArgumentException e) {

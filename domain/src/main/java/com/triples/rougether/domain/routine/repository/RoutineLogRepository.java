@@ -136,7 +136,7 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
     // afterUserId 초과분을 user id 오름차순으로 keyset 순회함.
     @Query("select distinct r.user.id from RoutineLog l join l.routine r join r.user u "
             + "where l.routineDate between :fromDate and :toDate "
-            + "and l.status in :statuses and r.deletedAt is null and u.deletedAt is null and u.bot = false "
+            + "and l.status in :statuses and r.deletedAt is null and u.deletedAt is null and u.bot = false and u.ai = false "
             + "and r.user.id > :afterUserId "
             + "order by r.user.id")
     List<Long> findUserIdsWithLogsInPeriod(

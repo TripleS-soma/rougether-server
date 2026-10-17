@@ -60,6 +60,53 @@ def smoke(base, env):
          'userPrompt': 'Deployment check', 'maxTokens': 512, 'jsonMode': True, 'reasoningEffort': 'low'})
     if result.get('model') != env['AI_CHAT_MODEL'] or not isinstance(result.get('content'), str) or not result['content'].strip():
         raise RuntimeError('invalid completion')
+    if env.get('AI_USERS_ENABLED') == 'true':
+        inventory = request(base, '/internal/v1/ai-users/inventory', env['AI_SERVICE_TOKEN'],
+                            {'aiUserId': 1, 'cursor': ''})
+        if not isinstance(inventory.get('records'), list):
+            raise RuntimeError('memory inventory unavailable')
+
+
+def ensure_memory(env):
+    # 기존 모델 전용 호스트에 메모리 기능을 실수로 올리지 않도록 용량을 확인함.
+    total = int(next(line.split()[1] for line in Path('/proc/meminfo').read_text().splitlines()
+                     if line.startswith('MemTotal:')))
+    if total < 7 * 1024 * 1024:
+        raise RuntimeError('AI memory deployment requires an 8 GiB host')
+    if env.get('AI_USER_NEO4J_URI') != 'bolt://rougether-ai-neo4j:7687' or env.get('AI_USER_NEO4J_USER', 'neo4j') != 'neo4j':
+        raise ValueError('managed Neo4j origin required')
+    password = env.get('AI_USER_NEO4J_PASSWORD', '')
+    if len(password) < 32 or not env.get('ANTHROPIC_API_KEY'):
+        raise ValueError('missing memory credentials')
+    network = 'rougether-ai-memory'
+    for kind, name in [('network', network), ('volume', 'rougether-ai-neo4j-data')]:
+        inspected = subprocess.run(['docker', kind, 'inspect', name], capture_output=True)
+        if inspected.returncode:
+            run('docker', kind, 'create', name)
+    name = 'rougether-ai-neo4j'
+    inspected = subprocess.run(['docker', 'container', 'inspect', name], capture_output=True, text=True)
+    if inspected.returncode:
+        folder = ROOT / 'memory'
+        folder.mkdir(mode=0o700, exist_ok=True)
+        write(folder / 'neo4j.env', '\n'.join([
+            'NEO4J_AUTH=neo4j/' + password, 'NEO4J_dbms_usage__report_enabled=false',
+            'NEO4J_server_memory_heap_initial__size=512m', 'NEO4J_server_memory_heap_max__size=1G',
+            'NEO4J_server_memory_pagecache_size=1G', '']))
+        run('docker', 'pull', 'neo4j:5.26.32-community')
+        run('docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', network,
+            '--memory', '3g', '--memory-swap', '3g', '--cpus', '1', '--pids-limit', '256',
+            '--env-file', str(folder / 'neo4j.env'), '-v', 'rougether-ai-neo4j-data:/data',
+            '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3', 'neo4j:5.26.32-community')
+    elif not json.loads(inspected.stdout)[0]['State']['Running']:
+        run('docker', 'start', name)
+    for _ in range(90):
+        # 비밀번호를 명령 인수나 로그에 싣지 않고 컨테이너의 기존 env를 사용함.
+        check = subprocess.run(['docker', 'exec', name, 'sh', '-c',
+            'cypher-shell -u neo4j -p "${NEO4J_AUTH#*/}" "RETURN 1" >/dev/null 2>&1'], capture_output=True)
+        if check.returncode == 0:
+            return network
+        time.sleep(1)
+    raise RuntimeError('Neo4j not ready')
 
 
 def deploy(image):
@@ -84,9 +131,15 @@ def deploy_locked(image):
     env['AI_PROVIDER_API_KEY'] = parameter(PREFIX + '/llm/api-key')
     allowed = {'AI_SERVICE_TOKEN', 'AI_PROVIDER_API_KEY', 'AI_PROVIDER_BASE_URL', 'AI_CHAT_MODEL',
                'AI_EMBEDDING_MODEL', 'AI_EMBEDDING_DIMENSIONS', 'AI_CHAT_CONCURRENCY', 'AI_EMBEDDING_CONCURRENCY',
-               'AI_PROVIDER_TIMEOUT_SECONDS', 'AI_REQUEST_TIMEOUT_SECONDS', 'AI_MAX_RETRIES'}
+               'AI_PROVIDER_TIMEOUT_SECONDS', 'AI_REQUEST_TIMEOUT_SECONDS', 'AI_MAX_RETRIES',
+               'AI_USERS_ENABLED', 'AI_USER_NEO4J_URI', 'AI_USER_NEO4J_USER', 'AI_USER_NEO4J_DATABASE',
+               'AI_USER_NEO4J_PASSWORD', 'ANTHROPIC_API_KEY', 'AI_USER_MODEL', 'AI_USER_HUMAN_MODEL', 'AI_USER_MEMORY_MODEL'}
     if set(env) - allowed or any(not isinstance(v, str) or '\n' in v or '\r' in v for v in env.values()):
         raise ValueError('invalid runtime configuration')
+    if env.get('AI_USERS_ENABLED', 'false') not in ('true', 'false'):
+        raise ValueError('invalid AI user activation')
+    memory_enabled = env.get('AI_USERS_ENABLED') == 'true'
+    network = ensure_memory(env) if memory_enabled else None
     folder = ROOT / str(port)
     folder.mkdir(mode=0o700, exist_ok=True)
     for key, filename in [('certificate', 'server.crt'), ('private_key', 'server.key'), ('ca_certificate', 'ca.crt')]:
@@ -102,10 +155,12 @@ def deploy_locked(image):
     nginx_path = NGINX_CONFIG
     old_config = nginx_path.read_text() if nginx_path.exists() else None
     try:
-        run('docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--memory', '512m',
-            '--memory-swap', '512m', '--cpus', '1', '--pids-limit', '128', '--read-only',
+        network_args = ['--network', network] if network else []
+        memory_limit = '2g' if memory_enabled else '512m'
+        run('docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--memory', memory_limit,
+            '--memory-swap', memory_limit, '--cpus', '1', '--pids-limit', '128', '--read-only', *network_args,
             '--tmpfs', '/tmp:size=16m,noexec,nosuid', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
-            '--stop-timeout', '105', '--env-file', str(folder / 'service.env'), '-p', f'127.0.0.1:{port}:8090',
+            '--stop-timeout', '195', '--env-file', str(folder / 'service.env'), '-p', f'127.0.0.1:{port}:8090',
             '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3', image)
         for attempt in range(60):
             try:
@@ -125,6 +180,13 @@ def deploy_locked(image):
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 512k;
     access_log off;
+    location /internal/v1/ai-users/ {{
+        proxy_pass http://127.0.0.1:{port};
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 190s;
+        proxy_send_timeout 10s;
+        proxy_next_upstream off;
+    }}
     location / {{
         proxy_pass http://127.0.0.1:{port};
         proxy_connect_timeout 3s;
@@ -153,7 +215,7 @@ def deploy_locked(image):
         raise
     if previous:
         # 이미 수락한 요청은 기존 worker에서 끝내도록 최대 deadline 이상 대기함.
-        time.sleep(100)
+        time.sleep(190)
         try:
             run('docker', 'stop', previous['name'])
             run('docker', 'rm', previous['name'])

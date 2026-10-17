@@ -16,7 +16,7 @@ public interface MinigameBestScoreRepository extends JpaRepository<MinigameBestS
     @Query("""
             select best from MinigameBestScore best
             join fetch best.user u
-            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false
+            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false and u.ai = false
             order by best.score desc, best.achievedAt asc, u.id asc
             """)
     List<MinigameBestScore> findLeaderboard(@Param("gameCode") String gameCode, Pageable pageable);
@@ -24,14 +24,14 @@ public interface MinigameBestScoreRepository extends JpaRepository<MinigameBestS
     @Query("""
             select count(best) from MinigameBestScore best
             join best.user u
-            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false
+            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false and u.ai = false
             """)
     long countPlayers(@Param("gameCode") String gameCode);
 
     @Query("""
             select count(best) from MinigameBestScore best
             join best.user u
-            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false
+            where best.gameCode = :gameCode and u.deletedAt is null and u.bot = false and u.ai = false
               and best.score > :score
             """)
     long countHigherScores(@Param("gameCode") String gameCode, @Param("score") int score);

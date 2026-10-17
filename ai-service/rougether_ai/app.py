@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse
 from .config import Settings
 from .models import CompletionRequest, EmbeddingRequest
 from .provider import AiError, Provider
+from .ai_user_routes import router as ai_user_router
 
 log = logging.getLogger("uvicorn.error.rougether")
 
@@ -81,7 +82,7 @@ class InternalBoundary:
                 operation, status, (time.monotonic() - started) * 1000)
 
 
-def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTransport | None = None):
+def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTransport | None = None, ai_users=None):
     config = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -95,10 +96,31 @@ def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTrans
             follow_redirects=False, trust_env=False, transport=transport,
         ) as client:
             app.state.provider = Provider(config, client)
-            yield
+            app.state.ai_users = None
+            if config.ai_users_enabled:
+                if ai_users is not None:
+                    app.state.ai_users = ai_users
+                else:
+                    from .ai_user_service import AiUserService, ClaudeGateway
+                    from .ai_user_settings import AiUserSettings
+                    from .graph_memory import GraphMemory
+                    memory_settings = AiUserSettings.from_env()
+                    claude = ClaudeGateway(memory_settings)
+                    try:
+                        memory = await GraphMemory.create(memory_settings, claude)
+                        app.state.ai_users = AiUserService(memory_settings, memory, claude)
+                    except BaseException:
+                        await claude.close()
+                        raise
+            try:
+                yield
+            finally:
+                if app.state.ai_users is not None:
+                    await app.state.ai_users.close()
 
     app = FastAPI(title="Rougether AI", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(InternalBoundary, settings=config)
+    app.include_router(ai_user_router)
 
     @app.exception_handler(AiError)
     async def ai_error(request: Request, error: AiError):

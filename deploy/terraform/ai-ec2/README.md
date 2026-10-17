@@ -1,6 +1,6 @@
 # AI 전용 EC2
 
-기존 API EC2와 같은 VPC에 별도 `t3.small`을 만듭니다. 외부 모델을 호출하는 경량 서버이며 모델 가중치를 올리지 않습니다. Terraform state는 API/RDS 스택과 분리합니다. 기존 VPC·subnet·API SG는 참조만 하고 수정하지 않습니다.
+기존 API EC2와 같은 VPC에 별도 `t3.large`(8GB)를 만듭니다. Claude 호출과 로컬 ONNX 임베딩, Neo4j 기억 저장을 함께 실행합니다. 가상 사용자 기능을 사용하지 않는 기존 공급자 호출만 배포한다면 `instance_type`을 `t3.small`로 줄일 수 있습니다. Terraform state는 API/RDS 스택과 분리합니다. 기존 VPC·subnet·API SG는 참조만 하고 수정하지 않습니다.
 
 - API SG → AI 사설 IP `8443`만 수신합니다. SSH·공개 HTTP 수신은 없습니다.
 - public IPv4는 SSM·ECR·모델 API 아웃바운드용입니다. NAT Gateway를 추가하지 않습니다.

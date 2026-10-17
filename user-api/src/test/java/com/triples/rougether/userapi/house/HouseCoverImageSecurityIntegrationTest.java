@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
+import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.repository.UserRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +18,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -26,6 +29,9 @@ class HouseCoverImageSecurityIntegrationTest {
 
     @Autowired
     private TokenService tokenService;
+
+    @Autowired
+    private UserRepository users;
 
     @MockitoBean
     private HouseCoverImageCatalog houseCoverImageCatalog;
@@ -38,9 +44,11 @@ class HouseCoverImageSecurityIntegrationTest {
     }
 
     @Test
+    @Transactional
     void 유효한_토큰이면_목록을_조회한다() throws Exception {
         when(houseCoverImageCatalog.items()).thenReturn(List.of());
-        String accessToken = tokenService.issueAccessToken(1L, MemberRole.NORMAL);
+        Long userId = users.saveAndFlush(User.signUp()).getId();
+        String accessToken = tokenService.issueAccessToken(userId, MemberRole.NORMAL);
 
         mockMvc.perform(get("/api/v1/houses/cover-images")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))

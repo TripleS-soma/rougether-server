@@ -54,7 +54,7 @@ public class RefreshTokenRotator {
             return Optional.empty();
         }
         // 탈퇴 회원 잔여 토큰 방어: 탈퇴 트랜잭션의 전량 폐기와 동시에 회전돼 살아남은 토큰도 여기서 거부됨.
-        if (stored.getUser().isDeleted()) {
+        if (stored.getUser().isDeleted() || stored.getUser().isBot() || stored.getUser().isAi()) {
             return Optional.empty();
         }
 
@@ -82,7 +82,7 @@ public class RefreshTokenRotator {
     private Optional<TokenResponse> handleRevoked(RefreshToken stored, Instant now) {
         User user = stored.getUser();
         String familyId = stored.getFamilyId();
-        if (isWithinGrace(stored, now) && !stored.isExpired(now) && !user.isDeleted()) {
+        if (isWithinGrace(stored, now) && !stored.isExpired(now) && !user.isDeleted() && !user.isBot() && !user.isAi()) {
             // 응답 유실 재시도: 서버는 회전했지만 클라이언트가 새 쌍을 못 받았음.
             // 받지 못한 후속 토큰(들)을 밀어내 family 의 살아있는 토큰을 하나로 유지하고, 같은 family 로 새 쌍을 줌.
             int superseded = refreshTokenRepository.revokeActiveInFamily(familyId, now, SUPERSEDED);

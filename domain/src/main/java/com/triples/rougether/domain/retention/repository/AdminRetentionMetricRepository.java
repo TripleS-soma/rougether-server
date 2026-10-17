@@ -14,13 +14,13 @@ import org.springframework.data.repository.query.Param;
 public interface AdminRetentionMetricRepository extends Repository<User, Long> {
 
     @Query("select u.id as userId, u.createdAt as createdAt from User u "
-            + "where u.deletedAt is null and u.bot = false order by u.id")
+            + "where u.deletedAt is null and u.bot = false and u.ai = false order by u.id")
     List<ActiveUserMetricRow> findActiveUsers();
 
     @Query("select a.user.id as userId, a.activityDate as activityDate from UserDailyActivity a "
             + "join a.user u where a.activityDate between :fromDate and :toDate "
             + "and u.createdAt >= :cohortCreatedAfter "
-            + "and u.deletedAt is null and u.bot = false")
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
     List<DailyActivityMetricRow> findActivitiesBetween(@Param("fromDate") LocalDate fromDate,
                                                        @Param("toDate") LocalDate toDate,
                                                        @Param("cohortCreatedAfter") Instant cohortCreatedAfter);
@@ -28,7 +28,7 @@ public interface AdminRetentionMetricRepository extends Repository<User, Long> {
     @Query("select l.routine.user.id as userId, l.completedAt as completedAt from RoutineLog l "
             + "join l.routine.user u where l.status = :status "
             + "and l.completedAt >= :fromInclusive and l.completedAt < :toExclusive "
-            + "and u.deletedAt is null and u.bot = false")
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
     List<CompletionEventMetricRow> findCompletionEvents(
             @Param("fromInclusive") Instant fromInclusive,
             @Param("toExclusive") Instant toExclusive,
@@ -42,7 +42,7 @@ public interface AdminRetentionMetricRepository extends Repository<User, Long> {
             + "sum(case when l.status = :completedStatus then 1 else 0 end) as completedCount, "
             + "count(l.id) as totalCount from RoutineLog l join l.routine.user u "
             + "where l.routineDate between :fromDate and :toDate and l.status in :statuses "
-            + "and u.deletedAt is null and u.bot = false group by l.routine.user.id")
+            + "and u.deletedAt is null and u.bot = false and u.ai = false group by l.routine.user.id")
     List<RoutineOutcomeMetricRow> findRoutineOutcomesBetween(
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate,
@@ -56,16 +56,16 @@ public interface AdminRetentionMetricRepository extends Repository<User, Long> {
 
     @Query("select s.user.id as userId, s.currentCount as currentCount, "
             + "s.lastSuccessDate as lastSuccessDate from Streak s join s.user u "
-            + "where u.deletedAt is null and u.bot = false")
+            + "where u.deletedAt is null and u.bot = false and u.ai = false")
     List<StreakMetricRow> findStreaksForActiveUsers();
 
     // 공동군 = 현재 ACTIVE·미삭제 집에서 나 외 ACTIVE 비봇·비탈퇴 사용자가 한 명 이상인 사용자.
     @Query("select distinct hm.user.id from HouseMember hm join hm.house h join hm.user u "
             + "where hm.status = :status and h.deletedAt is null "
-            + "and u.deletedAt is null and u.bot = false "
+            + "and u.deletedAt is null and u.bot = false and u.ai = false "
             + "and exists (select peer.id from HouseMember peer join peer.user peerUser "
             + "where peer.house = h and peer.user.id <> hm.user.id and peer.status = :status "
-            + "and peerUser.deletedAt is null and peerUser.bot = false)")
+            + "and peerUser.deletedAt is null and peerUser.bot = false and peerUser.ai = false)")
     List<Long> findSharedUserIds(@Param("status") HouseMemberStatus status);
 
     interface ActiveUserMetricRow {

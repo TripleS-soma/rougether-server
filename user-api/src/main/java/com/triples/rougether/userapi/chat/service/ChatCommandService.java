@@ -24,6 +24,9 @@ import org.springframework.transaction.annotation.Isolation;
 @RequiredArgsConstructor
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class ChatCommandService {
+    private com.triples.rougether.userapi.aiuser.service.AiUserEvents aiEvents;
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureAiEvents(com.triples.rougether.userapi.aiuser.service.AiUserEvents events) { aiEvents = events; }
     private final ChatRoomRepository rooms;
     private final ChatMessageRepository messages;
     private final ChatReadStateRepository reads;
@@ -54,6 +57,7 @@ public class ChatCommandService {
         if (bannedWords.containsBannedWord(request.content()))
             throw new BusinessException(ChatErrorCode.CHAT_CONTENT_BANNED);
         ChatMessage message = messages.save(ChatMessage.send(room, sender, key, request.content(), clock.instant()));
+        if (aiEvents != null) aiEvents.chat(sender, roomId, message.getId());
         // 발신만으로 이전 메시지를 읽었다고 간주하지 않음. 화면에 표시된 지점은 read API로 명시함.
         events.publishEvent(new ChatRoomChanged(roomId));
         events.publishEvent(new ChatMessageSent(message.getId()));

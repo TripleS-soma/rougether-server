@@ -22,7 +22,7 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
             FROM users u
             WHERE u.id = :userId
               AND u.deleted_at IS NULL
-              AND u.is_bot = FALSE
+              AND u.is_bot = FALSE AND u.is_ai = FALSE
             ON DUPLICATE KEY UPDATE activity_date = activity_date
             """, nativeQuery = true)
     int insertIfActiveUser(@Param("userId") Long userId,
@@ -35,7 +35,7 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
             INSERT INTO user_daily_activity (user_id, activity_date, created_at)
             SELECT u.id, :activityDate, CURRENT_TIMESTAMP
             FROM users u
-            WHERE u.id IN (:userIds) AND u.deleted_at IS NULL AND u.is_bot = FALSE
+            WHERE u.id IN (:userIds) AND u.deleted_at IS NULL AND u.is_bot = FALSE AND u.is_ai = FALSE
             ORDER BY u.id
             ON DUPLICATE KEY UPDATE activity_date = activity_date
             """, nativeQuery = true)
@@ -45,7 +45,7 @@ public interface UserDailyActivityRepository extends JpaRepository<UserDailyActi
     @Query(value = """
             SELECT a.user_id FROM user_daily_activity a JOIN users u ON u.id = a.user_id
             WHERE a.user_id IN (:userIds) AND a.activity_date = :activityDate
-              AND u.deleted_at IS NULL AND u.is_bot = FALSE
+              AND u.deleted_at IS NULL AND u.is_bot = FALSE AND u.is_ai = FALSE
             """, nativeQuery = true)
     List<Long> findRecordedActiveUserIds(@Param("userIds") Collection<Long> userIds,
                                         @Param("activityDate") LocalDate activityDate);

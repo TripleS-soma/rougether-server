@@ -85,6 +85,21 @@ class AdminUserObservationTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void AI계정은_사람요약에서_제외하고_AI필터에서만_조회한다() throws Exception {
+        userRepository.saveAndFlush(User.ai("별도 AI 계정", "가상 페르소나"));
+        userRepository.saveAndFlush(User.signUp("ai-separation-human@rougether.dev"));
+        mockMvc.perform(get("/admin/users/summary"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.activeUsers").value(1));
+        mockMvc.perform(get("/admin/users").param("accountStatus", "ALL"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].accountStatus").value("ACTIVE"));
+        mockMvc.perform(get("/admin/users").param("accountStatus", "AI"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].accountStatus").value("AI"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 요약은_활성회원의_최근가입_최근인증접속_온보딩완료를_집계한다() throws Exception {
         User completed = userRepository.save(User.signUp("observation-summary-completed@rougether.dev"));
         completed.recordAccess(Instant.now());

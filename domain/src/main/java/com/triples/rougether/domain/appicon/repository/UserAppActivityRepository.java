@@ -14,7 +14,7 @@ public interface UserAppActivityRepository extends JpaRepository<UserAppActivity
     // 처리 중 후보가 줄어도 누락되지 않게 사용자 id 커서로 조회함.
     @Query("""
             select a.userId from UserAppActivity a
-            where a.userId > :afterUserId and a.user.deletedAt is null and a.user.bot = false
+            where a.userId > :afterUserId and a.user.deletedAt is null and a.user.bot = false and a.user.ai = false
               and ((a.lastForegroundAt <= :twoDaysAgo and a.lastNotifiedStage < 1)
                 or (a.lastForegroundAt <= :fourDaysAgo and a.lastNotifiedStage < 2)
                 or (a.lastForegroundAt <= :sevenDaysAgo and a.lastNotifiedStage < 3))

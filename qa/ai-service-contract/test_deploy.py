@@ -78,6 +78,24 @@ class DeployTest(unittest.TestCase):
         self.assertIn('127.0.0.1:28090', deploy.NGINX_CONFIG.read_text())
         self.assertIn(('docker', 'stop', 'rougether-ai-18090'), self.calls)
 
+    def test_memory_capacity_failure_preserves_active_release(self):
+        self.runtime['env'] = {**self.env, 'AI_USERS_ENABLED': 'true'}
+        with patch.object(deploy, 'ensure_memory', side_effect=RuntimeError('insufficient memory')):
+            with self.assertRaises(RuntimeError):
+                deploy.deploy(IMAGE)
+        self.assert_preserved()
+        self.assertFalse(any(call[:2] == ('docker', 'run') for call in self.calls))
+
+    def test_memory_candidate_joins_private_network_and_has_bounded_resources(self):
+        self.runtime['env'] = {**self.env, 'AI_USERS_ENABLED': 'true'}
+        with patch.object(deploy, 'ensure_memory', return_value='rougether-ai-memory'):
+            deploy.deploy(IMAGE)
+        candidate = next(call for call in self.calls if call[:2] == ('docker', 'run'))
+        self.assertEqual('2g', candidate[candidate.index('--memory') + 1])
+        self.assertEqual('rougether-ai-memory', candidate[candidate.index('--network') + 1])
+        self.assertEqual('195', candidate[candidate.index('--stop-timeout') + 1])
+        self.assertIn('proxy_read_timeout 190s', deploy.NGINX_CONFIG.read_text())
+
     def test_smoke_rejects_bad_provider_data_without_assert(self):
         self.smoke.side_effect = None
         # patch를 우회해 원래 함수의 검증 경로를 직접 실행함.

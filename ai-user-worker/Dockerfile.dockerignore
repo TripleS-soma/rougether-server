@@ -1,0 +1,6 @@
+**
+!ai-user-worker/
+!ai-user-worker/worker.py
+!ai-service/
+!ai-service/rougether_ai/
+!ai-service/rougether_ai/ai_user_policy.py

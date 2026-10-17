@@ -1029,6 +1029,9 @@ test_nginx_config_preserves_websocket_upgrade() {
   assert_contains 'proxy_set_header Connection "upgrade";' "$NGINX_CONFIG_FILE" "WebSocket connection must be upgraded"
   assert_contains 'proxy_set_header Connection "";' "$NGINX_CONFIG_FILE" "ordinary HTTP routes must retain keepalive behavior"
   assert_contains 'server 10.0.1.10:18081;' "$NGINX_CONFIG_FILE" "admin upstream must remain on its active slot"
+  assert_contains 'location ^~ /internal/ {' "$NGINX_CONFIG_FILE" "public user origin must reject internal API routes"
+  assert_contains 'listen 127.0.0.1:8082;' "$NGINX_CONFIG_FILE" "AI control origin must bind to loopback only"
+  assert_contains 'location /internal/ai-users/ {' "$NGINX_CONFIG_FILE" "local worker must reach AI control routes"
   echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
 }
 

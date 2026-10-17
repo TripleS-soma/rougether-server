@@ -12,7 +12,7 @@ variable "vpc_id" { type = string }
 variable "subnet_id" { type = string }
 variable "api_security_group_id" { type = string }
 variable "github_deploy_role_name" { type = string }
-variable "instance_type" { default = "t3.small" }
+variable "instance_type" { default = "t3.large" }
 data "aws_caller_identity" "current" {}
 data "aws_subnet" "selected" { id = var.subnet_id }
 data "aws_security_group" "api" { id = var.api_security_group_id }

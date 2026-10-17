@@ -2,6 +2,8 @@
 
 임베딩과 텍스트 생성의 공급자 호출을 `ai-service/` FastAPI 프로세스로 분리한다. 같은 저장소에서 계약을 함께 검증하고, 이미지와 프로세스는 Spring과 별도로 배포할 수 있다. `ai.service.enabled`의 기본값은 `false`여서 이 변경만 배포하면 기존 직접 호출 경로가 유지된다. 고객용 API와 DB 스키마는 바뀌지 않는다.
 
+2026-10-17 추가한 가상 사용자 기능은 별도 `AI_USERS_ENABLED` 설정으로 켠다. 같은 FastAPI에 Graphiti, Neo4j 장기 기억과 행동 판단을 추가하며 [구현과 예약 실행 안내](ai-user-graphiti.md)를 따른다. 아래 설명은 기존 임베딩과 주간 회고 분리 경로의 계약이다.
+
 ## 책임 경계
 
 ```mermaid
@@ -21,7 +23,7 @@ flowchart LR
 | 기존 장애 시 EXACT-only 판정/회고 FALLBACK 정책 | 공급자 재시도·시간/크기/동시 실행 제한 |
 | 인증/소유권·보상/정산·가구 작업 수명 주기 | 내부 서비스 토큰 검증 |
 
-FastAPI에는 DB, Redis, SQS, S3 자격 증명이 필요 없다. 주간 기간의 한국 시간 정책과 개인 루틴 알림의 현지 시간 정책도 그대로다. 가구 생성은 이미 Lambda/SQS로 분리되어 있으므로 이번 단계에서는 변경하지 않는다. 해당 경로는 [가구 운영 문서](furniture-service-rollout.md)를 따른다.
+기본 경로의 FastAPI에는 DB, Redis, SQS, S3 자격 증명이 필요 없다. 가상 사용자 기능을 켜면 전용 Neo4j 자격 증명만 추가하며 MySQL 업무 DB에는 직접 연결하지 않는다. 주간 기간의 한국 시간 정책과 개인 루틴 알림의 현지 시간 정책도 그대로다. 가구 생성은 이미 Lambda/SQS로 분리되어 있으므로 이번 단계에서는 변경하지 않는다. 해당 경로는 [가구 운영 문서](furniture-service-rollout.md)를 따른다.
 
 ## 실행과 검증
 
