@@ -68,3 +68,7 @@ PR 워크플로는 AWS 자격 증명을 받지 않는다. main에서는 영수�
 - [Gradle 테스트 클래스 필터와 보고서](https://docs.gradle.org/current/userguide/java_testing.html).
 
 Docker ID 차이 근거: [Moby #51934](https://github.com/moby/moby/issues/51934), [Docker image load](https://docs.docker.com/reference/cli/docker/image/load/).
+
+## 재검증에서 확인한 채팅 테스트 경합
+
+ChatBodyPushTest의 주기 복구 테스트는 mock 소켓이 READY를 큐에 넣자마자 가짜 시계를 5초 앞당겼다. 송신 작업의 finally가 아직 끝나지 않았으면 실제로는 진행 중인 짧은 READY 쓰기가 3초를 넘긴 것으로 판단돼 watchdog이 연결을 닫을 수 있었다. READY 수신과 송신 작업 완료를 구분해, executor가 비어 있음을 제한된 시간 안에 확인한 뒤 시계를 이동하도록 고쳤다. Redis 신호 없이 5초 후 복구한다는 검증과 기존 소켓 대기 제한은 유지한다. 운영 채팅 코드는 바꾸지 않았다.
