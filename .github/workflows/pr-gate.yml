@@ -2,8 +2,7 @@ name: PR Gate
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,73 +16,33 @@ jobs:
   review-bot-test:
     name: Review bot unit tests
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s .github/review-bot/tests -v
+      - name: Verify artifact resolver API read permissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq length
+          gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq .tree.sha
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pr-gate.yml/runs?per_page=1" --jq .total_count
 
-      - name: Run review bot unit tests
-        run: python3 -m unittest discover -s .github/review-bot/tests -v
+  verify:
+    uses: ./.github/workflows/backend-verify.yml
 
   test:
+    # 기존 필수 검사 이름을 유지하며 모든 분할과 이미지 생성의 성공을 확인함.
     name: Gradle test
+    if: always()
+    needs: [verify, review-bot-test]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-
-      - name: Grant Gradle wrapper permission
-        run: chmod +x ./gradlew
-
-      - name: Test deployment scripts
-        run: |
-          bash -n deploy/scripts/bootstrap-blue-green-router.sh
-          bash deploy/scripts/test-bootstrap-blue-green-router.sh
-          bash .github/scripts/test-deploy-ec2-with-rollback.sh
-          bash .github/scripts/test-promote-ecr-dev-tags.sh
-          bash .github/scripts/test-runtime-env-helpers.sh
-          bash .github/scripts/test-wait-for-ssm-command.sh
-          bash .github/scripts/test-asset-privacy.sh
-          bash .github/scripts/test-admin-cloudfront.sh
-          python3 -m unittest discover -s deploy/terraform/monitoring/lambda/tests
-
-      - name: Run tests
-        run: ./gradlew test
-
-  docker-build:
-    name: Docker build ${{ matrix.module }}
-    runs-on: ubuntu-latest
-    needs: test
-    strategy:
-      matrix:
-        include:
-          - module: user-api
-          - module: admin-api
-          - module: batch
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build linux/amd64 image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          build-args: |
-            APP_MODULE=${{ matrix.module }}
-          push: false
-          tags: rougether-${{ matrix.module }}:pr-${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.module }}-amd64
+      - name: Require complete backend verification
+        env:
+          VERIFICATION: ${{ needs.verify.result }}
+          REVIEW_TESTS: ${{ needs.review-bot-test.result }}
+        run: test "$VERIFICATION" = success && test "$REVIEW_TESTS" = success

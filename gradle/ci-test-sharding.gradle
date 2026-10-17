@@ -1,0 +1,24 @@
+// user-api 테스트만 분할하며 내부 클래스는 바깥 클래스와 같은 러너에서 실행함.
+project(':user-api') {
+    tasks.named('test', Test) {
+        def shardIndex = providers.gradleProperty('ciShardIndex')
+        def shardCount = providers.gradleProperty('ciShardCount')
+        if (shardIndex.isPresent() != shardCount.isPresent()) {
+            throw new GradleException('ciShardIndex와 ciShardCount를 함께 지정해야 함')
+        }
+        if (shardIndex.isPresent()) {
+            int index = Integer.parseInt(shardIndex.get())
+            int count = Integer.parseInt(shardCount.get())
+            if (count < 1 || index < 0 || index >= count) {
+                throw new GradleException('잘못된 CI 테스트 분할 범위임')
+            }
+            inputs.property('ciShardIndex', index)
+            inputs.property('ciShardCount', count)
+            include { details ->
+                if (details.directory) return true
+                String outer = details.path.replaceAll(/\$.*$/, '').replaceAll(/\.class$/, '')
+                Math.floorMod(outer.hashCode(), count) == index
+            }
+        }
+    }
+}

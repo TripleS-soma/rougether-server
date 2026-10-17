@@ -1,0 +1,74 @@
+# 백엔드 CI 시간 분석과 검증 산출물 재사용
+
+## 기존 병목
+
+2026-10-17 PR #451의 전체 Gradle 명령은 12분 44초, main 배포에서는 13분 9초 걸렸다. JDK 준비는 각각 6초, 2초였으므로 도구 설치가 주원인은 아니다. 실제 테스트와 컴파일의 순차 실행이 대부분이었다.
+
+main 로그에서 user-api 테스트 클래스 준비부터 다음 모듈 작업까지 약 7분 27초가 걸렸다. 이 구간에는 테스트 JVM 기동도 포함된다. user-api 이전의 설정, 컴파일 및 다른 모듈 실행은 약 5분 35초였다. 기존 로그의 작업 출력 시각만으로 개별 테스트의 정확한 CI 소요 시간을 역산하지는 않는다.
+
+당시 로컬 JUnit 결과는 전체 2,680개, user-api 2,056개였다. 로컬 결과에서 첫 Spring 컨텍스트 기동과 MySQL을 사용하는 통합 테스트가 긴 구간에 포함됐다. CI와 로컬의 CPU 및 캐시 조건이 다르므로 로컬 클래스 시간을 CI 실측으로 취급하지 않는다. 31초 응답 지연을 실제로 검증하는 FurnitureControlClientTest도 유지한다.
+
+### 확인한 불필요한 50초 잠금 대기
+
+같은 소스를 Linux에서 전체 재실행한 결과 HouseCoverImageSecurityIntegrationTest가 51.34초 걸렸다. JUnit 로그에는 user_daily_activity INSERT의 `Lock wait timeout exceeded`와 유효 토큰 조회 테스트 호출 경로가 기록됐다. 실행 중 스택에서도 동일 쿼리의 MySQL 응답 대기를 확인했다.
+
+이 인증 테스트는 롤백용 트랜잭션 안에서 사용자를 만들고 MockMvc를 호출한다. 활동 기록 필터는 REQUIRES_NEW 트랜잭션에서 그 미커밋 사용자를 읽으려다 잠금 시간 초과까지 기다렸다. 관측 실패가 원 요청을 실패시키지 않도록 구현돼 있어 테스트는 느리게 통과하고 있었다.
+
+인증과 커버 목록 조회를 검증하는 이 두 테스트에서는 관련 없는 활동 recorder를 mock으로 분리한다. 실제 JWT, 인증 필터, 사용자 DB와 조회 응답 검증은 유지하며, 활동 기록의 실제 동작은 기존 activity 전용 필터/트랜잭션 테스트에서 계속 검증한다. 운영 코드나 DB 잠금 제한은 바꾸지 않는다.
+
+## 변경 구조
+
+- user-api 테스트를 클래스 이름의 안정적인 해시로 두 러너에 분배한다. 내부 클래스는 바깥 클래스와 같은 분할에 둔다. 각 러너 안의 테스트 순차 실행과 기존 힙, Spring 캐시 제한은 유지한다.
+- 나머지 모듈은 루트 test에서 user-api:test만 제외해 모두 실행한다. 새 모듈이 추가돼도 이 그룹에 포함된다. 전체 compileJava와 배포 스크립트 회귀 테스트도 유지한다.
+- 테스트 실행 중 같은 작업 그래프에서 세 서버의 bootJar를 만든다. Docker 안에서 다시 Java를 컴파일하지 않는다.
+- 세 JAR로 linux/amd64 런타임 이미지를 한 번 만들고, 공통 레이어를 포함한 하나의 이미지 아카이브를 저장한다.
+- JUnit 식별자, 클래스 소요 시간, Gradle 프로파일을 7일간 보관해 다음 최적화의 근거로 쓴다.
+
+PR Gate의 기존 `Gradle test` 검사 이름은 집계 게이트로 유지한다. 모든 테스트 분할, 이미지 생성, review bot 단위 테스트가 성공해야 통과한다. CodeQL과 별도 AI 서버 계약 검증도 유지한다.
+
+## main 재사용 조건
+
+다음 조건을 모두 만족할 때만 PR에서 검증한 이미지와 테스트 결과를 재사용한다.
+
+1. 현재 main 커밋에 연결된 병합 PR이며, 같은 저장소의 PR이다.
+2. 해당 PR head의 최신 PR Gate 실행이 완료됐고 성공했다. 실패, 취소 또는 진행 중인 최신 실행을 과거 성공으로 대신하지 않는다.
+3. 동일 실행 시도의 이미지와 영수증 아티팩트가 존재하고 만료되지 않았다.
+4. 영수증의 소스 트리 해시가 현재 main의 전체 Git 트리와 같다. 커밋 SHA는 달라도 파일, 설정, 워크플로가 모두 같아야 한다.
+5. 실제 GitHub 커밋 객체의 트리도 같고, 검증한 커밋은 해당 PR head이거나 그 head를 부모로 갖는 병합 커밋이다.
+6. 영수증의 실행 ID, 실행 시도, 이미지 아티팩트 ID가 일치한다.
+7. 다운로드한 이미지 아카이브 체크섬, 세 이미지 config/manifest ID, 소스 트리 라벨, 모듈 라벨, linux/amd64 아키텍처가 모두 맞는다.
+
+1~6을 확인할 수 없으면 전체 검증과 이미지 생성을 새로 수행한다. 7의 무결성 확인이 실패하면 AWS 자격 증명을 받기 전에 배포를 실패시킨다. 손상된 이미지를 대신 배포하거나 검사를 생략하지 않는다.
+
+직접 push, 병합 중 다른 변경의 유입, fork PR, 누락 또는 만료된 아티팩트는 새 검증 경로로 간다. JAR, 이미지와 영수증은 1일, 테스트 보고서는 7일 보관한다. 수동 실행의 `force_verification=true`로 재사용을 끄고 전체 검증할 수도 있다. 일부 작업만 재실행해 현재 실행 시도의 아티팩트가 완성되지 않았다면 전체 작업을 다시 실행해야 한다.
+
+### Docker 저장소 종류에 따른 이미지 ID
+
+실제 GitHub 아카이브를 Docker Desktop에 불러오는 검증에서 classic 저장소의 config digest와 containerd 저장소의 manifest digest가 서로 다른 ID로 표시되는 것을 확인했다. 아카이브 전체 체크섬을 먼저 검사하고, 내부 config의 해시와 그 config를 가리키는 OCI manifest의 해시를 직접 계산해 동일 이미지의 두 표현만 허용한다. 다른 이미지의 ID나 manifest 바이트 변조는 거부한다. CI에서도 이미지 생성 후 save/load 왕복을 검사한 다음에만 영수증을 게시한다.
+
+## 배포 보장
+
+PR 워크플로는 AWS 자격 증명을 받지 않는다. main에서는 영수증과 이미지 무결성 확인 후에만 AWS에 접근한다. 검증된 이미지를 재빌드 없이 `unverified-<main SHA>`로 올리고, 기존 test/build 게이트 이후 `:sha` 승격, EC2 전환, 공개 health 검증, `:dev` 승격 순서를 유지한다. 롤백 스크립트도 유지한다.
+
+기존 Dockerfile은 로컬 빌드 및 다른 호출자의 호환성을 위해 유지하고, 이번 CI에서만 Dockerfile.runtime을 사용한다. 서버 세 개의 선택 배포는 이번 변경에 포함하지 않는다.
+
+## 검증 결과
+
+- Linux 전체 재실행: test와 전체 compileJava 성공, 8분 21초. CI와 하드웨어가 다르므로 성능 비교 기준으로 사용하지 않는다.
+- 첫 분할 CI: 2,680개, 기존 skip 10개. 전체 실행과 테스트 식별자/횟수를 비교해 누락 0개, 추가 중복 0개를 확인했다. 그룹별 테스트 수는 user-api 956개, 1,100개, 나머지 모듈 624개다.
+- 첫 PR Gate 전체: 8분 42초. 기존 PR #451의 15분 11초와 비교하면 약 43% 단축됐다. 세 그룹은 각각 5분 43초, 7분 17초, 4분 37초였다. 이미지 패키징과 업로드는 별도 1분 13초였다.
+- 잠금 대기 수정의 대상 검증: 인증 2개와 실제 활동 기록 전용 테스트를 포함한 15개 통과. 커버 이미지 인증 클래스는 초기화 포함 51.34초에서 15.121초로 줄었고 잠금 시간 초과 로그가 없어졌다.
+- CI 도구 테스트 15개, review bot 17개, 기존 배포/롤백 검증 묶음, actionlint와 diff 검사 통과.
+- 잠금 대기 수정까지 포함한 최종 CI와 실제 이미지 묶음 검증 결과는 PR #452에 기록한다. main 재사용에 따른 운영 배포 단축 시간은 실제 main 실행 전까지 실측으로 주장하지 않는다.
+
+## 근거
+
+- [기존 PR Gate](https://github.com/TripleS-soma/rougether-server/actions/runs/39032643065), [기존 main 배포](https://github.com/TripleS-soma/rougether-server/actions/runs/39033706906).
+- [GitHub immutable artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts), [다른 실행의 아티팩트 다운로드](https://github.com/actions/download-artifact).
+- [Gradle 테스트 클래스 필터와 보고서](https://docs.gradle.org/current/userguide/java_testing.html).
+
+Docker ID 차이 근거: [Moby #51934](https://github.com/moby/moby/issues/51934), [Docker image load](https://docs.docker.com/reference/cli/docker/image/load/).
+
+## 재검증에서 확인한 채팅 테스트 경합
+
+ChatBodyPushTest의 주기 복구 테스트는 mock 소켓이 READY를 큐에 넣자마자 가짜 시계를 5초 앞당겼다. 송신 작업의 finally가 아직 끝나지 않았으면 실제로는 진행 중인 짧은 READY 쓰기가 3초를 넘긴 것으로 판단돼 watchdog이 연결을 닫을 수 있었다. READY 수신과 송신 작업 완료를 구분해, executor가 비어 있음을 제한된 시간 안에 확인한 뒤 시계를 이동하도록 고쳤다. Redis 신호 없이 5초 후 복구한다는 검증과 기존 소켓 대기 제한은 유지한다. 운영 채팅 코드는 바꾸지 않았다.
