@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.userapi.auth.service.TokenService;
+import com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder;
 import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.house.service.HouseCoverImageCatalog;
 import com.triples.rougether.domain.member.entity.User;
@@ -35,6 +36,11 @@ class HouseCoverImageSecurityIntegrationTest {
 
     @MockitoBean
     private HouseCoverImageCatalog houseCoverImageCatalog;
+
+    // 인증/조회 테스트의 미커밋 사용자를 활동 기록용 REQUIRES_NEW가 기다리지 않게 함.
+    // 활동 기록의 트랜잭션/필터 동작은 activity 패키지의 전용 테스트에서 검증함.
+    @MockitoBean
+    private UserDailyActivityRecorder activityRecorder;
 
     @Test
     void 토큰이_없으면_401을_반환한다() throws Exception {

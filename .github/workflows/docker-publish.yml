@@ -107,6 +107,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ env.IMAGE_ARTIFACT }}
+          merge-multiple: true
           path: bundle
           github-token: ${{ github.token }}
           run-id: ${{ env.SOURCE_RUN }}
@@ -114,6 +115,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ env.RECEIPT_ARTIFACT }}
+          merge-multiple: true
           path: bundle
           github-token: ${{ github.token }}
           run-id: ${{ env.SOURCE_RUN }}
