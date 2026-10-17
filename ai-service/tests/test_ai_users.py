@@ -107,7 +107,7 @@ def test_deterministic_action_requires_no_model():
         result = client.post("/internal/v1/ai-users/decide", headers=AUTH, json={"aiUserId": 1,
             "state": {"aiUserId": 1, "actions": ["WAIT"], "source": {"type": "SCHEDULE"},
                       "localTime": "03:00", "personaKey": "steady-walk"}})
-        assert result.json() == {"action": "WAIT", "payload": {}, "memory": ""}
+        assert result.json() == {"action": "WAIT", "payload": {"reason": "OUTSIDE_ACTIVE_HOURS"}, "memory": ""}
 
 
 def test_provider_error_does_not_retry_or_leak_response():

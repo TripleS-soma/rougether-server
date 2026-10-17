@@ -61,7 +61,7 @@ public class AiUserJobs {
                 + "JOIN ai_user_profiles p ON p.user_id=j.user_id JOIN users u ON u.id=j.user_id "
                 + "WHERE j.status='PENDING' AND j.ready_at<=? AND p.enabled=TRUE AND u.is_ai=TRUE AND u.deleted_at IS NULL "
                 + "AND (SELECT COUNT(*) FROM ai_user_jobs done WHERE done.user_id=j.user_id "
-                + "AND done.finished_at>=?)<CASE WHEN j.priority>=100 THEN ? ELSE ? END "
+                + "AND done.finished_at>=? AND done.status='DONE' AND done.action_name<>'WAIT')<CASE WHEN j.priority>=100 THEN ? ELSE ? END "
                 + "ORDER BY j.priority DESC,j.created_at,j.id LIMIT 1",
                 timestamp(now), timestamp(start), properties.dailyJobLimit(), Math.max(1,properties.dailyJobLimit()*2/3));
         if (due.isEmpty()) {
@@ -120,6 +120,17 @@ public class AiUserJobs {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
+    @Transactional(readOnly=true)
+    public Map<String,Object> outcome(long id,String owner,long token,String result) {
+        var row=jdbc.queryForMap("SELECT action_name,wait_reason FROM ai_user_jobs WHERE id=? AND status='DONE' AND lease_owner=? AND fencing_token=?",
+                id,owner,token);
+        var outcome=new java.util.LinkedHashMap<String,Object>();
+        outcome.put("result",result);
+        outcome.put("action",row.get("action_name"));
+        outcome.put("waitReason",row.get("wait_reason"));
+        return outcome;
+    }
+
     @Transactional
     public void defer(long id,String owner,long token) {
         requireClaim(id,owner,token);
@@ -155,17 +166,45 @@ public class AiUserJobs {
         var runtime = lockRuntime();
         if (!Boolean.TRUE.equals(runtime.get("enabled"))) return;
         Instant now = clock.instant();
-        var rows = jdbc.queryForList("SELECT user_id,ai_key,next_run_at FROM ai_user_profiles WHERE enabled=TRUE AND next_run_at<=?", timestamp(now));
+        var rows = jdbc.queryForList("SELECT user_id,ai_key,next_run_at,next_social_at FROM ai_user_profiles WHERE enabled=TRUE");
         int hour=now.atZone(ZoneId.of("Asia/Seoul")).getHour();
+        var dayStart=now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate().atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant();
         for (var row : rows) {
             long userId = ((Number) row.get("user_id")).longValue();
+            String persona=(String)row.get("ai_key");
             var slot = ((Timestamp) row.get("next_run_at")).toInstant();
-            if (AiPersonas.isAwake((String)row.get("ai_key"),hour))
-                enqueue(userId, "schedule:" + userId + ":" + slot.toEpochMilli(), 10, "SCHEDULE", null);
-            jdbc.update("UPDATE ai_user_profiles SET next_run_at=? WHERE user_id=?",
-                    timestamp(now.plus(properties.scheduleInterval()).plusSeconds(userId % 10 * 30)), userId);
+            if (!slot.isAfter(now)) {
+                if (AiPersonas.isAwake(persona,hour))
+                    enqueue(userId, "schedule:" + userId + ":" + slot.toEpochMilli(), 10, "SCHEDULE", null);
+                jdbc.update("UPDATE ai_user_profiles SET next_run_at=? WHERE user_id=?",
+                        timestamp(now.plus(properties.scheduleInterval()).plusSeconds(userId % 10 * 30)), userId);
+            }
+            var social=row.get("next_social_at")==null?AiPersonas.nextSocialVisit(persona,userId,now.minus(Duration.ofMinutes(30))):
+                    ((Timestamp)row.get("next_social_at")).toInstant();
+            if (!social.isAfter(now)) {
+                int visits=jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE user_id=? AND source_type='SOCIAL_BROWSE' AND created_at>=?",
+                        Integer.class,userId,timestamp(dayStart));
+                if (AiPersonas.isAwake(persona,hour) && visits<AiPersonas.socialVisits(persona).size())
+                    enqueue(userId,"social:"+userId+":"+social.toEpochMilli(),20,"SOCIAL_BROWSE",null);
+            }
+            if (row.get("next_social_at")==null || !social.isAfter(now))
+                jdbc.update("UPDATE ai_user_profiles SET next_social_at=? WHERE user_id=?",
+                        timestamp(AiPersonas.nextSocialVisit(persona,userId,now)),userId);
         }
         jdbc.update("DELETE FROM ai_user_memories WHERE expires_at<=?", timestamp(now));
+    }
+
+    @Transactional
+    public void bringForwardSocialVisit(Job job,AiUserActionExecutor.Action action) {
+        if (!java.util.Set.of(AiUserActionExecutor.Action.SHOP_PURCHASE,AiUserActionExecutor.Action.ROOM_LAYOUT,
+                AiUserActionExecutor.Action.MARKET_ORDER,AiUserActionExecutor.Action.MARKET_ISSUE).contains(action)) return;
+        String persona=jdbc.queryForObject("SELECT ai_key FROM ai_user_profiles WHERE user_id=?",String.class,job.userId());
+        if (!persona.startsWith("decorate-")) return;
+        var now=clock.instant();
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE user_id=? AND source_type='SOCIAL_BROWSE' AND created_at>?",
+                Integer.class,job.userId(),timestamp(now.minus(Duration.ofHours(2))))>0) return;
+        var next=timestamp(now.plus(Duration.ofMinutes(20)));
+        jdbc.update("UPDATE ai_user_profiles SET next_social_at=? WHERE user_id=? AND (next_social_at IS NULL OR next_social_at>?)",next,job.userId(),next);
     }
 
     private Map<String, Object> lockRuntime() {

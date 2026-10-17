@@ -43,6 +43,7 @@ public class AiUserObserver {
     private final GachaService gacha;
     private final MarketQueryService market;
     private final MyCharacterQueryService myCharacters;
+    private final AiUserSocialActivity social;
     private final tools.jackson.databind.ObjectMapper mapper;
 
     public record SourceReference(String type,Long id) {}
@@ -61,6 +62,7 @@ public class AiUserObserver {
         state.put("date",clock.instant().atZone(ZoneId.of("Asia/Seoul")).toLocalDate());
         state.put("localTime",clock.instant().atZone(ZoneId.of("Asia/Seoul")).toLocalTime());
         state.put("source",source(user,job.sourceType(),job.sourceId()));
+        if (job.sourceType().equals("SOCIAL_BROWSE")) return socialSnapshot(job,state);
         state.put("wallets",wallets.getWallets(user));
         state.put("today",today.today(user));
         state.put("onboarding",onboarding.getOnboarding(user));
@@ -143,6 +145,39 @@ public class AiUserObserver {
         return state;
     }
 
+    private Map<String,Object> socialSnapshot(AiUserJobs.Job job,Map<String,Object> state) {
+        long user=job.userId();
+        var context=social.observe(user);
+        String persona=(String)state.get("personaKey");
+        context.state().put("preference",persona.startsWith("social-")?"관심 있는 기존 글에 구체적인 댓글로 먼저 참여. 질문은 필요할 때만 함.":
+                persona.startsWith("observe-")?"읽는 비중이 높음. 관심사와 직접 연결되는 글에만 가끔 댓글이나 좋아요.":
+                persona.startsWith("decorate-")?"실제 앱의 구매, 배치, 거래와 관련된 주제에 참여. 소유하지 않은 물건이나 거래 경험은 만들지 않음.":
+                "루틴, 기록, 작은 계획의 구체적인 새 주제를 공유하거나 관련 글에 반응.");
+        var references=new java.util.LinkedHashSet<>(context.references());
+        state.put("social",context.state());
+        state.put("actions",context.state().get("allowedActions"));
+        state.put("profile",jdbc.queryForMap("SELECT nickname,bio FROM users WHERE id=?",user));
+        state.put("onboarding",onboarding.getOnboarding(user));
+        state.put("today",today.today(user));
+        var recent=new java.util.ArrayList<Map<String,Object>>();
+        for (var row:jdbc.queryForList("SELECT id,action_name,action_payload,finished_at FROM ai_user_jobs "
+                + "WHERE user_id=? AND status='DONE' AND action_name<>'WAIT' ORDER BY id DESC LIMIT 6",user)) {
+            var payload=mapper.readTree(row.get("action_payload") instanceof byte[] bytes?
+                    new String(bytes,java.nio.charset.StandardCharsets.UTF_8):row.get("action_payload").toString());
+            var activity=new LinkedHashMap<String,Object>();
+            activity.put("action",row.get("action_name"));
+            activity.put("at",row.get("finished_at"));
+            // 실행한 기능과 본인 계획 제목만 전달하고 타인의 원문/거래 상세를 재전송하지 않음.
+            String title=payload.path("title").asText("");
+            if (!title.isBlank()) activity.put("title",title.substring(0,Math.min(160,title.length())));
+            recent.add(activity);
+            references.add(new SourceReference("AI_JOB",((Number)row.get("id")).longValue()));
+        }
+        state.put("recentOwnActivity",recent);
+        jdbc.update("UPDATE ai_user_jobs SET context_sources=?,memory_sources=NULL WHERE id=?",mapper.writeValueAsString(references),job.id());
+        return state;
+    }
+
     // 회고가 고유명사·의미를 빠뜨릴 수 있어 접근 가능한 원문을 짧게 함께 제공함.
     // 위 origins 접근 검사 이후에만 조회하며, 삭제/차단된 원문이나 회고는 전달하지 않음.
     private Map<String,Object> memoryEvidence(Map<String,Object> memory) {
@@ -166,7 +201,7 @@ public class AiUserObserver {
     }
 
     public Object source(long user,String type,Long sourceId) {
-        if (type.equals("SCHEDULE")) return Map.of("type",type);
+        if (type.equals("SCHEDULE") || type.equals("SOCIAL_BROWSE")) return Map.of("type",type);
         if (sourceId==null) unavailable();
         if (type.equals("FEED_POST")) {
             requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,sourceId));
@@ -195,6 +230,17 @@ public class AiUserObserver {
     }
 
     public void requireResponseTarget(AiUserJobs.Job job,AiUserActionExecutor.Action action,tools.jackson.databind.JsonNode payload) {
+        if (job.sourceType().startsWith("FEED_") && !java.util.Set.of(AiUserActionExecutor.Action.FEED_COMMENT,
+                AiUserActionExecutor.Action.FEED_LIKE,AiUserActionExecutor.Action.WAIT).contains(action)) unavailable();
+        if (job.sourceType().equals("SOCIAL_BROWSE")) {
+            if (!java.util.Set.of(AiUserActionExecutor.Action.WAIT,AiUserActionExecutor.Action.FEED_POST,
+                    AiUserActionExecutor.Action.FEED_COMMENT,AiUserActionExecutor.Action.FEED_LIKE).contains(action)) unavailable();
+            if (action==AiUserActionExecutor.Action.FEED_COMMENT || action==AiUserActionExecutor.Action.FEED_LIKE) {
+                Long post=AiUserActionExecutor.id(payload,"postId");
+                String raw=jdbc.queryForObject("SELECT context_sources FROM ai_user_jobs WHERE id=?",String.class,job.id());
+                if (!contextReferences(raw).contains(new SourceReference("FEED_POST",post))) unavailable();
+            }
+        }
         if (action==AiUserActionExecutor.Action.HOUSE_CHEER || action==AiUserActionExecutor.Action.MEMBER_ROOM_CLEAN) {
             var target=memberTarget(job.userId(),AiUserActionExecutor.id(payload,"membershipId"));
             if (((Number)target.get("house_id")).longValue()!=AiUserActionExecutor.id(payload,"houseId")) unavailable();
@@ -218,7 +264,7 @@ public class AiUserObserver {
     }
     boolean accessible(long user,String type,Long id) {
         try {
-            if (type.equals("SCHEDULE")) return true;
+            if (type.equals("SCHEDULE") || type.equals("SOCIAL_BROWSE")) return true;
             if (id==null) return false;
             if (type.equals("FEED_POST")) {
                 requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,id));

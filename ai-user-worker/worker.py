@@ -121,7 +121,7 @@ class Worker:
             body = {**lease, **plan}
             for attempt in range(3):
                 try:
-                    self.control(f"/jobs/{job['id']}/execute", body)
+                    outcome=self.control(f"/jobs/{job['id']}/execute", body)
                     break
                 except (OSError, HTTPError) as error:
                     if isinstance(error, HTTPError) and error.code < 500:
@@ -129,9 +129,11 @@ class Worker:
                     if attempt == 2:
                         raise
                     time.sleep(attempt + 1)
-            log.info("job=%s completed", job["id"])
+            log.info("job=%s source=%s action=%s wait_reason=%s completed", job["id"], job.get("sourceType", "unknown"),
+                     outcome.get("action", plan["action"]), outcome.get("waitReason", plan["payload"].get("reason", "")))
         except Exception as error:
-            log.warning("job=%s failure_type=%s", job["id"], type(error).__name__)
+            log.warning("job=%s failure_type=%s http_status=%s", job["id"], type(error).__name__,
+                        error.code if isinstance(error, HTTPError) else "")
             retryable = isinstance(error, OSError) and (not isinstance(error, HTTPError) or error.code==429 or error.code>=500)
             try:
                 self.control(f"/jobs/{job['id']}/{'defer' if retryable else 'fail'}", lease)

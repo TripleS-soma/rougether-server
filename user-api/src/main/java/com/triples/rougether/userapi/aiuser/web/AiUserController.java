@@ -87,10 +87,11 @@ public class AiUserController {
         authorize(auth); return control.snapshot(id,lease.owner(),lease.token());
     }
     @PostMapping("/jobs/{id}/execute")
-    public Map<String,String> execute(@RequestHeader(value="Authorization",required=false) String auth,
+    public Map<String,Object> execute(@RequestHeader(value="Authorization",required=false) String auth,
             @PathVariable long id,@Valid @RequestBody Execution request) {
         authorize(auth);
-        return Map.of("result",control.execute(id,request.owner(),request.token(),request.action(),request.payload(),request.memory()));
+        String result=control.execute(id,request.owner(),request.token(),request.action(),request.payload(),request.memory());
+        return jobs.outcome(id,request.owner(),request.token(),result);
     }
     @PostMapping("/jobs/{id}/fail")
     public void fail(@RequestHeader(value="Authorization",required=false) String auth,
