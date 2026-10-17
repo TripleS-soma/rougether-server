@@ -1375,6 +1375,7 @@ server {
         proxy_pass http://rougether_user_api;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
+        proxy_set_header Host \$host;
         proxy_read_timeout 60s;
     }
 

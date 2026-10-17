@@ -1036,6 +1036,12 @@ test_nginx_config_preserves_websocket_upgrade() {
     return 1
   fi
   assert_contains 'location /internal/ai-users/ {' "$NGINX_CONFIG_FILE" "local worker must reach AI control routes"
+  local control_location
+  control_location="$(awk '/location \/internal\/ai-users\// {active=1; next} active && /}/ {exit} active {print}' "$NGINX_CONFIG_FILE")"
+  if ! printf '%s\n' "$control_location" | grep -Fq 'proxy_set_header Host $host;'; then
+    echo "not ok - control upstream must receive a valid HTTP Host instead of its underscore alias" >&2
+    return 1
+  fi
   echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
 }
 
