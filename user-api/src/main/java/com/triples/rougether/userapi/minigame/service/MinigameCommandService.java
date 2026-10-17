@@ -72,7 +72,7 @@ public class MinigameCommandService {
             if (!submissionHash.equals(run.getSubmissionHash())) {
                 throw new BusinessException(MinigameErrorCode.RUN_ALREADY_FINISHED);
             }
-            return receipt(run);
+            return receipt(run, userId);
         }
         Instant now = kstClock.instant();
         if (!now.isBefore(run.getExpiresAt())) {
@@ -93,8 +93,10 @@ public class MinigameCommandService {
         // 쓰기 결과를 쿼리 전에 반영해 같은 트랜잭션의 최고점과 순위가 맞도록 함.
         bestScoreRepository.flush();
         long rank = bestScoreRepository.countHigherScores(gameCode, best.getScore()) + 1;
-        run.finish(request.ticks(), score, submissionHash, best.getScore(), personalBest, rank, now);
-        return receipt(run);
+        // 회원 락 안이라 완료 순서대로 순번이 매겨짐. 저장해 두어 재요청 영수증도 같은 값을 돌려줌
+        int playCount = Math.toIntExact(runRepository.countByUserIdAndGameCodeAndFinishedAtIsNotNull(userId, gameCode) + 1);
+        run.finish(request.ticks(), score, submissionHash, best.getScore(), personalBest, rank, now, playCount);
+        return receipt(run, userId);
     }
 
     private User lockActivePlayer(Long userId) {
@@ -103,9 +105,12 @@ public class MinigameCommandService {
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
     }
 
-    private static MinigameFinishResponse receipt(MinigameRun run) {
+    // playCount는 완료 시 저장한 순번. V89 이전에 끝난 판만 완료 시각 기준으로 다시 셈.
+    private MinigameFinishResponse receipt(MinigameRun run, Long userId) {
+        long playCount = run.getPlayCount() != null ? run.getPlayCount()
+                : runRepository.countByUserIdAndGameCodeAndFinishedAtLessThanEqual(userId, run.getGameCode(), run.getFinishedAt());
         return new MinigameFinishResponse(run.getId(), run.getScore(), run.getFinishedBestScore(),
-                run.getPersonalBest(), run.getFinishedRank());
+                run.getPersonalBest(), run.getFinishedRank(), Math.toIntExact(playCount));
     }
 
     private static String submissionHash(MinigameFinishRequest request) {
@@ -113,6 +118,9 @@ public class MinigameCommandService {
         if (request.jumpTicks() != null) {
             // 러너의 기존 digest 형식을 유지해 업데이트 전 기록의 재전송도 동일하게 처리함.
             request.jumpTicks().forEach(tick -> canonical.append(tick).append(','));
+        } else if (request.picks() != null) {
+            canonical.append("picks:");
+            request.picks().forEach(pile -> canonical.append(pile).append(','));
         } else {
             canonical.append("actions:");
             request.actions().forEach(action -> canonical.append(action.tick()).append('=')

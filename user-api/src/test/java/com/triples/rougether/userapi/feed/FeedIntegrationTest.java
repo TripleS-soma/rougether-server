@@ -55,6 +55,8 @@ class FeedIntegrationTest {
     @Autowired UserRepository users;
     @Autowired RoutineRepository routineRows;
     @Autowired RoutineLogRepository routineLogs;
+    @Autowired com.triples.rougether.domain.minigame.repository.MinigameRunRepository minigameRuns;
+    @Autowired com.triples.rougether.domain.minigame.repository.MinigameBestScoreRepository minigameBests;
     @Autowired MemberWithdrawalService withdrawal;
     @Autowired TransactionTemplate tx;
     @Autowired TokenService tokens;
@@ -84,6 +86,8 @@ class FeedIntegrationTest {
                 jdbc.update("delete from user_daily_activity where user_id=?", id);
                 jdbc.update("delete l from routine_logs l join routines r on r.id=l.routine_id where r.user_id=?", id);
                 jdbc.update("delete from routines where user_id=?", id);
+                jdbc.update("delete from minigame_runs where user_id=?", id);
+                jdbc.update("delete from minigame_best_scores where user_id=?", id);
                 jdbc.update("delete from users where id=?", id);
             }
         });
@@ -576,6 +580,143 @@ class FeedIntegrationTest {
         assertThat(post.routine()).isNull();
         assertThat(post.content()).isEqualTo("기존 글 수정");
         commands.delete(owner, id);
+    }
+
+    // 서버 리플레이 검증을 통과해 끝난 판을 직접 만듦(검증기는 미니게임 테스트가 다룸). 순위가 다른 테스트 데이터와
+    // 섞이지 않게 큰 점수를 씀
+    static final String TOWER = com.triples.rougether.userapi.minigame.service.MinigameCatalog.TOWER;
+    static final Instant PLAYED_AT = Instant.parse("2026-10-14T03:00:00Z");
+    String finishedRun(Long owner, int score, Instant finishedAt) {
+        return tx.execute(s -> {
+            User player = users.findById(owner).orElseThrow();
+            var run = com.triples.rougether.domain.minigame.entity.MinigameRun.start(UUID.randomUUID().toString(), player,
+                    TOWER, 3, 1, finishedAt.minusSeconds(60), finishedAt.plusSeconds(1800));
+            var best = minigameBests.findByUserIdAndGameCode(owner, TOWER).orElse(null);
+            if (best == null) best = minigameBests.save(com.triples.rougether.domain.minigame.entity.MinigameBestScore
+                    .create(player, TOWER, 3, score, finishedAt));
+            else best.improve(score, 3, finishedAt);
+            run.finish(100, score, "h".repeat(64), best.getScore(), best.getScore() == score, 1, finishedAt);
+            return minigameRuns.save(run).getId();
+        });
+    }
+    String unfinishedRun(Long owner) {
+        return tx.execute(s -> minigameRuns.save(com.triples.rougether.domain.minigame.entity.MinigameRun.start(
+                UUID.randomUUID().toString(), users.findById(owner).orElseThrow(), TOWER, 3, 1,
+                PLAYED_AT, PLAYED_AT.plusSeconds(1800))).getId());
+    }
+    static FeedCreateRequest recordPost(FeedBoardType board, String runId) {
+        return new FeedCreateRequest(UUID.randomUUID(), "고양이 탑 쌓기 기록", List.of(), board, null,
+                new FeedMinigameRecordRequest(runId));
+    }
+
+    @Test void 자유글에_본인의_끝난_게임판을_연결하면_게시시점_서버값으로_기록카드를_고정한다() throws Exception {
+        Long owner = user(), rival = user(), viewer = user();
+        finishedRun(rival, 30_000_000, PLAYED_AT.minusSeconds(3600));
+        String low = finishedRun(owner, 10_000_000, PLAYED_AT.minusSeconds(60));
+        String best = finishedRun(owner, 20_000_000, PLAYED_AT);
+        // 게시판 생략 + 기록 연결은 자유글. 점수·순위는 요청에 없고 서버가 판 기록에서 계산함
+        var created = mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientPostId\":\"" + UUID.randomUUID() + "\",\"content\":\"새 기록!\","
+                                + "\"minigameRecord\":{\"runId\":\"" + best + "\"}}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.boardType").value("FREE"))
+                .andExpect(jsonPath("$.minigameRecord.gameCode").value(TOWER))
+                .andExpect(jsonPath("$.minigameRecord.score").value(20_000_000))
+                .andExpect(jsonPath("$.minigameRecord.rank").value(2))
+                .andExpect(jsonPath("$.minigameRecord.personalBest").value(true))
+                .andExpect(jsonPath("$.minigameRecord.achievedAt").value("2026-10-14T03:00:00Z"))
+                .andExpect(jsonPath("$.routine").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn().getResponse();
+        long id = mapper.readTree(created.getContentAsString()).path("postId").asLong();
+        // 최고점이 아닌 판도 연결할 수 있고 순위는 작성자 최고점 기준임
+        Long lowPost = commands.create(owner, recordPost(FeedBoardType.FREE, low));
+        var lowCard = query.get(viewer, lowPost).minigameRecord();
+        assertThat(lowCard.score()).isEqualTo(10_000_000);
+        assertThat(lowCard.personalBest()).isFalse();
+        assertThat(lowCard.rank()).isEqualTo(2);
+        // 게시 뒤 랭킹이 바뀌어도 카드 값은 그대로
+        Long newcomer = user();
+        finishedRun(newcomer, 40_000_000, PLAYED_AT.plusSeconds(60));
+        finishedRun(owner, 50_000_000, PLAYED_AT.plusSeconds(120));
+        mvc.perform(get("/api/v1/feed/posts/" + id).header("Authorization", auth(viewer)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minigameRecord.rank").value(2))
+                .andExpect(jsonPath("$.minigameRecord.personalBest").value(true));
+        mvc.perform(get("/api/v1/feed/posts").param("authorId", owner.toString()).param("boardType", "FREE")
+                        .header("Authorization", auth(viewer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.postId == " + id + ")].minigameRecord.score").value(20_000_000))
+                .andExpect(jsonPath("$.items[?(@.postId == " + lowPost + ")].minigameRecord.personalBest").value(false));
+        // 기록 없는 글은 null
+        Long plain = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "그냥 글", List.of(), FeedBoardType.FREE));
+        assertThat(query.get(viewer, plain).minigameRecord()).isNull();
+        // 수정은 기록을 유지하고 인증게시판으로는 옮길 수 없음
+        mvc.perform(patch("/api/v1/feed/posts/" + id).header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"본문만 수정\",\"boardType\":\"FREE\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").value("본문만 수정"))
+                .andExpect(jsonPath("$.minigameRecord.score").value(20_000_000));
+        mvc.perform(patch("/api/v1/feed/posts/" + id).header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"boardType\":\"VERIFICATION\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FEED_INPUT_INVALID"));
+        Routine routine = completedRoutine(owner, "산책", today());
+        error(() -> commands.update(owner, id, new FeedUpdateRequest(null, FeedBoardType.VERIFICATION, completion(routine, today()))),
+                "FEED_INPUT_INVALID");
+        assertThat(query.get(owner, id).minigameRecord().score()).isEqualTo(20_000_000);
+        assertThat(query.get(owner, id).boardType()).isEqualTo(FeedBoardType.FREE);
+        // 삭제는 루틴 연결처럼 카드 값을 비움
+        commands.delete(owner, id);
+        assertThat(jdbc.queryForObject("select count(*) from feed_posts where id=? and minigame_game_code is null "
+                + "and minigame_score is null and minigame_rank is null and minigame_personal_best is null "
+                + "and minigame_achieved_at is null", Long.class, id)).isEqualTo(1);
+    }
+
+    @Test void 연결할수없는_게임판과_허용되지않는_조합을_거절한다() throws Exception {
+        Long owner = user(), stranger = user();
+        String mine = finishedRun(owner, 10_000_000, PLAYED_AT);
+        String others = finishedRun(stranger, 10_000_000, PLAYED_AT);
+        error(() -> commands.create(owner, recordPost(FeedBoardType.FREE, others)), "FEED_MINIGAME_RECORD_INVALID");
+        error(() -> commands.create(owner, recordPost(FeedBoardType.FREE, unfinishedRun(owner))), "FEED_MINIGAME_RECORD_INVALID");
+        error(() -> commands.create(owner, recordPost(FeedBoardType.FREE, UUID.randomUUID().toString())), "FEED_MINIGAME_RECORD_INVALID");
+        assertThat(com.triples.rougether.userapi.feed.error.FeedErrorCode.FEED_MINIGAME_RECORD_INVALID.message()).isEqualTo("연결할 수 없는 게임 기록입니다.");
+        mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientPostId\":\"" + UUID.randomUUID() + "\",\"boardType\":\"FREE\",\"content\":\"남의 기록\","
+                                + "\"minigameRecord\":{\"runId\":\"" + others + "\"}}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FEED_MINIGAME_RECORD_INVALID"));
+        // 인증게시판 + 기록, 기록 + 루틴 완료는 입력 오류
+        Long photo = images.upload(owner, photo()).imageId();
+        Routine routine = completedRoutine(owner, "산책", today());
+        error(() -> commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "인증", List.of(photo),
+                FeedBoardType.VERIFICATION, completion(routine, today()), new FeedMinigameRecordRequest(mine))), "FEED_INPUT_INVALID");
+        error(() -> commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "둘 다", List.of(), null,
+                completion(routine, today()), new FeedMinigameRecordRequest(mine))), "FEED_INPUT_INVALID");
+        error(() -> commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "둘 다", List.of(), FeedBoardType.FREE,
+                completion(routine, today()), new FeedMinigameRecordRequest(mine))), "FEED_INPUT_INVALID");
+        mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientPostId\":\"" + UUID.randomUUID() + "\",\"boardType\":\"VERIFICATION\",\"content\":\"인증\","
+                                + "\"imageIds\":[" + photo + "],\"minigameRecord\":{\"runId\":\"" + mine + "\"}}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FEED_INPUT_INVALID"));
+        mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientPostId\":\"" + UUID.randomUUID() + "\",\"boardType\":\"FREE\",\"content\":\"빈 판\","
+                                + "\"minigameRecord\":{\"runId\":\" \"}}"))
+                .andExpect(status().isBadRequest());
+        // 본문 규칙은 그대로라 사진 없는 기록 글도 본문이 필요함
+        error(() -> commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), " ", List.of(), FeedBoardType.FREE,
+                null, new FeedMinigameRecordRequest(mine))), "FEED_INPUT_INVALID");
+        // 같은 UUID 재시도는 같은 글, 다른 판이면 409
+        FeedCreateRequest request = recordPost(FeedBoardType.FREE, mine);
+        Long id = commands.create(owner, request);
+        assertThat(commands.create(owner, request)).isEqualTo(id);
+        String another = finishedRun(owner, 5_000_000, PLAYED_AT.plusSeconds(10));
+        error(() -> commands.create(owner, new FeedCreateRequest(request.clientPostId(), request.content(), List.of(),
+                FeedBoardType.FREE, null, new FeedMinigameRecordRequest(another))), "FEED_REQUEST_CONFLICT");
+    }
+
+    @Test void 기록글_작성자가_탈퇴하면_카드값도_정리한다() throws Exception {
+        Long owner = user();
+        Long id = commands.create(owner, recordPost(FeedBoardType.FREE, finishedRun(owner, 10_000_000, PLAYED_AT)));
+        withdrawal.withdraw(owner);
+        cleanup.withdrawnContent();
+        assertThat(jdbc.queryForObject("select count(*) from feed_posts where id=? and deleted_at is not null "
+                + "and minigame_game_code is null and minigame_score is null", Long.class, id)).isEqualTo(1);
     }
 
     private static String sha256(String text) throws Exception {

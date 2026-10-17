@@ -296,6 +296,54 @@ class MinigameIntegrationTest {
     }
 
     @Test
+    void 같은_시각에_끝난_판도_완료_순서대로_판수를_매기고_재요청에도_같다() {
+        User player = player("동시각");
+        MinigameRun first = readyRun(player);
+        MinigameRun second = readyRun(player);
+        MinigameFinishResponse firstReceipt = commandService.finish(player.getId(), GAME, first.getId(), NO_JUMP);
+        MinigameFinishResponse secondReceipt = commandService.finish(player.getId(), GAME, second.getId(), NO_JUMP);
+        assertThat(firstReceipt.playCount()).isEqualTo(1);
+        assertThat(secondReceipt.playCount()).isEqualTo(2);
+        assertThat(commandService.finish(player.getId(), GAME, first.getId(), NO_JUMP)).isEqualTo(firstReceipt);
+    }
+
+    @Test
+    void 완료응답의_판수는_게임별로_끝낸_판만_세고_재요청에도_같다() {
+        User player = player("판 수");
+        User other = player("다른 사람");
+        MinigameRun unfinished = readyRun(player);
+        MinigameRun first = readyRun(player);
+        MinigameRun second = readyRun(player);
+        MinigameRun othersRun = readyRun(other);
+
+        assertThat(commandService.finish(player.getId(), GAME, first.getId(), NO_JUMP).playCount()).isEqualTo(1);
+        now = now.plusSeconds(1);
+        MinigameFinishResponse secondReceipt = commandService.finish(player.getId(), GAME, second.getId(), NO_JUMP);
+        assertThat(secondReceipt.playCount()).isEqualTo(2);
+        now = now.plusSeconds(1);
+        assertThat(commandService.finish(other.getId(), GAME, othersRun.getId(), NO_JUMP).playCount()).isEqualTo(1);
+
+        // 다른 게임은 따로 셈
+        MinigameRun stairs = runRepository.saveAndFlush(MinigameRun.start(UUID.randomUUID().toString(), player,
+                MinigameCatalog.STAIRS, 1, 1, now.minusSeconds(100), now.plusSeconds(1800)));
+        now = now.plusSeconds(1);
+        assertThat(commandService.finish(player.getId(), MinigameCatalog.STAIRS, stairs.getId(),
+                new MinigameFinishRequest(181, null, List.of(new MinigameAction(1, MinigameDirection.LEFT))))
+                .playCount()).isEqualTo(1);
+
+        // 이후 판이 끝나도 이전 판의 재요청 영수증은 최초 응답과 같음
+        now = now.plusSeconds(1);
+        MinigameRun third = readyRun(player);
+        assertThat(commandService.finish(player.getId(), GAME, third.getId(), NO_JUMP).playCount()).isEqualTo(3);
+        assertThat(commandService.finish(player.getId(), GAME, second.getId(), NO_JUMP)).isEqualTo(secondReceipt);
+        assertThat(runRepository.findById(second.getId()).orElseThrow().getPlayCount()).isEqualTo(2);
+        assertUnfinished(unfinished);
+        // V89 이전에 끝난 판(play_count 없음)의 재요청은 완료 시각까지의 판 수로 다시 셈
+        jdbc.update("update minigame_runs set play_count = null where id = ?", second.getId());
+        assertThat(commandService.finish(player.getId(), GAME, second.getId(), NO_JUMP).playCount()).isEqualTo(2);
+    }
+
+    @Test
     void 완료된_세션을_다른_내용으로_제출하면_409이고_최초_기록을_유지한다() {
         User player = player("중복 충돌");
         MinigameRun run = readyRun(player);

@@ -26,7 +26,7 @@ public class StairsReplayVerifier implements MinigameReplayVerifier {
     @Override
     public void validateInput(MinigameFinishRequest request) {
         if (request == null || request.ticks() == null || request.ticks() < 1
-                || request.ticks() > MAX_TICKS || request.jumpTicks() != null
+                || request.ticks() > MAX_TICKS || request.jumpTicks() != null || request.picks() != null
                 || request.actions() == null || request.actions().size() > MAX_INPUTS) {
             throw invalidReplay();
         }

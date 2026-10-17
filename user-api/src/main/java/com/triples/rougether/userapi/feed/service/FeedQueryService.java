@@ -69,10 +69,16 @@ public class FeedQueryService {
         return page.stream().map(p -> new FeedPostResponse(p.getId(), FeedAuthorResponse.of(p.getAuthor()),
                 p.getContent(), byPost.getOrDefault(p.getId(), List.of()), likeCounts.getOrDefault(p.getId(), 0L),
                 commentCounts.getOrDefault(p.getId(), 0L), liked.contains(p.getId()), p.getAuthor().getId().equals(viewer),
-                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType(), routine(p))).toList();
+                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType(), routine(p), minigameRecord(p))).toList();
     }
     private static FeedRoutineResponse routine(FeedPost post) {
         return post.hasRoutine() ? new FeedRoutineResponse(post.getRoutineId(), post.getRoutineTitle(), post.getRoutineDate()) : null;
+    }
+    private static FeedMinigameRecordResponse minigameRecord(FeedPost post) {
+        if (!post.hasMinigameRecord()) return null;
+        Integer rank = post.getMinigameRank() == null ? null : Math.toIntExact(post.getMinigameRank());
+        return new FeedMinigameRecordResponse(post.getMinigameGameCode(), post.getMinigameScore(), rank,
+                post.getMinigamePersonalBest(), post.getMinigameAchievedAt());
     }
     private Map<Long, Long> counts(List<FeedCount> counts) {
         return counts.stream().collect(Collectors.toMap(FeedCount::getPostId, FeedCount::getTotal));

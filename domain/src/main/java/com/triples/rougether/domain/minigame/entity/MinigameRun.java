@@ -62,6 +62,10 @@ public class MinigameRun extends BaseEntity {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    // 이 판을 끝낸 시점까지 같은 게임을 끝낸 판 수(이 판 포함). V89 이전에 끝난 판은 null
+    @Column(name = "play_count")
+    private Integer playCount;
+
     private MinigameRun(String id, User user, String gameCode, int rulesVersion, int seed,
                          Instant startedAt, Instant expiresAt) {
         this.id = id;
@@ -81,6 +85,12 @@ public class MinigameRun extends BaseEntity {
     // 최초 완료 응답을 저장해 동일한 제출의 재요청에도 같은 결과를 반환함.
     public void finish(int ticks, int score, String submissionHash, int finishedBestScore,
                        boolean personalBest, long finishedRank, Instant finishedAt) {
+        finish(ticks, score, submissionHash, finishedBestScore, personalBest, finishedRank, finishedAt, null);
+    }
+
+    public void finish(int ticks, int score, String submissionHash, int finishedBestScore,
+                       boolean personalBest, long finishedRank, Instant finishedAt, Integer playCount) {
+        this.playCount = playCount;
         this.ticks = ticks;
         this.score = score;
         this.submissionHash = submissionHash;

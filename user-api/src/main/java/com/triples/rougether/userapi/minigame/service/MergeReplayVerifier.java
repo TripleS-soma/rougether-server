@@ -35,7 +35,7 @@ public class MergeReplayVerifier implements MinigameReplayVerifier {
     public void validateInput(MinigameFinishRequest request) {
         if (request == null || request.ticks() == null
                 || request.ticks() < 1 || request.ticks() > MAX_TICKS
-                || request.jumpTicks() != null || request.actions() == null
+                || request.jumpTicks() != null || request.picks() != null || request.actions() == null
                 || request.actions().size() > MAX_ACTIONS) {
             throw invalidReplay();
         }
