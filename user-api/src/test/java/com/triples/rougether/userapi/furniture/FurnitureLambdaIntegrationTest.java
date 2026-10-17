@@ -72,6 +72,41 @@ class FurnitureLambdaIntegrationTest {
             default -> new Result(claim.action(), null, null, "private/furniture-generation/" + claim.id() + "/" + execution + "/candidate/a.png", true, 2, 1, null);
         };
     }
+    @Test void 사진_거절사유가_기존_Lambda메시지와_사용자응답에_전달되고_중복체크포인트도_한번만_환불() {
+        var m = create();
+        var started = control.handle(start(m, "owner"));
+        var extracted = new Extracted(false,
+                "{\"rejectionReason\":\"여러 대상이 보여 하나를 고르기 어려워요.\"}", 2, 1);
+        var command = new Command(m.jobId(), m.executionId(), "owner", 1,
+                new Result(started.claim().action(), extracted, null, null, false, 0, 0, null));
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        var transported = json.readValue(json.writeValueAsString(command), Command.class);
+        assertThat(control.handle(transported).status()).isEqualTo(Status.TERMINAL);
+        assertThat(control.handle(transported).status()).isEqualTo(Status.TERMINAL);
+        var job = jobs.findById(m.jobId()).orElseThrow();
+        var response = com.triples.rougether.furniture.dto.FurnitureGenerationResponse.from(job);
+        assertThat(response.failureCode()).isEqualTo("PHOTO_REJECTED");
+        assertThat(response.reason()).isEqualTo("여러 대상이 보여 하나를 고르기 어려워요.");
+        assertThat(response.imageAttempts()).isZero();
+        assertThat(response.assetKey()).isNull();
+        assertThat(job.getSubjectJson()).isNull();
+        assertThat(accounts.findById(job.getUserId()).orElseThrow().getBalance()).isEqualTo(1);
+        assertThat(entries.findAll().stream().filter(e -> m.jobId().equals(e.getReferenceId())
+                && e.getReason() == FurnitureCreditEntry.Reason.RELEASE)).hasSize(1);
+    }
+
+    @Test void 상세사유가_없는_기존_추출거절도_정상적으로_환불() {
+        var m = create();
+        var started = control.handle(start(m, "owner"));
+        var result = new Result(started.claim().action(), new Extracted(false, "", 2, 1), null, null, false, 0, 0, null);
+        assertThat(control.handle(new Command(m.jobId(), m.executionId(), "owner", 1, result)).status())
+                .isEqualTo(Status.TERMINAL);
+        var job = jobs.findById(m.jobId()).orElseThrow();
+        assertThat(job.getFailureCode()).isEqualTo("PHOTO_REJECTED");
+        assertThat(job.getLastReason()).isNull();
+        assertThat(accounts.findById(job.getUserId()).orElseThrow().getBalance()).isEqualTo(1);
+    }
+
     @Test void 실제_이미지_단계를_거쳐_완료하고_피드백은_새_실행으로_분리() {
         var m = create();
         var config = new com.triples.rougether.furniture.config.FurnitureGenerationProperties(true,

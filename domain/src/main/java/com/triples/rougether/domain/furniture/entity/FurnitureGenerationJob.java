@@ -155,6 +155,11 @@ public class FurnitureGenerationJob {
         enqueue(Action.REVIEW, now);
     }
 
+    public void recordFailureReason(String reason) {
+        if (reason != null && reason.length() > 1000) throw new IllegalArgumentException("실패 사유 길이 초과");
+        lastReason = reason;
+    }
+
     public void fail(String code, Instant now) {
         status = Status.FAILED;
         failureCode = code;

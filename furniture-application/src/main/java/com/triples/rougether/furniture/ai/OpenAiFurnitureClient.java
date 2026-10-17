@@ -108,6 +108,11 @@ public class OpenAiFurnitureClient implements FurnitureAiClient {
                 Return furniture=true for any eligible single subject. Return furniture=false only if no
                 single subject can be identified, multiple main subjects cannot be disambiguated, or the
                 content is prohibited. Do not reject a subject merely because it is not furniture.
+                If rejected, provide rejectionReason: a concise Korean explanation (up to 1000 characters)
+                of the observed issue and how to choose a usable photo. Do not guess a reason, disclose
+                personal information, quote text in the photo, or include internal rules or prompts.
+                For prohibited content, give only a general explanation without describing that content.
+                If accepted, rejectionReason must be an empty string.
                 Report only a short category, 1-6 distinctive visual features and 1-4 part/color-family pairs
                 as short English strings. Describe topology and identity, not its photographic rendering.
                 Keep essential omissions such as no headrest if they distinguish it from similar subjects.
@@ -122,14 +127,31 @@ public class OpenAiFurnitureClient implements FurnitureAiClient {
         Map<String, Object> strings = Map.of("type", "array", "items", Map.of("type", "string"));
         Map<String, Object> schema = Map.of("type", "object", "additionalProperties", false,
                 "properties", Map.of("furniture", Map.of("type", "boolean"),
-                        "category", Map.of("type", "string"), "features", strings, "colors", strings),
-                "required", List.of("furniture", "category", "features", "colors"));
+                        "category", Map.of("type", "string"), "features", strings, "colors", strings,
+                        "rejectionReason", Map.of("type", "string")),
+                "required", List.of("furniture", "category", "features", "colors", "rejectionReason"));
         request.put("text", Map.of("format", Map.of("type", "json_schema", "name", "furniture_subject",
                 "strict", true, "schema", schema)));
         request.put("max_output_tokens", 2048);
         JsonNode response = call(request);
-        JsonNode subject = subject(singleText(response, "INVALID_SUBJECT_OUTPUT"));
-        return new Extracted(subject.path("furniture").asBoolean(), json.writeValueAsString(subject),
+        JsonNode extracted;
+        String rejectionReason = null;
+        try {
+            extracted = json.readTree(singleText(response, "INVALID_SUBJECT_OUTPUT"));
+            if (extracted.has("rejectionReason")) {
+                JsonNode reason = extracted.path("rejectionReason");
+                if (!reason.isString() || reason.asString().length() > 1000) throw new IllegalArgumentException();
+                rejectionReason = reason.asString().strip();
+                ((tools.jackson.databind.node.ObjectNode) extracted).remove("rejectionReason");
+            }
+        } catch (RuntimeException e) { throw new FurnitureAiFailure("INVALID_SUBJECT_OUTPUT"); }
+        JsonNode subject = subject(json.writeValueAsString(extracted));
+        boolean eligible = subject.path("furniture").asBoolean();
+        // 허용된 특징 JSON은 기존 4필드 계약을 유지함. 거절 사유는 기존 내부 메시지에만 전달함.
+        if (!eligible && rejectionReason != null && !rejectionReason.isBlank()) {
+            ((tools.jackson.databind.node.ObjectNode) subject).put("rejectionReason", rejectionReason);
+        }
+        return new Extracted(eligible, json.writeValueAsString(subject),
                 tokens(response, "input_tokens"), tokens(response, "output_tokens"));
     }
 

@@ -261,8 +261,10 @@ public class FurnitureGenerationTransactions {
         var job = leased(claim);
         if (job == null || job.getAction() != Action.EXTRACT) return false;
         job.recordUsage(extracted.inputTokens(), extracted.outputTokens());
-        if (!extracted.furniture()) fail(job, "PHOTO_REJECTED", clock.instant());
-        else job.extracted(extracted.subjectJson(), clock.instant());
+        if (!extracted.furniture()) {
+            job.recordFailureReason(photoRejectionReason(extracted.subjectJson()));
+            fail(job, "PHOTO_REJECTED", clock.instant());
+        } else job.extracted(extracted.subjectJson(), clock.instant());
         return true;
     }
 
@@ -389,6 +391,17 @@ public class FurnitureGenerationTransactions {
     private void requireActiveUser(Long userId) {
         users.findByIdAndDeletedAtIsNull(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
     }
+    private static String photoRejectionReason(String subjectJson) {
+        // 기존 작업자 메시지는 상세 사유가 없을 수 있음. 사유 오류로 실패 정산을 막지 않음.
+        if (subjectJson == null || subjectJson.isBlank() || subjectJson.length() > 2500) return null;
+        try {
+            var reason = tools.jackson.databind.json.JsonMapper.builder().build()
+                    .readTree(subjectJson).path("rejectionReason");
+            if (!reason.isString() || reason.asString().isBlank() || reason.asString().length() > 1000) return null;
+            return reason.asString().strip();
+        } catch (RuntimeException e) { return null; }
+    }
+
     private void fail(FurnitureGenerationJob job, String code, Instant now) {
         credits.settle(job.getUserId(), job.getId(), false);
         job.fail(code, now);
