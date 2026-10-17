@@ -240,7 +240,7 @@ test_prune_preserves_rollback_tags_and_checks_free_space() {
   prune_unused_docker_images
 
   unset -f docker df
-  assert_contains '^image prune -a -f$' "$docker_calls" "deploy must prune unused Docker images before pull"
+  assert_contains '^image prune -a -f --filter label!=com.rougether.role=ai-user-worker$' "$docker_calls" "deploy must preserve idle AI worker images while pruning unused API images"
   if [ "$(grep -c '^tag sha256:user registry/user:previous$' "$docker_calls")" -ne 2 ] \
       || [ "$(grep -c '^tag sha256:admin registry/admin:previous$' "$docker_calls")" -ne 2 ] \
       || [ "$(grep -c '^tag sha256:batch registry/batch:previous$' "$docker_calls")" -ne 2 ]; then
@@ -1030,7 +1030,11 @@ test_nginx_config_preserves_websocket_upgrade() {
   assert_contains 'proxy_set_header Connection "";' "$NGINX_CONFIG_FILE" "ordinary HTTP routes must retain keepalive behavior"
   assert_contains 'server 10.0.1.10:18081;' "$NGINX_CONFIG_FILE" "admin upstream must remain on its active slot"
   assert_contains 'location ^~ /internal/ {' "$NGINX_CONFIG_FILE" "public user origin must reject internal API routes"
-  assert_contains 'listen 127.0.0.1:8082;' "$NGINX_CONFIG_FILE" "AI control origin must bind to loopback only"
+  assert_contains 'listen 127.0.0.1:38082;' "$NGINX_CONFIG_FILE" "AI control origin must use its dedicated loopback port"
+  if grep -q 'listen 127.0.0.1:8082;' "$NGINX_CONFIG_FILE"; then
+    echo "not ok - AI control listener must not occupy the batch health port" >&2
+    return 1
+  fi
   assert_contains 'location /internal/ai-users/ {' "$NGINX_CONFIG_FILE" "local worker must reach AI control routes"
   echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
 }
