@@ -1,22 +1,13 @@
 package com.triples.rougether.userapi.room.service;
 
 import com.triples.rougether.common.error.BusinessException;
-import com.triples.rougether.domain.character.entity.UserCharacter;
-import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
-import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
-import com.triples.rougether.domain.character.repository.UserCharacterRepository;
-import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
 import com.triples.rougether.domain.room.entity.RoomSlotType;
 import com.triples.rougether.domain.room.entity.RoomSurfaceSlot;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
 import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
-import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
-import com.triples.rougether.domain.routine.entity.Streak;
-import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest;
@@ -25,11 +16,8 @@ import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlo
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
-import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 // 방이 없으면 조회와 동일하게 첫 방문으로 보고 lazy 생성한다.
 @Service
 public class RoomCommandService {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     // 자유배치 값 허용 범위 (팀 확정 #162). 겹침·충돌 검증은 하지 않는다.
     private static final BigDecimal POSITION_MIN = BigDecimal.ZERO;
@@ -59,34 +45,19 @@ public class RoomCommandService {
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final RoomItemPlacementRepository roomItemPlacementRepository;
-    private final RoomCobwebRepository roomCobwebRepository;
     private final UserItemRepository userItemRepository;
-    private final UserCharacterRepository userCharacterRepository;
-    private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
-    private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
-    private final StreakRepository streakRepository;
-    private final UserRepository userRepository;
+    private final RoomResponseReader roomResponseReader;
 
     public RoomCommandService(PersonalRoomRepository personalRoomRepository,
                               RoomSurfaceSlotRepository roomSurfaceSlotRepository,
                               RoomItemPlacementRepository roomItemPlacementRepository,
-                              RoomCobwebRepository roomCobwebRepository,
                               UserItemRepository userItemRepository,
-                              UserCharacterRepository userCharacterRepository,
-                              UserCharacterAccessoryRepository userCharacterAccessoryRepository,
-                              CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                              StreakRepository streakRepository,
-                              UserRepository userRepository) {
+                              RoomResponseReader roomResponseReader) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
-        this.roomCobwebRepository = roomCobwebRepository;
         this.userItemRepository = userItemRepository;
-        this.userCharacterRepository = userCharacterRepository;
-        this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
-        this.renderProfileQueryService = renderProfileQueryService;
-        this.streakRepository = streakRepository;
-        this.userRepository = userRepository;
+        this.roomResponseReader = roomResponseReader;
     }
 
     @Transactional
@@ -116,7 +87,7 @@ public class RoomCommandService {
             room.increaseLayoutRevision();
         }
 
-        return assemble(userId, room);
+        return roomResponseReader.read(room);
     }
 
     // 자유배치 저장: surface 슬롯 + placements 전체 교체를 단일 트랜잭션으로.
@@ -166,7 +137,7 @@ public class RoomCommandService {
         room.convertToFreeLayout();
         room.increaseLayoutRevision();
 
-        return assemble(userId, room);
+        return roomResponseReader.read(room);
     }
 
     // 같은 slotType 을 한 요청에 두 번 지정하면 upsert 결과가 모호 → 진입 시 거부.
@@ -263,29 +234,5 @@ public class RoomCommandService {
                         slot -> slot.assign(userItem),
                         () -> roomSurfaceSlotRepository.save(
                                 RoomSurfaceSlot.create(room, slotType, userItem)));
-    }
-
-    // 저장 후의 방 전체 상태(내 방 조회와 동일 형식). saveAll 직후의 조회는 auto flush 로 신규 배치를 포함한다.
-    private RoomResponse assemble(Long userId, PersonalRoom room) {
-        List<RoomSurfaceSlot> slots = roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId);
-        List<RoomItemPlacement> placements = roomItemPlacementRepository.findByRoomUserIdWithItem(userId);
-        Streak streak = streakRepository.findByUserId(userId).orElse(null);
-        UserCharacter selectedCharacter = userCharacterRepository
-                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
-        List<UserCharacterAccessory> accessories = selectedCharacter == null
-                ? List.of()
-                : userCharacterAccessoryRepository.findActiveByUserCharacterId(
-                        selectedCharacter.getId());
-        return RoomResponse.of(
-                room,
-                userRepository.findById(userId).map(User::getBio).orElse(null),
-                slots,
-                placements,
-                streak,
-                LocalDate.now(KST),
-                selectedCharacter,
-                accessories,
-                renderProfileQueryService.findFor(accessories),
-                roomCobwebRepository.findVisibleActive(userId).orElse(null));
     }
 }

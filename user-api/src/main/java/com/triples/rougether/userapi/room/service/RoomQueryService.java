@@ -5,8 +5,6 @@ import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.entity.UserCharacterAccessory;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
-import com.triples.rougether.domain.member.entity.User;
-import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomCobweb;
 import com.triples.rougether.domain.room.entity.RoomItemPlacement;
@@ -15,14 +13,10 @@ import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
 import com.triples.rougether.domain.room.repository.RoomItemPlacementRepository;
 import com.triples.rougether.domain.room.repository.RoomCobwebRepository;
 import com.triples.rougether.domain.room.repository.RoomSurfaceSlotRepository;
-import com.triples.rougether.domain.routine.entity.Streak;
-import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -35,36 +29,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoomQueryService {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
     private final PersonalRoomRepository personalRoomRepository;
     private final RoomSurfaceSlotRepository roomSurfaceSlotRepository;
     private final RoomItemPlacementRepository roomItemPlacementRepository;
     private final RoomCobwebRepository roomCobwebRepository;
-    private final StreakRepository streakRepository;
+    private final RoomResponseReader roomResponseReader;
     private final UserCharacterRepository userCharacterRepository;
     private final UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     private final CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
-    private final UserRepository userRepository;
 
     public RoomQueryService(PersonalRoomRepository personalRoomRepository,
                             RoomSurfaceSlotRepository roomSurfaceSlotRepository,
                             RoomItemPlacementRepository roomItemPlacementRepository,
                             RoomCobwebRepository roomCobwebRepository,
-                            StreakRepository streakRepository,
+                            RoomResponseReader roomResponseReader,
                             UserCharacterRepository userCharacterRepository,
                             UserCharacterAccessoryRepository userCharacterAccessoryRepository,
-                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService,
-                            UserRepository userRepository) {
+                            CharacterAccessoryRenderProfileQueryService renderProfileQueryService) {
         this.personalRoomRepository = personalRoomRepository;
         this.roomSurfaceSlotRepository = roomSurfaceSlotRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
         this.roomCobwebRepository = roomCobwebRepository;
-        this.streakRepository = streakRepository;
+        this.roomResponseReader = roomResponseReader;
         this.userCharacterRepository = userCharacterRepository;
         this.userCharacterAccessoryRepository = userCharacterAccessoryRepository;
         this.renderProfileQueryService = renderProfileQueryService;
-        this.userRepository = userRepository;
     }
 
     // lazy 생성 가능해야 하므로 readOnly 아님.
@@ -76,7 +65,7 @@ public class RoomQueryService {
                     personalRoomRepository.ensureExists(userId);
                     return personalRoomRepository.findWithLockById(userId).orElseThrow();
                 });
-        return assemble(room, userId);
+        return roomResponseReader.read(room);
     }
 
     // 타인 방 조회(집 멤버 열람 등): 읽기 전용 — 남의 방을 조회로 생성하지 않는다.
@@ -85,7 +74,7 @@ public class RoomQueryService {
     public RoomResponse getRoomOf(Long roomUserId) {
         PersonalRoom room = personalRoomRepository.findById(roomUserId)
                 .orElseThrow(() -> new BusinessException(RoomErrorCode.ROOM_NOT_FOUND));
-        return assemble(room, roomUserId);
+        return roomResponseReader.read(room);
     }
 
     // 여러 사용자의 방 렌더 데이터를 한 번에 조회(집 미리보기 등 비구성원 노출 자리).
@@ -141,33 +130,5 @@ public class RoomQueryService {
                             renderProfiles,
                             cobwebByUser.get(room.getUserId()));
                 }));
-    }
-
-    private RoomResponse assemble(PersonalRoom room, Long userId) {
-        List<RoomSurfaceSlot> slots = roomSurfaceSlotRepository.findByRoomUserIdWithItem(userId);
-        List<RoomItemPlacement> placements = roomItemPlacementRepository.findByRoomUserIdWithItem(userId);
-        Streak streak = streakRepository.findByUserId(userId).orElse(null);
-        UserCharacter selectedCharacter = userCharacterRepository
-                .findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(userId).orElse(null);
-        List<UserCharacterAccessory> accessories = selectedCharacter == null
-                ? List.of()
-                : userCharacterAccessoryRepository.findActiveByUserCharacterId(
-                        selectedCharacter.getId());
-        return RoomResponse.of(
-                room,
-                ownerBioOf(userId),
-                slots,
-                placements,
-                streak,
-                LocalDate.now(KST),
-                selectedCharacter,
-                accessories,
-                renderProfileQueryService.findFor(accessories),
-                roomCobwebRepository.findVisibleActive(userId).orElse(null));
-    }
-
-    // 방 주인의 한 줄 소개. 탈퇴 회원은 익명화로 이미 null 이라 별도 처리 없음.
-    private String ownerBioOf(Long userId) {
-        return userRepository.findById(userId).map(User::getBio).orElse(null);
     }
 }

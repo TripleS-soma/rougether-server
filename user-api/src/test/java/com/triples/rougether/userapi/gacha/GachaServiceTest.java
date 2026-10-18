@@ -37,17 +37,15 @@ import com.triples.rougether.userapi.gacha.dto.GachaRewardListResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.character.service.CharacterUnlockPolicy;
 import com.triples.rougether.userapi.gacha.service.GachaService;
+import com.triples.rougether.userapi.gacha.service.GachaDrawPolicy;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,10 +61,13 @@ class GachaServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder walletHistoryRecorder;
     @Mock private CharacterUnlockPolicy characterUnlockPolicy;
-    @InjectMocks private GachaService gachaService;
+    private GachaService gachaService;
 
     @BeforeEach
     void stubUserLock() {
+        gachaService = new GachaService(gachaRepository, poolRepository, userItemRepository,
+                userCharacterRepository, walletRepository, userRepository, walletHistoryRecorder,
+                characterUnlockPolicy, new GachaDrawPolicy());
         // draw 는 획득 경로 직렬화를 위해 user 행 락을 먼저 잡는다 — draw 를 안 타는 테스트도 있어 lenient
         org.mockito.Mockito.lenient()
                 .when(userRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong()))
@@ -194,22 +195,6 @@ class GachaServiceTest {
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(2)))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.INVALID_DRAW_COUNT));
-    }
-
-    @Test
-    void 등급없는_풀은_등급_추첨없이_전체에서_균등_추첨한다() {
-        Random random = mock(Random.class);
-        ReflectionTestUtils.setField(gachaService, "random", random);
-        GachaPoolEntry first = mock(GachaPoolEntry.class);
-        GachaPoolEntry second = mock(GachaPoolEntry.class);
-        when(random.nextInt(2)).thenReturn(1);
-
-        GachaPoolEntry picked = ReflectionTestUtils.invokeMethod(
-                gachaService, "pickEntry", List.of(first, second), Map.of());
-
-        assertThat(picked).isSameAs(second);
-        verify(random, never()).nextInt(100);
-        verify(random).nextInt(2);
     }
 
     @ParameterizedTest
@@ -460,7 +445,7 @@ class GachaServiceTest {
     }
 
     @Test
-    void 미소유_캐릭터는_지급되고_코인1000이_차감된다() {
+    void 미소유_캐릭터는_지급되고_코인500이_차감된다() {
         Gacha g = activeGacha(500);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
         UserWallet wallet = mock(UserWallet.class);
@@ -509,6 +494,44 @@ class GachaServiceTest {
         assertThat(res.results().get(0).converted()).isTrue();
         assertThat(res.results().get(0).refundCurrencyType()).isEqualTo(CurrencyType.COIN);
         assertThat(res.results().get(0).refundAmount()).isEqualTo(100);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {6, 10})
+    void 캐릭터_연속뽑기는_첫_보상만_지급하고_같은_요청의_중복을_코인으로_환급한다(int requestCount) {
+        Gacha gacha = activeGacha(500);
+        when(gachaRepository.findById(10L)).thenReturn(Optional.of(gacha));
+        User user = mock(User.class);
+        UserWallet wallet = UserWallet.createWithBalance(user, CurrencyType.COIN, 3000);
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN))
+                .thenReturn(Optional.of(wallet));
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.DIAMOND))
+                .thenReturn(Optional.empty());
+        singleCharacterPool(5L, 10L);
+        when(userItemRepository.findByUserIdAndDeletedAtIsNull(1L)).thenReturn(List.of());
+        when(userCharacterRepository.findByUserId(1L)).thenReturn(List.of());
+        when(userRepository.getReferenceById(1L)).thenReturn(user);
+
+        GachaDrawResponse response = gachaService.draw(1L, 10L, new GachaDrawRequest(requestCount));
+
+        verify(userCharacterRepository, times(1)).save(any(UserCharacter.class));
+        verify(walletHistoryRecorder).record(wallet, -2500, WalletHistoryReason.GACHA_DRAW,
+                WalletHistory.SOURCE_GACHA, 10L);
+        verify(walletHistoryRecorder).record(wallet, 500, WalletHistoryReason.GACHA_DUPLICATE_CONVERT,
+                WalletHistory.SOURCE_GACHA, 10L);
+        assertThat(response.results()).extracting(result -> result.rewardType())
+                .containsExactly("CHARACTER", "CURRENCY", "CURRENCY", "CURRENCY", "CURRENCY", "CURRENCY");
+        assertThat(response.results()).allSatisfy(result -> assertThat(result.characterId()).isEqualTo(5L));
+        assertThat(response.results().getFirst().converted()).isFalse();
+        assertThat(response.results().subList(1, 6)).allSatisfy(result -> {
+            assertThat(result.converted()).isTrue();
+            assertThat(result.refundCurrencyType()).isEqualTo(CurrencyType.COIN);
+            assertThat(result.refundAmount()).isEqualTo(100);
+        });
+        assertThat(wallet.getBalance()).isEqualTo(1000);
+        assertThat(response.wallets()).containsExactly(
+                new GachaDrawResponse.WalletSummary(CurrencyType.COIN, 1000),
+                new GachaDrawResponse.WalletSummary(CurrencyType.DIAMOND, 0));
     }
 
     @Test

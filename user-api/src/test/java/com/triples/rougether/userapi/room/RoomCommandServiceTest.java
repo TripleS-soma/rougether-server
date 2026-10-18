@@ -26,12 +26,13 @@ import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest;
 import com.triples.rougether.userapi.room.dto.RoomSlotUpdateRequest.SlotAssignment;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
+import com.triples.rougether.userapi.room.service.RoomResponseReader;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -48,7 +49,18 @@ class RoomCommandServiceTest {
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
-    @InjectMocks private RoomCommandService roomCommandService;
+    private RoomCommandService roomCommandService;
+
+    @BeforeEach
+    void setUp() {
+        RoomResponseReader reader = new RoomResponseReader(
+                roomSurfaceSlotRepository, roomItemPlacementRepository, streakRepository,
+                userCharacterRepository, userCharacterAccessoryRepository,
+                renderProfileQueryService, roomCobwebRepository, userRepository);
+        roomCommandService = new RoomCommandService(
+                personalRoomRepository, roomSurfaceSlotRepository, roomItemPlacementRepository,
+                userItemRepository, reader);
+    }
 
     // RoomResponse.of 가 읽는 필드까지 stub 한 방 mock(성공 경로용).
     private PersonalRoom stubbedRoom(Long userId) {
