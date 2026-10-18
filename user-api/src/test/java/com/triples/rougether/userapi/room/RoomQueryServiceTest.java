@@ -1,17 +1,20 @@
 package com.triples.rougether.userapi.room;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.entity.UserCharacter;
 import com.triples.rougether.domain.character.repository.UserCharacterAccessoryRepository;
 import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.entity.RoomCobweb;
@@ -24,13 +27,15 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.userapi.room.dto.RoomResponse;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
 import com.triples.rougether.userapi.room.service.RoomQueryService;
+import com.triples.rougether.userapi.room.service.RoomResponseReader;
+import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.character.service.CharacterAccessoryRenderProfileQueryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -46,7 +51,19 @@ class RoomQueryServiceTest {
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
-    @InjectMocks private RoomQueryService roomQueryService;
+    private RoomQueryService roomQueryService;
+
+    @BeforeEach
+    void setUp() {
+        RoomResponseReader reader = new RoomResponseReader(
+                roomSurfaceSlotRepository, roomItemPlacementRepository, streakRepository,
+                userCharacterRepository, userCharacterAccessoryRepository,
+                renderProfileQueryService, roomCobwebRepository, userRepository);
+        roomQueryService = new RoomQueryService(
+                personalRoomRepository, roomSurfaceSlotRepository, roomItemPlacementRepository,
+                roomCobwebRepository, reader, userCharacterRepository,
+                userCharacterAccessoryRepository, renderProfileQueryService);
+    }
 
     @Test
     void 방이_없으면_lazy_생성하고_레벨0_스트릭0으로_응답한다() {
@@ -92,6 +109,7 @@ class RoomQueryServiceTest {
         RoomResponse response = roomQueryService.getMyRoom(userId);
 
         verify(personalRoomRepository, never()).save(any());
+        verify(personalRoomRepository, never()).ensureExists(any());
         assertThat(response.growthLevel()).isEqualTo(5);
         assertThat(response.streak().currentCount()).isEqualTo(3);
         assertThat(response.streak().longestCount()).isEqualTo(7);
@@ -213,5 +231,46 @@ class RoomQueryServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(me));
 
         assertThat(roomQueryService.getMyRoom(userId).ownerBio()).isNull();
+    }
+
+    @Test
+    void 타인의_방이_없으면_생성하지_않고_404로_거부한다() {
+        when(personalRoomRepository.findById(9L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> roomQueryService.getRoomOf(9L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(RoomErrorCode.ROOM_NOT_FOUND));
+
+        verify(personalRoomRepository, never()).ensureExists(any());
+        verifyNoInteractions(roomSurfaceSlotRepository, roomItemPlacementRepository,
+                userCharacterRepository, userCharacterAccessoryRepository,
+                renderProfileQueryService, streakRepository, roomCobwebRepository, userRepository);
+    }
+
+    @Test
+    void 여러_방의_렌더는_일괄_조회하고_없는_방을_만들지_않는다() {
+        List<Long> requestedIds = List.of(10L, 11L, 12L);
+        List<Long> existingIds = List.of(10L, 11L);
+        PersonalRoom first = mock(PersonalRoom.class);
+        PersonalRoom second = mock(PersonalRoom.class);
+        when(first.getUserId()).thenReturn(10L);
+        when(second.getUserId()).thenReturn(11L);
+        when(personalRoomRepository.findAllById(requestedIds)).thenReturn(List.of(first, second));
+
+        var result = roomQueryService.findRendersOf(requestedIds, true);
+
+        assertThat(result).containsOnlyKeys(10L, 11L);
+        verify(personalRoomRepository).findAllById(requestedIds);
+        verify(roomSurfaceSlotRepository).findByRoomUserIdInWithItem(existingIds);
+        verify(roomItemPlacementRepository).findByRoomUserIdInWithItem(existingIds);
+        verify(userCharacterRepository).findSelectedByUserIdIn(existingIds);
+        verify(roomCobwebRepository).findVisibleActiveByRoomUserIdIn(existingIds);
+        verify(personalRoomRepository, never()).ensureExists(any());
+        verify(roomSurfaceSlotRepository, never()).findByRoomUserIdWithItem(any());
+        verify(roomItemPlacementRepository, never()).findByRoomUserIdWithItem(any());
+        verify(userCharacterRepository, never()).findByUserIdAndSelectedIsTrueAndDeletedAtIsNull(any());
+        verify(roomCobwebRepository, never()).findVisibleActive(any());
+        verifyNoInteractions(streakRepository, userCharacterAccessoryRepository, userRepository);
     }
 }

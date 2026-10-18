@@ -30,15 +30,17 @@ import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.PlacementI
 import com.triples.rougether.userapi.room.dto.RoomLayoutUpdateRequest.SurfaceSlotAssignment;
 import com.triples.rougether.userapi.room.error.RoomErrorCode;
 import com.triples.rougether.userapi.room.service.RoomCommandService;
+import com.triples.rougether.userapi.room.service.RoomResponseReader;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 // PUT /rooms/me/layout(자유배치 저장)의 서비스 규칙 검증. DB 레벨(unique·flush 순서)은 통합 테스트에서 다룬다.
 @ExtendWith(MockitoExtension.class)
@@ -54,12 +56,25 @@ class RoomLayoutServiceTest {
     @Mock private UserCharacterAccessoryRepository userCharacterAccessoryRepository;
     @Mock private CharacterAccessoryRenderProfileQueryService renderProfileQueryService;
     @Mock private UserRepository userRepository;
-    @InjectMocks private RoomCommandService roomCommandService;
+    private RoomCommandService roomCommandService;
 
     private static final Long USER_ID = 1L;
 
+    @BeforeEach
+    void setUp() {
+        RoomResponseReader reader = new RoomResponseReader(
+                roomSurfaceSlotRepository, roomItemPlacementRepository, streakRepository,
+                userCharacterRepository, userCharacterAccessoryRepository,
+                renderProfileQueryService, roomCobwebRepository, userRepository);
+        roomCommandService = new RoomCommandService(
+                personalRoomRepository, roomSurfaceSlotRepository, roomItemPlacementRepository,
+                userItemRepository, reader);
+    }
+
     private PersonalRoom realRoom() {
-        return PersonalRoom.create(mock(User.class));
+        PersonalRoom room = PersonalRoom.create(mock(User.class));
+        ReflectionTestUtils.setField(room, "userId", USER_ID);
+        return room;
     }
 
     private UserItem ownedItem(Long id) {
