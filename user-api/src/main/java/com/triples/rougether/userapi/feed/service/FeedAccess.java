@@ -22,13 +22,15 @@ public class FeedAccess {
         return requireActive(users.findByIdForUpdate(userId).orElse(null));
     }
 
-    public User lockCommentParticipants(Long actorId, Long authorId) {
+    public User lockCommentParticipants(Long actorId, Long authorId, Long replyAuthorId) {
         User actor = null;
-        // 알림 FK가 수신자 회원 행도 참조함. 서로의 글에 댓글을 달아도 회원 잠금이 교차하지 않도록 정렬함.
-        for (Long id : Stream.of(actorId, authorId).distinct().sorted().toList()) {
+        // 게시물·답글 수신자의 알림 FK도 회원을 참조하므로 모든 참여자를 정렬해 잠금.
+        // 답글 대상의 탈퇴 여부는 재시도 판정 뒤에 검사해 이미 성공한 요청의 결과를 유지함.
+        for (Long id : Stream.of(actorId, authorId, replyAuthorId)
+                .filter(java.util.Objects::nonNull).distinct().sorted().toList()) {
             User locked = users.findByIdForUpdate(id).orElse(null);
             if (id.equals(actorId)) actor = requireActive(locked);
-            else if (locked == null || locked.isDeleted() || locked.isBot())
+            else if (id.equals(authorId) && (locked == null || locked.isDeleted() || locked.isBot()))
                 throw new BusinessException(FeedErrorCode.FEED_POST_NOT_FOUND);
         }
         return actor;

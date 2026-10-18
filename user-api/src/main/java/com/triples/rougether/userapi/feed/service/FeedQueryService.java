@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.feed.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.feed.entity.*;
 import com.triples.rougether.domain.feed.repository.*;
+import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.userapi.feed.dto.*;
 import static com.triples.rougether.userapi.feed.error.FeedErrorCode.*;
 import java.util.*;
@@ -21,6 +22,7 @@ public class FeedQueryService {
     private final FeedImageRepository images;
     private final FeedLikeRepository likes;
     private final FeedCommentRepository comments;
+    private final UserBlockRepository blocks;
 
     public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size) {
         return list(viewer, authorId, cursor, size, null);
@@ -39,13 +41,38 @@ public class FeedQueryService {
         return render(viewer, List.of(visible(postId, viewer))).getFirst();
     }
     public FeedPageResponse<FeedCommentResponse> comments(Long viewer, Long postId, Long cursor, int size) {
+        return comments(viewer, postId, cursor, size, false);
+    }
+    public FeedPageResponse<FeedCommentResponse> comments(Long viewer, Long postId, Long cursor, int size,
+                                                         boolean topLevelOnly) {
         access.active(viewer);
         validatePage(cursor, size);
         visible(postId, viewer);
-        List<FeedComment> found = comments.findPage(viewer, postId, cursor, PageRequest.of(0, size + 1));
+        List<FeedComment> found = topLevelOnly
+                ? comments.findThreads(viewer, postId, cursor, PageRequest.of(0, size + 1))
+                : comments.findPage(viewer, postId, cursor, PageRequest.of(0, size + 1));
+        return commentPage(viewer, found, size);
+    }
+    public FeedPageResponse<FeedCommentResponse> replies(Long viewer, Long postId, Long parentId, Long cursor, int size) {
+        access.active(viewer);
+        validatePage(cursor, size);
+        visible(postId, viewer);
+        FeedComment parent = comments.findByIdAndPostId(parentId, postId)
+                .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
+        if (parent.getParentCommentId() != null
+                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
+            throw new BusinessException(FEED_COMMENT_NOT_FOUND);
+        return commentPage(viewer, comments.findReplies(viewer, postId, parentId, cursor,
+                PageRequest.of(0, size + 1)), size);
+    }
+    private FeedPageResponse<FeedCommentResponse> commentPage(Long viewer, List<FeedComment> found, int size) {
         boolean more = found.size() > size;
         List<FeedComment> page = more ? found.subList(0, size) : found;
-        return new FeedPageResponse<>(page.stream().map(c -> FeedCommentResponse.of(c, viewer)).toList(),
+        List<Long> parentIds = page.stream().filter(c -> c.getParentCommentId() == null).map(FeedComment::getId).toList();
+        Map<Long, Long> replyCounts = parentIds.isEmpty() ? Map.of() : comments.countForParents(viewer, parentIds).stream()
+                .collect(Collectors.toMap(FeedReplyCount::getParentCommentId, FeedReplyCount::getTotal));
+        return new FeedPageResponse<>(page.stream()
+                .map(c -> FeedCommentResponse.of(c, viewer, replyCounts.getOrDefault(c.getId(), 0L))).toList(),
                 more ? page.getLast().getId() : null, more);
     }
     // 차단한 작성자의 글은 삭제된 글처럼 404(#399).

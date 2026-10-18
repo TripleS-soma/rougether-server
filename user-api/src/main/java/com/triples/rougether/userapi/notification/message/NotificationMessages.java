@@ -15,6 +15,13 @@ public final class NotificationMessages {
                 "New comment", "Someone commented on your post. Take a look!");
     }
 
+    public static NotificationContent feedReply() {
+        // 기존 FEED_COMMENT 타입과 게시물 이동 경로를 재사용해 구버전 앱도 알림을 열 수 있음.
+        return new NotificationContent(NotificationType.FEED_COMMENT,
+                "답글이 달렸어요", "내 댓글에 답글이 달렸어요. 확인해 보세요!",
+                "New reply", "Someone replied to your comment. Take a look!");
+    }
+
     public static NotificationContent houseMissionAchieved(String missionTitle) {
         return new NotificationContent(
                 NotificationType.HOUSE_MISSION_ACHIEVED,
