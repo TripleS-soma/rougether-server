@@ -43,18 +43,27 @@ public class AiUserSocialActivity {
                     || count("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND action_name='FEED_COMMENT' AND proactive=TRUE",id)>=2)
                 continue;
             var post=feed.get(user,id);
-            var comments=jdbc.queryForList("SELECT c.id,c.author_id,c.content FROM feed_comments c JOIN users a ON a.id=c.author_id "
+            var comments=jdbc.queryForList("SELECT c.id,c.author_id,c.content,c.parent_comment_id,c.reply_to_comment_id FROM feed_comments c JOIN users a ON a.id=c.author_id "
                     + "WHERE c.post_id=? AND c.deleted_at IS NULL AND a.deleted_at IS NULL AND NOT EXISTS "
                     + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=a.id) "
-                    + "OR (b.blocker_user_id=a.id AND b.blocked_user_id=?)) ORDER BY c.id DESC LIMIT 3",id,user,user);
+                    + "OR (b.blocker_user_id=a.id AND b.blocked_user_id=?)) AND (c.parent_comment_id IS NULL OR NOT EXISTS "
+                    + "(SELECT 1 FROM feed_comments root JOIN user_blocks rb ON "
+                    + "(rb.blocker_user_id=? AND rb.blocked_user_id=root.author_id) OR "
+                    + "(rb.blocker_user_id=root.author_id AND rb.blocked_user_id=?) WHERE root.id=c.parent_comment_id)) "
+                    + "ORDER BY c.id DESC LIMIT 3",id,user,user,user,user);
             var preview=new LinkedHashMap<String,Object>();
             preview.put("postId",id);
             preview.put("author",Map.of("userId",post.author().userId(),"nickname",Objects.requireNonNullElse(post.author().nickname(),"")));
             preview.put("content",clip(post.content(),700));
             preview.put("createdAt",post.createdAt());
             preview.put("likedByMe",post.likedByMe());
-            preview.put("recentComments",comments.stream().map(c -> Map.of("commentId",c.get("id"),
-                    "authorUserId",c.get("author_id"),"content",clip((String)c.get("content"),180))).toList());
+            preview.put("recentComments",comments.stream().map(c -> {
+                var item=new LinkedHashMap<String,Object>();
+                item.put("commentId",c.get("id")); item.put("authorUserId",c.get("author_id"));
+                item.put("content",clip((String)c.get("content"),180));
+                item.put("parentCommentId",c.get("parent_comment_id")); item.put("replyToCommentId",c.get("reply_to_comment_id"));
+                return item;
+            }).toList());
             references.add(new AiUserObserver.SourceReference("FEED_POST",id));
             for (var comment:comments) references.add(new AiUserObserver.SourceReference("FEED_COMMENT",((Number)comment.get("id")).longValue()));
             candidates.add(preview);
