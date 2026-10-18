@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_verification:
+        description: '기존 PR 결과를 재사용하지 않고 전체 검증과 이미지를 다시 생성함'
+        type: boolean
+        default: false
 
 concurrency:
   group: rougether-dev-deploy
@@ -33,84 +38,118 @@ env:
   DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'hold' }}
 
 jobs:
+  resolve:
+    name: Resolve verified PR artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      reused: ${{ steps.resolve.outputs.reused }}
+      run-id: ${{ steps.resolve.outputs.run_id }}
+      attempt: ${{ steps.resolve.outputs.attempt }}
+      artifact-id: ${{ steps.resolve.outputs.artifact_id }}
+      receipt-id: ${{ steps.resolve.outputs.receipt_id }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve exact source-tree match or require full verification
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_VERIFICATION: ${{ inputs.force_verification }}
+        run: python3 .github/scripts/backend_artifacts.py resolve
+
+  fresh:
+    needs: resolve
+    if: needs.resolve.outputs.reused != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/backend-verify.yml
+
   test:
     name: Gradle test
+    if: always()
+    needs: [resolve, fresh]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Validate deployment mode
-        shell: bash
+      - name: Require reused successful verification or fresh full verification
+        env:
+          RESOLVED: ${{ needs.resolve.result }}
+          REUSED: ${{ needs.resolve.outputs.reused }}
+          FRESH: ${{ needs.fresh.result }}
+          DEPLOY_MODE: ${{ env.DEPLOY_MODE }}
         run: |
-          case "$DEPLOY_MODE" in
-            hold|legacy|blue-green) ;;
-            *) echo "Invalid ROUGETHER_DEPLOY_MODE: $DEPLOY_MODE" >&2; exit 2 ;;
-          esac
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-
-      - name: Grant Gradle wrapper permission
-        run: chmod +x ./gradlew
-
-      - name: Run tests
-        run: ./gradlew test
+          case "$DEPLOY_MODE" in hold|legacy|blue-green) ;; *) exit 2 ;; esac
+          test "$RESOLVED" = success
+          if [ "$REUSED" = true ]; then
+            test "$FRESH" = skipped
+          else
+            test "$FRESH" = success
+          fi
 
   build:
-    name: Build and push ${{ matrix.module }}
+    name: Publish verified backend images
+    if: always() && needs.test.result == 'success'
+    needs: [resolve, fresh, test]
     runs-on: ubuntu-latest
-    # test 와 병렬 실행(벽시계 -3분). 게이트는 deploy 의 needs: [test, build] 가 유지한다 —
-    # 여기서는 :unverified-<sha> 만 push 한다. ":sha = 테스트 통과" 불변식을 지키기 위해
-    # :sha 승격은 test 통과 후 deploy 가, 부트스트랩이 쓰는 :dev 승격은 배포 검증 후 deploy 가 수행한다.
-    strategy:
-      matrix:
-        include:
-          - module: user-api
-            repository: user-api
-          - module: admin-api
-            repository: admin-api
-          - module: batch
-            repository: batch
-
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      SOURCE_RUN: ${{ needs.resolve.outputs.reused == 'true' && needs.resolve.outputs.run-id || github.run_id }}
+      SOURCE_ATTEMPT: ${{ needs.resolve.outputs.reused == 'true' && needs.resolve.outputs.attempt || github.run_attempt }}
+      IMAGE_ARTIFACT: ${{ needs.resolve.outputs.reused == 'true' && needs.resolve.outputs.artifact-id || needs.fresh.outputs.artifact-id }}
+      RECEIPT_ARTIFACT: ${{ needs.resolve.outputs.reused == 'true' && needs.resolve.outputs.receipt-id || needs.fresh.outputs.receipt-id }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
+      - uses: actions/checkout@v5
+      - name: Download exact immutable image artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ env.IMAGE_ARTIFACT }}
+          merge-multiple: true
+          path: bundle
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SOURCE_RUN }}
+      - name: Download exact validation receipt
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ env.RECEIPT_ARTIFACT }}
+          merge-multiple: true
+          path: bundle
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SOURCE_RUN }}
+      - name: Verify source, checksum and image identity before AWS access
+        run: |
+          python3 .github/scripts/backend_artifacts.py load \
+            --artifact-id "$IMAGE_ARTIFACT" --run-id "$SOURCE_RUN" --attempt "$SOURCE_ATTEMPT"
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build and push linux/amd64 image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          build-args: |
-            APP_MODULE=${{ matrix.module }}
-          push: true
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_PREFIX }}/${{ matrix.repository }}:unverified-${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.module }}-amd64
-          cache-to: type=gha,mode=max,scope=${{ matrix.module }}-amd64
+      - name: Push tested images without rebuilding
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          pids=()
+          for module in user-api admin-api batch; do
+            target="$REGISTRY/$ECR_REPOSITORY_PREFIX/$module:unverified-$GITHUB_SHA"
+            docker image tag "rougether-$module:verified-ci" "$target"
+            docker image push "$target" &
+            pids+=("$!")
+          done
+          result=0
+          for pid in "${pids[@]}"; do wait "$pid" || result=1; done
+          exit "$result"
 
   deploy:
     name: Deploy to EC2
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     # test 와 build 가 모두 성공해야 배포·:dev 승격이 일어난다 (병렬화의 게이트)
     needs: [test, build]

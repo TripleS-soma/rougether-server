@@ -110,6 +110,9 @@ class ChatBodyPushTest {
         try (var f = new Fixture()) {
             var socket = f.connect("reconcile", true);
             socket.await("READY");
+            // 프레임 큐에 넣은 직후에는 송신 finally가 끝나지 않을 수 있음.
+            // 이때 가짜 시계를 5초 앞당기면 정상 READY 쓰기를 3초 초과로 오인함.
+            f.awaitOutboundIdle();
             f.append(1);
             f.now.set(5000);
             f.handler.flush();
@@ -281,6 +284,14 @@ class ChatBodyPushTest {
             handler.afterConnectionEstablished(socket.raw);
             handler.handleTextMessage(socket.raw, new TextMessage("{\"type\":\"SUBSCRIBE\",\"roomId\":3,\"accessToken\":\"token\""
                     + (include ? ",\"includeMessages\":true" : "") + "}"));
+        }
+        void awaitOutboundIdle() throws InterruptedException {
+            var executor = (ThreadPoolExecutor) ReflectionTestUtils.getField(handler, "outbound");
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (executor.getActiveCount() != 0 || !executor.getQueue().isEmpty()) {
+                if (System.nanoTime() >= deadline) throw new AssertionError("소켓 송신 작업이 끝나지 않음");
+                Thread.sleep(1);
+            }
         }
         public void close() { handler.shutdown(); }
     }

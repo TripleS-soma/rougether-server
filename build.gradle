@@ -41,3 +41,5 @@ subprojects {
 		useJUnitPlatform()
 	}
 }
+
+apply from: "gradle/ci-test-sharding.gradle"
