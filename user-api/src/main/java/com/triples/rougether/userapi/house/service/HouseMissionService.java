@@ -1,5 +1,8 @@
 package com.triples.rougether.userapi.house.service;
 
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.isDailyAchieved;
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.ratePercent;
+
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
@@ -20,8 +23,6 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionClaimResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
-import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
-import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
@@ -30,16 +31,12 @@ import com.triples.rougether.userapi.notification.service.NotificationService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 단체 미션 - 생성(소유자)/목록·상세(구성원)/미리보기 요약(로그인 회원)/기여(수행 체크, 하루 1회)/보상(claim).
+// 집 미션의 생성, 삭제, 기여와 보상 수령을 처리함.
 // WEEKLY: 기여 누적 합 >= target, 1회 claim(+100) 후 COMPLETED. (모델 확정 2026-07-05)
 // DAILY: 오늘(KST) 기여 멤버 비율 >= target%, 매일 claim(+20) 반복, COMPLETED 전환 없음. (#201, 확정 2026-07-23)
 @Service
@@ -133,104 +130,6 @@ public class HouseMissionService {
         // 사라진 미션의 연동 루틴을 전 구성원에서 해제 - 이름/ID 잔존으로 클라이언트가 고아 연동을
         // 정리할 필요가 없게 서버가 원천에서 끊는다. bulk 는 PC 를 우회하므로 트랜잭션 끝에서 호출(위 softDelete 는 flush 됨).
         routineRepository.clearHouseMissionLink(missionId);
-    }
-
-    // 미션 목록 - 구성원 전용, 최신 생성순. currentValue 는 기여 합산(WEEKLY)·오늘 달성률 %(DAILY)를 일괄 조회(N+1 회피).
-    @Transactional(readOnly = true)
-    public HouseMissionListResponse getMissions(Long userId, Long houseId) {
-        House house = requireHouse(houseId);
-        HouseMember me = requireActiveMember(userId, houseId);
-        return new HouseMissionListResponse(summarizeMissions(house, me.getId()));
-    }
-
-    // 집 미리보기용 요약 - 로그인·집 존재·삭제 여부 검증을 마친 house 를 preview API 경계에서 받는다.
-    // 기여·보상 수령 가능 여부나 개인 기여값은 노출하지 않고 목록과 동일한 읽기 모델만 재사용한다.
-    @Transactional(readOnly = true)
-    public List<MissionSummary> getPreviewMissions(House house) {
-        return summarizeMissions(house, null);
-    }
-
-    // memberId 가 있으면(구성원 목록) 내 누적 기여·오늘 기여 여부를 일괄 조회해 행에 싣고, null(미리보기)이면 생략.
-    private List<MissionSummary> summarizeMissions(House house, Long memberId) {
-        Long houseId = house.getId();
-        List<HouseMission> missions = houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(houseId);
-        Map<Long, Long> sums = sumByMissionIds(missions);
-
-        LocalDate today = LocalDate.now(KST);
-        Map<Long, Integer> myContributions = myContributionsByMissionIds(memberId, missions);
-        Set<Long> contributedTodayIds = missionIdsContributedOn(memberId, missions, today);
-        List<Long> dailyIds = missions.stream()
-                .filter(mission -> mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE)
-                .map(HouseMission::getId)
-                .toList();
-        Map<Long, Long> todayCounts = countTodayByMissionIds(dailyIds, today);
-        Set<Long> todayClaimedIds = dailyIds.isEmpty()
-                ? Set.of()
-                : Set.copyOf(dailyRewardRepository.findClaimedMissionIds(dailyIds, today));
-
-        return missions.stream()
-                .map(mission -> {
-                    long currentValue = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE
-                            ? ratePercent(todayCounts.getOrDefault(mission.getId(), 0L), house.getCurrentMemberCount())
-                            : sums.getOrDefault(mission.getId(), 0L);
-                    boolean daily = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE;
-                    boolean todayClaimed = todayClaimedIds.contains(mission.getId());
-                    if (memberId == null) {
-                        return daily
-                                ? MissionSummary.ofDaily(mission, currentValue, todayClaimed)
-                                : MissionSummary.of(mission, currentValue);
-                    }
-                    int myContribution = myContributions.getOrDefault(mission.getId(), 0);
-                    boolean contributedToday = contributedTodayIds.contains(mission.getId());
-                    return daily
-                            ? MissionSummary.ofDaily(mission, currentValue, todayClaimed, myContribution, contributedToday)
-                            : MissionSummary.of(mission, currentValue, myContribution, contributedToday);
-                })
-                .toList();
-    }
-
-    // 내 누적 기여 일괄 조회 (N+1 회피). 참여 행이 없는 미션은 0.
-    private Map<Long, Integer> myContributionsByMissionIds(Long memberId, List<HouseMission> missions) {
-        if (memberId == null || missions.isEmpty()) {
-            return Map.of();
-        }
-        List<Long> ids = missions.stream().map(HouseMission::getId).toList();
-        Map<Long, Integer> contributions = new HashMap<>();
-        for (Object[] row : participantRepository.findContributionByMemberIdAndMissionIds(memberId, ids)) {
-            contributions.put((Long) row[0], ((Number) row[1]).intValue());
-        }
-        return contributions;
-    }
-
-    // 오늘 내가 기여한 미션 id 집합 (N+1 회피). 두 유형 모두 기여 시 일별 행이 남으므로 한 쿼리로 충분.
-    private Set<Long> missionIdsContributedOn(Long memberId, List<HouseMission> missions, LocalDate today) {
-        if (memberId == null || missions.isEmpty()) {
-            return Set.of();
-        }
-        List<Long> ids = missions.stream().map(HouseMission::getId).toList();
-        return Set.copyOf(dailyContributionRepository.findMissionIdsContributedOn(memberId, ids, today));
-    }
-
-    // 미션 상세 - 구성원 전용. 내 기여(myContribution)는 두 유형 모두 누적 체크 횟수.
-    @Transactional(readOnly = true)
-    public HouseMissionResponse getMission(Long userId, Long houseId, Long missionId) {
-        House house = requireHouse(houseId);
-        HouseMember me = requireActiveMember(userId, houseId);
-        HouseMission mission = requireMission(missionId, houseId);
-        int myContribution = participantRepository.findByMissionIdAndMemberId(missionId, me.getId())
-                .map(HouseMissionParticipant::getContributionValue)
-                .orElse(0);
-        if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
-            LocalDate today = LocalDate.now(KST);
-            long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(missionId, today);
-            return HouseMissionResponse.of(mission,
-                    ratePercent(todayCount, house.getCurrentMemberCount()),
-                    myContribution,
-                    isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue()),
-                    dailyRewardRepository.existsByMissionIdAndRewardDate(missionId, today));
-        }
-        long currentValue = participantRepository.sumContributionByMissionId(missionId);
-        return HouseMissionResponse.of(mission, currentValue, myContribution);
     }
 
     // 미션 수행 체크(기여) - 본인 +1, KST 하루 1회. 구성원이 공동 미션 자체를 직접 수행 체크한다 (모델 확정 2026-07-05).
@@ -412,50 +311,9 @@ public class HouseMissionService {
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER));
     }
 
-    private HouseMission requireMission(Long missionId, Long houseId) {
-        return houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(missionId, houseId)
-                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
-    }
-
-    private Map<Long, Long> sumByMissionIds(List<HouseMission> missions) {
-        if (missions.isEmpty()) {
-            return Map.of();
-        }
-        List<Long> ids = missions.stream().map(HouseMission::getId).toList();
-        Map<Long, Long> sums = new HashMap<>();
-        for (Object[] row : participantRepository.sumContributionByMissionIds(ids)) {
-            sums.put((Long) row[0], (Long) row[1]);
-        }
-        return sums;
-    }
-
     // 같은 코드(ALREADY_CLAIMED)를 재사용하되 DAILY 는 "오늘" 기준임을 메시지로 구분 (#201 결정값)
     private static BusinessException dailyAlreadyClaimed() {
         return new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED,
                 "오늘은 이미 보상을 받았습니다. 내일 다시 도전할 수 있습니다.");
-    }
-
-    private Map<Long, Long> countTodayByMissionIds(List<Long> missionIds, LocalDate today) {
-        if (missionIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, Long> counts = new HashMap<>();
-        for (Object[] row : dailyContributionRepository.countActiveByMissionIdsAndDate(missionIds, today)) {
-            counts.put((Long) row[0], (Long) row[1]);
-        }
-        return counts;
-    }
-
-    // DAILY 진행 표시값: 오늘 기여 멤버 비율 %(내림). 멤버 0명(이론상 없음)은 0 처리.
-    private static long ratePercent(long todayCount, int memberCount) {
-        if (memberCount <= 0) {
-            return 0;
-        }
-        return todayCount * 100 / memberCount;
-    }
-
-    // DAILY 달성 판정: 정수 산술로 (기여수/멤버수 >= target%) — 부동소수 오차 회피.
-    private static boolean isDailyAchieved(long todayCount, int memberCount, int targetPercent) {
-        return memberCount > 0 && todayCount * 100 >= (long) targetPercent * memberCount;
     }
 }

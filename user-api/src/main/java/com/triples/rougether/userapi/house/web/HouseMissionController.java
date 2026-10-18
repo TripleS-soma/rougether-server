@@ -7,6 +7,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,9 +30,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class HouseMissionController {
 
     private final HouseMissionService houseMissionService;
+    private final HouseMissionQueryService houseMissionQueryService;
 
-    public HouseMissionController(HouseMissionService houseMissionService) {
+    public HouseMissionController(HouseMissionService houseMissionService,
+                                  HouseMissionQueryService houseMissionQueryService) {
         this.houseMissionService = houseMissionService;
+        this.houseMissionQueryService = houseMissionQueryService;
     }
 
     @Operation(summary = "단체 미션 목록 조회",
@@ -42,7 +46,7 @@ public class HouseMissionController {
     public HouseMissionListResponse getMissions(@CurrentUser AuthUser user,
                                                 @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값")
                                                 @PathVariable Long houseId) {
-        return houseMissionService.getMissions(user.id(), houseId);
+        return houseMissionQueryService.getMissions(user.id(), houseId);
     }
 
     @Operation(summary = "단체 미션 등록",
@@ -70,7 +74,7 @@ public class HouseMissionController {
                                            @PathVariable Long houseId,
                                            @Parameter(description = "미션 ID. GET /api/v1/houses/{houseId}/missions (단체 미션 목록) 응답의 missionId 값")
                                            @PathVariable Long missionId) {
-        return houseMissionService.getMission(user.id(), houseId, missionId);
+        return houseMissionQueryService.getMission(user.id(), houseId, missionId);
     }
 
     @Operation(summary = "단체 미션 수행 체크 (기여)",

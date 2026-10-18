@@ -120,44 +120,6 @@ class HouseMissionServiceTest {
     }
 
     @Test
-    void 구성원이_아니면_목록_403() {
-        aliveHouse(1L);
-        when(houseMemberRepository.findByHouseIdAndUserId(1L, 7L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> houseMissionService.getMissions(7L, 1L))
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_NOT_MEMBER));
-    }
-
-    @Test
-    void 미리보기_미션_요약은_구성원_검사_없이_진행도를_반환한다() {
-        House house = aliveHouse(1L);
-        HouseMission mission = mock(HouseMission.class);
-        when(mission.getId()).thenReturn(3L);
-        when(mission.getTitle()).thenReturn("공개 미리보기 미션");
-        when(mission.getMissionType()).thenReturn(HouseMissionType.WEEKLY_MEMBER_COUNT);
-        when(mission.getTargetValue()).thenReturn(10);
-        when(mission.getStatus()).thenReturn(HouseMissionStatus.ACTIVE);
-        when(houseMissionRepository.findByHouseIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(1L))
-                .thenReturn(List.of(mission));
-        when(participantRepository.sumContributionByMissionIds(List.of(3L)))
-                .thenReturn(List.<Object[]>of(new Object[]{3L, 4L}));
-
-        var missions = houseMissionService.getPreviewMissions(house);
-
-        assertThat(missions).singleElement()
-                .satisfies(summary -> {
-                    assertThat(summary.title()).isEqualTo("공개 미리보기 미션");
-                    assertThat(summary.currentValue()).isEqualTo(4);
-                    assertThat(summary.targetValue()).isEqualTo(10);
-                    // 미리보기는 개인 기여값을 노출하지 않는다 (mobile #373).
-                    assertThat(summary.myContribution()).isNull();
-                    assertThat(summary.contributedToday()).isNull();
-                });
-        verify(houseMemberRepository, never()).findByHouseIdAndUserId(any(), any());
-    }
-
-    @Test
     void STREAK_DAYS_는_아직_지원하지_않아_400() {
         aliveHouse(1L);
         activeMember(1L, 7L, true, 10L);
@@ -323,14 +285,4 @@ class HouseMissionServiceTest {
         verify(house, never()).addGrowthPoints(100);
     }
 
-    @Test
-    void 존재하지_않는_미션은_404() {
-        aliveHouse(1L);
-        activeMember(1L, 7L, false, 10L);
-        when(houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(99L, 1L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> houseMissionService.getMission(7L, 1L, 99L))
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
-    }
 }

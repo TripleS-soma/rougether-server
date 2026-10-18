@@ -45,19 +45,19 @@ public class HouseQueryService {
     private final HouseMemberRepository houseMemberRepository;
     private final HouseJoinRequestRepository houseJoinRequestRepository;
     private final RoomQueryService roomQueryService;
-    private final HouseMissionService houseMissionService;
+    private final HouseMissionQueryService houseMissionQueryService;
 
     public HouseQueryService(HouseRepository houseRepository, HouseGoalRepository houseGoalRepository,
                              HouseMemberRepository houseMemberRepository,
                              HouseJoinRequestRepository houseJoinRequestRepository,
                              RoomQueryService roomQueryService,
-                             HouseMissionService houseMissionService) {
+                             HouseMissionQueryService houseMissionQueryService) {
         this.houseRepository = houseRepository;
         this.houseGoalRepository = houseGoalRepository;
         this.houseMemberRepository = houseMemberRepository;
         this.houseJoinRequestRepository = houseJoinRequestRepository;
         this.roomQueryService = roomQueryService;
-        this.houseMissionService = houseMissionService;
+        this.houseMissionQueryService = houseMissionQueryService;
     }
 
     // 집 상세 - ACTIVE 구성원만 조회 가능. 초대코드는 소유자에게만 내려간다.
@@ -118,7 +118,7 @@ public class HouseQueryService {
                 .count();
         return HousePreviewDetailResponse.of(
                 house, humanCount, goals, isMember, requestStatus,
-                houseMissionService.getPreviewMissions(house), memberRooms, noSeatForHuman);
+                houseMissionQueryService.getPreviewMissions(house), memberRooms, noSeatForHuman);
     }
 
     // 구성원 목록 - ACTIVE 구성원만 조회 가능, ACTIVE 구성원만 노출(가입순).
