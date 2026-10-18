@@ -98,7 +98,9 @@ public class AiUserActionExecutor {
                 yield feed.create(user, dto(p, FeedCreateRequest.class));
             }
             case FEED_COMMENT -> feed.comment(user, id(payload,"postId"),
-                    valid(new FeedCommentRequest(key, text(payload,"content"))));
+                    valid(new FeedCommentRequest(key, text(payload,"content"),
+                            job.sourceType().equals("FEED_COMMENT") ? job.sourceId()
+                                    : payload.hasNonNull("replyToCommentId") ? id(payload,"replyToCommentId") : null)));
             case FEED_LIKE -> { feed.like(user,id(payload,"postId"),payload.path("liked").asBoolean(true)); yield "OK"; }
             case FEED_UPDATE -> { feed.update(user,id(payload,"postId"),dto(payload.path("request"),FeedUpdateRequest.class)); yield "OK"; }
             case FEED_DELETE -> { feed.delete(user,id(payload,"postId")); yield "OK"; }

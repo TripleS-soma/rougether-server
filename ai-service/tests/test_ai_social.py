@@ -156,3 +156,59 @@ def test_human_text_question_on_photo_post_can_still_be_answered():
     state=social_state()
     state["source"]={"type":"FEED_COMMENT","post":{"id":8,"content":"내 방"},"comment":{"content":"요즘 어떤 책 읽어요?"}}
     assert "FEED_COMMENT" in planning_actions(state)
+
+
+def reply_state():
+    state=social_state()
+    state["source"]={"type":"FEED_COMMENT","post":{"postId":7,"content":"독서 이야기"},
+        "comment":{"id":13,"post_id":7,"author_id":42,"content":"몇 쪽부터 읽을 거예요?","reply_to_comment_id":10},
+        "inReplyTo":{"id":10,"author_id":1,"content":"짧게 읽을까 해요"},
+        "thread":[{"id":10,"author_id":1,"content":"짧게 읽을까 해요"},
+                  {"id":13,"author_id":42,"content":"몇 쪽부터 읽을 거예요?"}]}
+    return state
+
+
+def test_human_reply_uses_thread_context_and_binds_target_when_provider_omits_it():
+    state=reply_state()
+    def handler(request):
+        body=json.loads(request.content)
+        prompt=json.loads(body["messages"][0]["content"])
+        source=prompt["state"]["source"]
+        assert source["inReplyTo"]["content"]=="짧게 읽을까 해요"
+        assert len(source["thread"])==2
+        assert "source.comment.id" in body["system"]
+        assert "마무리 반응" in body["system"]
+        return httpx.Response(200,json={"stop_reason":"end_turn","content":[{"type":"text","text":json.dumps({
+            "action":"FEED_COMMENT","payload":{"postId":7,"content":"한 쪽부터요"},"memory":"읽을 계획을 답함"})}]})
+    with TestClient(create_app(CONFIG,ai_users=active(handler))) as client:
+        response=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
+        assert response.status_code==200
+        assert response.json()["payload"]["replyToCommentId"]==13
+
+
+@pytest.mark.parametrize("payload", [
+    {"postId":7,"content":"답글","replyToCommentId":10},
+    {"postId":8,"content":"답글","replyToCommentId":13},
+    {"postId":7,"content":"답글","replyToCommentId":True},
+    {"postId":7,"content":"답글","replyToCommentId":"13"},
+])
+def test_provider_cannot_change_reply_target_or_post(payload):
+    def handler(request):
+        return httpx.Response(200,json={"stop_reason":"end_turn","content":[{"type":"text","text":json.dumps({
+            "action":"FEED_COMMENT","payload":payload,"memory":""})}]})
+    with TestClient(create_app(CONFIG,ai_users=active(handler))) as client:
+        response=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":reply_state()})
+        assert response.status_code==502
+        assert response.json()["code"]=="AI_INVALID_ACTION_RESULT"
+
+
+def test_a_closing_human_reaction_can_end_without_another_comment():
+    state=reply_state()
+    state["source"]["comment"]["content"]="감사해요ㅋㅋ"
+    def handler(request):
+        return httpx.Response(200,json={"stop_reason":"end_turn","content":[{"type":"text","text":json.dumps({
+            "action":"WAIT","payload":{"reason":"NO_ACTION_DUE"},"memory":""})}]})
+    with TestClient(create_app(CONFIG,ai_users=active(handler))) as client:
+        response=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
+        assert response.status_code==200
+        assert response.json()["action"]=="WAIT"

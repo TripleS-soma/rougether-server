@@ -79,6 +79,7 @@ class FeedIntegrationTest {
         tx.executeWithoutResult(s -> {
             for (Long id : createdUsers) {
                 jdbc.update("delete from notification where user_id=?", id);
+                jdbc.update("delete from user_blocks where blocker_user_id=? or blocked_user_id=?", id, id);
                 jdbc.update("delete c from feed_comments c join feed_posts p on p.id=c.post_id where p.author_id=? or c.author_id=?", id, id);
                 jdbc.update("delete l from feed_likes l join feed_posts p on p.id=l.post_id where p.author_id=? or l.user_id=?", id, id);
                 jdbc.update("delete from feed_images where owner_id=?", id);
@@ -208,6 +209,174 @@ class FeedIntegrationTest {
         var cpage = query.comments(owner, third, null, 2);
         assertThat(cpage.items()).extracting(FeedCommentResponse::commentId).containsExactly(commentIds.get(0), commentIds.get(1));
         assertThat(query.comments(owner, third, cpage.nextCursor(), 2).items()).extracting(FeedCommentResponse::commentId).containsExactly(commentIds.get(2));
+    }
+
+
+    @Test void HTTP_대댓글과_답글의답글은_같은_원댓글에_묶고_실제대상을_보존한다() throws Exception {
+        Long owner = user(), commenter = user(), id = createPost(owner);
+        String path = "/api/v1/feed/posts/" + id + "/comments";
+        var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        var request = new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId());
+        var result = mvc.perform(post(path).header("Authorization", auth(owner))
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.parentCommentId").value(root.commentId()))
+                .andExpect(jsonPath("$.replyToCommentId").value(root.commentId()))
+                .andExpect(jsonPath("$.deleted").value(false)).andReturn().getResponse();
+        Long replyId = mapper.readTree(result.getContentAsString()).path("commentId").asLong();
+        var next = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "다시 답글", replyId));
+        assertThat(next.parentCommentId()).isEqualTo(root.commentId());
+        assertThat(next.replyToCommentId()).isEqualTo(replyId);
+        mvc.perform(get(path).param("topLevelOnly", "true").header("Authorization", auth(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].replyCount").value(2));
+        mvc.perform(get(path + "/" + root.commentId() + "/replies").header("Authorization", auth(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].commentId").value(replyId))
+                .andExpect(jsonPath("$.items[1].replyToCommentId").value(replyId));
+        assertThat(query.comments(owner, id, null, 20).items()).hasSize(3);
+        assertThat(query.get(owner, id).commentCount()).isEqualTo(3);
+    }
+
+    @Test void 답글대상도_재시도에_포함하고_대상삭제후_성공한_요청은_유지한다() throws Exception {
+        Long owner = user(), actor = user(), id = createPost(owner);
+        var rootRequest = new FeedCommentRequest(UUID.randomUUID(), "원댓글");
+        var root = commands.comment(owner, id, rootRequest);
+        var other = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "다른 원댓글"));
+        var request = new FeedCommentRequest(UUID.randomUUID(), "같은 내용", root.commentId());
+        var reply = commands.comment(actor, id, request);
+        assertThat(commands.comment(actor, id, request).commentId()).isEqualTo(reply.commentId());
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(request.clientCommentId(), "같은 내용", other.commentId())), "FEED_REQUEST_CONFLICT");
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(request.clientCommentId(), "같은 내용")), "FEED_REQUEST_CONFLICT");
+        error(() -> commands.comment(owner, id, new FeedCommentRequest(rootRequest.clientCommentId(), "원댓글", other.commentId())), "FEED_REQUEST_CONFLICT");
+        assertThat(commands.comment(owner, id, rootRequest).replyCount()).isEqualTo(1);
+        commands.deleteComment(owner, id, root.commentId());
+        assertThat(commands.comment(actor, id, request).commentId()).isEqualTo(reply.commentId());
+        commands.deleteComment(actor, id, reply.commentId());
+        error(() -> commands.comment(actor, id, request), "FEED_REQUEST_CONFLICT");
+    }
+
+    @Test void 다른글_없는댓글_삭제된댓글_탈퇴한작성자에게는_새답글을_쓸수없다() throws Exception {
+        Long owner = user(), actor = user(), commenter = user(), id = createPost(owner), second = createPost(owner);
+        var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        error(() -> commands.comment(actor, second, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId())), "FEED_COMMENT_NOT_FOUND");
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", Long.MAX_VALUE)), "FEED_COMMENT_NOT_FOUND");
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", 0L)), "FEED_INPUT_INVALID");
+        commands.deleteComment(commenter, id, root.commentId());
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId())), "FEED_COMMENT_NOT_FOUND");
+        var remaining = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "탈퇴 전"));
+        withdrawal.withdraw(commenter);
+        error(() -> commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", remaining.commentId())), "FEED_COMMENT_NOT_FOUND");
+    }
+
+    @Test void 원댓글삭제는_답글을_유지하고_내용없는_자리만_스레드목록에_남긴다() throws Exception {
+        Long owner = user(), actor = user(), id = createPost(owner);
+        var root = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "지울 개인정보"));
+        var reply = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "남을 대화", root.commentId()));
+        error(() -> commands.deleteComment(owner, id, reply.commentId()), "FEED_FORBIDDEN");
+        commands.deleteComment(owner, id, root.commentId());
+        var placeholder = query.comments(actor, id, null, 20, true).items().getFirst();
+        assertThat(placeholder.deleted()).isTrue();
+        assertThat(placeholder.content()).isEmpty();
+        assertThat(placeholder.author()).isEqualTo(new FeedAuthorResponse(null, null, null));
+        assertThat(placeholder.mine()).isFalse();
+        assertThat(placeholder.replyCount()).isEqualTo(1);
+        assertThat(query.comments(actor, id, null, 20).items()).extracting(FeedCommentResponse::commentId).containsExactly(reply.commentId());
+        assertThat(query.replies(actor, id, root.commentId(), null, 20).items()).hasSize(1);
+        assertThat(query.get(actor, id).commentCount()).isEqualTo(1);
+        var followup = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "이어가기", reply.commentId()));
+        assertThat(followup.parentCommentId()).isEqualTo(root.commentId());
+        commands.deleteComment(owner, id, followup.commentId());
+        commands.deleteComment(actor, id, reply.commentId());
+        assertThat(query.comments(actor, id, null, 20, true).items()).isEmpty();
+    }
+
+    @Test void 원댓글작성자탈퇴도_남의답글과_익명자리만_유지한다() throws Exception {
+        Long owner = user(), commenter = user(), actor = user(), id = createPost(owner);
+        var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "탈퇴 원문"));
+        commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "남의 답글", root.commentId()));
+        withdrawal.withdraw(commenter);
+        var placeholder = query.comments(owner, id, null, 20, true).items().getFirst();
+        assertThat(placeholder.deleted()).isTrue();
+        assertThat(placeholder.content()).isEmpty();
+        assertThat(placeholder.author().userId()).isNull();
+        assertThat(query.get(owner, id).commentCount()).isEqualTo(1);
+        cleanup.withdrawnContent();
+        assertThat(query.replies(owner, id, root.commentId(), null, 20).items()).hasSize(1);
+    }
+
+    @Test void 차단은_답글목록과_개수와_작성에_동일하게_적용한다() throws Exception {
+        Long owner = user(), commenter = user(), actor = user(), viewer = user(), id = createPost(owner);
+        var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        var reply = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId()));
+        jdbc.update("insert into user_blocks (blocker_user_id,blocked_user_id,created_at) values (?,?,?)", viewer, actor, Instant.now());
+        assertThat(query.comments(viewer, id, null, 20, true).items().getFirst().replyCount()).isZero();
+        assertThat(query.replies(viewer, id, root.commentId(), null, 20).items()).isEmpty();
+        assertThat(query.get(viewer, id).commentCount()).isEqualTo(1);
+        error(() -> commands.comment(viewer, id, new FeedCommentRequest(UUID.randomUUID(), "답글", reply.commentId())), "FEED_COMMENT_NOT_FOUND");
+        jdbc.update("insert into user_blocks (blocker_user_id,blocked_user_id,created_at) values (?,?,?)", viewer, commenter, Instant.now());
+        assertThat(query.comments(viewer, id, null, 20).items()).isEmpty();
+        assertThat(query.comments(viewer, id, null, 20, true).items()).isEmpty();
+        assertThat(query.get(viewer, id).commentCount()).isZero();
+        error(() -> query.replies(viewer, id, root.commentId(), null, 20), "FEED_COMMENT_NOT_FOUND");
+        error(() -> commands.comment(viewer, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId())), "FEED_COMMENT_NOT_FOUND");
+        jdbc.update("delete from user_blocks where blocker_user_id=? and blocked_user_id=?", viewer, actor);
+        error(() -> commands.comment(viewer, id, new FeedCommentRequest(UUID.randomUUID(), "답글", reply.commentId())), "FEED_COMMENT_NOT_FOUND");
+    }
+
+    @Test void 대댓글은_원댓글별로_중복없이_페이지를_잇고_삭제된대상도_연결은_유지한다() throws Exception {
+        Long owner = user(), actor = user(), id = createPost(owner);
+        var root = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        var another = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "다른 원댓글"));
+        var first = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "첫 답글", root.commentId()));
+        var second = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "둘째 답글", first.commentId()));
+        var third = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "셋째 답글", second.commentId()));
+        var roots = query.comments(actor, id, null, 1, true);
+        assertThat(roots.items()).extracting(FeedCommentResponse::commentId).containsExactly(root.commentId());
+        assertThat(query.comments(actor, id, roots.nextCursor(), 1, true).items()).extracting(FeedCommentResponse::commentId).containsExactly(another.commentId());
+        var page = query.replies(actor, id, root.commentId(), null, 1);
+        assertThat(page.items()).extracting(FeedCommentResponse::commentId).containsExactly(first.commentId());
+        commands.deleteComment(owner, id, second.commentId());
+        assertThat(query.replies(actor, id, root.commentId(), page.nextCursor(), 1).items())
+                .extracting(FeedCommentResponse::commentId).containsExactly(third.commentId());
+        assertThat(query.replies(actor, id, root.commentId(), page.nextCursor(), 1).items().getFirst().replyToCommentId()).isEqualTo(second.commentId());
+        error(() -> query.replies(actor, id, first.commentId(), null, 20), "FEED_COMMENT_NOT_FOUND");
+    }
+
+    @Test void 대댓글입력과_조회에도_HTTP_인증과_검증이_적용된다() throws Exception {
+        Long owner = user(), id = createPost(owner);
+        var root = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        String path = "/api/v1/feed/posts/" + id + "/comments";
+        mvc.perform(get(path + "/" + root.commentId() + "/replies")).andExpect(status().isUnauthorized());
+        mvc.perform(post(path).header("Authorization", auth(owner)).contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(new FeedCommentRequest(UUID.randomUUID(), "답글", -1L))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(path + "/" + root.commentId() + "/replies").param("size", "51").header("Authorization", auth(owner)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(path + "/" + root.commentId() + "/replies").param("cursor", "0").header("Authorization", auth(owner)))
+                .andExpect(status().isBadRequest());
+        commands.delete(owner, id);
+        error(() -> query.replies(owner, id, root.commentId(), null, 20), "FEED_POST_NOT_FOUND");
+        assertThat(jdbc.queryForObject("select count(*) from feed_comments where post_id=?", Long.class, id)).isZero();
+    }
+
+    @Test void 동시대댓글재시도는_한번만_저장하고_삭제경합도_대화연결이_깨지지않는다() throws Exception {
+        Long owner = user(), actor = user(), id = createPost(owner);
+        var root = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        var request = new FeedCommentRequest(UUID.randomUUID(), "동시 답글", root.commentId());
+        assertThat(new HashSet<>(concurrent(6, () -> commands.comment(actor, id, request).commentId()))).hasSize(1);
+        assertThat(query.replies(owner, id, root.commentId(), null, 20).items()).hasSize(1);
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var deletion = pool.submit(() -> { start.await(); commands.deleteComment(owner, id, root.commentId()); return true; });
+            var addition = pool.submit(() -> { start.await();
+                try { commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "경합 답글", root.commentId())); }
+                catch (BusinessException e) { assertThat(e.getErrorCode().code()).isEqualTo("FEED_COMMENT_NOT_FOUND"); }
+                return true;
+            });
+            start.countDown(); deletion.get(20, TimeUnit.SECONDS); addition.get(20, TimeUnit.SECONDS);
+        }
+        assertThat(query.comments(actor, id, null, 20, true).items().getFirst().deleted()).isTrue();
+        commands.delete(owner, id);
+        assertThat(jdbc.queryForObject("select count(*) from feed_comments where post_id=?", Long.class, id)).isZero();
     }
 
     @Test void 댓글재시도는_중복되지_않고_삭제된댓글과_다른본문의_재사용은_거절한다() throws Exception {

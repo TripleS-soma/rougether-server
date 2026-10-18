@@ -32,10 +32,25 @@ public class AiUserEvents {
     @Transactional(propagation = Propagation.MANDATORY)
     public void comment(User actor, long postId, long commentId) {
         if (!properties.enabled() || !actor.isHuman()) return;
-        List<Long> targets = jdbc.queryForList("SELECT DISTINCT u.id FROM users u JOIN ai_user_profiles p ON p.user_id=u.id "
-                + "WHERE p.enabled=TRUE AND u.is_ai=TRUE AND u.deleted_at IS NULL AND (EXISTS "
-                + "(SELECT 1 FROM feed_posts f WHERE f.id=? AND f.author_id=u.id AND f.deleted_at IS NULL) OR EXISTS "
-                + "(SELECT 1 FROM feed_comments c WHERE c.post_id=? AND c.author_id=u.id AND c.deleted_at IS NULL))", Long.class, postId, postId);
+        var source = jdbc.queryForMap("SELECT reply_to_comment_id FROM feed_comments WHERE id=? AND post_id=?", commentId, postId);
+        Object replyTo = source.get("reply_to_comment_id");
+        List<Long> targets;
+        if (replyTo != null) {
+            // 직접 받은 답글은 해당 계정만 처리함. 사람에게 쓴 답글을 다른 AI가 가로채지 않음.
+            targets = jdbc.queryForList("SELECT u.id FROM feed_comments c JOIN users u ON u.id=c.author_id "
+                    + "JOIN ai_user_profiles p ON p.user_id=u.id WHERE c.id=? AND c.post_id=? AND c.deleted_at IS NULL "
+                    + "AND p.enabled=TRUE AND u.is_ai=TRUE AND u.deleted_at IS NULL AND NOT EXISTS "
+                    + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
+                    + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?))", Long.class, replyTo, postId, actor.getId(), actor.getId());
+        } else {
+            targets = jdbc.queryForList("SELECT DISTINCT u.id FROM users u JOIN ai_user_profiles p ON p.user_id=u.id "
+                    + "WHERE p.enabled=TRUE AND u.is_ai=TRUE AND u.deleted_at IS NULL AND (EXISTS "
+                    + "(SELECT 1 FROM feed_posts f WHERE f.id=? AND f.author_id=u.id AND f.deleted_at IS NULL) OR EXISTS "
+                    + "(SELECT 1 FROM feed_comments c WHERE c.post_id=? AND c.author_id=u.id AND c.deleted_at IS NULL)) "
+                    + "AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
+                    + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?)) ORDER BY u.id", Long.class,
+                    postId, postId, actor.getId(), actor.getId());
+        }
         // 여러 AI가 같은 글에 답해도 하나의 사람 댓글에 한 계정만 반응함.
         if (!targets.isEmpty()) {
             long target = targets.get((int) (commentId % targets.size()));

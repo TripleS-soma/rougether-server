@@ -10,6 +10,7 @@ import static com.triples.rougether.userapi.feed.error.FeedErrorCode.*;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
+import com.triples.rougether.userapi.notification.message.NotificationContent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -137,26 +138,60 @@ public class FeedCommandService {
     }
     public FeedCommentResponse comment(Long userId, Long postId, FeedCommentRequest request) {
         Long authorId = posts.findAuthorId(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
-        User user = access.lockCommentParticipants(userId, authorId);
+        Long targetId = request.replyToCommentId();
+        if (targetId != null && targetId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
+        Long replyAuthorId = targetId == null ? null : comments.findAuthorId(postId, targetId).orElse(null);
+        User user = access.lockCommentParticipants(userId, authorId, replyAuthorId);
         FeedPost post = lockVisible(postId);
         requireNotBlocked(userId, authorId);
         if (request.clientCommentId() == null) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 500, false);
-        String requestHash = hash(content);
+        // 일반 댓글의 기존 hash는 유지하고 답글 대상은 재시도 요청의 일부로 고정함.
+        String requestHash = hash(targetId == null ? content : content + "\u0000reply:" + targetId);
         FeedComment previous = comments.findByPostIdAndAuthorIdAndClientCommentId(
                 postId, userId, request.clientCommentId().toString()).orElse(null);
         if (previous != null) {
-            if (!previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null)
+            if (!previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null
+                    || !Objects.equals(previous.getReplyToCommentId(), targetId))
                 throw new BusinessException(FEED_REQUEST_CONFLICT);
-            return FeedCommentResponse.of(previous, userId);
+            return commentResponse(previous, userId);
         }
-        FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(), requestHash, content));
+        FeedComment target = targetId == null ? null : replyTarget(userId, postId, targetId);
+        Long parentId = target == null ? null
+                : target.getParentCommentId() == null ? target.getId() : target.getParentCommentId();
+        if (parentId != null && !parentId.equals(targetId)) requireThreadVisible(userId, postId, parentId);
+        FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(),
+                requestHash, content, parentId, targetId));
         if (aiEvents != null) aiEvents.comment(user, postId, comment.getId());
-        // 댓글과 알림 내역을 함께 커밋하고 push만 기존 AFTER_COMMIT 경로로 발송함. 재시도·본인 댓글은 제외함.
-        // 게시물 작성자가 댓글 작성자를 차단했으면 알림을 만들지 않음(#399).
-        if (!authorId.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(authorId, userId))
-            notifications.send(authorId, NotificationMessages.feedComment(), postId);
+        // 게시물 작성자와 실제 답글 대상에게 알림을 저장하되 수신자가 같으면 답글 알림 하나만 보냄.
+        Map<Long, NotificationContent> recipients = new LinkedHashMap<>();
+        recipients.put(authorId, NotificationMessages.feedComment());
+        if (target != null) recipients.put(target.getAuthor().getId(), NotificationMessages.feedReply());
+        recipients.forEach((recipient, message) -> {
+            if (!recipient.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(recipient, userId))
+                notifications.send(recipient, message, postId);
+        });
         return FeedCommentResponse.of(comment, userId);
+    }
+    private FeedCommentResponse commentResponse(FeedComment comment, Long viewer) {
+        long replyCount = comment.getParentCommentId() == null
+                ? comments.countForParents(viewer, List.of(comment.getId())).stream().mapToLong(FeedReplyCount::getTotal).sum() : 0;
+        return FeedCommentResponse.of(comment, viewer, replyCount);
+    }
+    private FeedComment replyTarget(Long viewer, Long postId, Long targetId) {
+        FeedComment target = comments.findByIdAndPostId(targetId, postId)
+                .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
+        if (target.getDeletedAt() != null || target.getAuthor().isDeleted() || target.getAuthor().isBot()
+                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, target.getAuthor().getId()))
+            throw new BusinessException(FEED_COMMENT_NOT_FOUND);
+        return target;
+    }
+    private void requireThreadVisible(Long viewer, Long postId, Long parentId) {
+        FeedComment parent = comments.findByIdAndPostId(parentId, postId)
+                .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
+        if (parent.getParentCommentId() != null
+                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
+            throw new BusinessException(FEED_COMMENT_NOT_FOUND);
     }
     public void deleteComment(Long userId, Long postId, Long commentId) {
         access.lockActive(userId);

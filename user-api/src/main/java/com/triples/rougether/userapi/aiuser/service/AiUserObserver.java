@@ -118,6 +118,15 @@ public class AiUserObserver {
             references.add(new SourceReference("MEMBERSHIP",member.membershipId()));
         if (job.sourceId()!=null) references.add(new SourceReference(job.sourceType(),job.sourceId()));
         for (Long id:posts) references.add(new SourceReference("FEED_POST",id));
+        if (job.sourceType().equals("FEED_COMMENT")) {
+            var source=(Map<?,?>)state.get("source");
+            var comment=(Map<?,?>)source.get("comment");
+            references.add(new SourceReference("FEED_POST",((Number)comment.get("post_id")).longValue()));
+            for (var item:(List<?>)source.get("thread"))
+                references.add(new SourceReference("FEED_COMMENT",((Number)((Map<?,?>)item).get("id")).longValue()));
+            if (source.get("inReplyTo") instanceof Map<?,?> target)
+                references.add(new SourceReference("FEED_COMMENT",((Number)target.get("id")).longValue()));
+        }
         if (job.sourceType().equals("CHAT")) {
             var source=(Map<?,?>)state.get("source");
             for (var message:(List<?>)source.get("recentMessages"))
@@ -208,11 +217,26 @@ public class AiUserObserver {
             return Map.of("type",type,"post",feed.get(user,sourceId));
         }
         if (type.equals("FEED_COMMENT")) {
-            var comment=jdbc.queryForMap("SELECT post_id,author_id,content FROM feed_comments WHERE id=? AND deleted_at IS NULL",sourceId);
-            requireUnblocked(user,((Number)comment.get("author_id")).longValue());
+            var comment=readComment(user,sourceId);
             long post=((Number)comment.get("post_id")).longValue();
-            requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,post));
-            return Map.of("type",type,"comment",comment,"post",feed.get(user,post));
+            long root=comment.get("parent_comment_id")==null ? sourceId : ((Number)comment.get("parent_comment_id")).longValue();
+            var thread=jdbc.queryForList("SELECT c.id,c.post_id,c.author_id,c.content,c.parent_comment_id,c.reply_to_comment_id "
+                    + "FROM feed_comments c JOIN users u ON u.id=c.author_id WHERE c.post_id=? AND (c.id=? OR c.parent_comment_id=?) "
+                    + "AND c.id<=? AND c.deleted_at IS NULL AND u.deleted_at IS NULL AND NOT EXISTS "
+                    + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
+                    + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?)) ORDER BY c.id DESC LIMIT 8",post,root,root,sourceId,user,user);
+            java.util.Collections.reverse(thread);
+            var context=new LinkedHashMap<String,Object>();
+            context.put("type",type); context.put("comment",comment); context.put("post",feed.get(user,post));
+            context.put("thread",thread);
+            // 실제로 답한 앞선 댓글은 최근 8개 밖에 있어도 제공함. 대상이 사라진 사건은 추론 전에 중단함.
+            if (comment.get("reply_to_comment_id")!=null) {
+                long target=((Number)comment.get("reply_to_comment_id")).longValue();
+                var addressed=readComment(user,target);
+                if (((Number)addressed.get("author_id")).longValue()!=user) unavailable();
+                context.put("inReplyTo",addressed);
+            }
+            return context;
         }
         if (type.equals("CHAT")) {
             var message=jdbc.queryForMap("SELECT room_id,sender_user_id,content FROM chat_messages WHERE id=?",sourceId);
@@ -256,10 +280,27 @@ public class AiUserObserver {
             Long room=jdbc.queryForObject("SELECT room_id FROM chat_messages WHERE id=?",Long.class,job.sourceId());
             if (room!=AiUserActionExecutor.id(payload,"roomId")) unavailable();
         }
-        if (action==AiUserActionExecutor.Action.FEED_COMMENT && job.sourceType().startsWith("FEED_")) {
-            Long post=job.sourceType().equals("FEED_POST")?job.sourceId():
-                    jdbc.queryForObject("SELECT post_id FROM feed_comments WHERE id=?",Long.class,job.sourceId());
-            if (post!=AiUserActionExecutor.id(payload,"postId")) unavailable();
+        if (action==AiUserActionExecutor.Action.FEED_COMMENT) {
+            long post=AiUserActionExecutor.id(payload,"postId");
+            if (job.sourceType().startsWith("FEED_")) {
+                Long sourcePost=job.sourceType().equals("FEED_POST")?job.sourceId():
+                        jdbc.queryForObject("SELECT post_id FROM feed_comments WHERE id=?",Long.class,job.sourceId());
+                if (sourcePost!=post) unavailable();
+            }
+            if (job.sourceType().equals("FEED_COMMENT")) {
+                if (payload.hasNonNull("replyToCommentId")
+                        && AiUserActionExecutor.id(payload,"replyToCommentId")!=job.sourceId()) unavailable();
+                var source=readComment(job.userId(),job.sourceId());
+                if (source.get("reply_to_comment_id")!=null) {
+                    var target=readComment(job.userId(),((Number)source.get("reply_to_comment_id")).longValue());
+                    if (((Number)target.get("author_id")).longValue()!=job.userId()) unavailable();
+                }
+            } else if (payload.hasNonNull("replyToCommentId")) {
+                long targetId=AiUserActionExecutor.id(payload,"replyToCommentId");
+                String raw=jdbc.queryForObject("SELECT context_sources FROM ai_user_jobs WHERE id=?",String.class,job.id());
+                if (!contextReferences(raw).contains(new SourceReference("FEED_COMMENT",targetId))) unavailable();
+                if (((Number)readComment(job.userId(),targetId).get("post_id")).longValue()!=post) unavailable();
+            }
         }
     }
     boolean accessible(long user,String type,Long id) {
@@ -269,9 +310,7 @@ public class AiUserObserver {
             if (type.equals("FEED_POST")) {
                 requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,id));
             } else if (type.equals("FEED_COMMENT")) {
-                var comment=jdbc.queryForMap("SELECT post_id,author_id FROM feed_comments WHERE id=? AND deleted_at IS NULL",id);
-                requireUnblocked(user,((Number)comment.get("author_id")).longValue());
-                requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,comment.get("post_id")));
+                readComment(user,id);
             } else if (type.equals("CHAT")) {
                 var message=jdbc.queryForMap("SELECT room_id,sender_user_id FROM chat_messages WHERE id=?",id);
                 requireUnblocked(user,((Number)message.get("sender_user_id")).longValue());
@@ -311,6 +350,21 @@ public class AiUserObserver {
                 + "WHERE own.house_id=hm.house_id AND own.user_id=? AND own.status='ACTIVE')",membershipId,viewer);
         requireUnblocked(viewer,((Number)target.get("user_id")).longValue());
         return target;
+    }
+    private Map<String,Object> readComment(long user,long commentId) {
+        var comment=jdbc.queryForMap("SELECT id,post_id,author_id,content,parent_comment_id,reply_to_comment_id "
+                + "FROM feed_comments WHERE id=? AND deleted_at IS NULL",commentId);
+        requireUnblocked(user,((Number)comment.get("author_id")).longValue());
+        long post=((Number)comment.get("post_id")).longValue();
+        requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,post));
+        if (comment.get("parent_comment_id")!=null) {
+            // 원댓글이 삭제·탈퇴해도 타인의 답글은 살아 있음. 원댓글 작성자와의 차단만 검사함.
+            long author=jdbc.queryForObject("SELECT author_id FROM feed_comments WHERE id=? AND post_id=? AND parent_comment_id IS NULL",
+                    Long.class,comment.get("parent_comment_id"),post);
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM user_blocks WHERE (blocker_user_id=? AND blocked_user_id=?) "
+                    + "OR (blocker_user_id=? AND blocked_user_id=?)",Integer.class,user,author,author,user)!=0) unavailable();
+        }
+        return comment;
     }
     private boolean unblocked(long viewer,long author) {
         try { requireUnblocked(viewer,author); return true; }
