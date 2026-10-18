@@ -165,9 +165,11 @@ class FurnitureGenerationIntegrationTest {
     }
 
     @Test void 단일_주대상을_식별하지_못한_사진은_이미지를_생성하지_않음() {
-        when(ai.extract(any(), anyString())).thenReturn(new Extracted(false, "", 50, 10));
+        when(ai.extract(any(), anyString())).thenReturn(new Extracted(false,
+                "{\"rejectionReason\":\"대상이 흐릿해 식별하기 어려워요.\"}", 50, 10));
         var job = submitAndExtract();
         assertThat(job.failureCode()).isEqualTo("PHOTO_REJECTED");
+        assertThat(job.reason()).isEqualTo("대상이 흐릿해 식별하기 어려워요.");
         assertThat(job.imageAttempts()).isZero();
         verify(ai, never()).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
