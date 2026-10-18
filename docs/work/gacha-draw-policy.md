@@ -61,7 +61,7 @@
 | 실제 모델의 AI 사용자 평가 | 2 | `AI_USER_LIVE_EVAL`, 평가별 `AI_USER_LIVE_REGRESSION` 설정 |
 | 실제 가구 생성과 개발 Lambda | 5 | `FURNITURE_LIVE_SMOKE`, `FURNITURE_FLARE_CONCURRENT_LIVE`, `FURNITURE_LAMBDA_DEV_SMOKE` |
 
-정합성 코드 리뷰와 테스트 충실도 검토에서 차단 결함은 발견되지 않았다. 결과는 `codex/gacha-draw-policy`의 로컬 작업과 테스트 기준이며, 커밋, 병합, 운영 배포는 수행하지 않았다. 앞선 방 응답 리팩토링은 별도 `codex/room-response-reader` 작업에 보존되어 있다.
+정합성 코드 리뷰와 테스트 충실도 검토에서 차단 결함은 발견되지 않았다. 위 결과는 `codex/gacha-draw-policy`에서 수행한 독립 검증 기록이며, 병합 전 통합 검증과 구분한다.
 
 Java 25와 Docker의 MySQL 8.4 Testcontainers를 사용한다. CI 분할 속성을 지정하지 않고 아래 명령을 실행한다.
 
@@ -74,3 +74,11 @@ git diff --check
 ## 계약 확인 범위
 
 로컬 스펙 `9693089`의 확률, 요청 수량, 중복 환급 계약을 확인했다. 원격 스펙 최신 여부는 확인하지 못했다. 모두 `null`인 풀의 구현 설명 등 일부 문서는 현재 코드와 차이가 있어, 이번에는 기준 코드의 기존 동작과 난수 호출 순서를 보존했다. 빈 등급의 확률 재분배, 레벨 해금 조건 등 새로운 정책 결정은 포함하지 않는다.
+
+## 방 응답 리팩토링과 통합 검증 (2026-10-18)
+
+최신 main `58e9abf9` 위에 두 리팩토링을 합친 `codex/room-gacha-refactoring`에서 병합 전 검증을 수행했다. 방 응답에 최근 추가된 `ownerBio`를 보존했으며, 뽑기의 동작과 거래 경계는 독립 검증 때와 동일하다. migration 91개는 최신 main과 같고 버전 중복은 없다.
+
+`./gradlew compileJava test --console=plain`과 `git diff --check`가 통과했다. XML 386개 기준 전체 2,699개 중 2,689개 통과, 기존 환경 조건에 따른 10개 생략, 실패와 오류 0개다. 방 패키지 92개와 뽑기 패키지 108개는 모두 통과했다. 실행 시간은 3분 37초였으며, 입력이 바뀌지 않은 다른 모듈은 Gradle의 `UP-TO-DATE` 결과를 재사용했다.
+
+최신 main 재조회와 통합 정합성 리뷰에서도 차단할 문제는 없었다. CI 결과와 병합 상태는 해당 PR에서 별도로 확인한다.

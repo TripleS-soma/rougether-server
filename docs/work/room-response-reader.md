@@ -76,3 +76,13 @@ git diff --check
 - 실제 가구 AI·개발 Lambda 테스트 5개: `FURNITURE_LIVE_SMOKE`, `FURNITURE_FLARE_CONCURRENT_LIVE`, `FURNITURE_LAMBDA_DEV_SMOKE` 활성화 필요.
 
 정합성 리뷰와 테스트 충실도 검토에서도 차단할 결함은 발견되지 않았다. 이 결과는 로컬 worktree의 검증이며 운영 배포 결과는 아니다.
+
+## 최신 main 통합 검증 (2026-10-18)
+
+병합 준비 중 기준 main `58e9abf9`에 방 주인의 한 줄 소개인 `ownerBio`가 추가된 것을 확인했다. 이 조회도 `RoomResponseReader`로 옮겨 저장과 내 방, 타인 방 응답에서 유지한다. 소개의 공백과 null 처리에는 기존 DTO 규칙을 사용한다.
+
+최신 main을 기준으로 저장 서비스의 생성자 주입 의존성은 10개에서 5개로 줄고, Reader는 소개 조회용 `UserRepository`를 포함해 8개를 사용한다. 위의 9개에서 5개 비교는 10월 14일 최초 작업 기준이다. 기존 소개 응답 테스트와 신규 응답 일치 통합 테스트를 함께 유지했다.
+
+뽑기 정책 리팩토링과 합친 `codex/room-gacha-refactoring`에서 `./gradlew compileJava test --console=plain`이 통과했다. 전체 2,699개 중 2,689개 통과, 기존 환경 조건에 따른 10개 생략, 실패와 오류 0개다. 방 패키지 92개와 뽑기 패키지 108개는 모두 통과했다.
+
+실행 시간은 3분 37초였으며, 입력이 바뀌지 않은 다른 모듈은 Gradle의 `UP-TO-DATE` 결과를 재사용했다. 전체 집계는 각 모듈의 XML 386개 기준이다. 최신 main 재조회, migration 91개의 변경 및 중복 없음, `git diff --check`, 통합 코드의 정합성 리뷰까지 확인했다. CI와 병합 상태는 해당 PR에서 별도로 확인한다.
