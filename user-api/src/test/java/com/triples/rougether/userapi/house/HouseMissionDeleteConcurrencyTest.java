@@ -15,6 +15,7 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class HouseMissionDeleteConcurrencyTest {
 
     @Autowired private HouseMissionService houseMissionService;
+    @Autowired private HouseMissionQueryService houseMissionQueryService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseMissionRepository houseMissionRepository;
@@ -117,6 +119,6 @@ class HouseMissionDeleteConcurrencyTest {
 
         // 최종 불변식: 미션은 삭제됐고, 삭제된 미션에 기록된 기여가 없다
         assertThat(houseMissionRepository.findByIdAndHouseIdAndDeletedAtIsNull(missionId, houseId)).isEmpty();
-        assertThat(houseMissionService.getMissions(ownerId, houseId).items()).isEmpty();
+        assertThat(houseMissionQueryService.getMissions(ownerId, houseId).items()).isEmpty();
     }
 }

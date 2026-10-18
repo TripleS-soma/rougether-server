@@ -23,6 +23,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.house.web.HouseMissionController;
 import java.time.Instant;
@@ -46,6 +47,9 @@ class HouseMissionControllerTest {
     private HouseMissionService houseMissionService;
 
     @MockitoBean
+    private HouseMissionQueryService houseMissionQueryService;
+
+    @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
 
     // security 컨텍스트의 JwtAuthenticationFilter 가 의존 — slice 테스트에서 mock 필요.
@@ -67,7 +71,7 @@ class HouseMissionControllerTest {
     @Test
     void 미션_목록_응답_계약() throws Exception {
         authAsUser7();
-        when(houseMissionService.getMissions(7L, 1L)).thenReturn(new HouseMissionListResponse(List.of(
+        when(houseMissionQueryService.getMissions(7L, 1L)).thenReturn(new HouseMissionListResponse(List.of(
                 new MissionSummary(3L, "주간 미션", HouseMissionType.WEEKLY_MEMBER_COUNT, 20, 12L,
                         HouseMissionStatus.ACTIVE, null, null, null, 3, true,
                         Instant.parse("2026-07-05T00:00:00Z")))));
@@ -124,7 +128,7 @@ class HouseMissionControllerTest {
     @Test
     void 미션_상세_응답_계약() throws Exception {
         authAsUser7();
-        when(houseMissionService.getMission(7L, 1L, 3L)).thenReturn(missionResponse());
+        when(houseMissionQueryService.getMission(7L, 1L, 3L)).thenReturn(missionResponse());
 
         mockMvc.perform(get("/api/v1/houses/1/missions/3"))
                 .andExpect(status().isOk())

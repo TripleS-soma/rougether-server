@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionContributeResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 class HouseMissionFlowIntegrationTest {
 
     @Autowired private HouseMissionService houseMissionService;
+    @Autowired private HouseMissionQueryService houseMissionQueryService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseMissionParticipantRepository participantRepository;
@@ -183,7 +185,7 @@ class HouseMissionFlowIntegrationTest {
                         .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACTIVE));
 
         // 목록에는 EXPIRED 상태로 그대로 노출된다
-        assertThat(houseMissionService.getMissions(f.owner().getId(), f.house().getId()).items())
+        assertThat(houseMissionQueryService.getMissions(f.owner().getId(), f.house().getId()).items())
                 .anySatisfy(item -> {
                     assertThat(item.missionId()).isEqualTo(created.missionId());
                     assertThat(item.status()).isEqualTo(HouseMissionStatus.EXPIRED);

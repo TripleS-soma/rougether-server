@@ -17,6 +17,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 class HouseMissionDeleteIntegrationTest {
 
     @Autowired private HouseMissionService houseMissionService;
+    @Autowired private HouseMissionQueryService houseMissionQueryService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private HouseMissionParticipantRepository participantRepository;
@@ -68,8 +70,8 @@ class HouseMissionDeleteIntegrationTest {
         houseMissionService.delete(f.owner().getId(), f.house().getId(), created.missionId());
 
         // 목록·상세에서 사라진다
-        assertThat(houseMissionService.getMissions(f.owner().getId(), f.house().getId()).items()).isEmpty();
-        assertThatThrownBy(() -> houseMissionService.getMission(
+        assertThat(houseMissionQueryService.getMissions(f.owner().getId(), f.house().getId()).items()).isEmpty();
+        assertThatThrownBy(() -> houseMissionQueryService.getMission(
                 f.owner().getId(), f.house().getId(), created.missionId()))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
         // 기여 이력 자체는 보존된다 (soft delete)
@@ -111,7 +113,7 @@ class HouseMissionDeleteIntegrationTest {
                 f.owner().getId(), f.house().getId(), created.missionId()))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED));
         // 여전히 목록에 남아 있다
-        assertThat(houseMissionService.getMissions(f.owner().getId(), f.house().getId()).items()).hasSize(1);
+        assertThat(houseMissionQueryService.getMissions(f.owner().getId(), f.house().getId()).items()).hasSize(1);
     }
 
     @Test

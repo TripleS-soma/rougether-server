@@ -19,6 +19,7 @@ import com.triples.rougether.userapi.house.dto.HouseMissionCreateRequest;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse;
 import com.triples.rougether.userapi.house.dto.HouseMissionResponse;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -41,6 +42,7 @@ class HouseMissionDailyIntegrationTest {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Autowired private HouseMissionService houseMissionService;
+    @Autowired private HouseMissionQueryService houseMissionQueryService;
     @Autowired private HouseRepository houseRepository;
     @Autowired private HouseMemberRepository houseMemberRepository;
     @Autowired private UserRepository userRepository;
@@ -139,7 +141,7 @@ class HouseMissionDailyIntegrationTest {
         rewindContributionsToYesterday(missionId);
 
         HouseMissionResponse detail =
-                houseMissionService.getMission(f.owner().getId(), f.house().getId(), missionId);
+                houseMissionQueryService.getMission(f.owner().getId(), f.house().getId(), missionId);
         assertThat(detail.currentValue()).isZero();
         assertThat(detail.achieved()).isFalse();
         // 어제 기여와 무관하게 내 누적 기여는 유지된다
@@ -203,7 +205,7 @@ class HouseMissionDailyIntegrationTest {
         entityManager.flush();
 
         HouseMissionResponse detail =
-                houseMissionService.getMission(f.owner().getId(), f.house().getId(), missionId);
+                houseMissionQueryService.getMission(f.owner().getId(), f.house().getId(), missionId);
         // 탈퇴자 기여가 남으면 1/1=100% 로 왜곡 - 제외되어 0% 여야 한다
         assertThat(detail.currentValue()).isZero();
         assertThat(detail.achieved()).isFalse();
@@ -224,11 +226,11 @@ class HouseMissionDailyIntegrationTest {
         houseMissionService.claim(f.owner().getId(), f.house().getId(), dailyId);
 
         HouseMissionResponse detail =
-                houseMissionService.getMission(f.owner().getId(), f.house().getId(), dailyId);
+                houseMissionQueryService.getMission(f.owner().getId(), f.house().getId(), dailyId);
         assertThat(detail.todayClaimed()).isTrue();
         assertThat(detail.currentValue()).isEqualTo(50);
 
-        HouseMissionListResponse list = houseMissionService.getMissions(f.owner().getId(), f.house().getId());
+        HouseMissionListResponse list = houseMissionQueryService.getMissions(f.owner().getId(), f.house().getId());
         HouseMissionListResponse.MissionSummary dailyRow = list.items().stream()
                 .filter(item -> item.missionId().equals(dailyId)).findFirst().orElseThrow();
         HouseMissionListResponse.MissionSummary weeklyRow = list.items().stream()

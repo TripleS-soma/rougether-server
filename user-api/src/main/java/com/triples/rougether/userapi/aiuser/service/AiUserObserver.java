@@ -6,7 +6,7 @@ import com.triples.rougether.userapi.chat.service.ChatQueryService;
 import com.triples.rougether.userapi.feed.service.FeedQueryService;
 import com.triples.rougether.userapi.gacha.service.GachaService;
 import com.triples.rougether.userapi.house.service.HouseQueryService;
-import com.triples.rougether.userapi.house.service.HouseMissionService;
+import com.triples.rougether.userapi.house.service.HouseMissionQueryService;
 import com.triples.rougether.userapi.house.dto.HouseMemberListResponse.MemberSummary;
 import com.triples.rougether.userapi.market.service.MarketQueryService;
 import com.triples.rougether.userapi.onboarding.service.OnboardingQueryService;
@@ -34,7 +34,7 @@ public class AiUserObserver {
     private final WalletQueryService wallets;
     private final RoomQueryService rooms;
     private final HouseQueryService houses;
-    private final HouseMissionService missions;
+    private final HouseMissionQueryService missions;
     private final FeedQueryService feed;
     private final ChatQueryService chat;
     private final OnboardingQueryService onboarding;
