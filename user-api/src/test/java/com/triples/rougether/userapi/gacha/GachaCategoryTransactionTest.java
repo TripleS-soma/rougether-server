@@ -31,6 +31,7 @@ import com.triples.rougether.userapi.gacha.dto.GachaDrawRequest;
 import com.triples.rougether.userapi.gacha.dto.GachaDrawResponse;
 import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.gacha.service.GachaService;
+import com.triples.rougether.userapi.gacha.service.GachaDrawPolicy;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,15 +44,19 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 // 서비스의 실제 커밋/롤백을 확인하므로 테스트 자체에는 @Transactional 을 사용하지 않는다.
 // canonical seed 풀을 잠시 비활성화하는 동안 다른 테스트에 영향을 주지 않도록 DB 를 분리한다.
 @SpringBootTest(properties = "spring.datasource.url=jdbc:tc:mysql:8.4:///gacha_category_transactions")
+@Import(GachaCategoryTransactionTest.DrawPolicyConfiguration.class)
 class GachaCategoryTransactionTest {
 
     @Autowired private GachaService gachaService;
@@ -74,7 +79,6 @@ class GachaCategoryTransactionTest {
     private List<Long> activeSeedEntryIds = List.of();
     private List<CanonicalMachineState> canonicalMachineStates = List.of();
     private Gacha furnitureGacha;
-    private Random originalRandom;
 
     @BeforeEach
     void isolateCanonicalPool() {
@@ -93,21 +97,10 @@ class GachaCategoryTransactionTest {
                 Long.class, furnitureGacha.getId());
         jdbcTemplate.update("update gacha_pool_entries set is_active = false where gacha_id = ?",
                 furnitureGacha.getId());
-        originalRandom = (Random) ReflectionTestUtils.getField(gachaService, "random");
-        // 전설 경계값을 선택한다. 잘못 등록한 전설 보상을 필터하지 않으면 반드시 테스트가 실패한다.
-        ReflectionTestUtils.setField(gachaService, "random", new Random() {
-            @Override
-            public int nextInt(int bound) {
-                return bound - 1;
-            }
-        });
     }
 
     @AfterEach
     void restoreSeedAndRemoveFixtures() {
-        if (originalRandom != null) {
-            ReflectionTestUtils.setField(gachaService, "random", originalRandom);
-        }
         for (Long userId : userIds) {
             jdbcTemplate.update("delete from wallet_histories where user_id = ?", userId);
             jdbcTemplate.update("delete from user_items where user_id = ?", userId);
@@ -337,6 +330,21 @@ class GachaCategoryTransactionTest {
     private int rowCount(String table, User user) {
         return jdbcTemplate.queryForObject("select count(*) from " + table + " where user_id = ?",
                 Integer.class, user.getId());
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class DrawPolicyConfiguration {
+        @Bean
+        @Primary
+        GachaDrawPolicy deterministicGachaDrawPolicy() {
+            // 전설 경계값을 선택해 잘못 등록한 전설 보상의 필터 누락을 검출함.
+            return new GachaDrawPolicy(new Random() {
+                @Override
+                public int nextInt(int bound) {
+                    return bound - 1;
+                }
+            });
+        }
     }
 
     private record CanonicalMachineState(long id, boolean active) {
