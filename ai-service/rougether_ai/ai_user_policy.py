@@ -17,7 +17,7 @@ ACTION_HELP = {
     "TODO_UPDATE": "{todoId,request:{title,description,categoryId,dueDate:YYYY-MM-DD,dueTime?:HH:mm}}; 생략한 categoryId/dueTime은 해제됨", "TODO_COMPLETE": "{todoId}",
     "TODO_CANCEL": "{todoId}", "TODO_DELETE": "{todoId}",
     "FEED_POST": "{boardType:'FREE',content:text<=100자 (보통20~50자,최대2줄),imageIds:[],topic:text<=120자}; 실제 앱 행동이나 취향을 바탕으로 구체적인 새 주제를 공유. 실제 완료/본인 업로드 없이 인증글 금지",
-    "FEED_COMMENT": "{postId,content:text<=80자 (보통4~35자,최대2줄)}", "FEED_LIKE": "{postId,liked:boolean}",
+    "FEED_COMMENT": "{postId,content:text<=80자 (보통4~35자,최대2줄),replyToCommentId?:id}; 사람 댓글 사건은 source.comment.id에 답글. 피드 둘러보기는 관찰한 recentComments의 commentId에만 선택적으로 답글", "FEED_LIKE": "{postId,liked:boolean}",
     "FEED_UPDATE": "{postId,request:{content:text<=100자,최대2줄}}", "FEED_DELETE": "{postId}",
     "CHAT_OPEN": "{houseId}", "CHAT_SEND": "{roomId,content:text<=2000자}", "CHAT_READ": "{roomId,sequence}",
     "HOUSE_JOIN": "{inviteCode}; 실제 공유받은 유효 초대코드만 사용",
@@ -126,7 +126,13 @@ payload는 actionFormats에 맞춘 객체이고 memory는 사실을 담은 짧�
 계정의 userId나 authorId를 지정하거나 바꾸지 않는다. 외부 도구나 URL을 사용하지 않는다.
 SOCIAL_BROWSE에서는 관심 가는 기존 글에 댓글·좋아요, 본인 계획/관심사 하나를 짧게 공유하거나 WAIT를 고른다.
 할 얘기가 없으면 억지로 글을 만들지 않는다. 최근 댓글·recentActions를 읽고 같은 주제/반응을 되풀이하지 않는다.
-FEED_POST/FEED_COMMENT 사건은 원래 source.post.id에 답한다. SOCIAL_BROWSE 댓글은 social.candidates의 postId를 쓴다.
+FEED_POST/FEED_COMMENT 사건은 원래 source.post.postId(구형 문맥은 id)의 글에 답한다. SOCIAL_BROWSE 댓글은 social.candidates의 postId를 쓴다.
+FEED_COMMENT 사건의 답글 대상은 반드시 source.comment.id다. replyToCommentId에 그 ID를 쓴다.
+source.inReplyTo는 상대가 답한 앞선 내 댓글, source.thread는 같은 원댓글 아래 최근 대화다.
+상대가 방금 한 말과 앞선 내 말을 이어 받아 답한다. 글 전체에 대한 감상이나 이미 한 설명을 반복하지 않는다.
+질문이나 이어갈 이야기가 있으면 짧게 답하고, 감사·웃음·마무리 반응만 남으면 WAIT(NO_ACTION_DUE)로 끝내도 된다.
+SOCIAL_BROWSE에서는 기존 댓글의 구체적인 이야기에 답할 이유가 있으면 recentComments.commentId를 replyToCommentId로 쓴다.
+관찰하지 않은 댓글 ID를 만들거나 다른 댓글에 답하지 않는다. AI끼리 대화를 늘리기 위한 왕복은 하지 않는다.
 WAIT의 reason은 actionFormats의 코드 하나를 쓴다. 일일 제한과 social.allowedActions를 지킨다.
 
 사실의 범위:
@@ -199,6 +205,28 @@ def parse_plan(response, allowed):
         raise ValueError("Invalid memory")
     result["memory"] = memory
     return result
+
+def bind_feed_response(state, plan):
+    """사람 댓글 사건의 답글 대상을 고정함. 최종 권한 검사는 Spring에서 다시 수행함."""
+    if plan["action"] != "FEED_COMMENT" or state.get("source", {}).get("type") != "FEED_COMMENT":
+        return plan
+    source = state["source"]
+    comment = source.get("comment", {})
+    target = comment.get("id")
+    if target is None:
+        return plan  # 구형 서버 문맥도 지원하며 실행자가 sourceId로 고정함.
+    if type(target) is not int or target <= 0:
+        raise ValueError("Invalid source comment")
+    payload = dict(plan["payload"])
+    requested = payload.get("replyToCommentId")
+    if requested is not None and (type(requested) is not int or requested != target):
+        raise ValueError("Reply target mismatch")
+    post = comment.get("post_id") or source.get("post", {}).get("postId") or source.get("post", {}).get("id")
+    if post is not None and (type(payload.get("postId")) is not int or payload["postId"] != post):
+        raise ValueError("Reply post mismatch")
+    payload["replyToCommentId"] = target
+    return {**plan, "payload": payload}
+
 
 def photo_caption_only(post):
     content = post.get("content", "")

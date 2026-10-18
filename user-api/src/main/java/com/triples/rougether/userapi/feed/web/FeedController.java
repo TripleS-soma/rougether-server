@@ -64,14 +64,23 @@ public class FeedController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unlike(@CurrentUser AuthUser user, @PathVariable @Positive Long postId) { commands.like(user.id(), postId, false); }
 
-    @Operation(summary = "댓글 목록", description = "댓글은 오래된 순서이며 다음 cursor 이후를 조회합니다.")
+    @Operation(summary = "댓글 목록", description = "기본은 댓글·답글 전체를 오래된 순서로 조회합니다. topLevelOnly=true면 원댓글만 반환하며 답글이 남은 삭제 원댓글은 deleted=true, 빈 본문·작성자 정보로 표시합니다. replyCount는 요청자에게 보이는 답글 수입니다.")
     @GetMapping("/posts/{postId}/comments")
     public FeedPageResponse<FeedCommentResponse> comments(@CurrentUser AuthUser user,
             @PathVariable @Positive Long postId, @RequestParam(required = false) @Positive Long cursor,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
-        return query.comments(user.id(), postId, cursor, size);
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size,
+            @RequestParam(defaultValue = "false") boolean topLevelOnly) {
+        return query.comments(user.id(), postId, cursor, size, topLevelOnly);
     }
-    @Operation(summary = "댓글 등록")
+    @Operation(summary = "대댓글 목록", description = "원댓글 commentId 아래의 답글을 오래된 순서로 조회합니다. 답글에 다시 쓴 답글도 같은 목록에 있으며 실제 대상은 replyToCommentId입니다.")
+    @GetMapping("/posts/{postId}/comments/{commentId}/replies")
+    public FeedPageResponse<FeedCommentResponse> replies(@CurrentUser AuthUser user,
+            @PathVariable @Positive Long postId, @PathVariable @Positive Long commentId,
+            @RequestParam(required = false) @Positive Long cursor,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
+        return query.replies(user.id(), postId, commentId, cursor, size);
+    }
+    @Operation(summary = "댓글·대댓글 등록", description = "replyToCommentId 생략은 일반 댓글입니다. 지정하면 같은 게시물의 공개된 댓글에 답합니다. parentCommentId는 서버가 원댓글로 정규화하며 실제 답한 대상은 replyToCommentId로 유지합니다. 재시도는 본문과 답글 대상이 같아야 합니다.")
     @PostMapping("/posts/{postId}/comments")
     @ResponseStatus(HttpStatus.CREATED)
     public FeedCommentResponse comment(@CurrentUser AuthUser user, @PathVariable @Positive Long postId,

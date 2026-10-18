@@ -396,6 +396,121 @@ class AiUserRuntimeIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT memory_status FROM ai_user_jobs WHERE id=?",String.class,job.id())).isEqualTo("FAILED");
     }
 
+    @Test void directReplyRoutesToAddressedAiAndPersistsOneThreadedResponse() {
+        User human=quietHuman();
+        long owner=ais.getFirst(), addressed=ais.get(1);
+        long post=feed.create(owner,new FeedCreateRequest(UUID.randomUUID(),"독서 이야기",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(addressed,post,new FeedCommentRequest(UUID.randomUUID(),"짧게 읽어볼까 해요"));
+        var request=new FeedCommentRequest(UUID.randomUUID(),"얼마나 읽을 거예요?",root.commentId());
+        var incoming=feed.comment(human.getId(),post,request);
+        feed.comment(human.getId(),post,request);
+        var job=jobs.claim("direct-reply");
+        assertThat(job.userId()).isEqualTo(addressed);
+        assertThat(job.sourceId()).isEqualTo(incoming.commentId());
+        assertThat(jdbc.queryForObject("SELECT priority FROM ai_user_jobs WHERE id=?",Integer.class,job.id())).isEqualTo(100);
+        var source=mapper.valueToTree(control.snapshot(job.id(),job.owner(),job.fencingToken())).path("source");
+        assertThat(source.path("inReplyTo").path("id").asLong()).isEqualTo(root.commentId());
+        assertThat(source.path("thread").size()).isEqualTo(2);
+        var payload=mapper.createObjectNode().put("postId",post).put("content","일단 한 쪽만요");
+        String receipt=control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"짧게 읽을 계획을 답함");
+        assertThat(control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,null)).isEqualTo(receipt);
+        var response=mapper.readTree(receipt);
+        assertThat(response.path("parentCommentId").asLong()).isEqualTo(root.commentId());
+        assertThat(response.path("replyToCommentId").asLong()).isEqualTo(incoming.commentId());
+        assertThat(response.path("author").path("userId").asLong()).isEqualTo(addressed);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM feed_comments WHERE post_id=?",Integer.class,post)).isEqualTo(3);
+        var recorded=mapper.readTree(jdbc.queryForObject("SELECT action_payload FROM ai_user_jobs WHERE id=?",String.class,job.id()));
+        assertThat(recorded.path("replyToCommentId").asLong()).isEqualTo(incoming.commentId());
+    }
+
+    @Test void repliesBetweenHumansDoNotSummonOtherParticipatingAi() {
+        User first=quietHuman(), second=quietHuman();
+        long post=feed.create(ais.getFirst(),new FeedCreateRequest(UUID.randomUUID(),"이야기",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(first.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"사람 댓글"));
+        jdbc.update("DELETE FROM ai_user_jobs");
+        feed.comment(second.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"사람에게 답글",root.commentId()));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs",Integer.class)).isZero();
+    }
+
+    @Test void disabledOrBlockingAiDoesNotReceiveDirectReplyJobs() {
+        User human=quietHuman();
+        long owner=ais.getFirst(), addressed=ais.get(1);
+        long post=feed.create(owner,new FeedCreateRequest(UUID.randomUUID(),"이야기",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(addressed,post,new FeedCommentRequest(UUID.randomUUID(),"제 댓글"));
+        jdbc.update("UPDATE ai_user_profiles SET enabled=FALSE WHERE user_id=?",addressed);
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"꺼진 계정에게",root.commentId()));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs",Integer.class)).isZero();
+        jdbc.update("UPDATE ai_user_profiles SET enabled=TRUE WHERE user_id=?",addressed);
+        jdbc.update("INSERT INTO user_blocks(blocker_user_id,blocked_user_id,created_at) VALUES (?,?,CURRENT_TIMESTAMP)",addressed,human.getId());
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"차단한 계정에게",root.commentId()));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs",Integer.class)).isZero();
+    }
+
+    @Test void responseCannotChangeTheHumanCommentOrPostTarget() {
+        User human=quietHuman(); long ai=ais.getFirst();
+        long post=feed.create(ai,new FeedCreateRequest(UUID.randomUUID(),"이야기",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(ai,post,new FeedCommentRequest(UUID.randomUUID(),"제 댓글"));
+        var incoming=feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"질문",root.commentId()));
+        var job=jobs.claim("reply-guard"); control.snapshot(job.id(),job.owner(),job.fencingToken());
+        var payload=mapper.createObjectNode().put("postId",post).put("content","잘못된 답글").put("replyToCommentId",root.commentId());
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,null))
+                .isInstanceOf(RuntimeException.class);
+        payload.put("replyToCommentId",incoming.commentId()).put("postId",Long.MAX_VALUE);
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,null))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM feed_comments WHERE post_id=?",Integer.class,post)).isEqualTo(2);
+    }
+
+    @Test void threadContextIsBoundedAndIncludesTheOriginalTargetOutsideRecentWindow() {
+        User human=quietHuman(); long ai=ais.getFirst();
+        long post=feed.create(ai,new FeedCreateRequest(UUID.randomUUID(),"독서 기록",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(ai,post,new FeedCommentRequest(UUID.randomUUID(),"한 쪽부터 읽을 계획이에요"));
+        for(int i=0;i<12;i++) feed.comment(ai,post,new FeedCommentRequest(UUID.randomUUID(),"대화 "+i,root.commentId()));
+        var incoming=feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"그 계획은 언제 해요?",root.commentId()));
+        var job=jobs.claim("bounded-thread");
+        var source=mapper.valueToTree(control.snapshot(job.id(),job.owner(),job.fencingToken())).path("source");
+        assertThat(source.path("thread").size()).isEqualTo(8);
+        assertThat(source.path("thread").get(7).path("id").asLong()).isEqualTo(incoming.commentId());
+        assertThat(source.path("inReplyTo").path("id").asLong()).isEqualTo(root.commentId());
+        String refs=jdbc.queryForObject("SELECT context_sources FROM ai_user_jobs WHERE id=?",String.class,job.id());
+        assertThat(mapper.readValue(refs,AiUserObserver.SourceReference[].class))
+                .contains(new AiUserObserver.SourceReference("FEED_COMMENT",root.commentId()));
+        feed.deleteComment(ai,post,root.commentId());
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.createObjectNode().put("postId",post).put("content","지워진 원문 기반 답변"),null)).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test void threadAccessIsRevokedWhenAnyObservedParticipantBlocksAi() {
+        User human=quietHuman(), peer=quietHuman(); long ai=ais.getFirst();
+        long post=feed.create(ai,new FeedCreateRequest(UUID.randomUUID(),"이야기",List.of(),FeedBoardType.FREE));
+        var root=feed.comment(ai,post,new FeedCommentRequest(UUID.randomUUID(),"제 댓글"));
+        feed.comment(peer.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"제 원문도 전달됨",root.commentId()));
+        jdbc.update("DELETE FROM ai_user_jobs");
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"질문",root.commentId()));
+        var job=jobs.claim("thread-access");
+        assertThat(mapper.writeValueAsString(control.snapshot(job.id(),job.owner(),job.fencingToken()))).contains("제 원문도 전달됨");
+        jdbc.update("INSERT INTO user_blocks(blocker_user_id,blocked_user_id,created_at) VALUES (?,?,CURRENT_TIMESTAMP)",peer.getId(),ai);
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.createObjectNode().put("postId",post).put("content","이전 문맥으로 답변"),null)).isInstanceOf(RuntimeException.class);
+        assertThat(mapper.writeValueAsString(control.snapshot(job.id(),job.owner(),job.fencingToken()))).doesNotContain("제 원문도 전달됨");
+    }
+
+    @Test void socialBrowseMayReplyOnlyToAnObservedAccessibleComment() {
+        User human=quietHuman(); long ai=ais.getFirst();
+        long post=quietPost(human,"독서 계획 얘기");
+        var root=feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"한 쪽부터 읽을까 해요"));
+        var job=beginSocial(ai);
+        var payload=mapper.createObjectNode().put("postId",post).put("content","한 쪽이면 부담 없겠어요").put("replyToCommentId",root.commentId());
+        payload.put("replyToCommentId",Long.MAX_VALUE);
+        assertThatThrownBy(() -> control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,null))
+                .isInstanceOf(RuntimeException.class);
+        payload.put("replyToCommentId",root.commentId());
+        var result=mapper.readTree(control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"기존 댓글에 참여함"));
+        assertThat(result.path("parentCommentId").asLong()).isEqualTo(root.commentId());
+        assertThat(result.path("replyToCommentId").asLong()).isEqualTo(root.commentId());
+    }
+
     @Test void humanCommentEnqueuesPriorityJobInSameTransaction() {
         User human=tx.execute(s -> users.saveAndFlush(User.signUp()));
         createdHumans.add(human.getId());

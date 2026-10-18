@@ -33,6 +33,12 @@ public class AiUserControlService {
         observer.requireContextAccessible(job);
         memoryProjection.requireMemorySources(job);
         observer.requireResponseTarget(job,action,payload);
+        if (action==AiUserActionExecutor.Action.FEED_COMMENT && job.sourceType().equals("FEED_COMMENT")) {
+            // 구형 모델의 대상 생략도 실제 실행·감사·기억에 같은 답글 ID로 기록함.
+            var reply=mapper.createObjectNode().setAll((tools.jackson.databind.node.ObjectNode)payload);
+            reply.put("replyToCommentId",job.sourceId());
+            payload=reply;
+        }
         var rejected=social.reject(job,action,payload);
         if (rejected!=null) {
             action=AiUserActionExecutor.Action.WAIT;

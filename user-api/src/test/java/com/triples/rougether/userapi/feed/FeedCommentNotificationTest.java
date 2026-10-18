@@ -65,6 +65,7 @@ class FeedCommentNotificationTest {
         for (Long id : userIds) {
             jdbc.update("delete from notification where user_id=?", id);
             jdbc.update("delete from notification_setting where user_id=?", id);
+            jdbc.update("delete from user_blocks where blocker_user_id=? or blocked_user_id=?", id, id);
         }
         for (Long id : userIds) {
             jdbc.update("delete c from feed_comments c join feed_posts p on p.id=c.post_id where p.author_id=? or c.author_id=?", id, id);
@@ -73,6 +74,93 @@ class FeedCommentNotificationTest {
             jdbc.update("delete from user_daily_activity where user_id=?", id);
             jdbc.update("delete from users where id=?", id);
         }
+    }
+
+
+    @Test void 대상자가_작성자를_차단했으면_대상답글알림만_생략한다() {
+        Long owner = user(), commenter = user(), actor = user(), id = post(owner);
+        var root = commands.comment(commenter, id, request());
+        jdbc.update("insert into user_blocks (blocker_user_id,blocked_user_id,created_at) values (?,?,?)",
+                commenter, actor, java.time.Instant.now());
+        commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId()));
+        assertThat(inbox(commenter)).isEmpty();
+        assertThat(inbox(owner)).hasSize(2);
+    }
+
+    @Test void 대댓글은_게시물작성자와_대상댓글작성자에게_각각_한번만_알린다() {
+        Long owner = user(), commenter = user(), actor = user(), id = post(owner);
+        var root = commands.comment(commenter, id, request());
+        var request = new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId());
+        var reply = commands.comment(actor, id, request);
+        assertThat(commands.comment(actor, id, request).commentId()).isEqualTo(reply.commentId());
+        assertThat(inbox(owner)).hasSize(2);
+        assertThat(inbox(commenter)).singleElement().satisfies(row -> {
+            assertThat(row.get("type")).isEqualTo("FEED_COMMENT");
+            assertThat(row.get("body")).isEqualTo("내 댓글에 답글이 달렸어요. 확인해 보세요!");
+            assertThat(((Number) row.get("ref_id")).longValue()).isEqualTo(id);
+        });
+        assertThat(inbox(actor)).isEmpty();
+    }
+
+    @Test void 게시물과_댓글작성자가_같으면_답글알림을_한번만_보내고_자기답글은_제외한다() {
+        Long owner = user(), actor = user(), id = post(owner);
+        var root = commands.comment(owner, id, request());
+        var reply = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId()));
+        assertThat(inbox(owner)).singleElement().satisfies(row -> assertThat(row.get("title")).isEqualTo("답글이 달렸어요"));
+        commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "자기 답글", reply.commentId()));
+        assertThat(inbox(actor)).isEmpty();
+        assertThat(inbox(owner)).hasSize(2);
+        verify(push, times(2)).push(anyLong(), eq(owner), anyString(), anyString(), anyMap());
+    }
+
+    @Test void 답글알림은_대상자의_언어와_설정을_따르고_전체트랜잭션과_함께_롤백된다() {
+        Long owner = user(), commenter = user(), actor = user(), id = post(owner);
+        var root = commands.comment(commenter, id, request());
+        tx.executeWithoutResult(s -> users.findById(commenter).orElseThrow().changePreferences("en", null));
+        settings.updateSettings(commenter, new NotificationSettingUpdateRequest(null, null, null, false, null, null));
+        var request = new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId());
+        tx.executeWithoutResult(s -> { commands.comment(actor, id, request); s.setRollbackOnly(); });
+        assertThat(inbox(commenter)).isEmpty();
+        assertThat(inbox(owner)).hasSize(1);
+        commands.comment(actor, id, request);
+        assertThat(inbox(commenter)).singleElement().satisfies(row -> {
+            assertThat(row.get("title")).isEqualTo("New reply");
+            assertThat(row.get("body")).isEqualTo("Someone replied to your comment. Take a look!");
+            assertThat(row.get("push_status")).isEqualTo("BLOCKED");
+        });
+        verify(push, never()).push(anyLong(), eq(commenter), anyString(), anyString(), anyMap());
+    }
+
+    @Test void 답글알림저장_실패는_다른수신자알림과_답글도_함께_롤백한다() {
+        Long owner = user(), commenter = user(), actor = user(), id = post(owner);
+        var root = commands.comment(commenter, id, request());
+        doThrow(new IllegalStateException("reply notification unavailable")).when(notifications).send(eq(commenter), any(), eq(id));
+        assertThatThrownBy(() -> commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId())))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(inbox(owner)).hasSize(1);
+        assertThat(inbox(commenter)).isEmpty();
+        assertThat(jdbc.queryForObject("select count(*) from feed_comments where post_id=?", Long.class, id)).isEqualTo(1);
+    }
+
+    @Test void 세참여자가_동시에_서로_답해도_회원잠금이_교차하지_않는다() throws Exception {
+        Long a = user(), b = user(), c = user(), id = post(a);
+        var ar = commands.comment(b, id, request());
+        var br = commands.comment(c, id, request());
+        var toB = new FeedCommentRequest(UUID.randomUUID(), "B에게", ar.commentId());
+        var toC = new FeedCommentRequest(UUID.randomUUID(), "C에게", br.commentId());
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(6)) {
+            List<Future<?>> work = new ArrayList<>();
+            for (int i = 0; i < 6; i++) {
+                boolean fromB = i % 2 == 0;
+                work.add(pool.submit(() -> { start.await(); return commands.comment(fromB ? b : c, id, fromB ? toC : toB); }));
+            }
+            start.countDown();
+            for (var task : work) task.get(20, TimeUnit.SECONDS);
+        }
+        assertThat(inbox(a)).hasSize(4);
+        assertThat(inbox(b)).hasSize(1);
+        assertThat(inbox(c)).hasSize(1);
     }
 
     @Test void 댓글_커밋후_작성자에게_한번만_알리고_알림함과_push에_게시물_ID를_싣는다() throws Exception {
