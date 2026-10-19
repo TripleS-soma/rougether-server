@@ -16,6 +16,7 @@ import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.infra.assets.AssetStorageService;
 import com.triples.rougether.infra.assets.StoredAsset;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
+import com.triples.rougether.userapi.furniture.service.FurnitureGenerationQueryService;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -36,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(properties = {"furniture.generation.enabled=true", "furniture.generation.timeout=180s"})
 class FurnitureFlareConcurrentLiveTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired FurnitureGenerationWorker worker;
     @Autowired FurnitureGenerationProperties properties;
     @Autowired UserRepository users;
@@ -112,7 +114,7 @@ class FurnitureFlareConcurrentLiveTest {
             while (completed.size() < 4 && System.nanoTime() - started < TimeUnit.MINUTES.toNanos(8)) {
                 for (var entry : jobs.entrySet()) {
                     if (completed.containsKey(entry.getKey())) continue;
-                    var result = service.get(entry.getValue(), entry.getKey());
+                    var result = queries.get(entry.getValue(), entry.getKey());
                     if (result.status() == Status.SUCCEEDED || result.status() == Status.FAILED) {
                         String label = labels.get(result.id());
                         completed.put(result.id(), result);

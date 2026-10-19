@@ -17,6 +17,7 @@ import com.triples.rougether.furniture.lambda.*;
 import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol.*;
 import com.triples.rougether.furniture.service.*;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
+import com.triples.rougether.userapi.furniture.service.FurnitureGenerationQueryService;
 import com.triples.rougether.infra.assets.AssetStorageService;
 import com.triples.rougether.infra.llm.LlmProperties;
 import java.time.*;
@@ -39,6 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
 class FurnitureStabilityIntegrationTest {
     @Autowired FurnitureGenerationTransactions tx;
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired FurnitureLambdaControl control;
     @Autowired FurnitureGenerationJobRepository jobs;
     @Autowired UserRepository users;
@@ -169,7 +171,7 @@ class FurnitureStabilityIntegrationTest {
             int reads=0;long maxRead=0;
             try {
                 while(!blocked.isDone() && System.nanoTime()-t<TimeUnit.SECONDS.toNanos(9)) {
-                    long rt=System.nanoTime();assertThat(tx.list(u.getId())).isEmpty();maxRead=Math.max(maxRead,System.nanoTime()-rt);reads++;Thread.sleep(50);
+                    long rt=System.nanoTime();assertThat(queries.list(u.getId())).isEmpty();maxRead=Math.max(maxRead,System.nanoTime()-rt);reads++;Thread.sleep(50);
                 }
                 assertThatThrownBy(()->blocked.get(1,TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class);
                 double seconds=(System.nanoTime()-t)/1e9;assertThat(seconds).isLessThan(8);

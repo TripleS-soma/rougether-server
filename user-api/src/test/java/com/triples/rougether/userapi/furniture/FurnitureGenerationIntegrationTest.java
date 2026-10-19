@@ -36,6 +36,7 @@ import org.springframework.transaction.support.*;
         "furniture.generation.style-reference-keys=items/ref.png"})
 class FurnitureGenerationIntegrationTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired com.triples.rougether.userapi.market.service.MarketAssetService marketAssetService;
     @Autowired FurnitureGenerationTransactions transactions;
     @Autowired FurnitureGenerationWorker worker;
@@ -136,7 +137,7 @@ class FurnitureGenerationIntegrationTest {
         verify(ai,never()).extract(any(),anyString());
         jdbc.update("update furniture_worker_capacity set execution_enabled=true where id=1");
         worker.runNext(); worker.runNext(); worker.runNext();
-        assertThat(service.get(user.getId(),job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        assertThat(queries.get(user.getId(),job.id()).status()).isEqualTo(Status.SUCCEEDED);
         verify(ai,times(1)).extract(any(),anyString());
         verify(ai,times(1)).generate(any(),any());
         verify(ai,times(1)).review(any(),any());
@@ -146,15 +147,15 @@ class FurnitureGenerationIntegrationTest {
         var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
         assertThat(job.action()).isEqualTo(Action.EXTRACT);
         worker.runNext();
-        assertThat(service.get(user.getId(), job.id()).action()).isEqualTo(Action.GENERATE);
+        assertThat(queries.get(user.getId(), job.id()).action()).isEqualTo(Action.GENERATE);
         assertThat(jobs.findById(job.id()).orElseThrow().getExtractionAttempts()).isEqualTo(1);
         verify(ai, never()).generate(any(), any());
         assertThat(job.status()).isEqualTo(Status.QUEUED);
         assertThat(job.assetKey()).isNull();
         worker.runNext();
-        assertThat(service.get(user.getId(), job.id()).action()).isEqualTo(Action.REVIEW);
+        assertThat(queries.get(user.getId(), job.id()).action()).isEqualTo(Action.REVIEW);
         worker.runNext();
-        var result = service.get(user.getId(), job.id());
+        var result = queries.get(user.getId(), job.id());
         assertThat(result.status()).isEqualTo(Status.SUCCEEDED);
         assertThat(result.assetKey()).startsWith("items/photo-furniture/furniture/");
         assertThat(result.userItemId()).isNotNull();
@@ -191,7 +192,7 @@ class FurnitureGenerationIntegrationTest {
         assertThat(transactions.extracted(claim, new Extracted(true, "{}", 50, 10))).isFalse();
         worker.runNext();
         assertThat(jobs.findById(job.id()).orElseThrow().getSubjectJson()).isNull();
-        assertThat(service.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
         verify(ai, never()).extract(any(), anyString());
     }
 
@@ -203,7 +204,7 @@ class FurnitureGenerationIntegrationTest {
         verify(ai).generate(argThat(c -> c.correction().equals("의자의 다리를 바로잡아 주세요")), eq(Action.EDIT));
         verify(ai).generate(any(), eq(Action.REGENERATE));
         verify(ai, times(1)).extract(any(), anyString());
-        assertThat(service.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).hasSize(1);
     }
 
@@ -211,7 +212,7 @@ class FurnitureGenerationIntegrationTest {
         when(ai.review(any(), any())).thenReturn(review(Decision.REGENERATE));
         var job = submitAndExtract();
         for (int i = 0; i < 10; i++) worker.runNext();
-        assertThat(service.get(user.getId(), job.id()).failureCode()).isEqualTo("GENERATION_BUDGET_EXHAUSTED");
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("GENERATION_BUDGET_EXHAUSTED");
         verify(ai, times(3)).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
     }
@@ -221,7 +222,7 @@ class FurnitureGenerationIntegrationTest {
         var job = submitAndExtract();
         worker.runNext();
         worker.runNext();
-        assertThat(service.get(user.getId(), job.id()).failureCode()).isEqualTo("HARD_QA_REJECTED");
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("HARD_QA_REJECTED");
         verify(ai).review(any(), argThat(f -> f.contains("OBJECT_TOUCHES_CANVAS_BORDER")));
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
     }
@@ -233,13 +234,13 @@ class FurnitureGenerationIntegrationTest {
         service.feedback(user.getId(), done.id(), feedback);
         service.feedback(user.getId(), done.id(), feedback);
         assertThat(feedbacks.count()).isEqualTo(1);
-        assertThat(service.get(user.getId(), done.id()).action()).isEqualTo(Action.REVIEW);
+        assertThat(queries.get(user.getId(), done.id()).action()).isEqualTo(Action.REVIEW);
         when(ai.review(any(), any())).thenReturn(review(Decision.EDIT), review(Decision.ACCEPT));
         worker.runNext();
         verify(ai, times(1)).generate(any(), any());
         worker.runNext();
         worker.runNext();
-        var corrected = service.get(user.getId(), done.id());
+        var corrected = queries.get(user.getId(), done.id());
         assertThat(corrected.userItemId()).isEqualTo(done.userItemId());
         assertThat(corrected.assetKey()).isNotEqualTo(done.assetKey());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).singleElement()
@@ -253,7 +254,7 @@ class FurnitureGenerationIntegrationTest {
             assertCode(() -> service.feedback(user.getId(), done.id(),
                     new FurnitureFeedbackRequest(UUID.randomUUID(), "색이 달라요")), "FURNITURE_MARKET_LISTED");
             assertThat(feedbacks.count()).isZero();
-            assertThat(service.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
+            assertThat(queries.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
         } finally {
             jdbc.update("delete from market_assets");
         }
@@ -264,7 +265,7 @@ class FurnitureGenerationIntegrationTest {
         service.feedback(user.getId(), done.id(), new FurnitureFeedbackRequest(UUID.randomUUID(), "다시 봐주세요"));
         worker.runNext();
         verify(ai, times(1)).generate(any(), any());
-        assertThat(service.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
+        assertThat(queries.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
     }
 
     @Test void 같은_요청은_동시에_접수해도_한번만_저장하고_다른_사진은_충돌() throws Exception {
@@ -288,7 +289,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void 다른_사용자의_조회와_피드백을_차단하고_소유자_할당은_JWT_기준() {
         var done = complete();
         User other = users.save(User.signUp());
-        assertCode(() -> service.get(other.getId(), done.id()), "FURNITURE_JOB_NOT_FOUND");
+        assertCode(() -> queries.get(other.getId(), done.id()), "FURNITURE_JOB_NOT_FOUND");
         assertCode(() -> service.feedback(other.getId(), done.id(),
                 new FurnitureFeedbackRequest(UUID.randomUUID(), "바꿔줘")), "FURNITURE_JOB_NOT_FOUND");
     }
@@ -300,7 +301,7 @@ class FurnitureGenerationIntegrationTest {
         now = now.plusSeconds(241);
         worker.maintain();
         assertThat(transactions.generated(claim, "private/late.png", 100, 30)).isFalse();
-        assertThat(service.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
         worker.runNext();
         verify(ai, never()).generate(any(), any());
     }
@@ -379,7 +380,7 @@ class FurnitureGenerationIntegrationTest {
             var uploading = transactions.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "앞 의자");
             now = now.plusSeconds(301);
             worker.maintain();
-            assertThat(service.get(user.getId(), uploading.job().id()).failureCode()).isEqualTo("UPLOAD_INTERRUPTED");
+            assertThat(queries.get(user.getId(), uploading.job().id()).failureCode()).isEqualTo("UPLOAD_INTERRUPTED");
         }
         assertThat(submitAndExtract().action()).isEqualTo(Action.GENERATE);
         assertThat(jobs.count()).isEqualTo(3);
@@ -397,7 +398,7 @@ class FurnitureGenerationIntegrationTest {
         doThrow(new FurnitureAiFailure("PROVIDER_AUTH_FAILED")).when(ai).generate(any(), any());
         var job = submitAndExtract();
         worker.runNext(); worker.runNext();
-        assertThat(service.get(user.getId(), job.id()).failureCode()).isEqualTo("PROVIDER_AUTH_FAILED");
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("PROVIDER_AUTH_FAILED");
         verify(ai, times(1)).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
         when(ai.available()).thenReturn(false);
@@ -414,8 +415,8 @@ class FurnitureGenerationIntegrationTest {
                 .when(inventory).save(any(com.triples.rougether.domain.shop.entity.UserItem.class));
         worker.runNext();
         assertThat(items.count()).isEqualTo(itemCount);
-        assertThat(service.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
-        assertThat(service.get(user.getId(), job.id()).userItemId()).isNull();
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertThat(queries.get(user.getId(), job.id()).userItemId()).isNull();
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
         assertThat(objects.keySet()).noneMatch(k -> k.startsWith("items/photo-furniture/"));
     }
@@ -427,7 +428,7 @@ class FurnitureGenerationIntegrationTest {
                 items.replaceAssetKeyIfUnchanged(itemId, done.assetKey(), "items/admin-corrected.png"));
         service.feedback(user.getId(), done.id(), new FurnitureFeedbackRequest(UUID.randomUUID(), "검수해줘"));
         worker.runNext();
-        assertThat(service.get(user.getId(), done.id()).failureCode()).isEqualTo("RESULT_CHANGED_EXTERNALLY");
+        assertThat(queries.get(user.getId(), done.id()).failureCode()).isEqualTo("RESULT_CHANGED_EXTERNALLY");
         assertThat(items.findById(itemId).orElseThrow().getAssetKey()).isEqualTo("items/admin-corrected.png");
     }
 
@@ -438,10 +439,10 @@ class FurnitureGenerationIntegrationTest {
     private FurnitureGenerationResponse submitAndExtract() {
         var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
         worker.runNext();
-        return service.get(user.getId(), job.id());
+        return queries.get(user.getId(), job.id());
     }
     private FurnitureGenerationResponse complete() {
-        var job = submitAndExtract(); worker.runNext(); worker.runNext(); return service.get(user.getId(), job.id());
+        var job = submitAndExtract(); worker.runNext(); worker.runNext(); return queries.get(user.getId(), job.id());
     }
     private void assertCode(Runnable action, String code) {
         assertThatThrownBy(action::run).isInstanceOfSatisfying(BusinessException.class,

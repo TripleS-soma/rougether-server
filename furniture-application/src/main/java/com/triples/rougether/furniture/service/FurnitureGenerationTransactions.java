@@ -169,20 +169,6 @@ public class FurnitureGenerationTransactions {
         if (job.getStatus() == Status.UPLOADING) fail(job, "SOURCE_UPLOAD_FAILED", clock.instant());
     }
 
-    @Transactional(readOnly = true)
-    public FurnitureGenerationResponse get(Long userId, String id) {
-        requireActiveUser(userId);
-        return FurnitureGenerationResponse.from(jobs.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new BusinessException(FURNITURE_JOB_NOT_FOUND)));
-    }
-
-    @Transactional(readOnly = true)
-    public List<FurnitureGenerationResponse> list(Long userId) {
-        requireActiveUser(userId);
-        return jobs.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 20)).stream()
-                .map(FurnitureGenerationResponse::from).toList();
-    }
-
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 5)
     public FurnitureGenerationResponse feedback(Long userId, String id, String requestId, String content) {
         capacity.lock().orElseThrow();
@@ -385,9 +371,6 @@ public class FurnitureGenerationTransactions {
     }
     private void activeUser(Long userId) {
         if (lockedUser(userId).getDeletedAt() != null) throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
-    }
-    private void requireActiveUser(Long userId) {
-        users.findByIdAndDeletedAtIsNull(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
     }
     private void fail(FurnitureGenerationJob job, String code, Instant now) {
         credits.settle(job.getUserId(), job.getId(), false);
