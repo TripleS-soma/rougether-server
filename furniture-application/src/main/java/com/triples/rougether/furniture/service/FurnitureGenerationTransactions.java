@@ -11,8 +11,6 @@ import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Stat
 import com.triples.rougether.domain.furniture.repository.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
-import com.triples.rougether.domain.shop.entity.*;
-import com.triples.rougether.domain.shop.repository.*;
 import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.furniture.ai.FurnitureAiClient;
 import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
@@ -33,9 +31,7 @@ public class FurnitureGenerationTransactions {
     private final FurnitureGenerationJobRepository jobs;
     private final FurnitureGenerationFeedbackRepository feedbacks;
     private final UserRepository users;
-    private final ItemRepository items;
-    private final ThemeRepository themes;
-    private final UserItemRepository inventory;
+    private final FurnitureResultItemService resultItems;
     private final FurnitureGenerationProperties config;
     private final Clock clock;
     private final GenerationCreditLedger credits;
@@ -274,17 +270,10 @@ public class FurnitureGenerationTransactions {
                 }
                 Long inventoryId = job.getUserItemId();
                 if (inventoryId == null) {
-                    Theme theme = themes.findByCode("photo_furniture").orElseThrow();
-                    Item item = items.save(new Item(theme, "furniture", "positioned", null, null,
-                            review.name(), null, null, finalKey, false, false));
-                    item.updateDefaultSlot("midRight");
-                    inventoryId = inventory.save(UserItem.create(users.getReferenceById(job.getUserId()), item)).getId();
-                } else {
-                    UserItem owned = inventory.findOwnedWithItem(job.getUserId(), inventoryId).orElseThrow();
-                    if (items.replaceAssetKeyIfUnchanged(owned.getItem().getId(), job.getResultAssetKey(), finalKey) != 1) {
-                        fail(job, "RESULT_CHANGED_EXTERNALLY", now);
-                        return false;
-                    }
+                    inventoryId = resultItems.grant(job.getUserId(), review.name(), finalKey);
+                } else if (!resultItems.replaceImage(job.getUserId(), inventoryId, job.getResultAssetKey(), finalKey)) {
+                    fail(job, "RESULT_CHANGED_EXTERNALLY", now);
+                    return false;
                 }
                 credits.settle(job.getUserId(), job.getId(), true);
                 job.succeed(finalKey, inventoryId, now);

@@ -9,12 +9,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.billing.entity.FurnitureCreditEntry;
 import com.triples.rougether.domain.billing.entity.FurnitureCreditPurchase.*;
+import com.triples.rougether.domain.billing.entity.FurnitureCreditReservation;
 import com.triples.rougether.domain.billing.repository.*;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status;
 import com.triples.rougether.domain.furniture.repository.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.shop.entity.UserItem;
+import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.billing.service.*;
@@ -62,8 +66,9 @@ class FurnitureBillingIntegrationTest {
     @Autowired FurnitureCreditAccountRepository accounts;
     @Autowired FurnitureCreditPurchaseRepository purchases;
     @Autowired FurnitureCreditReservationRepository reservations;
-    @Autowired FurnitureCreditEntryRepository entries;
+    @MockitoSpyBean FurnitureCreditEntryRepository entries;
     @Autowired UserRepository users;
+    @Autowired ItemRepository items;
     @MockitoSpyBean UserItemRepository inventory;
     @MockitoBean ApplePurchaseVerifier apple;
     @MockitoBean GooglePurchaseVerifier google;
@@ -220,6 +225,40 @@ class FurnitureBillingIntegrationTest {
         assertThat(queries.get(user.getId(), job.id()).userItemId()).isNull();
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
+    }
+
+    @Test void 지급후_차감원장_저장실패는_가구와_보관함과_정산을_롤백한뒤_예약반환() {
+        grant("1");
+        var job = submit();
+        worker.runNext(); worker.runNext();
+        long itemCount = items.count();
+        long inventoryCount = inventory.count();
+        doThrow(new IllegalStateException("spend entry failed")).when(entries).save(argThat(entry ->
+                entry != null && entry.getReason() == FurnitureCreditEntry.Reason.SPEND
+                        && entry.getReferenceId().equals(job.id())));
+
+        worker.runNext();
+
+        var order = inOrder(inventory, entries);
+        order.verify(inventory).save(any(UserItem.class));
+        order.verify(entries).save(argThat(entry -> entry.getReason() == FurnitureCreditEntry.Reason.SPEND
+                && entry.getReferenceId().equals(job.id())));
+        assertThat(items.count()).isEqualTo(itemCount);
+        assertThat(inventory.count()).isEqualTo(inventoryCount);
+        assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
+        var failed = queries.get(user.getId(), job.id());
+        assertThat(failed.status()).isEqualTo(Status.FAILED);
+        assertThat(failed.failureCode()).isEqualTo("STORAGE_OR_PROCESSING_FAILED");
+        assertThat(failed.userItemId()).isNull();
+        assertThat(failed.assetKey()).isNull();
+        var account = accounts.findById(user.getId()).orElseThrow();
+        assertThat(account.getBalance()).isEqualTo(3);
+        assertThat(account.getReserved()).isZero();
+        assertThat(reservations.findById(job.id()).orElseThrow().getStatus())
+                .isEqualTo(FurnitureCreditReservation.Status.RELEASED);
+        assertThat(entries.findAll().stream().filter(entry -> entry.getReferenceId().equals(job.id())))
+                .extracting(FurnitureCreditEntry::getReason)
+                .containsExactlyInAnyOrder(FurnitureCreditEntry.Reason.RESERVE, FurnitureCreditEntry.Reason.RELEASE);
     }
 
     @Test void 완성가구_피드백은_생성권을_추가차감하거나_반환하지_않음() {
