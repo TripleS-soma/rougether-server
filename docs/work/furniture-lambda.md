@@ -1,5 +1,7 @@
 # 가구 생성 Lambda 실행 분리
 
+현재 가구 AI 실행은 **Lambda만 지원**한다. 상주 워커 실행 코드와 `furniture-worker` 모듈, 배포 템플릿은 제거했다. 만료 정산과 사진 삭제는 `FurnitureGenerationMaintenanceService`로 분리해 API에서 계속 수행한다. [상주 워커 문서](furniture-worker.md)는 과거 실험 기록이다.
+
 기존 multipart 경로에서 API는 사진 접수·전처리·S3 업로드와 작업 조회를 맡는다. 업로드 완료 또는 피드백 접수 트랜잭션에서 실행 ID와 outbox를 함께 저장한다. 별도 스케줄러가 `jobId`, `executionId`만 SQS로 전송한다. Lambda는 S3에서 이미지를 읽고 기존 특징 추출·제작 지침·이미지 생성·검수를 수행한다. 2026-09-11에 추가한 [직접 업로드와 vips 전처리 경로](furniture-preprocessing.md)는 기본 비활성화이며 별도 배포 검증이 필요하다.
 
 ```mermaid
@@ -19,7 +21,7 @@ flowchart LR
 ## 보장하는 경계
 
 - 동일 사진의 단계 순서는 EXTRACT → GENERATE → REVIEW이고 검수 결정에 따라 EDIT/REGENERATE를 반복한다. 기존 시도 횟수 한도를 유지한다. 원본은 추출·검수에만 들어가고 생성에는 전달하지 않는다.
-- 전체 동시 실행 수는 DB singleton 잠금으로 제한한다. `execution_mode=RESIDENT`가 기본이며 이 버전의 상주 워커는 LAMBDA 모드에서 작업을 선점하지 못한다.
+- 전체 동시 실행 수는 DB singleton 잠금으로 제한한다. 기존 DB 열과 Lambda 모드 guard는 호환성을 위해 유지한다. 이미 적용된 migration의 기본값은 `RESIDENT`이므로 **새 환경에서는 `execution_mode=LAMBDA`를 명시적으로 설정해야 한다.** 현재 코드는 RESIDENT 실행을 지원하지 않으며 모드를 자동 전환하지 않는다.
 - SQS가 중복 전달돼도 첫 invocation owner만 실행한다. 단계 결과 저장과 다음 단계 선점을 하나의 트랜잭션에서 처리하므로 그 사이 다른 워커에 실행권이 넘어가지 않는다.
 - DB 명령에는 순번과 해시가 있다. 같은 명령 재전송은 마지막 응답을 반환하며, 같은 순번의 다른 내용은 거부한다. AI 호출을 둘러싼 자동 재시도는 없다. 제어 명령만 최대 3회 전송한다. API의 SQS 전송도 전체 5초로 제한해 한 번의 네트워크 정체가 전달·정리 스케줄러를 무기한 붙잡지 않게 한다.
 - 결과 저장 여부를 알 수 없는 실행은 새 invocation이 이어서 AI를 호출하지 않는다. 작업 lease가 만료되면 기존 유지보수 작업이 실패 처리하고 생성권을 한 번만 반환한다. 공급자에서 이미 발생한 비용까지 취소되는 것은 아니다.
@@ -28,7 +30,9 @@ flowchart LR
 
 ## 실행 설정과 한계
 
-| 항목 | 초기 배포 구성 |
+다음 값은 2026-09-09 초기 실험 구성이며 현재 운영 환경의 실시간 설정이 아니다. 2026-09-11 서비스 전환 당시 설정과 검증은 [서비스 적용 기록](furniture-service-rollout.md)에 별도로 남겼다. 배포할 때는 대상 환경의 설정을 확인한다.
+
+| 항목 | 초기 실험 구성 |
 | --- | --- |
 | AI 함수 | Java 25 / arm64 / 2048MB / 600초 / reserved concurrency 2 |
 | DB 제어 함수 | Java 25 / arm64 / 1024MB / 60초 / reserved concurrency 2 |
@@ -57,20 +61,20 @@ git diff --check
 - `ControlBootTest`: MySQL migration/validate와 DB 제어 전용 부트를 실행하고 AI/S3 빈 및 유휴 커넥션 풀이 없음을 확인한다.
 - 로컬 테스트는 AWS IAM, Linux 이미지 처리 라이브러리, Lambda cold start, 실제 provider 제한·비용 검증을 대신하지 않는다.
 
-## 배포 순서
+## 배포와 복구
 
-1. 기존 상주 워커 변경을 포함한 이 worktree를 리뷰하고 최신 migration 번호와 충돌 여부를 확인한다. V69/V70은 아직 운영 적용 전이다.
+1. 변경을 리뷰하고 최신 main의 migration 번호와 충돌 여부를 확인한다. 현재 가구 capacity/outbox migration은 V72/V73이며, 이전 실험 문서의 V69/V70과 구분한다. 이미 적용한 migration과 DB의 `execution_mode` 열은 수정하거나 제거하지 않는다.
 2. AWS에서 암호화·접근 제한한 Terraform remote state backend를 먼저 구성한다. `db_password`는 sensitive지만 Terraform state에는 값이 저장된다. 로컬 state/plan/tfvars를 공유하거나 커밋하지 않는다. CI secret 또는 임시 환경 주입을 사용한다. DB URL에는 비밀번호를 넣지 않는다.
 3. `deploy/furniture-lambda/main.tf`에 필요한 기존 VPC/private subnet/RDS SG/에셋 bucket/비공개 배포 artifact bucket/publisher IAM role/SSM key ARN/KMS ARN/SNS alarm topic을 입력해 plan을 검토한다. 현재 배포 정의는 NAT나 VPC endpoint를 만들지 않는다. AI 키는 VPC 외부 함수가 SSM에서 읽고 DB 함수에는 DB 정보만 전달한다.
-4. V69/V70 적용과 새 API 배포는 dispatcher 비활성화 상태에서 수행한다. 두 ZIP은 기존 비공개 artifact bucket을 통해 배포하며 트리거도 끈 상태로 만든다. 이 구성을 적용하기 전 환경·비용·plan을 승인한다.
-5. 구버전 워커를 종료하고 진행/대기/업로드 작업을 비운다. `switch-mode.sql`의 조회로 drain을 확인한 뒤 DB 모드를 LAMBDA, 전역 상한을 2로 전환한다. API 환경에 `FURNITURE_LAMBDA_DISPATCH_ENABLED=true`, `FURNITURE_LAMBDA_QUEUE_URL=<output>`를 설정하고 SQS 트리거를 활성화한다. 사용자 접수는 이 전환이 끝난 뒤 재개한다.
+4. 새 환경은 API migration 적용과 배포를 dispatcher 비활성화 상태에서 수행한다. 두 ZIP은 기존 비공개 artifact bucket을 통해 배포하며 트리거도 끈 상태로 만든다. 기존 Lambda 환경을 갱신할 때는 현재 모드·실행 상한·트리거 설정을 확인하고 초기 실험값으로 덮어쓰지 않는다. AWS 구성을 변경하기 전 환경·비용·plan을 검토한다.
+5. 실행 설정을 바꾸는 전환에서는 신규 접수를 멈추고 진행/대기/업로드 작업을 비운다. 과거 워커 프로세스가 남아 있다면 먼저 종료한다. `switch-mode.sql`의 조회로 drain을 확인한 뒤 DB 모드를 LAMBDA로 설정하고 대상 환경에 맞는 실행 상한을 사용한다. API 환경에 `FURNITURE_LAMBDA_DISPATCH_ENABLED=true`, `FURNITURE_LAMBDA_QUEUE_URL=<output>`를 설정하고 SQS 트리거를 활성화한다. 사용자 접수는 이 전환이 끝난 뒤 재개한다. 기존 Lambda 환경은 이미 설정된 LAMBDA 모드를 유지한다.
 6. 운영 트래픽 전에 제한된 DEV 검증을 한다. 처음에는 fake AI로 연결/장애를 확인하고, 승인된 실제 이미지 소량으로 출력·소요 시간·Max Memory Used·일반 API p95·오류/환불·큐 대기·비용을 기록한다. 이 검증 전에는 운영 완료/성능 향상 수치를 주장하지 않는다.
 
-되돌릴 때는 트리거와 dispatcher를 끄고 RUNNING 실행을 완료 또는 lease 만료로 정산한 다음 모드를 RESIDENT로 바꾼다. 큐에 남은 옛 메시지는 실행 ID와 상태로 fencing되지만, 이미 호출한 유료 AI 작업을 초기 상태로 되돌려 재생하지 않는다. pending outbox가 없는 전환 이전 QUEUED 작업은 drain 후 전환한다.
+되돌릴 때는 신규 접수와 트리거를 멈추되 유지보수 호출이 실행되는 API는 남겨 RUNNING 실행을 완료 또는 lease 만료로 정산한다. 그다음 dispatcher를 끄고 **이전에 검증한 Lambda 방식의 API 이미지·AI/control ZIP·환경 설정**으로 복구한다. DB 모드는 LAMBDA로 유지하며, 현재 버전에서 RESIDENT로 바꾸는 것은 지원하는 복구 방법이 아니다. 이전 상주 워커 바이너리를 다시 운영하는 일은 별도 전환 검토가 필요하다. 큐에 남은 옛 메시지는 실행 ID와 상태로 fencing되지만, 이미 호출한 유료 AI 작업을 초기 상태로 되돌려 재생하지 않는다. pending outbox가 없는 전환 이전 QUEUED 작업은 drain 후 전환한다.
 
 ## 정리와 관측
 
-API 유지보수는 dispatcher 기능과 함께 매분 실행되어 lease 만료·탈퇴·24시간 사진 삭제를 처리한다. 실행 응답에 포함된 특징/키도 같은 보존 기한에 삭제한다. 성공한 공개 에셋은 보관함이 참조하므로 유지한다. 이전 후보와 DB 저장 전 중단된 private 업로드는 기존 bucket의 private prefix 수명주기 정책으로 정리해야 한다. **기존 S3 lifecycle 설정은 이 Terraform이 덮어쓰지 않는다.** 배포 전 private prefix 1일 만료 및 버전 관리 시 noncurrent version 정책을 확인한다.
+API 유지보수는 기존처럼 dispatcher 기능이 활성화된 경우 매분 `FurnitureGenerationMaintenanceService.maintain()`을 호출한다. 이 서비스는 lease 만료·탈퇴·24시간 사진 삭제를 처리하며 AI 실행에 의존하지 않는다. dispatcher를 비활성화하면 예약된 유지보수 호출도 중단되므로 진행 중 작업의 만료 정산 전에 끄지 않는다. 실행 응답에 포함된 특징/키도 같은 보존 기한에 삭제한다. 성공한 공개 에셋은 보관함이 참조하므로 유지한다. 이전 후보와 DB 저장 전 중단된 private 업로드는 기존 bucket의 private prefix 수명주기 정책으로 정리해야 한다. **기존 S3 lifecycle 설정은 이 Terraform이 덮어쓰지 않는다.** 배포 전 private prefix 1일 만료 및 버전 관리 시 noncurrent version 정책을 확인한다.
 
 공개 결과 업로드 후 DB 정산 전 중단된 경우에는 미연결 공개 에셋이 남을 수 있다. 공개 prefix 전체에 만료 정책을 적용하면 정상 가구도 삭제되므로 적용하지 않는다. 배포 전 정기 S3 inventory와 DB `referencesAsset` 대조 절차를 정하고, 미연결·유예 기간 경과가 확인된 객체만 정리한다. 이는 기존 worker에도 있는 정리 한계다.
 

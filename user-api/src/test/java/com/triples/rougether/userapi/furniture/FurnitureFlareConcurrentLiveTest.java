@@ -7,10 +7,11 @@ import static org.mockito.Mockito.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status;
+import com.triples.rougether.domain.furniture.repository.FurnitureGenerationJobRepository;
 import com.triples.rougether.furniture.ai.FurnitureAiClient;
 import com.triples.rougether.furniture.ai.OpenAiFurnitureClient;
 import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
-import com.triples.rougether.furniture.service.FurnitureGenerationWorker;
+import com.triples.rougether.furniture.lambda.*;
 import com.triples.rougether.furniture.service.FurnitureImages;
 import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.infra.assets.AssetStorageService;
@@ -22,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,7 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
 class FurnitureFlareConcurrentLiveTest {
     @Autowired FurnitureGenerationService service;
     @Autowired FurnitureGenerationQueryService queries;
-    @Autowired FurnitureGenerationWorker worker;
+    @Autowired FurnitureLambdaControl control;
+    @Autowired FurnitureGenerationJobRepository jobRepository;
     @Autowired FurnitureGenerationProperties properties;
     @Autowired UserRepository users;
     @Autowired JdbcTemplate jdbc;
@@ -47,6 +50,10 @@ class FurnitureFlareConcurrentLiveTest {
     final AtomicInteger active = new AtomicInteger(), peak = new AtomicInteger();
     final Queue<Map<String, Object>> calls = new ConcurrentLinkedQueue<>();
     final JsonMapper json = JsonMapper.builder().build();
+
+    @AfterEach void restoreCapacity() {
+        jdbc.update("update furniture_worker_capacity set execution_mode='RESIDENT', max_in_flight=1, execution_enabled=true where id=1");
+    }
 
     Object observe(String stage, InvocationOnMock invocation) throws Throwable {
         long start = System.nanoTime();
@@ -86,7 +93,7 @@ class FurnitureFlareConcurrentLiveTest {
         doAnswer(i -> observe("EXTRACT", i)).when(ai).extract(any(), anyString());
         doAnswer(i -> observe("GENERATE", i)).when(ai).generate(any(), any());
         doAnswer(i -> observe("REVIEW", i)).when(ai).review(any(), any());
-        jdbc.update("update furniture_worker_capacity set max_in_flight=4, execution_enabled=true where id=1");
+        jdbc.update("update furniture_worker_capacity set execution_mode='LAMBDA', max_in_flight=4, execution_enabled=true where id=1");
         Map<String, Long> jobs = new LinkedHashMap<>();
         Map<String, String> labels = new LinkedHashMap<>();
         for (int n = 0; n < 4; n++) {
@@ -97,19 +104,20 @@ class FurnitureFlareConcurrentLiveTest {
                     new MockMultipartFile("photo", "upload.jpg", "image/jpeg", Files.readAllBytes(samples.resolve(slug).resolve("upload.jpg"))));
             jobs.put(job.id(), user.getId()); labels.put(job.id(), slug + "-" + n);
         }
-        var stop = new AtomicBoolean();
         var executor = Executors.newFixedThreadPool(4);
         List<Future<?>> futures = new ArrayList<>();
         Map<String, FurnitureGenerationResponse> completed = new LinkedHashMap<>();
         Map<String, Double> elapsed = new LinkedHashMap<>();
         long started = System.nanoTime();
         try {
-            for (int n = 0; n < 4; n++) futures.add(executor.submit(() -> {
-                while (!stop.get()) {
-                    worker.runNext();
-                    try { Thread.sleep(50); }
-                    catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
-                }
+            for (String jobId : jobs.keySet()) futures.add(executor.submit(() -> {
+                var stage = new FurnitureLambdaStage(ai, new FurnitureImages(), storage, properties);
+                var runner = new FurnitureLambdaRunner(control::handle, stage::execute, properties.timeout());
+                var message = new FurnitureLambdaProtocol.Message(jobId,
+                        jobRepository.findById(jobId).orElseThrow().getExecutionId());
+                long executionStarted = System.nanoTime();
+                assertThat(runner.run(message, UUID.randomUUID().toString(),
+                        () -> (int) Math.max(0, 600_000 - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - executionStarted)))).isTrue();
             }));
             while (completed.size() < 4 && System.nanoTime() - started < TimeUnit.MINUTES.toNanos(8)) {
                 for (var entry : jobs.entrySet()) {
@@ -130,7 +138,7 @@ class FurnitureFlareConcurrentLiveTest {
                 Thread.sleep(250);
             }
         } finally {
-            stop.set(true); executor.shutdown();
+            executor.shutdown();
             if (!executor.awaitTermination(190, TimeUnit.SECONDS)) executor.shutdownNow();
             Files.writeString(output.resolve("calls.json"), json.writeValueAsString(calls));
             Files.writeString(output.resolve("summary.json"), json.writeValueAsString(Map.of(

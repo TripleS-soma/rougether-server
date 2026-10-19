@@ -25,8 +25,12 @@ import com.triples.rougether.userapi.billing.service.*;
 import com.triples.rougether.userapi.billing.store.*;
 import com.triples.rougether.userapi.billing.store.StorePurchaseVerifier.Verified;
 import com.triples.rougether.userapi.furniture.FurnitureFixtures;
+import com.triples.rougether.userapi.furniture.FurnitureLambdaTestDriver;
 import com.triples.rougether.furniture.ai.FurnitureAiClient;
 import com.triples.rougether.furniture.ai.FurnitureAiClient.*;
+import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaControl;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaStage;
 import com.triples.rougether.userapi.furniture.service.*;
 import com.triples.rougether.furniture.service.*;
 import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
@@ -43,6 +47,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.*;
 import org.springframework.test.web.servlet.MockMvc;
@@ -51,7 +56,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @SpringBootTest(properties = {"billing.enabled=true", "billing.require-credits=true", "billing.environment=SANDBOX", "billing.worker-enabled=false",
         "billing.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "billing.apple.products.pack3=3", "billing.apple.products.pack7=7", "billing.google.products.pack3=3",
-        "furniture.generation.enabled=true", "furniture.generation.worker-enabled=false",
+        "furniture.generation.enabled=true",
         "furniture.generation.style-reference-keys=items/ref.png"})
 @AutoConfigureMockMvc
 class FurnitureBillingIntegrationTest {
@@ -60,7 +65,11 @@ class FurnitureBillingIntegrationTest {
     @Autowired PurchaseReferenceCipher cipher;
     @Autowired FurnitureGenerationService furniture;
     @Autowired FurnitureGenerationQueryService queries;
-    @Autowired FurnitureGenerationWorker worker;
+    @Autowired FurnitureGenerationMaintenanceService maintenance;
+    @Autowired FurnitureLambdaControl control;
+    @Autowired FurnitureGenerationProperties properties;
+    @Autowired JdbcTemplate jdbc;
+    private FurnitureLambdaTestDriver lambda;
     @Autowired FurnitureGenerationJobRepository jobs;
     @Autowired FurnitureGenerationFeedbackRepository feedbacks;
     @Autowired FurnitureCreditAccountRepository accounts;
@@ -86,6 +95,9 @@ class FurnitureBillingIntegrationTest {
     @BeforeEach void setup() {
         entries.deleteAll(); reservations.deleteAll(); purchases.deleteAll(); accounts.deleteAll();
         feedbacks.deleteAll(); jobs.deleteAll();
+        jdbc.update("update furniture_worker_capacity set execution_mode='LAMBDA', max_in_flight=1, execution_enabled=true where id=1");
+        lambda = new FurnitureLambdaTestDriver(control,
+                new FurnitureLambdaStage(ai, new FurnitureImages(), storage, properties), jobs);
         user = users.save(User.signUp("billing-" + UUID.randomUUID() + "@example.test"));
         now = Instant.parse("2026-09-07T03:00:00Z");
         doAnswer(i -> now).when(kstClock).instant();
@@ -118,6 +130,7 @@ class FurnitureBillingIntegrationTest {
     @AfterEach void cleanup() {
         entries.deleteAll(); reservations.deleteAll(); purchases.deleteAll(); accounts.deleteAll();
         feedbacks.deleteAll(); jobs.deleteAll();
+        jdbc.update("update furniture_worker_capacity set execution_mode='RESIDENT', max_in_flight=1, execution_enabled=true where id=1");
     }
 
     @Test void 검증된_거래만_지급하고_재전송과_다른계정_재사용을_차단() {
@@ -151,7 +164,7 @@ class FurnitureBillingIntegrationTest {
         grant("1");
         for (int i = 0; i < 3; i++) {
             var job = submit();
-            worker.runNext(); worker.runNext(); worker.runNext();
+            lambda.runNext(); lambda.runNext(); lambda.runNext();
             assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
         }
         assertThat(credits.balance(user.getId()).available()).isZero();
@@ -167,7 +180,7 @@ class FurnitureBillingIntegrationTest {
         assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
         assertThat(credits.balance(user.getId()).reserved()).isEqualTo(1);
         assertThat(furniture.submit(user.getId(), requestId, "의자", photo()).id()).isEqualTo(job.id());
-        worker.runNext(); worker.runNext(); worker.runNext();
+        lambda.runNext(); lambda.runNext(); lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
@@ -200,7 +213,7 @@ class FurnitureBillingIntegrationTest {
         grant("1");
         var job = submit();
         when(ai.extract(any(), anyString())).thenThrow(new FurnitureAiFailure("PROVIDER_RATE_LIMITED"));
-        worker.runNext(); worker.maintain(); worker.maintain();
+        lambda.runNext(); maintenance.maintain(); maintenance.maintain();
         assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
@@ -210,34 +223,41 @@ class FurnitureBillingIntegrationTest {
         grant("1");
         when(ai.review(any(), any())).thenReturn(new Review(Decision.EDIT, "의자", "다리 오류", "다리 수정", 1, 1));
         var job = submit();
-        for (int i = 0; i < 7; i++) worker.runNext();
+        for (int i = 0; i < 7; i++) lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
         verify(ai, times(3)).generate(any(), any());
     }
 
-    @Test void 보관함_저장실패는_지급과_차감을_같이_롤백한뒤_예약반환() {
+    @Test void 보관함_저장실패는_지급과_차감을_같이_롤백한뒤_실행만료시_예약반환() {
         grant("1");
-        var job = submit(); worker.runNext(); worker.runNext();
+        var job = submit(); lambda.runNext(); lambda.runNext();
         doThrow(new IllegalStateException("inventory failed")).when(inventory).save(any());
-        worker.runNext();
+        assertThatThrownBy(lambda::runNext).isInstanceOf(IllegalStateException.class);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.PROCESSING);
         assertThat(queries.get(user.getId(), job.id()).userItemId()).isNull();
+        assertThat(credits.balance(user.getId()).reserved()).isEqualTo(1);
+        verify(ai, times(1)).review(any(), any());
+        verify(inventory, times(3)).save(any());
+        now = now.plusSeconds(661);
+        maintenance.maintain();
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
     }
 
-    @Test void 지급후_차감원장_저장실패는_가구와_보관함과_정산을_롤백한뒤_예약반환() {
+    @Test void 지급후_차감원장_저장실패는_가구와_보관함과_정산을_롤백한뒤_실행만료시_예약반환() {
         grant("1");
         var job = submit();
-        worker.runNext(); worker.runNext();
+        lambda.runNext(); lambda.runNext();
         long itemCount = items.count();
         long inventoryCount = inventory.count();
         doThrow(new IllegalStateException("spend entry failed")).when(entries).save(argThat(entry ->
                 entry != null && entry.getReason() == FurnitureCreditEntry.Reason.SPEND
                         && entry.getReferenceId().equals(job.id())));
 
-        worker.runNext();
+        assertThatThrownBy(lambda::runNext).isInstanceOf(IllegalStateException.class);
 
         var order = inOrder(inventory, entries);
         order.verify(inventory).save(any(UserItem.class));
@@ -246,9 +266,15 @@ class FurnitureBillingIntegrationTest {
         assertThat(items.count()).isEqualTo(itemCount);
         assertThat(inventory.count()).isEqualTo(inventoryCount);
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.PROCESSING);
+        assertThat(credits.balance(user.getId()).reserved()).isEqualTo(1);
+        verify(ai, times(1)).review(any(), any());
+        verify(inventory, times(3)).save(any());
+        now = now.plusSeconds(661);
+        maintenance.maintain();
         var failed = queries.get(user.getId(), job.id());
         assertThat(failed.status()).isEqualTo(Status.FAILED);
-        assertThat(failed.failureCode()).isEqualTo("STORAGE_OR_PROCESSING_FAILED");
+        assertThat(failed.failureCode()).isEqualTo("WORKER_INTERRUPTED");
         assertThat(failed.userItemId()).isNull();
         assertThat(failed.assetKey()).isNull();
         var account = accounts.findById(user.getId()).orElseThrow();
@@ -263,10 +289,10 @@ class FurnitureBillingIntegrationTest {
 
     @Test void 완성가구_피드백은_생성권을_추가차감하거나_반환하지_않음() {
         grant("1");
-        var job = submit(); worker.runNext(); worker.runNext(); worker.runNext();
+        var job = submit(); lambda.runNext(); lambda.runNext(); lambda.runNext();
         when(ai.review(any(), any())).thenThrow(new FurnitureAiFailure("PROVIDER_RATE_LIMITED"));
         furniture.feedback(user.getId(), job.id(), new FurnitureFeedbackRequest(UUID.randomUUID(), "다리 확인"));
-        worker.runNext();
+        lambda.runNext();
         assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
         assertThat(queries.get(user.getId(), job.id()).assetKey()).isNotNull();
@@ -307,7 +333,7 @@ class FurnitureBillingIntegrationTest {
         credits.apply(null, verified(Store.APPLE, "123", "pack3", 0), cipher.encrypt("123"));
         assertThat(credits.balance(user.getId()).purchaseAdjustmentPending()).isTrue();
         when(ai.extract(any(), anyString())).thenThrow(new FurnitureAiFailure("PROVIDER_RATE_LIMITED"));
-        worker.runNext();
+        lambda.runNext();
         assertThat(credits.balance(user.getId()).available()).isZero();
         assertThat(credits.balance(user.getId()).reserved()).isZero();
         assertThat(credits.balance(user.getId()).purchaseAdjustmentPending()).isFalse();
@@ -350,8 +376,8 @@ class FurnitureBillingIntegrationTest {
         grant("123");
         var job = submit();
         now = now.plus(Duration.ofHours(25));
-        worker.maintain();
-        worker.maintain();
+        maintenance.maintain();
+        maintenance.maintain();
         assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();

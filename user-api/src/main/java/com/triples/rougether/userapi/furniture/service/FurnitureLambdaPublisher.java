@@ -2,7 +2,7 @@ package com.triples.rougether.userapi.furniture.service;
 
 import com.triples.rougether.furniture.lambda.FurnitureLambdaOutbox;
 import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol.Message;
-import com.triples.rougether.furniture.service.FurnitureGenerationWorker;
+import com.triples.rougether.furniture.service.FurnitureGenerationMaintenanceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.*;
@@ -18,20 +18,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class FurnitureLambdaPublisher {
     private final FurnitureLambdaOutbox outbox;
-    private final FurnitureGenerationWorker worker;
+    private final FurnitureGenerationMaintenanceService maintenance;
     private final SqsClient sqs;
     private final String queueUrl;
     private final JsonMapper json = JsonMapper.builder().build();
     @org.springframework.beans.factory.annotation.Autowired
-    public FurnitureLambdaPublisher(FurnitureLambdaOutbox outbox, FurnitureGenerationWorker worker,
+    public FurnitureLambdaPublisher(FurnitureLambdaOutbox outbox, FurnitureGenerationMaintenanceService maintenance,
             @Value("${furniture.lambda.queue-url}") String queueUrl) {
-        this(outbox, worker, queueUrl, SqsClient.builder().overrideConfiguration(
+        this(outbox, maintenance, queueUrl, SqsClient.builder().overrideConfiguration(
                 software.amazon.awssdk.core.client.config.ClientOverrideConfiguration.builder()
                         .apiCallTimeout(java.time.Duration.ofSeconds(5))
                         .apiCallAttemptTimeout(java.time.Duration.ofSeconds(3)).build()).build());
     }
-    FurnitureLambdaPublisher(FurnitureLambdaOutbox outbox, FurnitureGenerationWorker worker, String queueUrl, SqsClient sqs) {
-        this.outbox = outbox; this.worker = worker; this.queueUrl = queueUrl; this.sqs = sqs;
+    FurnitureLambdaPublisher(FurnitureLambdaOutbox outbox, FurnitureGenerationMaintenanceService maintenance, String queueUrl, SqsClient sqs) {
+        this.outbox = outbox; this.maintenance = maintenance; this.queueUrl = queueUrl; this.sqs = sqs;
     }
     @Bean(destroyMethod = "close") SqsClient furnitureSqsClient() { return sqs; }
     @Scheduled(fixedDelayString = "${furniture.lambda.dispatch-delay:2000}")
@@ -47,5 +47,5 @@ public class FurnitureLambdaPublisher {
         }
     }
     @Scheduled(fixedDelay = 60_000)
-    public void maintain() { worker.maintain(); }
+    public void maintain() { maintenance.maintain(); }
 }

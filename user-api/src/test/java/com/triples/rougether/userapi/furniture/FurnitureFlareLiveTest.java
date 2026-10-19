@@ -7,41 +7,52 @@ import static org.mockito.Mockito.*;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.furniture.repository.FurnitureGenerationJobRepository;
 import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
 import com.triples.rougether.furniture.ai.FurnitureAiClient;
 import com.triples.rougether.furniture.ai.OpenAiFurnitureClient;
+import com.triples.rougether.furniture.lambda.*;
 import com.triples.rougether.userapi.furniture.service.*;
 import com.triples.rougether.furniture.service.*;
 import com.triples.rougether.infra.assets.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.json.JsonMapper;
 
 // 명시적 opt-in에서만 유료 OpenAI 호출함. DB는 테스트 MySQL, S3는 메모리 저장소이므로 운영 데이터는 변경하지 않음.
 @EnabledIfEnvironmentVariable(named = "FURNITURE_LIVE_SMOKE", matches = "true")
-@SpringBootTest(properties = {"furniture.generation.enabled=true", "furniture.generation.worker-enabled=false",
-        "furniture.generation.timeout=180s"})
+@SpringBootTest(properties = {"furniture.generation.enabled=true", "furniture.generation.timeout=180s"})
 class FurnitureFlareLiveTest {
     @Autowired FurnitureGenerationService service;
     @Autowired FurnitureGenerationQueryService queries;
-    @Autowired FurnitureGenerationWorker worker;
+    @Autowired FurnitureLambdaControl control;
+    @Autowired FurnitureGenerationJobRepository jobs;
+    @Autowired JdbcTemplate jdbc;
     @Autowired FurnitureGenerationProperties properties;
     @Autowired UserRepository users;
     @MockitoBean AssetStorageService storage;
     @MockitoSpyBean OpenAiFurnitureClient ai;
 
+    @AfterEach void restoreCapacity() {
+        jdbc.update("update furniture_worker_capacity set execution_mode='RESIDENT', max_in_flight=1, execution_enabled=true where id=1");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"mac-mini", "bear-cake"})
     void 실제_사진을_Flare로_생성_검수(String slug) throws Exception {
+        jdbc.update("update furniture_worker_capacity set execution_mode='LAMBDA', max_in_flight=1, execution_enabled=true where id=1");
         Path output = Path.of(System.getenv("FURNITURE_LIVE_OUTPUT")).resolve(slug);
         Files.createDirectories(output);
         doAnswer(i -> {
@@ -107,19 +118,33 @@ class FurnitureFlareLiveTest {
         User user = users.save(User.signUp("furniture-flare-" + slug + "@example.test"));
         var result = service.submit(user.getId(), UUID.randomUUID(), slug.equals("mac-mini") ? "사진의 은색 맥 미니 본체 하나" : "사진의 산타 모자를 쓴 흰 곰 얼굴 케이크 하나",
                 new MockMultipartFile("photo", "upload.jpg", "image/jpeg", photo));
-        for (int i = 0; i < 1 + properties.maxImageAttempts() + properties.maxReviewAttempts(); i++) {
-            if (result.status() == Status.SUCCEEDED || result.status() == Status.FAILED) break;
-            long started = System.nanoTime();
-            String stage = "step-" + i;
-            worker.runNext();
-            Files.writeString(output.resolve("timing.jsonl"), JsonMapper.builder().build().writeValueAsString(Map.of(
-                    "stage", stage, "seconds", (System.nanoTime() - started) / 1_000_000_000.0)) + "\n",
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            result = queries.get(user.getId(), result.id());
-            Files.writeString(output.resolve("result.json"), JsonMapper.builder().build().writeValueAsString(result));
-            Files.writeString(output.resolve("stages.jsonl"), JsonMapper.builder().build().writeValueAsString(result) + "\n",
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        }
+        String jobId = result.id();
+        var message = new FurnitureLambdaProtocol.Message(jobId, jobs.findById(jobId).orElseThrow().getExecutionId());
+        var stage = new FurnitureLambdaStage(ai, new FurnitureImages(), storage, properties);
+        var runner = new FurnitureLambdaRunner(command -> {
+            var reply = control.handle(command);
+            var snapshot = queries.get(user.getId(), jobId);
+            try {
+                String json = JsonMapper.builder().build().writeValueAsString(snapshot);
+                Files.writeString(output.resolve("result.json"), json);
+                Files.writeString(output.resolve("stages.jsonl"), json + "\n",
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+            return reply;
+        }, (claim, executionId) -> {
+            long stepStarted = System.nanoTime();
+            var outcome = stage.execute(claim, executionId);
+            try {
+                Files.writeString(output.resolve("timing.jsonl"), JsonMapper.builder().build().writeValueAsString(Map.of(
+                        "stage", claim.action().name(), "seconds", (System.nanoTime() - stepStarted) / 1_000_000_000.0)) + "\n",
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+            return outcome;
+        }, properties.timeout());
+        long started = System.nanoTime();
+        assertThat(runner.run(message, UUID.randomUUID().toString(),
+                () -> (int) Math.max(0, 600_000 - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)))).isTrue();
+        result = queries.get(user.getId(), jobId);
         if (result.assetKey() != null) {
             byte[] sprite = objects.get(result.assetKey());
             Files.write(output.resolve("furniture.png"), sprite);

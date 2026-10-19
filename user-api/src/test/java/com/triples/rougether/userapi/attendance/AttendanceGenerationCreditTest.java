@@ -30,7 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest(properties = {"billing.require-credits=true", "furniture.generation.worker-enabled=false"})
+@SpringBootTest(properties = "billing.require-credits=true")
 class AttendanceGenerationCreditTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");

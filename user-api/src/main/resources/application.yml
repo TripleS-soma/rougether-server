@@ -113,7 +113,6 @@ llm:
 furniture:
   generation:
     enabled: ${FURNITURE_GENERATION_ENABLED:false}
-    worker-enabled: ${FURNITURE_GENERATION_WORKER_ENABLED:true}
     model: ${FURNITURE_GENERATION_MODEL:gpt-6-astra}
     image-model: ${FURNITURE_GENERATION_IMAGE_MODEL:gpt-image-2}
     timeout: ${FURNITURE_GENERATION_TIMEOUT:180s}

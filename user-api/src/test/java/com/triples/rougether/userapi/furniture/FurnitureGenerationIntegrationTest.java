@@ -14,6 +14,12 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.shop.repository.*;
 import com.triples.rougether.furniture.ai.FurnitureAiClient;
 import com.triples.rougether.furniture.ai.FurnitureAiClient.*;
+import com.triples.rougether.furniture.config.FurnitureGenerationProperties;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaControl;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol.Command;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol.Result;
+import com.triples.rougether.furniture.lambda.FurnitureLambdaStage;
 import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
 import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.*;
@@ -32,14 +38,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.*;
 
-@SpringBootTest(properties = {"furniture.generation.enabled=true", "furniture.generation.worker-enabled=false",
+@SpringBootTest(properties = {"furniture.generation.enabled=true",
         "furniture.generation.style-reference-keys=items/ref.png"})
 class FurnitureGenerationIntegrationTest {
     @Autowired FurnitureGenerationService service;
     @Autowired FurnitureGenerationQueryService queries;
     @Autowired com.triples.rougether.userapi.market.service.MarketAssetService marketAssetService;
     @Autowired FurnitureGenerationTransactions transactions;
-    @Autowired FurnitureGenerationWorker worker;
+    @Autowired FurnitureGenerationMaintenanceService maintenance;
+    @Autowired FurnitureLambdaControl control;
+    @Autowired FurnitureGenerationProperties config;
     @Autowired FurnitureGenerationJobRepository jobs;
     @Autowired FurnitureGenerationFeedbackRepository feedbacks;
     @Autowired UserRepository users;
@@ -55,9 +63,10 @@ class FurnitureGenerationIntegrationTest {
     private User user;
     private byte[] valid;
     private Instant now;
+    private FurnitureLambdaTestDriver lambda;
 
     @BeforeEach void setup() {
-        jdbc.update("update furniture_worker_capacity set max_in_flight=1, execution_enabled=true where id=1");
+        jdbc.update("update furniture_worker_capacity set execution_mode='LAMBDA', max_in_flight=1, execution_enabled=true where id=1");
         feedbacks.deleteAll();
         jobs.deleteAll();
         now = Instant.parse("2026-09-06T03:00:00Z");
@@ -95,10 +104,19 @@ class FurnitureGenerationIntegrationTest {
             if (bytes == null) throw new IllegalStateException("missing test object");
             return new StoredAsset(bytes, "image/png");
         });
-        doAnswer(i -> { objects.remove(i.getArgument(0)); return null; }).when(storage).delete(anyString());
+        doAnswer(i -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            objects.remove(i.getArgument(0));
+            return null;
+        }).when(storage).delete(anyString());
+        lambda = new FurnitureLambdaTestDriver(control, new FurnitureLambdaStage(ai, new FurnitureImages(), storage, config), jobs);
     }
 
-    @Test void 여러_워커의_동시선점도_DB_전체상한을_넘지_않음() throws Exception {
+    @AfterEach void resetMode() {
+        jdbc.update("update furniture_worker_capacity set execution_mode='RESIDENT', max_in_flight=1, execution_enabled=true where id=1");
+    }
+
+    @Test void 여러_Lambda의_동시시작도_DB_전체상한을_넘지_않음() throws Exception {
         jdbc.update("update furniture_worker_capacity set max_in_flight=2 where id=1");
         var ids=new ArrayList<String>();
         for(int i=0;i<8;i++) {
@@ -106,11 +124,15 @@ class FurnitureGenerationIntegrationTest {
             ids.add(service.submit(owner.getId(),UUID.randomUUID(),"",photo()).id());
         }
         var start=new CountDownLatch(1);
-        var claimed=new CopyOnWriteArrayList<FurnitureGenerationTransactions.Claim>();
+        var claimed=new CopyOnWriteArrayList<Command>();
         try(var pool=Executors.newFixedThreadPool(8)) {
             var futures=new ArrayList<Future<?>>();
             for(var id:ids) futures.add(pool.submit(() -> {
-                try { start.await(); var claim=transactions.claim(id);if(claim!=null)claimed.add(claim); }
+                try {
+                    start.await();
+                    var command = startCommand(id);
+                    if (control.handle(command).status() == FurnitureLambdaProtocol.Status.READY) claimed.add(command);
+                }
                 catch(InterruptedException e) { Thread.currentThread().interrupt();throw new RuntimeException(e); }
             }));
             start.countDown();
@@ -120,23 +142,28 @@ class FurnitureGenerationIntegrationTest {
         assertThat(jobs.countByStatus(Status.PROCESSING)).isEqualTo(2);
         assertThat(jobs.countByStatus(Status.QUEUED)).isEqualTo(6);
         assertThat(jobs.findAll().stream().mapToInt(j -> j.getExtractionAttempts()).sum()).isEqualTo(2);
-        transactions.failed(claimed.getFirst(),"TEST_INTERRUPTED");
+        var first = claimed.getFirst();
+        assertThat(control.handle(new Command(first.jobId(), first.executionId(), first.owner(), 1,
+                Result.failure(Action.EXTRACT, "TEST_INTERRUPTED"))).status()).isEqualTo(FurnitureLambdaProtocol.Status.TERMINAL);
         var queued=jobs.findAll().stream().filter(j -> j.getStatus()==Status.QUEUED).findFirst().orElseThrow();
-        assertThat(transactions.claim(queued.getId())).isNotNull();
+        assertThat(control.handle(startCommand(queued.getId())).status()).isEqualTo(FurnitureLambdaProtocol.Status.READY);
         assertThat(jobs.countByStatus(Status.PROCESSING)).isEqualTo(2);
-        now=now.plusSeconds(241);worker.maintain();
+        now=now.plusSeconds(661);maintenance.maintain();
         assertThat(jobs.countByStatus(Status.PROCESSING)).isZero();
-        assertThat(transactions.extracted(claimed.getLast(),new Extracted(true,"{}",1,1))).isFalse();
+        var late = claimed.getLast();
+        assertThat(control.handle(new Command(late.jobId(), late.executionId(), late.owner(), 1,
+                new Result(Action.EXTRACT, new Extracted(true, "{}", 1, 1), null, null, false, 0, 0, null))).status())
+                .isEqualTo(FurnitureLambdaProtocol.Status.TERMINAL);
     }
 
     @Test void 실행을_중지해도_접수는_큐에_남고_재개후_선점됨() {
         var job=service.submit(user.getId(),UUID.randomUUID(),"",photo());
         jdbc.update("update furniture_worker_capacity set execution_enabled=false where id=1");
-        worker.runNext();
+        lambda.runNext();
         assertThat(jobs.findById(job.id()).orElseThrow().getExtractionAttempts()).isZero();
         verify(ai,never()).extract(any(),anyString());
         jdbc.update("update furniture_worker_capacity set execution_enabled=true where id=1");
-        worker.runNext(); worker.runNext(); worker.runNext();
+        lambda.runNext(); lambda.runNext(); lambda.runNext();
         assertThat(queries.get(user.getId(),job.id()).status()).isEqualTo(Status.SUCCEEDED);
         verify(ai,times(1)).extract(any(),anyString());
         verify(ai,times(1)).generate(any(),any());
@@ -146,15 +173,15 @@ class FurnitureGenerationIntegrationTest {
     @Test void 사진_접수_생성_검수_개인_보관함_지급까지_연결() {
         var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
         assertThat(job.action()).isEqualTo(Action.EXTRACT);
-        worker.runNext();
+        lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).action()).isEqualTo(Action.GENERATE);
         assertThat(jobs.findById(job.id()).orElseThrow().getExtractionAttempts()).isEqualTo(1);
         verify(ai, never()).generate(any(), any());
         assertThat(job.status()).isEqualTo(Status.QUEUED);
         assertThat(job.assetKey()).isNull();
-        worker.runNext();
+        lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).action()).isEqualTo(Action.REVIEW);
-        worker.runNext();
+        lambda.runNext();
         var result = queries.get(user.getId(), job.id());
         assertThat(result.status()).isEqualTo(Status.SUCCEEDED);
         assertThat(result.assetKey()).startsWith("items/photo-furniture/furniture/");
@@ -200,7 +227,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void 특징추출_실패는_생성으로_우회하지_않고_중단() {
         when(ai.extract(any(), anyString())).thenThrow(new FurnitureAiFailure("INVALID_SUBJECT_OUTPUT"));
         var job = submitAndExtract();
-        worker.runNext();
+        lambda.runNext();
         assertThat(job.failureCode()).isEqualTo("INVALID_SUBJECT_OUTPUT");
         verify(ai, times(1)).extract(any(), anyString());
         verify(ai, never()).generate(any(), any());
@@ -208,12 +235,13 @@ class FurnitureGenerationIntegrationTest {
 
     @Test void 특징추출도_lease_만료후_재호출하거나_늦은_결과를_적용하지_않음() {
         var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
-        var claim = transactions.claim(job.id());
+        var claim = lambda.currentClaim(job.id());
         assertThat(claim.action()).isEqualTo(Action.EXTRACT);
-        now = now.plusSeconds(241);
-        worker.maintain();
-        assertThat(transactions.extracted(claim, new Extracted(true, "{}", 50, 10))).isFalse();
-        worker.runNext();
+        now = now.plusSeconds(661);
+        maintenance.maintain();
+        assertThat(lambda.checkpoint(job.id(), new Result(claim.action(), new Extracted(true, "{}", 50, 10),
+                null, null, false, 0, 0, null)).status()).isEqualTo(FurnitureLambdaProtocol.Status.TERMINAL);
+        lambda.runNext();
         assertThat(jobs.findById(job.id()).orElseThrow().getSubjectJson()).isNull();
         assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
         verify(ai, never()).extract(any(), anyString());
@@ -222,7 +250,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void Astra가_부분수정과_전체재생성을_선택하고_수정사유를_다음호출에_전달() {
         when(ai.review(any(), any())).thenReturn(review(Decision.EDIT), review(Decision.REGENERATE), review(Decision.ACCEPT));
         var job = submitAndExtract();
-        for (int i = 0; i < 6; i++) worker.runNext();
+        for (int i = 0; i < 6; i++) lambda.runNext();
         verify(ai).generate(any(), eq(Action.GENERATE));
         verify(ai).generate(argThat(c -> c.correction().equals("의자의 다리를 바로잡아 주세요")), eq(Action.EDIT));
         verify(ai).generate(any(), eq(Action.REGENERATE));
@@ -234,7 +262,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void 반복_품질실패는_세번에서_멈추고_지급하지_않음() {
         when(ai.review(any(), any())).thenReturn(review(Decision.REGENERATE));
         var job = submitAndExtract();
-        for (int i = 0; i < 10; i++) worker.runNext();
+        for (int i = 0; i < 10; i++) lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("GENERATION_BUDGET_EXHAUSTED");
         verify(ai, times(3)).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
@@ -243,8 +271,8 @@ class FurnitureGenerationIntegrationTest {
     @Test void AI가_통과시켜도_투명도와_잘림_검사_실패는_지급_금지() {
         doReturn(new Generated(FurnitureFixtures.png(false, true), 100, 30)).when(ai).generate(any(), any());
         var job = submitAndExtract();
-        worker.runNext();
-        worker.runNext();
+        lambda.runNext();
+        lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("HARD_QA_REJECTED");
         verify(ai).review(any(), argThat(f -> f.contains("OBJECT_TOUCHES_CANVAS_BORDER")));
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
@@ -259,10 +287,10 @@ class FurnitureGenerationIntegrationTest {
         assertThat(feedbacks.count()).isEqualTo(1);
         assertThat(queries.get(user.getId(), done.id()).action()).isEqualTo(Action.REVIEW);
         when(ai.review(any(), any())).thenReturn(review(Decision.EDIT), review(Decision.ACCEPT));
-        worker.runNext();
+        lambda.runNext();
         verify(ai, times(1)).generate(any(), any());
-        worker.runNext();
-        worker.runNext();
+        lambda.runNext();
+        lambda.runNext();
         var corrected = queries.get(user.getId(), done.id());
         assertThat(corrected.userItemId()).isEqualTo(done.userItemId());
         assertThat(corrected.assetKey()).isNotEqualTo(done.assetKey());
@@ -286,7 +314,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void 피드백_검수에서_유지가_선택되면_추가_이미지_호출_없음() {
         var done = complete();
         service.feedback(user.getId(), done.id(), new FurnitureFeedbackRequest(UUID.randomUUID(), "다시 봐주세요"));
-        worker.runNext();
+        lambda.runNext();
         verify(ai, times(1)).generate(any(), any());
         assertThat(queries.get(user.getId(), done.id()).assetKey()).isEqualTo(done.assetKey());
     }
@@ -319,32 +347,34 @@ class FurnitureGenerationIntegrationTest {
 
     @Test void 만료된_lease의_늦은_응답은_지급할_수_없고_외부_호출을_자동_재전송하지_않음() {
         var job = submitAndExtract();
-        var claim = transactions.claim(job.id());
-        assertThat(transactions.claim(job.id())).isNull();
-        now = now.plusSeconds(241);
-        worker.maintain();
-        assertThat(transactions.generated(claim, "private/late.png", 100, 30)).isFalse();
+        var claim = lambda.currentClaim(job.id());
+        assertThat(control.handle(startCommand(job.id())).status()).isEqualTo(FurnitureLambdaProtocol.Status.DUPLICATE);
+        now = now.plusSeconds(661);
+        maintenance.maintain();
+        assertThat(lambda.checkpoint(job.id(), new Result(claim.action(), null, null,
+                "private/late.png", true, 100, 30, null)).status()).isEqualTo(FurnitureLambdaProtocol.Status.TERMINAL);
         assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
-        worker.runNext();
+        lambda.runNext();
         verify(ai, never()).generate(any(), any());
     }
 
-    @Test void 작업자_동시_선점은_하나만_성공() throws Exception {
-        var job = submitAndExtract();
+    @Test void 같은_작업을_여러_Lambda가_동시에_시작해도_하나만_성공() throws Exception {
+        var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
         AtomicInteger claimed = new AtomicInteger();
         try (var executor = Executors.newFixedThreadPool(4)) {
             var start = new CountDownLatch(1);
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < 4; i++) futures.add(executor.submit(() -> {
                 start.await();
-                if (transactions.claim(job.id()) != null) claimed.incrementAndGet();
+                if (control.handle(startCommand(job.id())).status() == FurnitureLambdaProtocol.Status.READY) claimed.incrementAndGet();
                 return null;
             }));
             start.countDown();
             for (var f : futures) f.get(10, TimeUnit.SECONDS);
         }
         assertThat(claimed).hasValue(1);
-        assertThat(jobs.findById(job.id()).orElseThrow().getImageAttempts()).isEqualTo(1);
+        assertThat(jobs.findById(job.id()).orElseThrow().getExtractionAttempts()).isEqualTo(1);
+        assertThat(jobs.findById(job.id()).orElseThrow().getImageAttempts()).isZero();
     }
 
     @Test void 원본은_24시간_후_삭제하고_완료_가구는_유지() {
@@ -355,7 +385,7 @@ class FurnitureGenerationIntegrationTest {
         now = now.plus(Duration.ofHours(24));
         assertCode(() -> service.feedback(user.getId(), done.id(),
                 new FurnitureFeedbackRequest(UUID.randomUUID(), "수정")), "FURNITURE_SOURCE_EXPIRED");
-        worker.maintain();
+        maintenance.maintain();
         assertThat(objects).doesNotContainKeys(source, candidate).containsKey(done.assetKey());
         assertThat(jobs.findById(done.id()).orElseThrow().getSourceKey()).isNull();
         assertThat(jobs.findById(done.id()).orElseThrow().getSubjectJson()).isNull();
@@ -363,14 +393,15 @@ class FurnitureGenerationIntegrationTest {
 
     @Test void 처리중_탈퇴하면_늦은_검수결과를_지급하지_않음() {
         var job = submitAndExtract();
-        worker.runNext();
-        var claim = transactions.claim(job.id());
+        lambda.runNext();
+        var claim = lambda.currentClaim(job.id());
         new TransactionTemplate(transactionManager).executeWithoutResult(s -> {
             User owner = users.findByIdForUpdate(user.getId()).orElseThrow();
             org.springframework.test.util.ReflectionTestUtils.setField(owner, "deletedAt", now);
         });
-        assertThat(transactions.reviewed(claim, review(Decision.ACCEPT), true, "items/not-granted.png")).isFalse();
-        worker.maintain();
+        assertThat(lambda.checkpoint(job.id(), new Result(claim.action(), null, review(Decision.ACCEPT),
+                "items/not-granted.png", true, 0, 0, null)).status()).isEqualTo(FurnitureLambdaProtocol.Status.TERMINAL);
+        maintenance.maintain();
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
         assertThat(jobs.findById(job.id()).orElseThrow().getSourceKey()).isNull();
     }
@@ -378,7 +409,7 @@ class FurnitureGenerationIntegrationTest {
     @Test void 같은_날에도_여러번_생성할_수_있고_동시작업만_제한() {
         var first = submitAndExtract();
         assertCode(this::submitAndExtract, "FURNITURE_JOB_IN_PROGRESS");
-        worker.runNext(); worker.runNext();
+        lambda.runNext(); lambda.runNext();
         complete(); complete();
         assertThat(jobs.count()).isEqualTo(3);
     }
@@ -402,7 +433,7 @@ class FurnitureGenerationIntegrationTest {
         for (int i = 0; i < 2; i++) {
             var uploading = transactions.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "앞 의자");
             now = now.plusSeconds(301);
-            worker.maintain();
+            maintenance.maintain();
             assertThat(queries.get(user.getId(), uploading.job().id()).failureCode()).isEqualTo("UPLOAD_INTERRUPTED");
         }
         assertThat(submitAndExtract().action()).isEqualTo(Action.GENERATE);
@@ -420,28 +451,36 @@ class FurnitureGenerationIntegrationTest {
     @Test void 공급자_장애에는_가짜_가구나_무한_재시도가_없음() {
         doThrow(new FurnitureAiFailure("PROVIDER_AUTH_FAILED")).when(ai).generate(any(), any());
         var job = submitAndExtract();
-        worker.runNext(); worker.runNext();
+        lambda.runNext(); lambda.runNext();
         assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("PROVIDER_AUTH_FAILED");
         verify(ai, times(1)).generate(any(), any());
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
         when(ai.available()).thenReturn(false);
-        var waiting = submitAndExtract();
-        assertThat(waiting.status()).isEqualTo(Status.QUEUED);
-        assertThat(jobs.findById(waiting.id()).orElseThrow().getExtractionAttempts()).isZero();
+        var unavailable = submitAndExtract();
+        assertThat(unavailable.status()).isEqualTo(Status.FAILED);
+        assertThat(unavailable.failureCode()).isEqualTo("AI_UNAVAILABLE");
+        assertThat(jobs.findById(unavailable.id()).orElseThrow().getExtractionAttempts()).isEqualTo(1);
     }
 
     @Test void 보관함_저장이_실패하면_마스터_아이템과_성공상태도_함께_롤백() {
         var job = submitAndExtract();
-        worker.runNext();
+        lambda.runNext();
         long itemCount = items.count();
         doThrow(new org.springframework.dao.DataIntegrityViolationException("test inventory failure"))
                 .when(inventory).save(any(com.triples.rougether.domain.shop.entity.UserItem.class));
-        worker.runNext();
+        assertThatThrownBy(lambda::runNext).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         assertThat(items.count()).isEqualTo(itemCount);
-        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        // DB 명령 실패는 AI를 재호출하지 않으며, 실행 만료 전까지 결과 객체를 보존함.
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.PROCESSING);
         assertThat(queries.get(user.getId(), job.id()).userItemId()).isNull();
         assertThat(inventory.findInventoryByUserId(user.getId(), null)).isEmpty();
-        assertThat(objects.keySet()).noneMatch(k -> k.startsWith("items/photo-furniture/"));
+        assertThat(objects.keySet()).anyMatch(k -> k.startsWith("items/photo-furniture/"));
+        verify(inventory, times(3)).save(any(com.triples.rougether.domain.shop.entity.UserItem.class));
+        verify(ai, times(1)).review(any(), any());
+        now = now.plusSeconds(661);
+        maintenance.maintain();
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertThat(queries.get(user.getId(), job.id()).failureCode()).isEqualTo("WORKER_INTERRUPTED");
     }
 
     @Test void 외부에서_수정한_아이템은_유지_판정이어도_옛_결과로_덮어쓰지_않음() {
@@ -450,7 +489,7 @@ class FurnitureGenerationIntegrationTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(s ->
                 items.replaceAssetKeyIfUnchanged(itemId, done.assetKey(), "items/admin-corrected.png"));
         service.feedback(user.getId(), done.id(), new FurnitureFeedbackRequest(UUID.randomUUID(), "검수해줘"));
-        worker.runNext();
+        lambda.runNext();
         assertThat(queries.get(user.getId(), done.id()).failureCode()).isEqualTo("RESULT_CHANGED_EXTERNALLY");
         assertThat(items.findById(itemId).orElseThrow().getAssetKey()).isEqualTo("items/admin-corrected.png");
     }
@@ -458,14 +497,17 @@ class FurnitureGenerationIntegrationTest {
     private Review review(Decision decision) {
         return new Review(decision, "파란 사무용 의자", "다리 형태를 확인했습니다", "의자의 다리를 바로잡아 주세요", 100, 20);
     }
+    private Command startCommand(String jobId) {
+        return new Command(jobId, jobs.findById(jobId).orElseThrow().getExecutionId(), UUID.randomUUID().toString(), 0, null);
+    }
     private MockMultipartFile photo() { return new MockMultipartFile("photo", "chair.png", "image/png", valid); }
     private FurnitureGenerationResponse submitAndExtract() {
         var job = service.submit(user.getId(), UUID.randomUUID(), "앞 의자", photo());
-        worker.runNext();
+        lambda.runNext();
         return queries.get(user.getId(), job.id());
     }
     private FurnitureGenerationResponse complete() {
-        var job = submitAndExtract(); worker.runNext(); worker.runNext(); return queries.get(user.getId(), job.id());
+        var job = submitAndExtract(); lambda.runNext(); lambda.runNext(); return queries.get(user.getId(), job.id());
     }
     private void assertCode(Runnable action, String code) {
         assertThatThrownBy(action::run).isInstanceOfSatisfying(BusinessException.class,
