@@ -1,4 +1,8 @@
-# 가구 생성 상주 워커
+# 가구 생성 상주 워커 실험 기록
+
+이 문서는 **2026-09-09에 검증한 상주 워커 설계와 실험 결과**를 보관한다. 현재 지원하는 실행 방식은 [가구 Lambda](furniture-lambda.md)이며, `furniture-worker` 모듈과 `deploy/furniture-worker` 배포 템플릿은 제거했다. 아래의 워커 구조·설정·검증 수치는 당시 기록으로, 현재 실행 안내가 아니다.
+
+만료 정산과 사진 삭제는 `FurnitureGenerationMaintenanceService`로 분리해 API의 기존 매분 유지보수 호출에서 계속 수행한다. `RESIDENT` 모드로 바꾸어도 현재 코드에서 상주 워커 실행을 재개할 수 없다. Lambda 전환 이력은 [2026-09-11 서비스 적용 기록](furniture-service-rollout.md)을 참고한다.
 
 ## 실행 경계
 
@@ -57,15 +61,9 @@ UPDATE furniture_worker_capacity SET execution_enabled = TRUE WHERE id = 1;
 
 DB 상한은 애플리케이션의 PROCESSING 단계 수에 대한 한도다. timeout 뒤 공급자가 계속 계산하는 경우까지 공급자 내부 실행 수를 보장하지는 않는다. DB가 끊기면 다음 선점을 하지 못하고, 진행 중 결과 저장 실패는 기존 lease 만료 정책으로 수습한다.
 
-## 배포 준비와 전환
+## 당시 배포 설계와 전환
 
-이번 작업은 로컬 검증까지이며 운영 배포와 신규 AWS 리소스 생성은 수행하지 않는다. 준비된 실행 템플릿은 `deploy/furniture-worker/compose.yml`이다. 운영 DB/S3 접근 권한·비공개 네트워크·환경 파일은 배포 환경에서 공급한다.
-
-```bash
-docker build --build-arg APP_MODULE=furniture-worker -t <worker-image> .
-```
-
-주요 환경 변수:
+당시 작업은 로컬 검증까지였으며 운영 배포와 신규 AWS 리소스 생성은 수행하지 않았다. 별도 컨테이너 실행용 compose 템플릿과 worker 이미지 빌드를 준비했지만, 현재 저장소에서는 모듈과 템플릿을 제거해 이 방식으로 빌드하거나 배포하지 않는다. 다음 환경 변수도 당시 워커 설정 기록이다.
 
 | 변수 | 용도 |
 | --- | --- |
@@ -76,7 +74,7 @@ docker build --build-arg APP_MODULE=furniture-worker -t <worker-image> .
 | FURNITURE_WORKER_CONCURRENCY | JVM당 소비 루프 수 |
 | BILLING_REQUIRE_CREDITS | 신규 예약 정책. 이미 예약된 작업은 설정과 무관하게 정산 |
 
-worker는 Flyway를 실행하지 않는다. API의 migration 적용 후 worker를 시작한다. 최초 전환에서는 신규 접수를 잠시 닫고, 기존 API 내 워커를 drain/중지한 다음 새 API와 워커를 시작한다. **기존 버전 워커는 전역 용량 잠금을 사용하지 않으므로 신구 워커를 동시에 실행하지 않는다.** 롤백도 새 워커를 정지한 후 이전 실행 방식 하나만 활성화한다. 적용된 migration은 유지한다.
+당시 worker는 Flyway를 실행하지 않고 API가 migration을 적용한 뒤 기동하도록 설계했다. 기존 API 내 워커는 전역 용량 잠금을 사용하지 않았기 때문에 신구 워커가 겹치지 않도록 접수를 닫고 drain한 뒤 교체하는 절차를 사용했다. 이는 과거 전환 설계이며 현재 버전의 롤백 절차가 아니다. 현재 복구는 [가구 Lambda의 배포·복구 절차](furniture-lambda.md#배포와-복구)를 따른다. 적용된 migration은 유지한다.
 
 compose의 512MiB 힙/1024MiB 컨테이너는 워커 초기 실행 설정이다. 호스트 예산에는 API, 워커 개수, DB, OS 및 배포 중 신구 프로세스 중첩을 함께 포함해야 한다. 별도 JVM의 기본 메모리 비용은 늘어나므로 단순히 같은 작은 EC2에 추가하면 안 된다. 배포 전 실제 호스트 여유를 확인한다.
 
@@ -94,9 +92,9 @@ compose의 512MiB 힙/1024MiB 컨테이너는 워커 초기 실행 설정이다.
 
 2026-09-09 로컬 검증에서 워커 2개·전역 상한 4개로 20건을 모두 완료했다. 별도 장애 주입에서는 워커의 JVM heap OOM 후에도 인증된 가구 목록 API 오류가 없었으며, 19건 예약 해제와 대기 단계 1건 완료를 확인했다. 재시작을 반복해도 원장에 추가 정산이 생기지 않았다. 전체 회귀 테스트는 1,934개 통과, 실제 AI smoke 1개 제외였고 API/worker bootJar 빌드도 성공했다. 가짜 AI와 파일 저장소를 사용한 격리 환경의 결과이며 운영 성능 수치는 아니다.
 
-다음 비교 대상은 **일반 on-demand Lambda Functions**다. Lambda Managed Instances나 Provisioned Concurrency는 요금 구조가 다르므로 같은 계산에 섞지 않는다. 일반 함수는 요청 수와 할당 메모리·실행 시간에 따라 과금된다. 따라서 함수 안에서 AI HTTP 응답을 기다리는 시간도 실행 시간에 포함되는 구조로 비용을 추정해야 한다. 호출이 드문 경우와 지속적인 부하를 각각 계산하고, 실제 측정 없이 Lambda가 더 저렴하다고 결론 내리지 않는다. [AWS Lambda 요금](https://aws.amazon.com/lambda/pricing/)
+당시 다음 비교 대상으로 **일반 on-demand Lambda Functions**를 정했다. Lambda Managed Instances나 Provisioned Concurrency는 요금 구조가 다르므로 같은 계산에 섞지 않았다. 일반 함수의 요청 수와 할당 메모리·실행 시간, AI HTTP 응답 대기 시간을 포함해 비용을 비교하려는 계획이었다. 호출이 드문 경우와 지속적인 부하를 각각 계산하고, 실제 측정 없이 Lambda가 더 저렴하다고 결론 내리지 않는 것을 기준으로 삼았다. 당시 참고 자료: [AWS Lambda 요금](https://aws.amazon.com/lambda/pricing/).
 
-| 비교 항목 | 상주 워커 현재 구현 | Lambda에서 추가 확인할 것 |
+| 비교 항목 | 당시 상주 워커 구현 | 당시 Lambda에서 추가 확인할 것 |
 | --- | --- | --- |
 | 실행 구조 | JVM을 유지하고 제한된 작업들을 병렬 실행 | 초기화 시간, 함수당 메모리, 호출 단위 |
 | 비용 | 상주 호스트 비용과 유휴 메모리 | 할당 GB × 과금 초의 합계, 요청·큐·네트워크 비용 |

@@ -38,10 +38,6 @@ public interface FurnitureGenerationJobRepository extends JpaRepository<Furnitur
             + "(select ui.id from UserItem ui where ui.item.id = :itemId)")
     Optional<String> findGenerationJobIdByItemId(@Param("itemId") Long itemId);
 
-    @Query("select j.id from FurnitureGenerationJob j where j.status = 'QUEUED' "
-            + "and j.nextRunAt <= :now order by j.nextRunAt, j.id")
-    List<String> findDue(@Param("now") Instant now, Pageable page);
-
     @Query("select j.id from FurnitureGenerationJob j where "
             + "(j.status = 'PROCESSING' and j.leaseUntil <= :now) "
             + "or (j.status = 'UPLOADING' and ((j.uploadExpiresAt is null and j.createdAt <= :uploadCutoff) or j.uploadExpiresAt <= :now)) "

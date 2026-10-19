@@ -16,6 +16,7 @@ import com.triples.rougether.furniture.lambda.FurnitureLambdaProtocol.*;
 import com.triples.rougether.furniture.ai.FurnitureAiClient.*;
 import com.triples.rougether.furniture.service.FurnitureGenerationTransactions;
 import com.triples.rougether.furniture.service.FurnitureGenerationTransactions.Claim;
+import com.triples.rougether.furniture.service.FurnitureGenerationMaintenanceService;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -33,6 +34,7 @@ class FurnitureLambdaIntegrationTest {
     @Autowired FurnitureLambdaControl control;
     @Autowired FurnitureLambdaOutbox outbox;
     @Autowired FurnitureGenerationTransactions tx;
+    @Autowired FurnitureGenerationMaintenanceService maintenance;
     @Autowired FurnitureGenerationJobRepository jobs;
     @Autowired FurnitureLambdaExecutionRepository executions;
     @Autowired FurnitureGenerationFeedbackRepository feedbacks;
@@ -104,7 +106,8 @@ class FurnitureLambdaIntegrationTest {
             String key = i.getArgument(2) + "/" + UUID.randomUUID() + ".png";
             objects.put(key, i.getArgument(0)); return key;
         });
-        var stage = new FurnitureLambdaStage(ai, new com.triples.rougether.furniture.service.FurnitureImages(), storage, config);
+        var stage = new FurnitureLambdaStage(
+                ai, new com.triples.rougether.furniture.service.FurnitureImages(), storage, config);
         var runner = new FurnitureLambdaRunner(control::handle, stage::execute, config.timeout());
         runner.run(m, "first", () -> 600_000);
         var job = jobs.findById(m.jobId()).orElseThrow();
@@ -151,7 +154,13 @@ class FurnitureLambdaIntegrationTest {
             assertThat(replies.stream().filter(r -> r.status() == Status.DUPLICATE)).hasSize(7);
         }
         assertThat(jobs.findById(m.jobId()).orElseThrow().getExtractionAttempts()).isEqualTo(1);
-        assertThat(tx.claim(m.jobId())).isNull();
+    }
+    @Test void 실행을_중지하면_Lambda는_AI_단계를_할당하지않음() {
+        var m = create();
+        jdbc.update("update furniture_worker_capacity set execution_enabled=false where id=1");
+
+        assertThat(control.handle(start(m, "paused")).status()).isEqualTo(Status.BUSY);
+        assertThat(jobs.findById(m.jobId()).orElseThrow().getExtractionAttempts()).isZero();
     }
     @Test void 여러_작업의_동시_시작은_전체_상한을_지킴() throws Exception {
         var messages = new ArrayList<Message>();
@@ -194,7 +203,7 @@ class FurnitureLambdaIntegrationTest {
         assertThat(runner.run(m, "second", () -> 600_000)).isTrue();
         assertThat(calls).hasValue(1);
         now = now.plusSeconds(661);
-        tx.maintain(m.jobId()); tx.maintain(m.jobId());
+        maintenance.maintain(); maintenance.maintain();
         var job = jobs.findById(m.jobId()).orElseThrow();
         assertThat(job.getFailureCode()).isEqualTo("WORKER_INTERRUPTED");
         assertThat(accounts.findById(job.getUserId()).orElseThrow().getBalance()).isEqualTo(1);

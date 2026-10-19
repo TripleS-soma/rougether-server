@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
         "spring.datasource.username=${FURNITURE_DEV_DB_USER}", "spring.datasource.password=${FURNITURE_DEV_DB_PASSWORD}",
         "furniture.generation.enabled=true", "furniture.lambda.dispatch-enabled=true",
         "furniture.lambda.queue-url=${FURNITURE_DEV_QUEUE_URL}", "billing.require-credits=true",
-        "billing.worker-enabled=false", "furniture.generation.worker-enabled=false",
+        "billing.worker-enabled=false",
         "asset.s3.bucket=${FURNITURE_DEV_ASSET_BUCKET}", "furniture.lambda.dispatch-delay=1000"})
 class FurnitureLambdaDevSmokeTest {
     @Autowired FurnitureGenerationService service;

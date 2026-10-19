@@ -29,7 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest(properties = {"furniture.generation.enabled=false", "furniture.generation.worker-enabled=false"})
+@SpringBootTest(properties = "furniture.generation.enabled=false")
 class FurnitureGenerationQueryIntegrationTest {
     private static final Instant CREATED_AT = Instant.parse("2026-09-06T03:00:00Z");
 

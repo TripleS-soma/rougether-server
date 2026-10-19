@@ -190,24 +190,9 @@ public class FurnitureGenerationTransactions {
         return FurnitureGenerationResponse.from(job);
     }
 
-    @Transactional(readOnly = true)
-    public List<String> due() { return jobs.findDue(clock.instant(), PageRequest.of(0, 10)); }
-
-    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
-    public Claim claim(String id) {
-        // 전체 용량 → 사용자 → 작업 순으로 잠금. 잠금은 외부 호출 전에 해제됨.
-        var limit = capacity.lock().orElseThrow();
-        if (!"RESIDENT".equals(limit.getExecutionMode()) || !limit.isExecutionEnabled()
-                || jobs.countByStatus(Status.PROCESSING) >= limit.getMaxInFlight()) return null;
-        return claimStage(id, null);
-    }
-
     // 호출자는 capacity 잠금을 보유하며 실행 소유권과 전체 제한을 먼저 검증해야 함.
     public Claim claimForLambda(String id, Instant deadline) {
-        return claimStage(id, deadline);
-    }
-
-    private Claim claimStage(String id, Instant deadline) {
+        Objects.requireNonNull(deadline);
         User user = lockedUser(jobs.findOwnerId(id).orElseThrow());
         var job = jobs.findForUpdate(id).orElseThrow();
         Instant now = clock.instant();
@@ -233,7 +218,7 @@ public class FurnitureGenerationTransactions {
             fail(job, "GENERATION_BUDGET_EXHAUSTED", now);
             return null;
         }
-        String token = job.claim(now, deadline == null ? now.plus(config.timeout()).plusSeconds(60) : deadline);
+        String token = job.claim(now, deadline);
         return new Claim(job.getId(), job.getUserId(), token, job.getAction(), job.getSourceKey(),
                 job.getCandidateKey(), job.getResultAssetKey(), job.getTargetHint(), job.getFeedback(),
                 job.getCorrectionPrompt(), job.getSubjectJson());

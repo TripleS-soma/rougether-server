@@ -63,10 +63,6 @@ rougether:
   bots:
     enabled: false
 
-furniture:
-  generation:
-    worker-enabled: false
-
 billing:
   require-credits: false
   worker-enabled: false

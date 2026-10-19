@@ -36,7 +36,7 @@ admin-api/   운영자 대면 앱 :8081  /admin   아이디·비밀번호 + 세�
 | Controller, DTO | 각 앱 | 위와 동일 |
 | 공통 에러·util | `common` | `com.triples.rougether.common.*` |
 
-가구 생성의 API/워커 공용 실행 로직은 `furniture-application` 애플리케이션 라이브러리에, S3 어댑터는 `infra:assets`에 둡니다. `furniture-worker`는 별도 비웹 Boot 앱이며 user-api Boot 앱에 의존하지 않습니다. 자세한 실행·전환 기준은 [가구 워커](../work/furniture-worker.md)를 따릅니다.
+가구 생성의 API/Lambda 공용 로직은 `furniture-application` 애플리케이션 라이브러리에, S3 어댑터는 `infra:assets`에 둡니다. AI 실행은 Lambda만 지원하며, 만료 정산과 사진 삭제는 `FurnitureGenerationMaintenanceService`를 통해 API에서 수행합니다. 상주 `furniture-worker` 모듈과 배포 템플릿은 제거했습니다. 새 환경은 기존 DB migration의 기본값과 별개로 `execution_mode=LAMBDA`를 명시적으로 설정해야 합니다. 자세한 실행·복구 기준은 [가구 Lambda](../work/furniture-lambda.md)를 따릅니다.
 
 임베딩·주간 회고의 공급자 호출은 `ai-service/` FastAPI 프로세스로 선택적으로 분리합니다. `infra:llm`의 기존 인터페이스를 유지하고 `AI_SERVICE_ENABLED=true`일 때 내부 HTTP 어댑터를 사용합니다. 도메인 집계·프롬프트·결과 저장·폴백은 Spring이 담당합니다. 실행·검증·전환/복구 기준은 [AI 서버 분리](../work/ai-service.md)를 따릅니다.
 
