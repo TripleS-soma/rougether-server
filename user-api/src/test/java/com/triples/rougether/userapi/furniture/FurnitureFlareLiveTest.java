@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
         "furniture.generation.timeout=180s"})
 class FurnitureFlareLiveTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired FurnitureGenerationWorker worker;
     @Autowired FurnitureGenerationProperties properties;
     @Autowired UserRepository users;
@@ -114,7 +115,7 @@ class FurnitureFlareLiveTest {
             Files.writeString(output.resolve("timing.jsonl"), JsonMapper.builder().build().writeValueAsString(Map.of(
                     "stage", stage, "seconds", (System.nanoTime() - started) / 1_000_000_000.0)) + "\n",
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            result = service.get(user.getId(), result.id());
+            result = queries.get(user.getId(), result.id());
             Files.writeString(output.resolve("result.json"), JsonMapper.builder().build().writeValueAsString(result));
             Files.writeString(output.resolve("stages.jsonl"), JsonMapper.builder().build().writeValueAsString(result) + "\n",
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);

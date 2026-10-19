@@ -31,6 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
         "furniture.generation.timeout=180s"})
 class FurnitureGenerationLiveSmokeTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired FurnitureGenerationWorker worker;
     @Autowired FurnitureGenerationProperties properties;
     @Autowired UserRepository users;
@@ -81,7 +82,7 @@ class FurnitureGenerationLiveSmokeTest {
         for (int i = 0; i < 1 + properties.maxImageAttempts() + properties.maxReviewAttempts(); i++) {
             if (result.status() == Status.SUCCEEDED || result.status() == Status.FAILED) break;
             worker.runNext();
-            result = service.get(user.getId(), result.id());
+            result = queries.get(user.getId(), result.id());
             Files.writeString(output.resolve("result.json"), JsonMapper.builder().build().writeValueAsString(result));
             Files.writeString(output.resolve("stages.jsonl"), JsonMapper.builder().build().writeValueAsString(result) + "\n",
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);

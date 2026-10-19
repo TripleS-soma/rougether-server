@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.furniture.web;
 import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
 import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
+import com.triples.rougether.userapi.furniture.service.FurnitureGenerationQueryService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "Furniture Generation", description = "사진으로 내 가구 만들기")
 public class FurnitureGenerationController {
     private final FurnitureGenerationService service;
+    private final FurnitureGenerationQueryService queries;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "가구 생성 작업 접수", description = "같은 requestId와 사진은 중복 생성하지 않음. JPEG/PNG, 10MB 이하.")
@@ -38,13 +40,13 @@ public class FurnitureGenerationController {
     @GetMapping
     @Operation(summary = "내 최근 가구 생성 작업 20개")
     public ResponseEntity<JobList> list(@CurrentUser AuthUser user) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new JobList(service.list(user.id())));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new JobList(queries.list(user.id())));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "가구 생성 상태 조회")
     public ResponseEntity<FurnitureGenerationResponse> get(@CurrentUser AuthUser user, @PathVariable UUID id) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.get(user.id(), id.toString()));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(queries.get(user.id(), id.toString()));
     }
 
     @PostMapping("/{id}/feedback")

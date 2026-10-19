@@ -55,6 +55,7 @@ class FurnitureBillingIntegrationTest {
     @Autowired FurnitureBillingService billing;
     @Autowired PurchaseReferenceCipher cipher;
     @Autowired FurnitureGenerationService furniture;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired FurnitureGenerationWorker worker;
     @Autowired FurnitureGenerationJobRepository jobs;
     @Autowired FurnitureGenerationFeedbackRepository feedbacks;
@@ -146,7 +147,7 @@ class FurnitureBillingIntegrationTest {
         for (int i = 0; i < 3; i++) {
             var job = submit();
             worker.runNext(); worker.runNext(); worker.runNext();
-            assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
+            assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
         }
         assertThat(credits.balance(user.getId()).available()).isZero();
         assertThat(credits.balance(user.getId()).reserved()).isZero();
@@ -162,7 +163,7 @@ class FurnitureBillingIntegrationTest {
         assertThat(credits.balance(user.getId()).reserved()).isEqualTo(1);
         assertThat(furniture.submit(user.getId(), requestId, "의자", photo()).id()).isEqualTo(job.id());
         worker.runNext(); worker.runNext(); worker.runNext();
-        assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
     }
@@ -195,7 +196,7 @@ class FurnitureBillingIntegrationTest {
         var job = submit();
         when(ai.extract(any(), anyString())).thenThrow(new FurnitureAiFailure("PROVIDER_RATE_LIMITED"));
         worker.runNext(); worker.maintain(); worker.maintain();
-        assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
     }
@@ -205,7 +206,7 @@ class FurnitureBillingIntegrationTest {
         when(ai.review(any(), any())).thenReturn(new Review(Decision.EDIT, "의자", "다리 오류", "다리 수정", 1, 1));
         var job = submit();
         for (int i = 0; i < 7; i++) worker.runNext();
-        assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
         verify(ai, times(3)).generate(any(), any());
@@ -216,7 +217,7 @@ class FurnitureBillingIntegrationTest {
         var job = submit(); worker.runNext(); worker.runNext();
         doThrow(new IllegalStateException("inventory failed")).when(inventory).save(any());
         worker.runNext();
-        assertThat(furniture.get(user.getId(), job.id()).userItemId()).isNull();
+        assertThat(queries.get(user.getId(), job.id()).userItemId()).isNull();
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
     }
@@ -229,7 +230,7 @@ class FurnitureBillingIntegrationTest {
         worker.runNext();
         assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
-        assertThat(furniture.get(user.getId(), job.id()).assetKey()).isNotNull();
+        assertThat(queries.get(user.getId(), job.id()).assetKey()).isNotNull();
     }
 
     @Test void 동시_결제확인과_웹훅은_한번만_지급() throws Exception {
@@ -312,7 +313,7 @@ class FurnitureBillingIntegrationTest {
         now = now.plus(Duration.ofHours(25));
         worker.maintain();
         worker.maintain();
-        assertThat(furniture.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
         assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
         assertThat(credits.balance(user.getId()).reserved()).isZero();
         verify(ai, never()).extract(any(), anyString());

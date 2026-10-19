@@ -8,7 +8,6 @@ import com.triples.rougether.userapi.furniture.dto.FurnitureFeedbackRequest;
 import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.furniture.error.FurnitureGenerationErrorCode;
 import com.triples.rougether.infra.assets.AssetStorageService;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class FurnitureGenerationService {
     private final FurnitureGenerationTransactions transactions;
+    private final FurnitureGenerationQueryService queries;
     private final FurnitureImages images;
     private final AssetStorageService storage;
     private final FurnitureGenerationProperties config;
@@ -44,11 +44,9 @@ public class FurnitureGenerationService {
             transactions.uploadFailed(userId, id);
             log.warn("가구 원본 업로드 실패 job={}", id);
         }
-        return transactions.get(userId, id);
+        return queries.get(userId, id);
     }
 
-    public FurnitureGenerationResponse get(Long userId, String id) { return transactions.get(userId, id); }
-    public List<FurnitureGenerationResponse> list(Long userId) { return transactions.list(userId); }
     public FurnitureGenerationResponse feedback(Long userId, String id, FurnitureFeedbackRequest request) {
         requireAvailable();
         try { return transactions.feedback(userId, id, request.requestId().toString(), request.feedback().strip()); }

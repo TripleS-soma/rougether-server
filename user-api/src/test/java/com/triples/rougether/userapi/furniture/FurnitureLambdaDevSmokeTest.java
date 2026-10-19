@@ -7,6 +7,7 @@ import com.triples.rougether.domain.billing.entity.FurnitureCreditAccount;
 import com.triples.rougether.domain.billing.repository.FurnitureCreditAccountRepository;
 import com.triples.rougether.furniture.dto.FurnitureGenerationResponse;
 import com.triples.rougether.userapi.furniture.service.FurnitureGenerationService;
+import com.triples.rougether.userapi.furniture.service.FurnitureGenerationQueryService;
 import com.triples.rougether.infra.assets.AssetStorageService;
 import java.nio.file.*;
 import java.time.Instant;
@@ -31,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
         "asset.s3.bucket=${FURNITURE_DEV_ASSET_BUCKET}", "furniture.lambda.dispatch-delay=1000"})
 class FurnitureLambdaDevSmokeTest {
     @Autowired FurnitureGenerationService service;
+    @Autowired FurnitureGenerationQueryService queries;
     @Autowired UserRepository users;
     @Autowired FurnitureCreditAccountRepository accounts;
     @Autowired JdbcTemplate jdbc;
@@ -69,7 +71,7 @@ class FurnitureLambdaDevSmokeTest {
             while(finished.size()<2 && System.nanoTime()-start<TimeUnit.SECONDS.toNanos(720)) {
                 for(var entry:jobs.entrySet()) {
                     if(finished.containsKey(entry.getKey()))continue;
-                    var job=service.get(entry.getValue(),entry.getKey());
+                    var job=queries.get(entry.getValue(),entry.getKey());
                     if(job.status().name().equals("SUCCEEDED") || job.status().name().equals("FAILED")) {
                         finished.put(job.id(),job); elapsed.put(job.id(),(System.nanoTime()-start)/1e9);
                     }
