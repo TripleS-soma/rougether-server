@@ -46,6 +46,7 @@ import com.triples.rougether.userapi.notification.service.NotificationService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
@@ -110,11 +111,13 @@ class RoutineMissionAutoContributeIntegrationTest {
                 houseRepository, houseMemberRepository, houseMissionRepository,
                 participantRepository, dailyContributionRepository, dailyRewardRepository,
                 mock(BannedWordChecker.class), mock(NotificationService.class), routineRepository);
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                new DailyRewardService(routineLogRepository, todoRepository), recorder);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository,
-                new DailyRewardService(routineLogRepository, todoRepository),
+                userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager), houseMissionService,
-                new WalletHistoryRecorder(walletHistoryRepository),
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
 
         user = userRepository.save(User.signUp());

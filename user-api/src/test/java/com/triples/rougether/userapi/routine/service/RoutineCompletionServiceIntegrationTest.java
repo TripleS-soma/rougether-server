@@ -26,6 +26,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
@@ -84,11 +85,14 @@ class RoutineCompletionServiceIntegrationTest {
     void setUp() {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                dailyRewardService, recorder);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository, dailyRewardService,
+                userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class),
-                new WalletHistoryRecorder(walletHistoryRepository),
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();

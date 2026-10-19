@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
@@ -22,14 +23,17 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -37,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -78,11 +83,14 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
     void setUp() {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                dailyRewardService, recorder);
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository, dailyRewardService,
+                userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class),
-                new WalletHistoryRecorder(walletHistoryRepository),
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
@@ -172,6 +180,18 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 new RoutineLogCreateRequest(null));
         assertThat(partial.rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(45);
+        List<WalletHistory> histories = walletHistoryRepository.findHistories(
+                userId, null, null, PageRequest.of(0, 100)).getContent();
+        assertThat(histories).hasSize(5);
+        assertThat(histories).filteredOn(history -> partial.id().equals(history.getSourceId()))
+                .singleElement().satisfies(history -> {
+                    assertThat(history.getAmount()).isEqualTo(5);
+                    assertThat(history.getBalanceAfter()).isEqualTo(45);
+                    assertThat(history.getReason()).isEqualTo(WalletHistoryReason.ROUTINE_COMPLETE);
+                    assertThat(history.getCurrencyType()).isEqualTo(CurrencyType.COIN);
+                    assertThat(history.getSourceType()).isEqualTo(WalletHistory.SOURCE_ROUTINE_LOG);
+                    assertThat(history.getSourceId()).isEqualTo(partial.id());
+                });
 
         // 상한 소진 → 다음 완료는 0
         Long nextRoutine = persistRoutine(userId);
@@ -179,6 +199,10 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 new RoutineLogCreateRequest(null));
         assertThat(next.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletHistoryRepository.findHistories(
+                userId, null, null, PageRequest.of(0, 100)).getContent())
+                .containsExactlyElementsOf(histories)
+                .noneMatch(history -> next.id().equals(history.getSourceId()));
     }
 
     @Test

@@ -23,6 +23,8 @@ import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -46,12 +48,15 @@ class RoutineLogServiceCompleteRetryTest {
     private final UserWalletRepository userWalletRepository = mock(UserWalletRepository.class);
     private final StreakRepository streakRepository = mock(StreakRepository.class);
     private final DailyRewardService dailyRewardService = mock(DailyRewardService.class);
+    private final WalletHistoryRecorder recorder = mock(WalletHistoryRecorder.class);
+    private final CompletionRewardService completionRewardService = new CompletionRewardService(
+            dailyRewardService, recorder);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 
     private final RoutineLogService service = new RoutineLogService(routineRepository,
-            routineLogRepository, userWalletRepository, streakRepository, dailyRewardService,
+            routineLogRepository, userWalletRepository, streakRepository, completionRewardService,
             new TransactionTemplate(transactionManager), mock(HouseMissionService.class),
-            mock(com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder.class),
+            recorder,
                 org.mockito.Mockito.mock(RoomGrowthService.class));
 
     @Test

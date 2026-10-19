@@ -21,7 +21,7 @@ import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.routine.error.RoutineErrorCode;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
-import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
@@ -41,13 +41,12 @@ public class RoutineLogService {
     // KST 고정 — "당일" 판정과 routineDate 기본값 모두 이 기준임
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
-    private static final int REWARD_AMOUNT = 10;
 
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final UserWalletRepository userWalletRepository;
     private final StreakRepository streakRepository;
-    private final DailyRewardService dailyRewardService;
+    private final CompletionRewardService completionRewardService;
     private final TransactionTemplate transactionTemplate;
     private final HouseMissionService houseMissionService;
     private final WalletHistoryRecorder walletHistoryRecorder;
@@ -106,17 +105,13 @@ public class RoutineLogService {
 
         // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
         // 당일 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
-        int reward = isToday
-                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
-                : 0;
+        int reward = completionRewardService.calculateAmount(userId, routineDate, today);
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
                 routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
 
         if (reward > 0) {
-            wallet.add(reward);
-            walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.ROUTINE_COMPLETE,
-                    WalletHistory.SOURCE_ROUTINE_LOG, log.getId());
+            completionRewardService.grantRoutineReward(wallet, reward, log.getId());
             roomGrowthService.award(userId, reward);
             log.recordGrowthReward(reward);
         }
