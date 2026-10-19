@@ -8,6 +8,7 @@ import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob;
 import com.triples.rougether.domain.furniture.repository.*;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.domain.billing.entity.*;
 import com.triples.rougether.domain.billing.repository.*;
 import com.triples.rougether.furniture.lambda.*;
@@ -36,6 +37,7 @@ class FurnitureLambdaIntegrationTest {
     @Autowired FurnitureLambdaExecutionRepository executions;
     @Autowired FurnitureGenerationFeedbackRepository feedbacks;
     @Autowired UserRepository users;
+    @Autowired UserItemRepository inventory;
     @Autowired FurnitureCreditAccountRepository accounts;
     @Autowired FurnitureCreditReservationRepository reservations;
     @Autowired FurnitureCreditEntryRepository entries;
@@ -176,6 +178,8 @@ class FurnitureLambdaIntegrationTest {
         var job = jobs.findById(m.jobId()).orElseThrow();
         assertThat(job.getStatus()).isEqualTo(FurnitureGenerationJob.Status.SUCCEEDED);
         assertThat(job.getUserItemId()).isNotNull();
+        assertThat(inventory.findInventoryByUserId(job.getUserId(), null)).singleElement()
+                .satisfies(owned -> assertThat(owned.getId()).isEqualTo(job.getUserItemId()));
         assertThat(calls).hasValue(3);
         assertThat(reservations.findById(m.jobId()).orElseThrow().getStatus()).isEqualTo(FurnitureCreditReservation.Status.SPENT);
         assertThat(entries.findAll().stream().filter(e -> m.jobId().equals(e.getReferenceId()) && e.getReason() == FurnitureCreditEntry.Reason.SPEND)).hasSize(1);

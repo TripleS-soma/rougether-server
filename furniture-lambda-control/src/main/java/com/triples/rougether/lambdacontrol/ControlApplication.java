@@ -17,7 +17,8 @@ import org.springframework.data.jpa.repository.config.*;
 @EntityScan("com.triples.rougether.domain")
 @EnableJpaRepositories("com.triples.rougether.domain")
 @EnableConfigurationProperties(FurnitureGenerationProperties.class)
-@Import({FurnitureLambdaControl.class, FurnitureGenerationTransactions.class, GenerationCreditLedger.class})
+@Import({FurnitureLambdaControl.class, FurnitureGenerationTransactions.class,
+        FurnitureResultItemService.class, GenerationCreditLedger.class})
 public class ControlApplication {
     @Bean javax.sql.DataSource dataSource(org.springframework.core.env.Environment env) {
         var source = new org.springframework.jdbc.datasource.DriverManagerDataSource();
