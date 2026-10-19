@@ -26,6 +26,7 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.config.JpaConfig;
@@ -75,9 +76,12 @@ class TodoServiceIntegrationTest {
     void setUp() {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                dailyRewardService, recorder);
         service = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository),
+                userWalletRepository, completionRewardService,
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         userId = userRepository.save(User.signUp()).getId();
     }
@@ -327,9 +331,11 @@ class TodoServiceIntegrationTest {
         service.create(userId, imported("팀 회의", "evt-1"));
         TodoRepository racing = mock(TodoRepository.class, AdditionalAnswers.delegatesTo(todoRepository));
         doReturn(false).when(racing).existsByUserIdAndExternalSourceAndExternalId(any(), anyString(), anyString());
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                new DailyRewardService(routineLogRepository, todoRepository), recorder);
         TodoService racingService = new TodoService(racing, categoryRepository, userRepository,
-                userWalletRepository, new DailyRewardService(routineLogRepository, todoRepository),
-                new WalletHistoryRecorder(walletHistoryRepository),
+                userWalletRepository, completionRewardService, recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
 
         assertThatThrownBy(() -> racingService.create(userId, imported("팀 회의(재동기화)", "evt-1")))

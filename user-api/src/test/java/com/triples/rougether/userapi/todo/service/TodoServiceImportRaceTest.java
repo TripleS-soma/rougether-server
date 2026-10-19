@@ -17,7 +17,7 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
-import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.error.TodoErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
@@ -38,7 +38,7 @@ class TodoServiceImportRaceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
 
     private final TodoService service = new TodoService(todoRepository, mock(CategoryRepository.class),
-            userRepository, mock(UserWalletRepository.class), mock(DailyRewardService.class),
+            userRepository, mock(UserWalletRepository.class), mock(CompletionRewardService.class),
             mock(WalletHistoryRecorder.class),
                 org.mockito.Mockito.mock(RoomGrowthService.class));
 

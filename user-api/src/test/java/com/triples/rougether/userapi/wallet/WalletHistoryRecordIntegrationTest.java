@@ -26,7 +26,9 @@ import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
+import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.userapi.routine.service.RoutineLogService;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import com.triples.rougether.userapi.todo.service.TodoService;
@@ -94,13 +96,15 @@ class WalletHistoryRecordIntegrationTest {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                dailyRewardService, recorder);
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository, dailyRewardService,
+                userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class), recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService, recorder,
+                userWalletRepository, completionRewardService, recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         walletQueryService = new WalletQueryService(userWalletRepository, walletHistoryRepository);
         user = userRepository.save(User.signUp());
@@ -112,7 +116,8 @@ class WalletHistoryRecordIntegrationTest {
     void 루틴_완료하면_ROUTINE_COMPLETE_이력이_잔액_스냅샷과_함께_남는다() {
         Long routineId = persistRoutine(user);
 
-        routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
+        RoutineLogResponse response = routineLogService.complete(userId, routineId,
+                new RoutineLogCreateRequest(null));
 
         List<WalletHistory> histories = myHistories();
         assertThat(histories).hasSize(1);
@@ -123,6 +128,7 @@ class WalletHistoryRecordIntegrationTest {
         assertThat(history.getBalanceAfter()).isEqualTo(10);
         assertThat(history.getSourceType()).isEqualTo(WalletHistory.SOURCE_ROUTINE_LOG);
         assertThat(history.getSourceId()).isNotNull();
+        assertThat(history.getSourceId()).isEqualTo(response.id());
     }
 
     @Test

@@ -15,7 +15,7 @@ import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.persistence.UniqueViolations;
-import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.userapi.room.service.RoomGrowthService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
@@ -44,15 +44,13 @@ public class TodoService {
 
     // KST 고정 — 완료 가능 여부(마감일) 판정 기준
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 투두 보상: 루틴과 같은 10코인 고정
     private static final CurrencyType REWARD_CURRENCY = CurrencyType.COIN;
-    private static final int REWARD_AMOUNT = 10;
 
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
-    private final DailyRewardService dailyRewardService;
+    private final CompletionRewardService completionRewardService;
     private final WalletHistoryRecorder walletHistoryRecorder;
     private final RoomGrowthService roomGrowthService;
 
@@ -147,16 +145,12 @@ public class TodoService {
         }
         // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
         // 당일 마감 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
-        int reward = today.equals(dueDate)
-                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
-                : 0;
+        int reward = completionRewardService.calculateAmount(userId, dueDate, today);
 
         todo.complete(REWARD_CURRENCY, reward, Instant.now());
 
         if (reward > 0) {
-            wallet.add(reward);
-            walletHistoryRecorder.record(wallet, reward, WalletHistoryReason.TODO_COMPLETE,
-                    WalletHistory.SOURCE_TODO, todo.getId());
+            completionRewardService.grantTodoReward(wallet, reward, todo.getId());
             // 방 생성 보장의 중간 flush 전에 완료·성장 보상을 함께 기록함. 지급 실패 시 같은 트랜잭션에서 롤백됨.
             todo.recordGrowthReward(reward);
             roomGrowthService.award(userId, reward);

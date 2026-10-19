@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
@@ -19,13 +20,16 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -33,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @DataJpaTest
@@ -68,9 +73,12 @@ class TodoServiceDailyRewardCapIntegrationTest {
     void setUp() {
         DailyRewardService dailyRewardService = new DailyRewardService(routineLogRepository,
                 todoRepository);
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                dailyRewardService, recorder);
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
-                userWalletRepository, dailyRewardService,
-                new WalletHistoryRecorder(walletHistoryRepository),
+                userWalletRepository, completionRewardService,
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         User user = userRepository.save(User.signUp());
         userId = user.getId();
@@ -174,12 +182,28 @@ class TodoServiceDailyRewardCapIntegrationTest {
         TodoCompleteResponse partial = todoService.complete(userId, partialTodoId);
         assertThat(partial.rewardAmount()).isEqualTo(5);
         assertThat(walletBalance()).isEqualTo(45);
+        List<WalletHistory> histories = walletHistoryRepository.findHistories(
+                userId, null, null, PageRequest.of(0, 100)).getContent();
+        assertThat(histories).hasSize(5);
+        assertThat(histories).filteredOn(history -> partialTodoId.equals(history.getSourceId()))
+                .singleElement().satisfies(history -> {
+                    assertThat(history.getAmount()).isEqualTo(5);
+                    assertThat(history.getBalanceAfter()).isEqualTo(45);
+                    assertThat(history.getReason()).isEqualTo(WalletHistoryReason.TODO_COMPLETE);
+                    assertThat(history.getCurrencyType()).isEqualTo(CurrencyType.COIN);
+                    assertThat(history.getSourceType()).isEqualTo(WalletHistory.SOURCE_TODO);
+                    assertThat(history.getSourceId()).isEqualTo(partialTodoId);
+                });
 
         // 상한 소진 → 다음 완료는 0
         Long nextTodoId = todoService.create(userId,
                 new TodoCreateRequest("다음 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, nextTodoId).rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletHistoryRepository.findHistories(
+                userId, null, null, PageRequest.of(0, 100)).getContent())
+                .containsExactlyElementsOf(histories)
+                .noneMatch(history -> nextTodoId.equals(history.getSourceId()));
     }
 
     @Test

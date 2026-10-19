@@ -30,6 +30,7 @@ import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
+import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
@@ -87,12 +88,14 @@ class RoutineFailedLogTransitionIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
+        CompletionRewardService completionRewardService = new CompletionRewardService(
+                new DailyRewardService(routineLogRepository, todoRepository), recorder);
         service = new RoutineLogService(routineRepository, routineLogRepository,
-                userWalletRepository, streakRepository,
-                new DailyRewardService(routineLogRepository, todoRepository),
+                userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
                 org.mockito.Mockito.mock(HouseMissionService.class),
-                new WalletHistoryRecorder(walletHistoryRepository),
+                recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));
         user = userRepository.save(User.signUp());
         userId = user.getId();
