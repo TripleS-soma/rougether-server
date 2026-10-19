@@ -5,10 +5,10 @@ import com.triples.rougether.domain.routine.entity.Category;
 import com.triples.rougether.domain.routine.entity.Routine;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
-import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
-import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
-import com.triples.rougether.userapi.today.dto.TodaySummary;
-import com.triples.rougether.userapi.today.dto.TodayTodoItem;
+import com.triples.rougether.userapi.agenda.dto.AgendaCategoryGroup;
+import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
+import com.triples.rougether.userapi.agenda.dto.AgendaSummary;
+import com.triples.rougether.userapi.agenda.dto.AgendaTodoItem;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,7 +28,7 @@ public class DailyAgendaAssembler {
     }
 
     // 카테고리별 묶음. 미분류(category=null)는 categoryId=null 그룹으로 분리, 맨 뒤로 둠
-    public List<TodayCategoryGroup> groupByCategory(List<Routine> routines,
+    public List<AgendaCategoryGroup> groupByCategory(List<Routine> routines,
                                                     Set<Long> completedRoutineIds,
                                                     List<TodoAgendaRow> todos) {
         // categoryId(null=미분류) → 누적기. null 키 허용 위해 LinkedHashMap 사용
@@ -36,7 +36,7 @@ public class DailyAgendaAssembler {
         for (Routine routine : routines) {
             Long key = categoryIdOf(routine.getCategory());
             groups.computeIfAbsent(key, Accumulator::new)
-                    .routines.add(new TodayRoutineItem(routine.getId(), routine.getTitle(),
+                    .routines.add(new AgendaRoutineItem(routine.getId(), routine.getTitle(),
                             routine.getScheduledTime(), routine.getAuthType(),
                             completedRoutineIds.contains(routine.getId()),
                             routine.getHouseMissionId()));
@@ -44,7 +44,7 @@ public class DailyAgendaAssembler {
         for (TodoAgendaRow todo : todos) {
             Long key = todo.categoryId();
             groups.computeIfAbsent(key, Accumulator::new)
-                    .todos.add(new TodayTodoItem(todo.id(), todo.title(),
+                    .todos.add(new AgendaTodoItem(todo.id(), todo.title(),
                             todo.dueDate(), todo.dueTime(), todo.status(),
                             todo.completedAt()));
         }
@@ -56,7 +56,7 @@ public class DailyAgendaAssembler {
                 .toList();
     }
 
-    public TodaySummary summarize(List<Routine> routines, Set<Long> completedRoutineIds,
+    public AgendaSummary summarize(List<Routine> routines, Set<Long> completedRoutineIds,
                                   List<TodoAgendaRow> todos) {
         int completedRoutines = (int) routines.stream()
                 .filter(r -> completedRoutineIds.contains(r.getId())).count();
@@ -66,7 +66,7 @@ public class DailyAgendaAssembler {
         int completedCount = completedRoutines + completedTodos;
         int remainingCount = total - completedCount;
         double progressRate = total == 0 ? 0.0 : (double) completedCount / total;
-        return new TodaySummary(completedCount, remainingCount, progressRate);
+        return new AgendaSummary(completedCount, remainingCount, progressRate);
     }
 
     // 미분류(category=null)면 null. 연관은 lazy id 접근이라 초기화 없이 FK만 읽음
@@ -77,25 +77,25 @@ public class DailyAgendaAssembler {
     // 카테고리별 루틴·투두 누적기. 정렬 후 DTO로 변환함
     private static final class Accumulator {
         private final Long categoryId;
-        private final List<TodayRoutineItem> routines = new ArrayList<>();
-        private final List<TodayTodoItem> todos = new ArrayList<>();
+        private final List<AgendaRoutineItem> routines = new ArrayList<>();
+        private final List<AgendaTodoItem> todos = new ArrayList<>();
 
         private Accumulator(Long categoryId) {
             this.categoryId = categoryId;
         }
 
-        private TodayCategoryGroup toGroup() {
+        private AgendaCategoryGroup toGroup() {
             // 루틴은 scheduled_time 시간순(null은 뒤), 그다음 id
             routines.sort(Comparator
-                    .comparing(TodayRoutineItem::scheduledTime,
+                    .comparing(AgendaRoutineItem::scheduledTime,
                             Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(TodayRoutineItem::id));
+                    .thenComparing(AgendaRoutineItem::id));
             // 투두는 due_time 시간순(null은 뒤), 그다음 id
             todos.sort(Comparator
-                    .comparing(TodayTodoItem::dueTime,
+                    .comparing(AgendaTodoItem::dueTime,
                             Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(TodayTodoItem::id));
-            return new TodayCategoryGroup(categoryId, List.copyOf(routines), List.copyOf(todos));
+                    .thenComparing(AgendaTodoItem::id));
+            return new AgendaCategoryGroup(categoryId, List.copyOf(routines), List.copyOf(todos));
         }
     }
 }

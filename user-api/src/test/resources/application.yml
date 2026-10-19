@@ -1,6 +1,7 @@
 spring:
   datasource:
-    url: jdbc:tc:mysql:8.4:///rougether
+    # minimum-idle=0의 초기 확인 연결이 닫혀도 테스트 JVM 종료까지 DB를 유지함
+    url: jdbc:tc:mysql:8.4:///rougether?TC_DAEMON=true
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
     # 전체 실행 시 컨텍스트가 수십 개 캐시되어 같은 컨테이너에 붙음. 컨텍스트당 기본 풀(10)이면
     # MySQL max_connections(151)를 초과해 Too many connections 로 컨텍스트 로드가 깨짐 → 풀 상한을 낮게 잡음.

@@ -1,10 +1,12 @@
-package com.triples.rougether.userapi.today.dto;
+package com.triples.rougether.userapi.agenda.dto;
 
 import com.triples.rougether.domain.routine.entity.AuthType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalTime;
 
-public record TodayRoutineItem(
+// Java 타입을 옮겨도 기존 OpenAPI 스키마 이름과 참조를 유지함
+@Schema(name = "TodayRoutineItem")
+public record AgendaRoutineItem(
         @Schema(description = "루틴 ID. 루틴 완료 체크/취소 등 루틴 API 경로의 {id}로 사용", example = "1")
         Long id,
         @Schema(description = "루틴 제목", example = "아침 운동")
@@ -20,7 +22,7 @@ public record TodayRoutineItem(
 ) {
 
     // 기존 테스트/호출부 호환용 (houseMissionId 미지정 = 미연동)
-    public TodayRoutineItem(Long id, String title, LocalTime scheduledTime,
+    public AgendaRoutineItem(Long id, String title, LocalTime scheduledTime,
                             AuthType authType, boolean completed) {
         this(id, title, scheduledTime, authType, completed, null);
     }

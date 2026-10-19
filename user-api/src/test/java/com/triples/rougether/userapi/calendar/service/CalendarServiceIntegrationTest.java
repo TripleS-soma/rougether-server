@@ -1,11 +1,10 @@
 package com.triples.rougether.userapi.calendar.service;
 
-import com.triples.rougether.userapi.support.KstMidnightGuard;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
@@ -24,6 +23,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.house.support.HouseLinkValidator;
@@ -31,7 +31,7 @@ import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineResponse;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
-import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
+import com.triples.rougether.userapi.support.KstMidnightGuard;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -190,12 +190,12 @@ class CalendarServiceIntegrationTest {
         persistRoutine("미완료 루틴", RoutineStatus.ACTIVE, "DAILY", null, null, null, null, null);
         persistCompletedLog(done, TODAY);
 
-        List<TodayRoutineItem> routines = service.day(userId, TODAY).categories().get(0).routines();
+        List<AgendaRoutineItem> routines = service.day(userId, TODAY).categories().get(0).routines();
 
         assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
-                .extracting(TodayRoutineItem::completed).containsExactly(true);
+                .extracting(AgendaRoutineItem::completed).containsExactly(true);
         assertThat(routines).filteredOn(r -> r.title().equals("미완료 루틴"))
-                .extracting(TodayRoutineItem::completed).containsExactly(false);
+                .extracting(AgendaRoutineItem::completed).containsExactly(false);
     }
 
     @Test
@@ -292,14 +292,14 @@ class CalendarServiceIntegrationTest {
         persistCompletedLog(done, PAST);
         persistFailedLog(failed, PAST);
 
-        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+        List<AgendaRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
 
-        assertThat(routines).extracting(TodayRoutineItem::title)
+        assertThat(routines).extracting(AgendaRoutineItem::title)
                 .containsExactlyInAnyOrder("완료 루틴", "실패 루틴");
         assertThat(routines).filteredOn(r -> r.title().equals("완료 루틴"))
-                .extracting(TodayRoutineItem::completed).containsExactly(true);
+                .extracting(AgendaRoutineItem::completed).containsExactly(true);
         assertThat(routines).filteredOn(r -> r.title().equals("실패 루틴"))
-                .extracting(TodayRoutineItem::completed).containsExactly(false);
+                .extracting(AgendaRoutineItem::completed).containsExactly(false);
     }
 
     @Test
@@ -355,13 +355,13 @@ class CalendarServiceIntegrationTest {
         // 과거: 로그가 가리키는 옛 버전 하나만 — 새 버전 로그는 없으므로 겹침 없음
         assertThat(service.day(userId, pastSameWeekday).categories().stream()
                 .flatMap(g -> g.routines().stream()))
-                .extracting(TodayRoutineItem::id)
+                .extracting(AgendaRoutineItem::id)
                 .containsExactly(routineId);
 
         // 당일: 새 DAILY 버전 하나만 — 옛 버전은 닫혀 live 경로에서 제외
         assertThat(service.day(userId, TODAY).categories().stream()
                 .flatMap(g -> g.routines().stream()))
-                .extracting(TodayRoutineItem::id)
+                .extracting(AgendaRoutineItem::id)
                 .containsExactly(neo.id());
     }
 
@@ -378,10 +378,10 @@ class CalendarServiceIntegrationTest {
         em.flush();
         em.clear();
 
-        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+        List<AgendaRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
 
-        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("삭제될 루틴");
-        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(false);
+        assertThat(routines).extracting(AgendaRoutineItem::title).containsExactly("삭제될 루틴");
+        assertThat(routines).extracting(AgendaRoutineItem::completed).containsExactly(false);
     }
 
     @Test
@@ -391,10 +391,10 @@ class CalendarServiceIntegrationTest {
                 null, null, null, null, null);
         persistCompletedLog(routineId, PAST);
 
-        List<TodayRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
+        List<AgendaRoutineItem> routines = service.day(userId, PAST).categories().get(0).routines();
 
-        assertThat(routines).extracting(TodayRoutineItem::title).containsExactly("나중에 만든 루틴");
-        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(true);
+        assertThat(routines).extracting(AgendaRoutineItem::title).containsExactly("나중에 만든 루틴");
+        assertThat(routines).extracting(AgendaRoutineItem::completed).containsExactly(true);
     }
 
     @Test
@@ -415,7 +415,7 @@ class CalendarServiceIntegrationTest {
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0).categoryId()).isEqualTo(category.getId());
-        assertThat(groups.get(0).routines()).extracting(TodayRoutineItem::title)
+        assertThat(groups.get(0).routines()).extracting(AgendaRoutineItem::title)
                 .containsExactly("삭제될 루틴");
         assertThat(groups.get(0).routines().get(0).completed()).isTrue();
     }
@@ -461,12 +461,12 @@ class CalendarServiceIntegrationTest {
                 null, null, null, null, null);
         backdateCreatedAt(routineId, 20);
 
-        List<TodayRoutineItem> routines = service.day(userId, YESTERDAY)
+        List<AgendaRoutineItem> routines = service.day(userId, YESTERDAY)
                 .categories().get(0).routines();
 
-        assertThat(routines).extracting(TodayRoutineItem::title)
+        assertThat(routines).extracting(AgendaRoutineItem::title)
                 .containsExactly("어제 미완료 루틴");
-        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(false);
+        assertThat(routines).extracting(AgendaRoutineItem::completed).containsExactly(false);
     }
 
     @Test
@@ -489,18 +489,18 @@ class CalendarServiceIntegrationTest {
         persistCompletedLog(done, YESTERDAY);
         persistFailedLog(failed, YESTERDAY);
 
-        List<TodayRoutineItem> recalculated = service.day(userId, YESTERDAY)
+        List<AgendaRoutineItem> recalculated = service.day(userId, YESTERDAY)
                 .categories().get(0).routines();
-        List<TodayRoutineItem> logOnly = service.day(userId, dayBeforeYesterday)
+        List<AgendaRoutineItem> logOnly = service.day(userId, dayBeforeYesterday)
                 .categories().get(0).routines();
 
         // 배치가 덜 끝난 어제도 다 끝난 그저께와 같은 답 — 미처리분을 재계산이 메움
-        assertThat(recalculated).extracting(TodayRoutineItem::title, TodayRoutineItem::completed)
+        assertThat(recalculated).extracting(AgendaRoutineItem::title, AgendaRoutineItem::completed)
                 .containsExactlyInAnyOrderElementsOf(
                         logOnly.stream()
                                 .map(r -> tuple(r.title(), r.completed()))
                                 .toList());
-        assertThat(recalculated).extracting(TodayRoutineItem::title, TodayRoutineItem::completed)
+        assertThat(recalculated).extracting(AgendaRoutineItem::title, AgendaRoutineItem::completed)
                 .containsExactlyInAnyOrder(
                         tuple("완료 루틴", true),
                         tuple("실패 루틴", false),
@@ -531,10 +531,10 @@ class CalendarServiceIntegrationTest {
         backdateVersionBranch(routineId);
 
         CalendarDayResponse response = service.day(userId, YESTERDAY);
-        List<TodayRoutineItem> routines = response.categories().get(0).routines();
+        List<AgendaRoutineItem> routines = response.categories().get(0).routines();
 
         assertThat(routines).hasSize(1);
-        assertThat(routines).extracting(TodayRoutineItem::completed).containsExactly(true);
+        assertThat(routines).extracting(AgendaRoutineItem::completed).containsExactly(true);
         assertThat(response.summary().completedCount()).isEqualTo(1);
         assertThat(response.summary().remainingCount()).isZero();
         assertThat(response.summary().progressRate()).isEqualTo(1.0);
@@ -585,7 +585,7 @@ class CalendarServiceIntegrationTest {
     private List<String> routineTitles(CalendarDayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.routines().stream())
-                .map(TodayRoutineItem::title)
+                .map(AgendaRoutineItem::title)
                 .toList();
     }
 

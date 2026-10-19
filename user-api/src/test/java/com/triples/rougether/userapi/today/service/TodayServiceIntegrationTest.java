@@ -20,10 +20,10 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
+import com.triples.rougether.userapi.agenda.dto.AgendaTodoItem;
 import com.triples.rougether.userapi.global.config.JpaConfig;
-import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
 import com.triples.rougether.userapi.today.dto.TodayResponse;
-import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -151,7 +151,7 @@ class TodayServiceIntegrationTest {
                 null, null, null, null, null);
         persistCompletedLog(routineId);
 
-        TodayRoutineItem item = service.today(userId, MONDAY).categories().get(0).routines().get(0);
+        AgendaRoutineItem item = service.today(userId, MONDAY).categories().get(0).routines().get(0);
 
         assertThat(item.completed()).isTrue();
     }
@@ -347,7 +347,7 @@ class TodayServiceIntegrationTest {
             assertThat(todoTitles(response)).containsExactly("완료 투두", "미분류");
             var group = response.categories().get(0);
             assertThat(group.categoryId()).isEqualTo(categoryId);
-            assertThat(group.todos().get(0)).isEqualTo(new com.triples.rougether.userapi.today.dto.TodayTodoItem(
+            assertThat(group.todos().get(0)).isEqualTo(new AgendaTodoItem(
                     completedId, "완료 투두", MONDAY, LocalTime.NOON,
                     com.triples.rougether.domain.routine.entity.TodoStatus.COMPLETED, completedAt));
             assertThat(response.categories().get(1).categoryId()).isNull();
@@ -363,7 +363,7 @@ class TodayServiceIntegrationTest {
     private java.util.List<String> routineTitles(TodayResponse response) {
         return response.categories().stream()
                 .flatMap(g -> g.routines().stream())
-                .map(TodayRoutineItem::title)
+                .map(AgendaRoutineItem::title)
                 .toList();
     }
 

@@ -1,0 +1,153 @@
+{
+  "schemas" : {
+    "CalendarDayResponse" : {
+      "type" : "object",
+      "properties" : {
+        "date" : {
+          "type" : "string",
+          "format" : "date",
+          "description" : "조회 기준일(YYYY-MM-DD)",
+          "example" : "2026-06-30"
+        },
+        "categories" : {
+          "type" : "array",
+          "description" : "카테고리별 묶음. categoryId 오름차순 정렬, 미분류(categoryId=null) 그룹은 맨 뒤",
+          "items" : {
+            "$ref" : "#/components/schemas/TodayCategoryGroup"
+          }
+        },
+        "summary" : {
+          "$ref" : "#/components/schemas/TodaySummary",
+          "description" : "진행 요약(그날 대상 루틴·투두 기준 완료/남은 개수·진행률)"
+        }
+      }
+    },
+    "TodayCategoryGroup" : {
+      "type" : "object",
+      "properties" : {
+        "categoryId" : {
+          "type" : "integer",
+          "format" : "int64",
+          "description" : "카테고리 ID(미분류면 null). 이름·색상은 내 카테고리 목록 조회(GET /api/v1/categories)에서 resolve",
+          "example" : 3
+        },
+        "routines" : {
+          "type" : "array",
+          "description" : "오늘 대상 루틴 목록. 수행 예정 시각 오름차순(미지정은 뒤), 같으면 id 오름차순",
+          "items" : {
+            "$ref" : "#/components/schemas/TodayRoutineItem"
+          }
+        },
+        "todos" : {
+          "type" : "array",
+          "description" : "오늘 대상 투두 목록(기준일까지 마감인 투두, 지난 마감 포함)",
+          "items" : {
+            "$ref" : "#/components/schemas/TodayTodoItem"
+          }
+        }
+      }
+    },
+    "TodayRoutineItem" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "integer",
+          "format" : "int64",
+          "description" : "루틴 ID. 루틴 완료 체크/취소 등 루틴 API 경로의 {id}로 사용",
+          "example" : 1
+        },
+        "title" : {
+          "type" : "string",
+          "description" : "루틴 제목",
+          "example" : "아침 운동"
+        },
+        "scheduledTime" : {
+          "type" : "string",
+          "description" : "수행 예정 시각(HH:mm:ss, 미지정이면 null)",
+          "example" : "07:00:00"
+        },
+        "authType" : {
+          "type" : "string",
+          "description" : "인증 방식. 허용값: CHECK(체크형), PHOTO(사진 인증형)",
+          "enum" : [ "CHECK", "PHOTO" ],
+          "example" : "CHECK"
+        },
+        "completed" : {
+          "type" : "boolean",
+          "description" : "기준일 완료 여부. false면 완료 체크(POST /api/v1/routines/{id}/logs), true면 완료 취소(DELETE /api/v1/routines/{id}/logs)로 전환"
+        },
+        "houseMissionId" : {
+          "type" : "integer",
+          "format" : "int64",
+          "description" : "연동된 집 단체미션 ID(미연동이면 null). 이름 매칭 대신 이 값으로 연동 루틴을 판별",
+          "example" : 12
+        }
+      }
+    },
+    "TodaySummary" : {
+      "type" : "object",
+      "properties" : {
+        "completedCount" : {
+          "type" : "integer",
+          "format" : "int32",
+          "description" : "완료한 항목 수(기준일에 완료한 루틴 + COMPLETED 상태 투두)",
+          "example" : 3
+        },
+        "remainingCount" : {
+          "type" : "integer",
+          "format" : "int32",
+          "description" : "남은 항목 수(루틴+투두)",
+          "example" : 2
+        },
+        "progressRate" : {
+          "type" : "number",
+          "format" : "double",
+          "description" : "진행률(완료 수 / 전체 대상 수, 0.0~1.0. 대상이 없으면 0.0)",
+          "example" : 0.6
+        }
+      }
+    },
+    "TodayTodoItem" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "integer",
+          "format" : "int64",
+          "description" : "투두 ID. 투두 완료 체크/취소 등 투두 API 경로의 {id}로 사용",
+          "example" : 1
+        },
+        "title" : {
+          "type" : "string",
+          "description" : "투두 제목",
+          "example" : "장보기"
+        },
+        "dueDate" : {
+          "type" : "string",
+          "format" : "date",
+          "description" : "마감일(YYYY-MM-DD)",
+          "example" : "2026-06-30"
+        },
+        "dueTime" : {
+          "type" : "string",
+          "description" : "마감 시각(HH:mm:ss, 미지정이면 null)",
+          "example" : "18:00:00"
+        },
+        "status" : {
+          "type" : "string",
+          "description" : "투두 상태. 허용값: PENDING(대기), COMPLETED(완료)",
+          "enum" : [ "PENDING", "COMPLETED" ],
+          "example" : "PENDING"
+        },
+        "completedAt" : {
+          "type" : "string",
+          "format" : "date-time",
+          "description" : "완료 시각(ISO-8601, 미완료면 null)",
+          "example" : "2026-06-30T07:00:00Z"
+        }
+      }
+    }
+  },
+  "response" : {
+    "$ref" : "#/components/schemas/CalendarDayResponse"
+  }
+}

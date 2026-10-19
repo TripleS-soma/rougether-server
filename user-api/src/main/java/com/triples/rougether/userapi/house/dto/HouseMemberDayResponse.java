@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
-// 집 멤버의 그날 현황(루틴 + 투두, 완료 여부 포함). 오늘 현황(TodayRoutineItem/TodayTodoItem) 스타일에 맞춤.
+// 집 멤버의 그날 현황(루틴 + 투두, 완료 여부 포함). 공통 일별 항목(AgendaRoutineItem/AgendaTodoItem) 스타일에 맞춤.
 public record HouseMemberDayResponse(
         @Schema(description = "기준 날짜(YYYY-MM-DD). date 미지정 시 오늘(KST)", example = "2026-07-08")
         LocalDate date,

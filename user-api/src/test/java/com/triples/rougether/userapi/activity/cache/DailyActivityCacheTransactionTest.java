@@ -33,7 +33,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:daily-activity-cache-tx;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=",
-        "spring.datasource.hikari.maximum-pool-size=2", "spring.datasource.hikari.minimum-idle=1"})
+        // Flyway 초기화 중 사용하는 연결 3개를 허용하며, 반환 여부는 activeConnections=0으로 검증함
+        "spring.datasource.hikari.maximum-pool-size=3", "spring.datasource.hikari.minimum-idle=1"})
 class DailyActivityCacheTransactionTest {
     @MockitoSpyBean UserDailyActivityWriter writer;
     @Autowired UserDailyActivityBatcher batcher;
