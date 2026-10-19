@@ -1,4 +1,4 @@
-package com.triples.rougether.userapi.today.dto;
+package com.triples.rougether.userapi.agenda.dto;
 
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-public record TodayTodoItem(
+// Java 타입을 옮겨도 기존 OpenAPI 스키마 이름과 참조를 유지함
+@Schema(name = "TodayTodoItem")
+public record AgendaTodoItem(
         @Schema(description = "투두 ID. 투두 완료 체크/취소 등 투두 API 경로의 {id}로 사용", example = "1")
         Long id,
         @Schema(description = "투두 제목", example = "장보기")

@@ -7,17 +7,17 @@ import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.RoutineDayLogRow;
-import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
+import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.support.DailyCount;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.dto.AgendaCategoryGroup;
+import com.triples.rougether.userapi.agenda.dto.AgendaSummary;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayCount;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.calendar.dto.CalendarMonthResponse;
-import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
-import com.triples.rougether.userapi.today.dto.TodaySummary;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -260,9 +260,9 @@ public class CalendarService {
     private CalendarDayResponse assemble(LocalDate date, List<Routine> routines,
                                          Set<Long> completedRoutineIds, List<Todo> todos) {
         List<TodoAgendaRow> todoRows = todos.stream().map(TodoAgendaRow::from).toList();
-        List<TodayCategoryGroup> categories =
+        List<AgendaCategoryGroup> categories =
                 agendaAssembler.groupByCategory(routines, completedRoutineIds, todoRows);
-        TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todoRows);
+        AgendaSummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todoRows);
         return new CalendarDayResponse(date, categories, summary);
     }
 }

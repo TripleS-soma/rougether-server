@@ -1,10 +1,9 @@
 package com.triples.rougether.userapi.calendar.service;
 
-import com.triples.rougether.userapi.support.KstMidnightGuard;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionRepository;
 import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
@@ -20,6 +19,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayCount;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.calendar.dto.CalendarMonthResponse;
@@ -28,7 +28,7 @@ import com.triples.rougether.userapi.house.support.HouseLinkValidator;
 import com.triples.rougether.userapi.routine.dto.RepeatDays;
 import com.triples.rougether.userapi.routine.dto.RoutineUpdateRequest;
 import com.triples.rougether.userapi.routine.service.RoutineService;
-import com.triples.rougether.userapi.today.dto.TodayRoutineItem;
+import com.triples.rougether.userapi.support.KstMidnightGuard;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -431,7 +431,7 @@ class CalendarMonthIntegrationTest {
                 .isEqualTo(day.categories().stream().mapToInt(g -> g.todos().size()).sum());
         assertThat(count.routineCompletedCount()).as("completed routine on %s", date)
                 .isEqualTo(day.categories().stream().flatMap(g -> g.routines().stream())
-                        .filter(TodayRoutineItem::completed).count());
+                        .filter(AgendaRoutineItem::completed).count());
         assertThat(count.todoCompletedCount()).as("completed todo on %s", date)
                 .isEqualTo(day.categories().stream().flatMap(g -> g.todos().stream())
                         .filter(todo -> todo.status() == TodoStatus.COMPLETED).count());

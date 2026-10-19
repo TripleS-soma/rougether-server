@@ -20,7 +20,7 @@
 - `recommendation.experiment.holdout-enabled`(`RECOMMENDATION_HOLDOUT_ENABLED`, 기본 true)가 실험 kill switch다. false면 배정·적격 기록과 CONTROL 게이트를 모두 건너뛰고 전원에게 추천을 준다(기존 배정 행 보존) — 실험 종료 시 배포 없이 CONTROL 추천을 재개하는 경로. 홀드아웃 비율(20%)·실험 키·종료 조건은 spec 정본 미확정(open question)이다.
 - 탈퇴 purge는 `recommendation_experiment_eligibilities` → `recommendation_experiment_assignments` 순으로 지운다. 주간 회고 job 자체는 이 HOLDOUT의 대상이 아니지만, 회고 본문의 closed-loop 섹션은 ACCEPTED 추천에서 나오므로 CONTROL 사용자의 회고 내용은 달라진다. 이후 `WEEKLY_LLM` 추천(#334)이 도입되면 CONTROL도 AI 추천을 받게 되어 전체 루틴 로그 기반 `completionDeltaPp`가 오염된다 — 그 시점에 실험 종료(kill switch) 또는 지표 분리를 먼저 결정해야 한다.
 
-- 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`TodayTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
+- 투두(`todos`)는 `due_date`(마감일)와 별개로 `due_time`(마감 시각, `LocalTime`, nullable) 컬럼을 가진다. 루틴의 `scheduled_time`과 동일하게 초/나노를 0으로 정규화해 저장한다. 등록·수정(`TodoCreateRequest`/`TodoUpdateRequest`)에서 입력받고, 단건·목록·오늘 현황·캘린더 응답(`TodoResponse`/`AgendaTodoItem`)에 노출한다. 완료 가능 여부·보상 판정은 기존대로 `due_date`(날짜 단위)만 기준으로 하며 `due_time`은 판정에 관여하지 않는다.
 - 오늘 현황·캘린더에서 같은 날짜로 묶인 투두는 루틴의 `scheduled_time` 정렬과 동일하게 `due_time` 오름차순(시각 없는 항목은 뒤로)으로 정렬한 뒤 id 순으로 둔다(`DailyAgendaAssembler`).
 
 ### 저녁 미완료 통합 알림 (`daily_incomplete_digests`)
@@ -51,7 +51,7 @@
 ### 집 단체미션 연동 표시 (V35)
 
 - 클라이언트가 단체미션↔루틴 연동을 이름 매칭으로 추적하던 것을 서버 저장 식별자로 대체한다(이름이 바뀌면 연동이 끊기는 문제, 프론트 요청 2026-07-29).
-- 루틴은 `routines.house_mission_id`(nullable)에 연동된 단체미션 id, 카테고리는 `categories.house_id`(nullable)에 연동된 집 id를 보관하고 등록·수정 요청(`houseMissionId`/`houseId`)으로 받는다. 단건·목록·오늘 현황·캘린더 응답(`RoutineResponse`/`TodayRoutineItem`/`CategoryResponse`)에 노출한다.
+- 루틴은 `routines.house_mission_id`(nullable)에 연동된 단체미션 id, 카테고리는 `categories.house_id`(nullable)에 연동된 집 id를 보관하고 등록·수정 요청(`houseMissionId`/`houseId`)으로 받는다. 단건·목록·오늘 현황·캘린더 응답(`RoutineResponse`/`AgendaRoutineItem`/`CategoryResponse`)에 노출한다.
 - 연동 지정은 해당 집의 ACTIVE 구성원만 가능하다(`HouseLinkValidator`, 집 도메인 소유 컴포넌트). 위반 시 `HOUSE_MISSION_NOT_FOUND`/`HOUSE_NOT_FOUND`/`HOUSE_NOT_MEMBER`.
 - 수정 요청에서 이 필드는 null=기존 연동 유지다. `categoryId`(null=해제)와 규칙이 다른 이유: 연동 필드를 모르는 구버전 클라이언트의 수정 요청이 연동을 지우면 안 되기 때문. 해제는 전용 API 로 한다 — `DELETE /api/v1/routines/{id}/house-mission-link`, `DELETE /api/v1/categories/{id}/house-link` (멱등, 대상 데이터 자체는 유지, 과거 자동 기여는 미회수).
 - 연동은 집 이벤트 시 서버가 자동 해제한다: 미션 삭제 → 전 구성원의 연동 루틴 해제(`clearHouseMissionLink`), 집 탈퇴·강퇴 → 그 회원의 해당 집 연동 루틴·카테고리 해제(`clearHouseMissionLinksOfMember`/`clearHouseLinkOfMember`, 마지막 구성원 탈퇴로 집이 정리되는 경우 포함). 루틴·카테고리 자체는 개인 데이터라 서버가 삭제하지 않는다(삭제 여부는 클라이언트 UX 결정). bulk 해제는 영속성 컨텍스트를 우회하고 비우지도 않으므로(잠근 house 등이 detach 되면 변경 유실), 같은 트랜잭션에서 이후 루틴·카테고리를 읽지 않는 위치(트랜잭션 끝)에서만 호출한다.

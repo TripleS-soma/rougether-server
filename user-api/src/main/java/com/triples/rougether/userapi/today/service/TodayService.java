@@ -7,13 +7,13 @@ import com.triples.rougether.domain.routine.repository.RoutineDayLogRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.StreakRepository;
-import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
+import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
-import com.triples.rougether.userapi.today.dto.TodayCategoryGroup;
+import com.triples.rougether.userapi.agenda.dto.AgendaCategoryGroup;
+import com.triples.rougether.userapi.agenda.dto.AgendaSummary;
 import com.triples.rougether.userapi.today.dto.TodayResponse;
 import com.triples.rougether.userapi.today.dto.TodayStreak;
-import com.triples.rougether.userapi.today.dto.TodaySummary;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -70,8 +70,8 @@ public class TodayService {
         // 마감일이 정확히 오늘인 투두만(overdue·밀린 투두 제외 — calendar와 동일)
         List<TodoAgendaRow> todos = todoRepository.findAgendaDueOn(userId, targetDate);
 
-        List<TodayCategoryGroup> categories = agendaAssembler.groupByCategory(routines, completedRoutineIds, todos);
-        TodaySummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todos);
+        List<AgendaCategoryGroup> categories = agendaAssembler.groupByCategory(routines, completedRoutineIds, todos);
+        AgendaSummary summary = agendaAssembler.summarize(routines, completedRoutineIds, todos);
         TodayStreak streak = TodayStreak.from(
                 streakRepository.findByUserId(userId).orElse(null), targetDate);
         return new TodayResponse(targetDate, categories, summary, streak);

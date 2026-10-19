@@ -1,8 +1,10 @@
-package com.triples.rougether.userapi.today.dto;
+package com.triples.rougether.userapi.agenda.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-public record TodaySummary(
+// Java 타입을 옮겨도 기존 OpenAPI 스키마 이름과 참조를 유지함
+@Schema(name = "TodaySummary")
+public record AgendaSummary(
         @Schema(description = "완료한 항목 수(기준일에 완료한 루틴 + COMPLETED 상태 투두)", example = "3")
         int completedCount,
         @Schema(description = "남은 항목 수(루틴+투두)", example = "2")
