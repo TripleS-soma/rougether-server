@@ -40,15 +40,11 @@ class AuthServiceAppleLoginTest {
     @Mock
     private KakaoApiClient kakaoApiClient;
     @Mock
-    private KakaoLoginHandler kakaoLoginHandler;
+    private SocialLoginHandler socialLoginHandler;
     @Mock
     private GoogleTokenVerifier googleTokenVerifier;
     @Mock
-    private GoogleLoginHandler googleLoginHandler;
-    @Mock
     private AppleTokenVerifier appleTokenVerifier;
-    @Mock
-    private AppleLoginHandler appleLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
     @Mock
@@ -65,8 +61,8 @@ class AuthServiceAppleLoginTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, tokenService,
-                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, socialLoginHandler,
+                googleTokenVerifier, appleTokenVerifier,
                 appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
@@ -77,12 +73,12 @@ class AuthServiceAppleLoginTest {
         when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
         when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
         when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
-        when(appleLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
+        when(socialLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
 
         LoginResponse response = authService.appleLogin("idtok", "authcode");
 
         assertThat(response).isEqualTo(expected);
-        verify(appleLoginHandler, times(1)).login(appleUser, "enc-rt");
+        verify(socialLoginHandler, times(1)).login(appleUser, "enc-rt");
     }
 
     @Test
@@ -92,7 +88,7 @@ class AuthServiceAppleLoginTest {
         when(appleTokenVerifier.verify("idtok")).thenReturn(appleUser);
         when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
         when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
-        when(appleLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
+        when(socialLoginHandler.login(appleUser, "enc-rt")).thenReturn(expected);
 
         LoginResponse response = authService.appleLogin("idtok", "authcode");
 
@@ -108,7 +104,7 @@ class AuthServiceAppleLoginTest {
         when(appleTokenExchangeClient.exchangeRefreshToken("authcode")).thenReturn("apple-rt");
         when(appleRefreshTokenCipher.encrypt("apple-rt")).thenReturn("enc-rt");
         // 첫 시도는 경쟁 충돌로 롤백, 재시도는 승자 연동으로 로그인 성공.
-        when(appleLoginHandler.login(appleUser, "enc-rt"))
+        when(socialLoginHandler.login(appleUser, "enc-rt"))
                 .thenThrow(new DataIntegrityViolationException("uq_oauth_provider_user"))
                 .thenReturn(afterRetry);
 
@@ -116,7 +112,9 @@ class AuthServiceAppleLoginTest {
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
-        verify(appleLoginHandler, times(2)).login(appleUser, "enc-rt");
+        verify(socialLoginHandler, times(2)).login(appleUser, "enc-rt");
+        verify(appleTokenExchangeClient, times(1)).exchangeRefreshToken("authcode");
+        verify(appleRefreshTokenCipher, times(1)).encrypt("apple-rt");
     }
 
     @Test
@@ -133,6 +131,6 @@ class AuthServiceAppleLoginTest {
                 .isEqualTo(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER);
         // 1회용 코드가 소모되지 않아야 앱이 같은 코드로 allowNewAccount 재요청을 할 수 있음.
         verify(appleTokenExchangeClient, never()).exchangeRefreshToken(any());
-        verify(appleLoginHandler, never()).login(any(), any());
+        verify(socialLoginHandler, never()).login(any(), any());
     }
 }
