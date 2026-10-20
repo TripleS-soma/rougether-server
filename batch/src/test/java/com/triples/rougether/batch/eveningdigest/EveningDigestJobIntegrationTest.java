@@ -32,6 +32,7 @@ import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
 import java.time.Clock;
@@ -86,7 +87,7 @@ class EveningDigestJobIntegrationTest {
     @EntityScan("com.triples.rougether.domain")
     @EnableJpaRepositories("com.triples.rougether.domain")
     @EnableJpaAuditing
-    @Import({BatchJdbcConfig.class, EveningDigestJobConfig.class, ReminderPushWriter.class})
+    @Import({BatchJdbcConfig.class, EveningDigestJobConfig.class, ReminderPushWriter.class, FcmDelivery.class})
     static class TestConfig {
 
         @Bean

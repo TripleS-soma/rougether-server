@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import com.triples.rougether.batch.reminder.ReminderPushWriter;
 import com.triples.rougether.infra.fcm.FcmSender;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -32,7 +33,7 @@ class RoomCobwebTriggerIntegrationTest {
     @org.springframework.boot.persistence.autoconfigure.EntityScan("com.triples.rougether.domain")
     @org.springframework.data.jpa.repository.config.EnableJpaRepositories("com.triples.rougether.domain")
     @org.springframework.data.jpa.repository.config.EnableJpaAuditing
-    @Import({RoomCobwebTrigger.class, RoomCobwebActivationService.class, ReminderPushWriter.class})
+    @Import({RoomCobwebTrigger.class, RoomCobwebActivationService.class, ReminderPushWriter.class, FcmDelivery.class})
     static class TestConfig {
     }
 

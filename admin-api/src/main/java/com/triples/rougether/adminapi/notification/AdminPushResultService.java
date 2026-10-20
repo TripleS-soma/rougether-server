@@ -3,7 +3,7 @@ package com.triples.rougether.adminapi.notification;
 import com.triples.rougether.domain.notification.entity.Notification;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
-import com.triples.rougether.infra.fcm.FcmSendResult;
+import com.triples.rougether.infra.fcm.FcmDeliveryResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,12 +20,12 @@ public class AdminPushResultService {
     private final NotificationRepository notificationRepository;
     private final UserDeviceTokenRepository userDeviceTokenRepository;
 
-    public void record(Long notificationId, Long userId, FcmSendResult result, int tokenCount) {
+    public void record(Long notificationId, Long userId, FcmDeliveryResult result, int tokenCount) {
         if (!result.invalidTokens().isEmpty()) {
             // 발송 시점 소유자 조건으로 스코프 - 발송~응답 사이 소유권이 이전된 토큰을 지우지 않기 위함
             userDeviceTokenRepository.deleteAllByTokenInAndUserId(result.invalidTokens(), userId);
         }
-        if (result.successCount() > 0) {
+        if (result.successful()) {
             markSent(notificationId);
             return;
         }

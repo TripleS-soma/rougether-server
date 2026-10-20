@@ -2,8 +2,8 @@ package com.triples.rougether.userapi.notification.fcm;
 
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
-import com.triples.rougether.infra.fcm.FcmSendResult;
-import com.triples.rougether.infra.fcm.FcmSender;
+import com.triples.rougether.infra.fcm.FcmDeliveryResult;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
 import java.util.List;
@@ -21,7 +21,7 @@ public class FcmPushExecutor {
     private final UserDeviceTokenRepository userDeviceTokenRepository;
     private final DeviceTokenService deviceTokenService;
     private final NotificationPushStatusService notificationPushStatusService;
-    private final FcmSender fcmSender;
+    private final FcmDelivery fcmDelivery;
 
     @Async("notificationTaskExecutor")
     public void push(Long notificationId, Long userId, String title, String body) {
@@ -44,36 +44,32 @@ public class FcmPushExecutor {
         List<String> tokens = userDeviceTokenRepository.findAllByUserId(userId).stream()
                 .map(UserDeviceToken::getToken)
                 .toList();
-        if (tokens.isEmpty()) {
-            if (notificationId == null) {
-                // 무기록 푸시(채팅)는 토큰 없는 구성원이 흔해 메시지마다 WARN 이 쌓이므로 낮춤
-                log.debug("FCM 발송 생략 - userId={}, 등록된 디바이스 토큰 없음", userId);
-            } else {
-                log.warn("FCM 발송 실패 - notificationId={}, userId={}, 등록된 디바이스 토큰 없음", notificationId, userId);
-            }
-            markFailed(notificationId);
-            return;
-        }
-
-        FcmSendResult result;
-        try {
-            result = data.isEmpty() ? fcmSender.send(tokens, title, body) : fcmSender.send(tokens, title, body, data);
-        } catch (Exception e) {
-            log.warn("FCM 발송 실패 - notificationId={}", notificationId, e);
-            markFailed(notificationId);
-            return;
-        }
-
+        FcmDeliveryResult result = fcmDelivery.deliver(tokens, title, body, () -> data);
         if (!result.invalidTokens().isEmpty()) {
             deviceTokenService.deleteAllByToken(userId, result.invalidTokens());
         }
 
-        if (result.successCount() > 0) {
+        if (result.successful()) {
             markSent(notificationId);
         } else {
-            log.warn("FCM 발송 실패 - notificationId={}, userId={}, tokenCount={}, invalidTokenCount={}",
-                    notificationId, userId, tokens.size(), result.invalidTokens().size());
+            logFailure(notificationId, userId, tokens.size(), result);
             markFailed(notificationId);
+        }
+    }
+
+    private void logFailure(Long notificationId, Long userId, int tokenCount, FcmDeliveryResult result) {
+        if (result.status() == FcmDeliveryResult.Status.NO_TOKENS) {
+            if (notificationId == null) {
+                // 무기록 푸시(채팅)는 토큰 없는 구성원이 흔해 메시지마다 WARN이 쌓이므로 낮춤
+                log.debug("FCM 발송 생략 - userId={}, 등록된 디바이스 토큰 없음", userId);
+            } else {
+                log.warn("FCM 발송 실패 - notificationId={}, userId={}, 등록된 디바이스 토큰 없음", notificationId, userId);
+            }
+        } else if (result.status() == FcmDeliveryResult.Status.SEND_FAILED) {
+            log.warn("FCM 발송 실패 - notificationId={}", notificationId, result.cause());
+        } else {
+            log.warn("FCM 발송 실패 - notificationId={}, userId={}, tokenCount={}, invalidTokenCount={}",
+                    notificationId, userId, tokenCount, result.invalidTokens().size());
         }
     }
 
