@@ -9,8 +9,8 @@ import com.triples.rougether.domain.notification.policy.NotificationPushPolicy;
 import com.triples.rougether.domain.notification.repository.NotificationRepository;
 import com.triples.rougether.domain.notification.repository.NotificationSettingRepository;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
-import com.triples.rougether.infra.fcm.FcmSendResult;
-import com.triples.rougether.infra.fcm.FcmSender;
+import com.triples.rougether.infra.fcm.FcmDeliveryResult;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import java.time.Clock;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,20 +32,20 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
     private final NotificationRepository notificationRepository;
     private final DailyIncompleteDigestRepository dailyIncompleteDigestRepository;
     private final NotificationSettingRepository notificationSettingRepository;
-    private final FcmSender fcmSender;
+    private final FcmDelivery fcmDelivery;
     private final Clock clock;
 
     public ReminderPushWriter(UserDeviceTokenRepository userDeviceTokenRepository,
                               NotificationRepository notificationRepository,
                               DailyIncompleteDigestRepository dailyIncompleteDigestRepository,
                               NotificationSettingRepository notificationSettingRepository,
-                              FcmSender fcmSender,
+                              FcmDelivery fcmDelivery,
                               ObjectProvider<Clock> clockProvider) {
         this.userDeviceTokenRepository = userDeviceTokenRepository;
         this.notificationRepository = notificationRepository;
         this.dailyIncompleteDigestRepository = dailyIncompleteDigestRepository;
         this.notificationSettingRepository = notificationSettingRepository;
-        this.fcmSender = fcmSender;
+        this.fcmDelivery = fcmDelivery;
         this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
     }
 
@@ -77,32 +77,26 @@ public class ReminderPushWriter implements ItemWriter<Notification> {
         List<String> tokens = userDeviceTokenRepository.findAllByUserId(userId).stream()
                 .map(UserDeviceToken::getToken)
                 .toList();
-        if (tokens.isEmpty()) {
-            updatePushStatus(notification, PushStatus.FAILED);
-            return;
+        FcmDeliveryResult result = fcmDelivery.deliver(
+                tokens, notification.getTitle(), notification.getBody(), () -> pushData(notification));
+        if (result.status() == FcmDeliveryResult.Status.SEND_FAILED) {
+            // 리마인드 외 타입(주간 회고 등)도 이 writer를 지나므로 타입을 함께 남김
+            log.warn("알림 FCM 발송 실패 - notificationId={}, type={}",
+                    notificationId, notification.getType(), result.cause());
         }
-
-        FcmSendResult result;
-        try {
-            if (notification.getType() == NotificationType.APP_INACTIVITY_REMINDER
-                    || notification.getType() == NotificationType.ROOM_COBWEB_APPEARED) {
-                result = fcmSender.send(tokens, notification.getTitle(), notification.getBody(), Map.of(
-                        "type", notification.getType().name(),
-                        "screen", "myRoom", "notificationId", notificationId.toString()));
-            } else {
-                result = fcmSender.send(tokens, notification.getTitle(), notification.getBody());
-            }
-        } catch (Exception e) {
-            // 리마인드 외 타입(주간 회고 등)도 이 writer 를 지나므로 타입을 함께 남김
-            log.warn("알림 FCM 발송 실패 - notificationId={}, type={}", notificationId, notification.getType(), e);
-            updatePushStatus(notification, PushStatus.FAILED);
-            return;
-        }
-
         if (!result.invalidTokens().isEmpty()) {
             userDeviceTokenRepository.deleteAllByTokenInAndUserId(result.invalidTokens(), userId);
         }
-        updatePushStatus(notification, result.successCount() > 0 ? PushStatus.SENT : PushStatus.FAILED);
+        updatePushStatus(notification, result.successful() ? PushStatus.SENT : PushStatus.FAILED);
+    }
+
+    private Map<String, String> pushData(Notification notification) {
+        if (notification.getType() == NotificationType.APP_INACTIVITY_REMINDER
+                || notification.getType() == NotificationType.ROOM_COBWEB_APPEARED) {
+            return Map.of("type", notification.getType().name(),
+                    "screen", "myRoom", "notificationId", notification.getId().toString());
+        }
+        return Map.of();
     }
 
     private void updatePushStatus(Notification notification, PushStatus pushStatus) {

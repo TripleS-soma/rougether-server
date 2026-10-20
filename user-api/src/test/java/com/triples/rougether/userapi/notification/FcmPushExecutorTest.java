@@ -1,23 +1,29 @@
 package com.triples.rougether.userapi.notification;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.domain.notification.entity.UserDeviceToken;
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import com.triples.rougether.userapi.notification.service.DeviceTokenService;
 import com.triples.rougether.userapi.notification.service.NotificationPushStatusService;
 import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -40,7 +46,13 @@ class FcmPushExecutorTest {
     @Mock private DeviceTokenService deviceTokenService;
     @Mock private NotificationPushStatusService notificationPushStatusService;
     @Mock private FcmSender fcmSender;
-    @InjectMocks private FcmPushExecutor fcmPushExecutor;
+    private FcmPushExecutor fcmPushExecutor;
+
+    @BeforeEach
+    void setUp() {
+        fcmPushExecutor = new FcmPushExecutor(userDeviceTokenRepository, deviceTokenService,
+                notificationPushStatusService, new FcmDelivery(fcmSender));
+    }
 
     private UserDeviceToken tokenOf(String token) {
         UserDeviceToken deviceToken = mock(UserDeviceToken.class);
@@ -135,5 +147,85 @@ class FcmPushExecutorTest {
         fcmPushExecutor.push(100L, 1L, "제목", "본문");
 
         verify(deviceTokenService, never()).deleteAllByToken(any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void 무기록_채팅_푸시는_성공_여부와_관계없이_상태를_저장하지_않고_무효_토큰만_정리한다(int successCount) {
+        Map<String, String> data = Map.of("houseId", "10", "messageId", "20");
+        List<UserDeviceToken> tokens = List.of(tokenOf("alive-token"), tokenOf("dead-token"));
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(tokens);
+        when(fcmSender.send(List.of("alive-token", "dead-token"), "제목", "본문", data))
+                .thenReturn(new FcmSendResult(successCount, List.of("dead-token")));
+
+        fcmPushExecutor.pushWithoutRecord(1L, "제목", "본문", data);
+
+        verify(fcmSender).send(List.of("alive-token", "dead-token"), "제목", "본문", data);
+        verify(deviceTokenService).deleteAllByToken(1L, List.of("dead-token"));
+        verifyNoInteractions(notificationPushStatusService);
+    }
+
+    @Test
+    void 무기록_채팅_푸시의_발송_예외는_상태_저장이나_토큰_삭제를_일으키지_않는다() {
+        Map<String, String> data = Map.of("houseId", "10");
+        List<UserDeviceToken> tokens = List.of(tokenOf("token-1"));
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(tokens);
+        when(fcmSender.send(List.of("token-1"), "제목", "본문", data))
+                .thenThrow(new RuntimeException("fcm down"));
+
+        fcmPushExecutor.pushWithoutRecord(1L, "제목", "본문", data);
+
+        verifyNoInteractions(notificationPushStatusService, deviceTokenService);
+    }
+
+    @Test
+    void 무기록_채팅_푸시에_토큰이_없으면_발송과_상태_저장을_모두_생략한다() {
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(List.of());
+
+        fcmPushExecutor.pushWithoutRecord(1L, "제목", "본문", Map.of("houseId", "10"));
+
+        verifyNoInteractions(fcmSender, notificationPushStatusService, deviceTokenService);
+    }
+
+    @Test
+    void 무효_토큰_삭제_예외는_발송_실패로_삼키지_않고_호출자에게_전파한다() {
+        List<UserDeviceToken> tokens = List.of(tokenOf("dead-token"));
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(tokens);
+        when(fcmSender.send(List.of("dead-token"), "제목", "본문"))
+                .thenReturn(new FcmSendResult(0, List.of("dead-token")));
+        RuntimeException failure = new IllegalStateException("token cleanup failed");
+        doThrow(failure).when(deviceTokenService).deleteAllByToken(1L, List.of("dead-token"));
+
+        assertThatThrownBy(() -> fcmPushExecutor.push(100L, 1L, "제목", "본문"))
+                .isSameAs(failure);
+
+        verifyNoInteractions(notificationPushStatusService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void 상태_저장_예외는_발송_실패로_삼키거나_다시_저장하지_않고_전파한다(int successCount) {
+        List<UserDeviceToken> tokens = List.of(tokenOf("token-1"));
+        when(userDeviceTokenRepository.findAllByUserId(1L)).thenReturn(tokens);
+        when(fcmSender.send(List.of("token-1"), "제목", "본문"))
+                .thenReturn(new FcmSendResult(successCount, List.of()));
+        RuntimeException failure = new IllegalStateException("status update failed");
+        if (successCount > 0) {
+            doThrow(failure).when(notificationPushStatusService).markSent(100L);
+        } else {
+            doThrow(failure).when(notificationPushStatusService).markFailed(100L);
+        }
+
+        assertThatThrownBy(() -> fcmPushExecutor.push(100L, 1L, "제목", "본문"))
+                .isSameAs(failure);
+
+        if (successCount > 0) {
+            verify(notificationPushStatusService).markSent(100L);
+            verify(notificationPushStatusService, never()).markFailed(any());
+        } else {
+            verify(notificationPushStatusService).markFailed(100L);
+            verify(notificationPushStatusService, never()).markSent(any());
+        }
+        verifyNoInteractions(deviceTokenService);
     }
 }

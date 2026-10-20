@@ -29,6 +29,7 @@ import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepos
 import com.triples.rougether.domain.routine.entity.Todo;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
 import java.time.Clock;
@@ -68,7 +69,7 @@ class AppIconReminderIntegrationTest {
     @EntityScan("com.triples.rougether.domain")
     @EnableJpaRepositories("com.triples.rougether.domain")
     @EnableJpaAuditing
-    @Import({AppIconReminderService.class, ReminderPushWriter.class})
+    @Import({AppIconReminderService.class, ReminderPushWriter.class, FcmDelivery.class})
     static class TestConfig {
     }
 

@@ -130,6 +130,33 @@ class BugReportReplyPushFlowTest {
         assertThat(replyCount).isEqualTo(1);
     }
 
+    @Test
+    void 성공이_없고_무효_토큰도_없으면_FAILED_로_기록하되_토큰은_유지한다() {
+        registerToken("retryable-token-1");
+        registerToken("retryable-token-2");
+        when(fcmSender.send(anyList(), anyString(), anyString())).thenReturn(FcmSendResult.empty());
+
+        bugReportAdminService.reply(reportId, "답장이에요", null, "admin");
+
+        assertThat(replyNotificationPushStatus()).isEqualTo(PushStatus.FAILED);
+        assertThat(userDeviceTokenRepository.findAllByUserId(userId))
+                .extracting(UserDeviceToken::getToken)
+                .containsExactlyInAnyOrder("retryable-token-1", "retryable-token-2");
+    }
+
+    @Test
+    void 모든_토큰이_무효이면_FAILED_로_기록하고_무효_토큰을_모두_삭제한다() {
+        registerToken("dead-token-1");
+        registerToken("dead-token-2");
+        when(fcmSender.send(anyList(), anyString(), anyString()))
+                .thenReturn(new FcmSendResult(0, List.of("dead-token-1", "dead-token-2")));
+
+        bugReportAdminService.reply(reportId, "답장이에요", null, "admin");
+
+        assertThat(replyNotificationPushStatus()).isEqualTo(PushStatus.FAILED);
+        assertThat(userDeviceTokenRepository.findAllByUserId(userId)).isEmpty();
+    }
+
     private void registerToken(String token) {
         userDeviceTokenRepository.save(UserDeviceToken.register(
                 userRepository.findById(userId).orElseThrow(), token, DevicePlatform.ANDROID, Instant.now()));

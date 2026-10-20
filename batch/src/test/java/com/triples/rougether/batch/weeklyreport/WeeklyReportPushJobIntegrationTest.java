@@ -19,6 +19,7 @@ import com.triples.rougether.domain.notification.repository.NotificationSettingR
 import com.triples.rougether.domain.notification.repository.UserDeviceTokenRepository;
 import com.triples.rougether.domain.report.entity.WeeklyReport;
 import com.triples.rougether.domain.report.repository.WeeklyReportRepository;
+import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmSendResult;
 import com.triples.rougether.infra.fcm.FcmSender;
 import java.time.Clock;
@@ -74,7 +75,7 @@ class WeeklyReportPushJobIntegrationTest {
     @EnableJpaRepositories("com.triples.rougether.domain")
     @EnableJpaAuditing
     @Import({BatchJdbcConfig.class, WeeklyReportPushJobConfig.class, WeeklyReportPushProcessor.class,
-            ReminderPushWriter.class})
+            ReminderPushWriter.class, FcmDelivery.class})
     static class TestConfig {
 
         @Bean
