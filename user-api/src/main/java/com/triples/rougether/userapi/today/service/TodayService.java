@@ -1,7 +1,6 @@
 package com.triples.rougether.userapi.today.service;
 
 import com.triples.rougether.domain.routine.entity.Routine;
-import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.RoutineStatus;
 import com.triples.rougether.domain.routine.repository.RoutineDayLogRow;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
@@ -10,6 +9,7 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.LiveRoutineSelector;
 import com.triples.rougether.userapi.agenda.dto.AgendaCategoryGroup;
 import com.triples.rougether.userapi.agenda.dto.AgendaSummary;
 import com.triples.rougether.userapi.today.dto.TodayResponse;
@@ -18,7 +18,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,15 +28,13 @@ public class TodayService {
 
     // KST 고정 — "오늘"·요일 판정 모두 이 기준임
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 그날 한 번에 읽는 로그 상태: 완료 대조 + 건너뜀 제외(mobile #189)
-    private static final List<RoutineLogStatus> DAY_LOG_STATUSES =
-            List.of(RoutineLogStatus.COMPLETED, RoutineLogStatus.SKIPPED);
 
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final TodoRepository todoRepository;
     private final StreakRepository streakRepository;
     private final DailyAgendaAssembler agendaAssembler;
+    private final LiveRoutineSelector liveRoutineSelector;
 
     @Transactional(readOnly = true)
     public TodayResponse today(Long userId) {
@@ -47,25 +44,16 @@ public class TodayService {
     // 기준일을 받는 조회 — 요일·기간 판정을 결정적으로 검증하는 테스트에서만 직접 호출함
     @Transactional(readOnly = true)
     TodayResponse today(Long userId, LocalDate targetDate) {
-        // 기간 내 ACTIVE 루틴 중 오늘 반복 대상만 추림.
-        List<Routine> targets = routineRepository
-                .findAgendaCandidates(userId, RoutineStatus.ACTIVE, targetDate)
-                .stream()
-                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, targetDate))
-                .toList();
+        List<Routine> candidates = routineRepository
+                .findAgendaCandidates(userId, RoutineStatus.ACTIVE, targetDate);
+        List<Routine> targets = liveRoutineSelector.targetsOn(candidates, targetDate);
 
-        // 대상 루틴이 없으면 완료·건너뜀 로그 조회 결과를 사용하지 않으므로 생략함(쿼리 예산 3회).
+        // 대상 루틴이 없으면 완료·건너뜀 로그 조회를 생략함(쿼리 예산 3회)
         List<RoutineDayLogRow> dayLogs = targets.isEmpty() ? List.of() : routineLogRepository
-                .findDayLogRowsOn(userId, targetDate, DAY_LOG_STATUSES);
-        // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
-        Set<Long> skippedLineages = lineageKeysOf(dayLogs, RoutineLogStatus.SKIPPED);
-        List<Routine> routines = targets.stream()
-                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
-                .toList();
-        Set<Long> completedRoutineIds = dayLogs.stream()
-                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
-                .map(RoutineDayLogRow::getRoutineId)
-                .collect(Collectors.toSet());
+                .findDayLogRowsOn(userId, targetDate, LiveRoutineSelector.LOG_STATUSES);
+        LiveRoutineSelector.Selection selection = liveRoutineSelector.applyDayLogs(targets, dayLogs);
+        List<Routine> routines = selection.routines();
+        Set<Long> completedRoutineIds = selection.completedRoutineIds();
 
         // 마감일이 정확히 오늘인 투두만(overdue·밀린 투두 제외 — calendar와 동일)
         List<TodoAgendaRow> todos = todoRepository.findAgendaDueOn(userId, targetDate);
@@ -75,17 +63,5 @@ public class TodayService {
         TodayStreak streak = TodayStreak.from(
                 streakRepository.findByUserId(userId).orElse(null), targetDate);
         return new TodayResponse(targetDate, categories, summary, streak);
-    }
-
-    // coalesce 키와 짝 — origin 미백필 row는 자기 id가 계보 키임
-    private static Long lineageKey(Routine routine) {
-        return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
-    }
-
-    private static Set<Long> lineageKeysOf(List<RoutineDayLogRow> rows, RoutineLogStatus status) {
-        return rows.stream()
-                .filter(row -> row.getStatus() == status)
-                .map(RoutineDayLogRow::getLineageKey)
-                .collect(Collectors.toSet());
     }
 }

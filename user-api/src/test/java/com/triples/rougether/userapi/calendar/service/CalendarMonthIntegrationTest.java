@@ -19,6 +19,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.LiveRoutineSelector;
 import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayCount;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
@@ -89,7 +90,7 @@ class CalendarMonthIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
-                new DailyAgendaAssembler(), CLOCK);
+                new DailyAgendaAssembler(), new LiveRoutineSelector(), CLOCK);
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }
@@ -382,7 +383,7 @@ class CalendarMonthIntegrationTest {
         // UTC Clock을 주입해도 KST 기준 오늘·어제 구간을 판정해야 함
         for (Instant instant : List.of(midnight.minusSeconds(1), midnight)) {
             service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
-                    new DailyAgendaAssembler(), Clock.fixed(instant, ZoneOffset.UTC));
+                    new DailyAgendaAssembler(), new LiveRoutineSelector(), Clock.fixed(instant, ZoneOffset.UTC));
             CalendarDayCount count = countOn(service.month(userId, YearMonth.from(target)), target);
             assertThat(count.routineCount()).isEqualTo(2);
             assertThat(count.routineCompletedCount()).isEqualTo(1);
