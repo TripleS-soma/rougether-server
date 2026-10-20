@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.triples.rougether.domain.assetpipeline.repository.AssetPipelineJobRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -230,6 +233,70 @@ class AssetFoundryAdminTest {
                 .andExpect(content().string(containsString("Rougether Asset Foundry")))
                 .andExpect(content().string(containsString("디지털 트윈")))
                 .andExpect(content().string(containsString("품질 게이트")));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "characters/cat/animations/idle.webp, characters/cat/animations/idle.webp",
+            "characters/cat/animations/pose-cycle.webp, characters/cat/animations/pose-cycle.webp",
+            "'  characters/cat/animations/wave.webp  ', characters/cat/animations/wave.webp"
+    })
+    @WithMockUser(username = "operator", roles = "ADMIN")
+    void 캐릭터_애니메이션_3종을_허용하고_key의_양끝_공백을_제거한다(String suppliedKey, String storedKey)
+            throws Exception {
+        mockMvc.perform(post("/admin/asset-foundry/jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createCharacterJobJson("CHARACTER_ANIMATION", suppliedKey))
+                        .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kind").value("CHARACTER_ANIMATION"))
+                .andExpect(jsonPath("$.outputAssetKey").value(storedKey));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "characters/Upper_Cat/animations/idle.webp",
+            "characters/space cat/animations/idle.webp",
+            "characters/cat../animations/idle.webp",
+            "characters/cat/animations/run.webp",
+            "characters/cat/nested/animations/idle.webp"
+    })
+    @WithMockUser(username = "operator", roles = "ADMIN")
+    void 제작_등록은_code의_대문자_공백_경로이동과_규격밖_애니메이션을_거부한다(String key)
+            throws Exception {
+        mockMvc.perform(post("/admin/asset-foundry/jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createCharacterJobJson("CHARACTER_ANIMATION", key))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ASSET_PIPELINE_REQUEST_INVALID"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ANIMATED_FURNITURE, characters/cat/animations/idle.webp",
+            "CHARACTER_ANIMATION, items/chair-animated-v1.webp"
+    })
+    @WithMockUser(username = "operator", roles = "ADMIN")
+    void 애니메이션_key라도_신청한_종류와_다르면_제작_등록을_거부한다(String kind, String key)
+            throws Exception {
+        mockMvc.perform(post("/admin/asset-foundry/jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createCharacterJobJson(kind, key))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ASSET_PIPELINE_REQUEST_INVALID"));
+    }
+
+    private static String createCharacterJobJson(String kind, String outputAssetKey) {
+        return """
+                {
+                  "name": "캐릭터 모션",
+                  "slug": "character-animation-contract",
+                  "kind": "%s",
+                  "outputAssetKey": "%s"
+                }
+                """.formatted(kind, outputAssetKey);
     }
 
     private static String createJobJson(String slug) {

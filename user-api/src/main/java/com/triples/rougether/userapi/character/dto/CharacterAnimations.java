@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.character.dto;
 
+import com.triples.rougether.common.asset.CharacterAnimationKeys;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 // 캐릭터 애니메이션(애니메이션 WebP) asset key 묶음. S3 적재 규칙 characters/{code}/animations/ 에서 파생한다.
@@ -18,7 +19,7 @@ public record CharacterAnimations(
         String wave) {
 
     public static CharacterAnimations of(String code) {
-        String base = "characters/" + code + "/animations/";
-        return new CharacterAnimations(base + "idle.webp", base + "pose-cycle.webp", base + "wave.webp");
+        CharacterAnimationKeys keys = CharacterAnimationKeys.of(code);
+        return new CharacterAnimations(keys.idle(), keys.poseCycle(), keys.wave());
     }
 }

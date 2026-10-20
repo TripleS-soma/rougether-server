@@ -1,5 +1,6 @@
 package com.triples.rougether.adminapi.asset;
 
+import com.triples.rougether.common.asset.CharacterAnimationKeys;
 import java.util.regex.Pattern;
 
 /**
@@ -10,8 +11,6 @@ public final class AssetKeyClassifier {
 
     private static final Pattern FURNITURE_ANIMATED_WEBP =
             Pattern.compile("(?:^|/)[^/]+-animated-v\\d+\\.webp$");
-    private static final Pattern CHARACTER_ANIMATED_WEBP =
-            Pattern.compile("^characters/[^/]+/animations/(?:idle|pose-cycle|wave)\\.webp$");
 
     private AssetKeyClassifier() {
     }
@@ -19,6 +18,6 @@ public final class AssetKeyClassifier {
     public static boolean isAnimated(String assetKey) {
         return assetKey != null
                 && (FURNITURE_ANIMATED_WEBP.matcher(assetKey).find()
-                || CHARACTER_ANIMATED_WEBP.matcher(assetKey).matches());
+                || CharacterAnimationKeys.matches(assetKey));
     }
 }

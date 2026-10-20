@@ -123,6 +123,28 @@ class CatalogActivationTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void 누락된_캐릭터_에셋은_base_idle_pose_cycle_wave_순서로_모두_안내한다() throws Exception {
+        Character character = characterRepository.save(new Character(
+                "missing_order_cat", "누락 순서 고양이", "characters/missing-order-base.webp", 996, false));
+        given(storage.exists(anyString())).willReturn(false);
+
+        mockMvc.perform(put("/admin/catalog/characters/{characterId}/active", character.getId())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CATALOG_ACTIVATION_INVALID"))
+                .andExpect(jsonPath("$.message").value(
+                        "S3에 캐릭터 에셋이 없어 활성화할 수 없습니다: characters/missing-order-base.webp, "
+                                + "characters/missing_order_cat/animations/idle.webp, "
+                                + "characters/missing_order_cat/animations/pose-cycle.webp, "
+                                + "characters/missing_order_cat/animations/wave.webp"));
+
+        assertThat(characterRepository.findById(character.getId()).orElseThrow().isActive()).isFalse();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void 캐릭터_비활성화는_S3_검증_없이_즉시_반영된다() throws Exception {
         Character character = characterRepository.save(new Character(
                 "deactivation_cat", "비활성화 고양이", "characters/deactivation-cat.webp", 998, true));

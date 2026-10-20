@@ -44,6 +44,10 @@ class MyCharacterQueryIntegrationTest {
         assertThat(response.items()).extracting("selected").containsExactly(false, true);
         assertThat(response.items().get(0).animations().idle())
                 .isEqualTo("characters/mc_bear/animations/idle.webp");
+        assertThat(response.items().get(0).animations().poseCycle())
+                .isEqualTo("characters/mc_bear/animations/pose-cycle.webp");
+        assertThat(response.items().get(0).animations().wave())
+                .isEqualTo("characters/mc_bear/animations/wave.webp");
         assertThat(response.items().get(0).acquiredAt()).isNotNull();
     }
 

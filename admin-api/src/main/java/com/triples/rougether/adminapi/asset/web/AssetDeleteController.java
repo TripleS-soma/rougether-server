@@ -2,6 +2,7 @@ package com.triples.rougether.adminapi.asset.web;
 
 import com.triples.rougether.adminapi.asset.service.AssetDeleteResult;
 import com.triples.rougether.adminapi.asset.service.AssetStorageService;
+import com.triples.rougether.common.asset.CharacterAnimationKeys;
 import com.triples.rougether.domain.character.repository.CharacterPoseRepository;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import java.util.regex.Pattern;
@@ -18,11 +19,6 @@ public class AssetDeleteController {
 
     private static final Pattern CHARACTER_ASSET_KEY_PATTERN = Pattern.compile(
             "^characters/[A-Za-z0-9][A-Za-z0-9._/-]*\\.(png|jpg|jpeg|webp|gif)$");
-
-    // code 파생 애니메이션 계약 key (user-api CharacterAnimations.of 와 동일 규칙).
-    // DB 에 row 가 없어 참조 검사로는 안 잡히므로 code 를 뽑아 캐릭터 존재 여부로 막는다.
-    private static final Pattern CHARACTER_ANIMATION_KEY_PATTERN = Pattern.compile(
-            "^characters/([^/]+)/animations/(?:idle|pose-cycle|wave)\\.webp$");
 
     private final AssetStorageService storage;
     private final CharacterRepository characterRepository;
@@ -58,8 +54,10 @@ public class AssetDeleteController {
     }
 
     private boolean isRegisteredCharacterAnimation(String key) {
-        var matcher = CHARACTER_ANIMATION_KEY_PATTERN.matcher(key);
-        return matcher.matches() && characterRepository.findByCode(matcher.group(1)).isPresent();
+        // 파생 key는 DB 참조가 없으므로 캐릭터 코드로 삭제 보호 대상을 확인함
+        return CharacterAnimationKeys.characterCode(key)
+                .map(code -> characterRepository.findByCode(code).isPresent())
+                .orElse(false);
     }
 
     private void validateKey(String key) {
