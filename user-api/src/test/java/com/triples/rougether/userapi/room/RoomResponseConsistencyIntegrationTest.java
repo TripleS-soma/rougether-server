@@ -285,6 +285,10 @@ class RoomResponseConsistencyIntegrationTest {
         assertThat(response.character().name()).isEqualTo("응답 검증 캐릭터");
         assertThat(response.character().assetKey()).isEqualTo("characters/response-test.png");
         assertThat(response.character().animations().idle()).isEqualTo("characters/" + characterCode + "/animations/idle.webp");
+        assertThat(response.character().animations().poseCycle())
+                .isEqualTo("characters/" + characterCode + "/animations/pose-cycle.webp");
+        assertThat(response.character().animations().wave())
+                .isEqualTo("characters/" + characterCode + "/animations/wave.webp");
         assertThat(response.character().accessories()).singleElement().satisfies(accessory -> {
             assertThat(accessory.userItemId()).isEqualTo(glassesId);
             assertThat(accessory.name()).isEqualTo("안경");

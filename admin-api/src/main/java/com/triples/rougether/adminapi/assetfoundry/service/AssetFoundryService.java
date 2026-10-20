@@ -8,6 +8,7 @@ import com.triples.rougether.adminapi.assetfoundry.dto.AssetPipelineQaCheckReque
 import com.triples.rougether.adminapi.assetfoundry.dto.AssetPipelineQaUpdateRequest;
 import com.triples.rougether.adminapi.assetfoundry.dto.AssetPipelineStatusUpdateRequest;
 import com.triples.rougether.adminapi.assetfoundry.error.AssetFoundryException;
+import com.triples.rougether.common.asset.CharacterAnimationKeys;
 import com.triples.rougether.domain.assetpipeline.entity.AssetPipelineCheck;
 import com.triples.rougether.domain.assetpipeline.entity.AssetPipelineCheckResult;
 import com.triples.rougether.domain.assetpipeline.entity.AssetPipelineJob;
@@ -33,8 +34,6 @@ public class AssetFoundryService {
     private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9-]{2,99}$");
     private static final Pattern ASSET_KEY_PATTERN = Pattern.compile(
             "^(?:items|characters|house)/[a-z0-9_./-]+\\.(?:png|jpe?g|webp)$");
-    private static final Pattern CHARACTER_ANIMATION_PATTERN = Pattern.compile(
-            "^characters/[^/]+/animations/(?:idle|pose-cycle|wave)\\.webp$");
     private static final Pattern HOUSE_FRAME_PATTERN = Pattern.compile(
             "^house/[a-z0-9_./-]*frame[a-z0-9_./-]*\\.png$");
 
@@ -217,7 +216,7 @@ public class AssetFoundryService {
                     && !AssetKeyClassifier.isAnimated(outputKey);
             case ANIMATED_FURNITURE -> outputKey.startsWith("items/")
                     && AssetKeyClassifier.isAnimated(outputKey);
-            case CHARACTER_ANIMATION -> CHARACTER_ANIMATION_PATTERN.matcher(outputKey).matches();
+            case CHARACTER_ANIMATION -> CharacterAnimationKeys.matches(outputKey);
             case HOUSE_FRAME -> HOUSE_FRAME_PATTERN.matcher(outputKey).matches();
         };
         if (!valid) {

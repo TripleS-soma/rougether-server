@@ -6,6 +6,7 @@ import com.triples.rougether.adminapi.catalog.dto.CatalogCharacterRow;
 import com.triples.rougether.adminapi.catalog.dto.CatalogItemListResponse;
 import com.triples.rougether.adminapi.catalog.dto.CatalogItemRow;
 import com.triples.rougether.adminapi.catalog.error.CatalogActivationInvalidException;
+import com.triples.rougether.common.asset.CharacterAnimationKeys;
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.repository.CharacterRepository;
 import com.triples.rougether.domain.shop.entity.Item;
@@ -19,13 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 // 카탈로그(아이템·캐릭터)의 사용/미사용 토글. 상점·캐릭터 목록·뽑기는 전부 is_active 를
 // 조회 시점에 거르므로, 여기서 플래그만 바꾸면 프론트에는 다음 요청부터 바로 반영된다.
 // 활성화 시에는 S3 에 실제 에셋이 있는지 검증한다 — 캐릭터 애니메이션 3종은 DB 없이
-// code 로 파생되는 계약(user-api CharacterAnimations)이라, 빠뜨린 채 활성화하면
+// code로 파생되는 공통 계약이므로, 빠뜨린 채 활성화하면
 // 프론트에서 조용히 404 가 나기 때문이다 (docs/claude/domains/assets.md).
 @Service
 public class CatalogActivationService {
-
-    private static final List<String> CHARACTER_ANIMATION_FILES =
-            List.of("idle.webp", "pose-cycle.webp", "wave.webp");
 
     private final ItemRepository itemRepository;
     private final CharacterRepository characterRepository;
@@ -92,9 +90,7 @@ public class CatalogActivationService {
         if (!assetStorageService.exists(character.getBaseAssetKey())) {
             missing.add(character.getBaseAssetKey());
         }
-        String animationBase = "characters/" + character.getCode() + "/animations/";
-        for (String file : CHARACTER_ANIMATION_FILES) {
-            String key = animationBase + file;
+        for (String key : CharacterAnimationKeys.of(character.getCode()).all()) {
             if (!assetStorageService.exists(key)) {
                 missing.add(key);
             }
