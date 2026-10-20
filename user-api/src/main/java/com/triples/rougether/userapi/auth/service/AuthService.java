@@ -34,11 +34,9 @@ public class AuthService {
     private final TokenService tokenService;
     private final RefreshTokenRotator refreshTokenRotator;
     private final KakaoApiClient kakaoApiClient;
-    private final KakaoLoginHandler kakaoLoginHandler;
+    private final SocialLoginHandler socialLoginHandler;
     private final GoogleTokenVerifier googleTokenVerifier;
-    private final GoogleLoginHandler googleLoginHandler;
     private final AppleTokenVerifier appleTokenVerifier;
-    private final AppleLoginHandler appleLoginHandler;
     private final AppleTokenExchangeClient appleTokenExchangeClient;
     private final AppleRefreshTokenCipher appleRefreshTokenCipher;
     private final SignupService signupService;
@@ -70,7 +68,7 @@ public class AuthService {
         return new LoginResponse(user.getId(), accessToken, refreshToken, isNewUser);
     }
 
-    // 카카오 로그인 오케스트레이션. 트랜잭션은 KakaoLoginHandler.login이 소유함(HTTP 호출을 트랜잭션 밖에 둠).
+    // 카카오 로그인 오케스트레이션. 트랜잭션은 SocialLoginHandler.login이 소유함(HTTP 호출을 트랜잭션 밖에 둠).
     public LoginResponse kakaoLogin(String accessToken) {
         return kakaoLogin(accessToken, false);
     }
@@ -83,15 +81,15 @@ public class AuthService {
         emailProviderConflictGuard.ensureNewAccountAllowed(OauthProvider.KAKAO, kakaoUser.id(),
                 kakaoUser.email(), kakaoUser.emailVerified(), allowNewAccount);
         try {
-            return kakaoLoginHandler.login(kakaoUser);
+            return socialLoginHandler.login(kakaoUser);
         } catch (DataIntegrityViolationException race) {
             // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
             // 이제 승자가 만든 연동이 보여 로그인으로 전환됨.
-            return kakaoLoginHandler.login(kakaoUser);
+            return socialLoginHandler.login(kakaoUser);
         }
     }
 
-    // 구글 로그인 오케스트레이션. 트랜잭션은 GoogleLoginHandler.login이 소유함(JWK 검증을 트랜잭션 밖에 둠).
+    // 구글 로그인 오케스트레이션. 트랜잭션은 SocialLoginHandler.login이 소유함(JWK 검증을 트랜잭션 밖에 둠).
     public LoginResponse googleLogin(String idToken) {
         return googleLogin(idToken, false);
     }
@@ -102,14 +100,14 @@ public class AuthService {
         emailProviderConflictGuard.ensureNewAccountAllowed(OauthProvider.GOOGLE, googleUser.id(),
                 googleUser.email(), googleUser.emailVerified(), allowNewAccount);
         try {
-            return googleLoginHandler.login(googleUser);
+            return socialLoginHandler.login(googleUser);
         } catch (DataIntegrityViolationException race) {
             // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
-            return googleLoginHandler.login(googleUser);
+            return socialLoginHandler.login(googleUser);
         }
     }
 
-    // 애플 로그인 오케스트레이션. 트랜잭션은 AppleLoginHandler.login이 소유함(JWK 검증·코드 교환 HTTP를 트랜잭션 밖에 둠).
+    // 애플 로그인 오케스트레이션. 트랜잭션은 SocialLoginHandler.login이 소유함(JWK 검증·코드 교환 HTTP를 트랜잭션 밖에 둠).
     public LoginResponse appleLogin(String idToken, String authorizationCode) {
         return appleLogin(idToken, authorizationCode, false);
     }
@@ -124,10 +122,10 @@ public class AuthService {
         String encryptedRefreshToken = appleRefreshTokenCipher.encrypt(
                 appleTokenExchangeClient.exchangeRefreshToken(authorizationCode));
         try {
-            return appleLoginHandler.login(appleUser, encryptedRefreshToken);
+            return socialLoginHandler.login(appleUser, encryptedRefreshToken);
         } catch (DataIntegrityViolationException race) {
             // 동시 최초가입 경쟁의 패자: 첫 트랜잭션이 통째로 롤백됐으므로 새 트랜잭션(새 스냅샷)으로 재시도.
-            return appleLoginHandler.login(appleUser, encryptedRefreshToken);
+            return socialLoginHandler.login(appleUser, encryptedRefreshToken);
         }
     }
 

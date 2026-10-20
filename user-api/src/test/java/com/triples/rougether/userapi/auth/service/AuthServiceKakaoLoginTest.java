@@ -38,15 +38,11 @@ class AuthServiceKakaoLoginTest {
     @Mock
     private KakaoApiClient kakaoApiClient;
     @Mock
-    private KakaoLoginHandler kakaoLoginHandler;
+    private SocialLoginHandler socialLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.GoogleTokenVerifier googleTokenVerifier;
     @Mock
-    private GoogleLoginHandler googleLoginHandler;
-    @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenVerifier appleTokenVerifier;
-    @Mock
-    private AppleLoginHandler appleLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
     @Mock
@@ -63,8 +59,8 @@ class AuthServiceKakaoLoginTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, tokenService,
-                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, socialLoginHandler,
+                googleTokenVerifier, appleTokenVerifier,
                 appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
@@ -73,12 +69,12 @@ class AuthServiceKakaoLoginTest {
         KakaoUser kakaoUser = new KakaoUser("kakao-1", "a@b.com");
         LoginResponse expected = new LoginResponse(10L, "acc", "ref", true);
         when(kakaoApiClient.fetchUser("tok")).thenReturn(kakaoUser);
-        when(kakaoLoginHandler.login(kakaoUser)).thenReturn(expected);
+        when(socialLoginHandler.login(kakaoUser)).thenReturn(expected);
 
         LoginResponse response = authService.kakaoLogin("tok");
 
         assertThat(response).isEqualTo(expected);
-        verify(kakaoLoginHandler, times(1)).login(kakaoUser);
+        verify(socialLoginHandler, times(1)).login(kakaoUser);
     }
 
     @Test
@@ -87,7 +83,7 @@ class AuthServiceKakaoLoginTest {
         LoginResponse afterRetry = new LoginResponse(9L, "acc", "ref", false);
         when(kakaoApiClient.fetchUser("tok")).thenReturn(kakaoUser);
         // 첫 시도는 경쟁 충돌로 롤백, 재시도는 승자 연동으로 로그인 성공.
-        when(kakaoLoginHandler.login(kakaoUser))
+        when(socialLoginHandler.login(kakaoUser))
                 .thenThrow(new DataIntegrityViolationException("uq_oauth_provider_user"))
                 .thenReturn(afterRetry);
 
@@ -95,7 +91,7 @@ class AuthServiceKakaoLoginTest {
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
-        verify(kakaoLoginHandler, times(2)).login(kakaoUser);
+        verify(socialLoginHandler, times(2)).login(kakaoUser);
     }
 
     @Test
@@ -110,7 +106,7 @@ class AuthServiceKakaoLoginTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(AuthErrorCode.EMAIL_LINKED_TO_OTHER_PROVIDER);
-        verify(kakaoLoginHandler, never()).login(any());
+        verify(socialLoginHandler, never()).login(any(KakaoUser.class));
     }
 
     @Test
@@ -118,7 +114,7 @@ class AuthServiceKakaoLoginTest {
         KakaoUser kakaoUser = new KakaoUser("kakao-4", "a@b.com", true);
         LoginResponse created = new LoginResponse(12L, "acc", "ref", true);
         when(kakaoApiClient.fetchUser("tok")).thenReturn(kakaoUser);
-        when(kakaoLoginHandler.login(kakaoUser)).thenReturn(created);
+        when(socialLoginHandler.login(kakaoUser)).thenReturn(created);
 
         LoginResponse response = authService.kakaoLogin("tok", true);
 

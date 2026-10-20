@@ -44,15 +44,11 @@ class AuthServiceRefreshTest {
     @Mock
     private KakaoApiClient kakaoApiClient;
     @Mock
-    private KakaoLoginHandler kakaoLoginHandler;
+    private SocialLoginHandler socialLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.GoogleTokenVerifier googleTokenVerifier;
     @Mock
-    private GoogleLoginHandler googleLoginHandler;
-    @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenVerifier appleTokenVerifier;
-    @Mock
-    private AppleLoginHandler appleLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
     @Mock
@@ -70,8 +66,8 @@ class AuthServiceRefreshTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, tokenService,
-                new RefreshTokenRotator(refreshTokenRepository, userRepository, tokenService, jwtProperties), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                new RefreshTokenRotator(refreshTokenRepository, userRepository, tokenService, jwtProperties), kakaoApiClient, socialLoginHandler,
+                googleTokenVerifier, appleTokenVerifier,
                 appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 

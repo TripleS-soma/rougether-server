@@ -33,15 +33,11 @@ class AuthServiceGoogleLoginTest {
     @Mock
     private KakaoApiClient kakaoApiClient;
     @Mock
-    private KakaoLoginHandler kakaoLoginHandler;
+    private SocialLoginHandler socialLoginHandler;
     @Mock
     private GoogleTokenVerifier googleTokenVerifier;
     @Mock
-    private GoogleLoginHandler googleLoginHandler;
-    @Mock
     private AppleTokenVerifier appleTokenVerifier;
-    @Mock
-    private AppleLoginHandler appleLoginHandler;
     @Mock
     private com.triples.rougether.userapi.auth.client.AppleTokenExchangeClient appleTokenExchangeClient;
     @Mock
@@ -58,8 +54,8 @@ class AuthServiceGoogleLoginTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, tokenService,
-                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, kakaoLoginHandler,
-                googleTokenVerifier, googleLoginHandler, appleTokenVerifier, appleLoginHandler,
+                org.mockito.Mockito.mock(RefreshTokenRotator.class), kakaoApiClient, socialLoginHandler,
+                googleTokenVerifier, appleTokenVerifier,
                 appleTokenExchangeClient, appleRefreshTokenCipher, signupService, emailProviderConflictGuard);
     }
 
@@ -68,12 +64,12 @@ class AuthServiceGoogleLoginTest {
         GoogleUser googleUser = new GoogleUser("google-1", "a@b.com");
         LoginResponse expected = new LoginResponse(10L, "acc", "ref", true);
         when(googleTokenVerifier.verify("idtok")).thenReturn(googleUser);
-        when(googleLoginHandler.login(googleUser)).thenReturn(expected);
+        when(socialLoginHandler.login(googleUser)).thenReturn(expected);
 
         LoginResponse response = authService.googleLogin("idtok");
 
         assertThat(response).isEqualTo(expected);
-        verify(googleLoginHandler, times(1)).login(googleUser);
+        verify(socialLoginHandler, times(1)).login(googleUser);
     }
 
     @Test
@@ -82,7 +78,7 @@ class AuthServiceGoogleLoginTest {
         LoginResponse afterRetry = new LoginResponse(9L, "acc", "ref", false);
         when(googleTokenVerifier.verify("idtok")).thenReturn(googleUser);
         // 첫 시도는 경쟁 충돌로 롤백, 재시도는 승자 연동으로 로그인 성공.
-        when(googleLoginHandler.login(googleUser))
+        when(socialLoginHandler.login(googleUser))
                 .thenThrow(new DataIntegrityViolationException("uq_oauth_provider_user"))
                 .thenReturn(afterRetry);
 
@@ -90,6 +86,6 @@ class AuthServiceGoogleLoginTest {
 
         assertThat(response.isNewUser()).isFalse();
         assertThat(response.userId()).isEqualTo(9L);
-        verify(googleLoginHandler, times(2)).login(googleUser);
+        verify(socialLoginHandler, times(2)).login(googleUser);
     }
 }
