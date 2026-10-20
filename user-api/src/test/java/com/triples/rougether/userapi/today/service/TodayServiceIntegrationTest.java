@@ -20,6 +20,7 @@ import com.triples.rougether.domain.routine.repository.StreakRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.LiveRoutineSelector;
 import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
 import com.triples.rougether.userapi.agenda.dto.AgendaTodoItem;
 import com.triples.rougether.userapi.global.config.JpaConfig;
@@ -67,7 +68,7 @@ class TodayServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new TodayService(routineRepository, routineLogRepository, todoRepository,
-                streakRepository, new DailyAgendaAssembler());
+                streakRepository, new DailyAgendaAssembler(), new LiveRoutineSelector());
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }

@@ -23,6 +23,7 @@ import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.LiveRoutineSelector;
 import com.triples.rougether.userapi.agenda.dto.AgendaRoutineItem;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayResponse;
 import com.triples.rougether.userapi.global.config.JpaConfig;
@@ -93,7 +94,7 @@ class CalendarServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         service = new CalendarService(routineRepository, routineLogRepository, todoRepository,
-                new DailyAgendaAssembler(), Clock.system(ZoneId.of("Asia/Seoul")));
+                new DailyAgendaAssembler(), new LiveRoutineSelector(), Clock.system(ZoneId.of("Asia/Seoul")));
         user = userRepository.save(User.signUp());
         userId = user.getId();
     }

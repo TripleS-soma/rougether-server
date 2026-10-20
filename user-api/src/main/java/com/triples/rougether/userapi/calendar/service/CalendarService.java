@@ -13,6 +13,7 @@ import com.triples.rougether.domain.routine.repository.TodoAgendaRow;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.domain.support.DailyCount;
 import com.triples.rougether.userapi.agenda.DailyAgendaAssembler;
+import com.triples.rougether.userapi.agenda.LiveRoutineSelector;
 import com.triples.rougether.userapi.agenda.dto.AgendaCategoryGroup;
 import com.triples.rougether.userapi.agenda.dto.AgendaSummary;
 import com.triples.rougether.userapi.calendar.dto.CalendarDayCount;
@@ -38,14 +39,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class CalendarService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 그날 한 번에 읽는 로그 상태: 완료 대조 + 건너뜀 제외(mobile #189)
-    private static final List<RoutineLogStatus> DAY_LOG_STATUSES =
-            List.of(RoutineLogStatus.COMPLETED, RoutineLogStatus.SKIPPED);
 
     private final RoutineRepository routineRepository;
     private final RoutineLogRepository routineLogRepository;
     private final TodoRepository todoRepository;
     private final DailyAgendaAssembler agendaAssembler;
+    private final LiveRoutineSelector liveRoutineSelector;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -61,26 +60,14 @@ public class CalendarService {
     }
 
     private CalendarDayResponse liveDay(Long userId, LocalDate date) {
-        // 그날 완료·건너뜀 로그를 한 번에 읽음(엔티티 로드 없이 id·계보 키만)
-        List<RoutineDayLogRow> dayLogs = routineLogRepository.findDayLogRowsOn(userId, date, DAY_LOG_STATUSES);
-        Set<Long> skippedLineages = lineageKeysOf(dayLogs, RoutineLogStatus.SKIPPED);
-        // ACTIVE 루틴 중 그날 반복 대상만 추림
-        List<Routine> routines = routineRepository
+        List<RoutineDayLogRow> dayLogs = routineLogRepository
+                .findDayLogRowsOn(userId, date, LiveRoutineSelector.LOG_STATUSES);
+        List<Routine> activeRoutines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
-                        userId, RoutineStatus.ACTIVE)
-                .stream()
-                .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
-                // 건너뛴 발생분(SKIPPED, mobile #189)은 계보 단위로 뺀다
-                .filter(routine -> !skippedLineages.contains(lineageKey(routine)))
-                .toList();
-
-        // 그날 완료한 루틴 id 집합
-        Set<Long> completedRoutineIds = dayLogs.stream()
-                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
-                .map(RoutineDayLogRow::getRoutineId)
-                .collect(Collectors.toSet());
-
-        return assemble(date, routines, completedRoutineIds, todosOn(userId, date));
+                        userId, RoutineStatus.ACTIVE);
+        List<Routine> targets = liveRoutineSelector.targetsOn(activeRoutines, date);
+        LiveRoutineSelector.Selection selection = liveRoutineSelector.applyDayLogs(targets, dayLogs);
+        return assemble(date, selection.routines(), selection.completedRoutineIds(), todosOn(userId, date));
     }
 
     // 과거: 그날 log(COMPLETED+FAILED) 단독 조회. 판정은 day-end 배치가 끝냈으므로 재구성하지 않고,
@@ -193,26 +180,20 @@ public class CalendarService {
         List<Routine> activeRoutines = routineRepository
                 .findByUserIdAndStatusAndDeletedAtIsNullOrderByScheduledTimeAscOriginRoutineIdAsc(
                         userId, RoutineStatus.ACTIVE);
-        // 완료·건너뜀을 한 쿼리로 읽어 날짜별로 가른다(월 조회 쿼리 예산 6회 유지)
-        List<RoutineDayLogRow> logRows = routineLogRepository.findDayLogRowsBetween(userId, from, to, DAY_LOG_STATUSES);
-        Map<LocalDate, Set<Long>> completedIdsByDate = logRows.stream()
-                .filter(row -> row.getStatus() == RoutineLogStatus.COMPLETED)
-                .collect(Collectors.groupingBy(RoutineDayLogRow::getRoutineDate,
-                        Collectors.mapping(RoutineDayLogRow::getRoutineId, Collectors.toSet())));
-        // 건너뛴 발생분(SKIPPED, mobile #189)은 날짜별 분모에서도 뺀다 — /calendar 의 live 소싱과 같은 기준
-        Map<LocalDate, Set<Long>> skippedLineagesByDate = logRows.stream()
-                .filter(row -> row.getStatus() == RoutineLogStatus.SKIPPED)
-                .collect(Collectors.groupingBy(RoutineDayLogRow::getRoutineDate,
-                        Collectors.mapping(RoutineDayLogRow::getLineageKey, Collectors.toSet())));
+        // 구간 로그를 한 번 조회해 날짜별로 묶음. 날짜마다 해당 로그만 판정함(쿼리 예산 6회 유지)
+        Map<LocalDate, List<RoutineDayLogRow>> logsByDate = routineLogRepository
+                .findDayLogRowsBetween(userId, from, to, LiveRoutineSelector.LOG_STATUSES)
+                .stream()
+                .collect(Collectors.groupingBy(RoutineDayLogRow::getRoutineDate));
         return from.datesUntil(to.plusDays(1))
                 .collect(Collectors.toMap(
                         date -> date,
-                        date -> countRoutines(activeRoutines.stream()
-                                        .filter(routine -> agendaAssembler.isRoutineTargetOn(routine, date))
-                                        .filter(routine -> !skippedLineagesByDate
-                                                .getOrDefault(date, Set.of()).contains(lineageKey(routine)))
-                                        .toList(),
-                                completedIdsByDate.getOrDefault(date, Set.of()))));
+                        date -> {
+                            List<Routine> targets = liveRoutineSelector.targetsOn(activeRoutines, date);
+                            LiveRoutineSelector.Selection selection = liveRoutineSelector.applyDayLogs(
+                                    targets, logsByDate.getOrDefault(date, List.of()));
+                            return countRoutines(selection.routines(), selection.completedRoutineIds());
+                        }));
     }
 
     private static Counts countRoutines(List<Routine> routines, Set<Long> completedRoutineIds) {
@@ -243,13 +224,6 @@ public class CalendarService {
 
     private static Long lineageKey(Routine routine) {
         return routine.getOriginRoutineId() != null ? routine.getOriginRoutineId() : routine.getId();
-    }
-
-    private static Set<Long> lineageKeysOf(List<RoutineDayLogRow> rows, RoutineLogStatus status) {
-        return rows.stream()
-                .filter(row -> row.getStatus() == status)
-                .map(RoutineDayLogRow::getLineageKey)
-                .collect(Collectors.toSet());
     }
 
     // 마감일이 정확히 그날인 투두만
