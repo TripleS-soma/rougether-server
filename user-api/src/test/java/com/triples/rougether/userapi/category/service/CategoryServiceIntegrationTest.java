@@ -50,6 +50,8 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -353,11 +355,14 @@ class CategoryServiceIntegrationTest {
         Long deletedTodoId = persistTodo(user, category);
         Instant alreadyDeletedAt = Instant.now().minusSeconds(3600);
         todoRepository.findById(deletedTodoId).orElseThrow().softDelete(alreadyDeletedAt);
-        // 다른 카테고리 루틴의 로그는 남아야 함
+        // 다른 카테고리의 닫힌 루틴도 기록과 사진을 보존함
         Category other = categoryRepository.save(
                 Category.create(user, "무관", null, null, 1, PrivacyScope.PRIVATE));
         Long otherRoutineId = persistRoutine(user, other, RoutineStatus.ACTIVE);
+        routineRepository.findById(otherRoutineId).orElseThrow().softDelete(Instant.now());
         Long otherLogId = persistRoutineLog(routineRepository.findById(otherRoutineId).orElseThrow());
+        Long otherPhotoId = persistPhotoVerification(
+                routineLogRepository.findById(otherLogId).orElseThrow());
         Streak streak = streakRepository.save(Streak.start(user, TODAY));
         Long streakId = streak.getId();
         int streakCount = streak.getCurrentCount();
@@ -371,6 +376,7 @@ class CategoryServiceIntegrationTest {
         assertThat(photoVerificationRepository.findById(photoId)).isEmpty();
         assertThat(routineLogRepository.findById(logId)).isEmpty();
         assertThat(routineLogRepository.findById(otherLogId)).isPresent();
+        assertThat(photoVerificationRepository.findById(otherPhotoId)).isPresent();
         assertThat(todoRepository.findById(liveTodoId).orElseThrow().getDeletedAt()).isNotNull();
         // 이미 삭제된 투두의 deletedAt은 덮어쓰지 않음
         assertThat(todoRepository.findById(deletedTodoId).orElseThrow().getDeletedAt())
@@ -405,9 +411,13 @@ class CategoryServiceIntegrationTest {
         // 상한 초과분은 reward 0으로 기록됨 — 지워도 지급 슬롯이 복구되지 않으므로 삭제 대상
         Long unrewardedLogId = persistRoutineLog(
                 routineRepository.findById(unrewardedRoutineId).orElseThrow(), TODAY, 0);
-        // 과거 완료는 항상 reward 0이라 어느 날의 상한에도 잡히지 않음
+        Long unrewardedPhotoId = persistPhotoVerification(
+                routineLogRepository.findById(unrewardedLogId).orElseThrow());
+        // 과거 지급 기록은 오늘 보상 상한에 영향을 주지 않아 삭제됨
         Long pastLogId = persistRoutineLog(
                 routineRepository.findById(pastRoutineId).orElseThrow(), TODAY.minusDays(1), 10);
+        Long pastPhotoId = persistPhotoVerification(
+                routineLogRepository.findById(pastLogId).orElseThrow());
         em.flush();
         em.clear();
 
@@ -420,22 +430,25 @@ class CategoryServiceIntegrationTest {
         assertThat(photoVerificationRepository.findById(rewardedPhotoId)).isPresent();
         assertThat(routineLogRepository.findById(unrewardedLogId)).isEmpty();
         assertThat(routineLogRepository.findById(pastLogId)).isEmpty();
+        assertThat(photoVerificationRepository.findById(unrewardedPhotoId)).isEmpty();
+        assertThat(photoVerificationRepository.findById(pastPhotoId)).isEmpty();
     }
 
     // 스케줄 수정으로 버전이 분기되면 옛 버전은 옛 카테고리에 soft delete로 남음.
     // 그 카테고리를 PURGE할 때 옛 버전 log를 지우면 지금도 쓰는 루틴의 기록이 사라지고,
     // 계보 기준 중복 완료 가드(findByLineageAndDateAndStatus)까지 비어 같은 날 재완료가 됨
-    @Test
-    void PURGE는_계보에_살아있는_버전이_있으면_그_루틴의_log를_남긴다() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void PURGE는_계보에_살아있는_버전이_있으면_그_루틴의_log를_남긴다(boolean explicitOrigin) {
         User user = userRepository.findById(userId).orElseThrow();
         Category oldCategory = categoryRepository.save(
                 Category.create(user, "운동", null, null, 0, PrivacyScope.PRIVATE));
         Category newCategory = categoryRepository.save(
                 Category.create(user, "건강", null, null, 1, PrivacyScope.PRIVATE));
-        // 옛 버전: 운동 카테고리에 남아 닫힘. 계보 루트라 origin = 자기 id
+        // 계보 루트는 origin이 자기 id이거나 null이어도 같은 계보로 판정함
         Long oldVersionId = persistRoutine(user, oldCategory, RoutineStatus.ACTIVE);
         Routine oldVersion = routineRepository.findById(oldVersionId).orElseThrow();
-        ReflectionTestUtils.setField(oldVersion, "originRoutineId", oldVersionId);
+        ReflectionTestUtils.setField(oldVersion, "originRoutineId", explicitOrigin ? oldVersionId : null);
         oldVersion.softDelete(Instant.now());
         // 새 버전: 건강 카테고리로 옮겨가 살아있음. 같은 계보를 승계
         Long newVersionId = persistRoutine(user, newCategory, RoutineStatus.ACTIVE);
@@ -447,9 +460,11 @@ class CategoryServiceIntegrationTest {
         // 계보가 통째로 닫힌 루틴은 정상 삭제 대상
         Long orphanRoutineId = persistRoutine(user, oldCategory, RoutineStatus.ACTIVE);
         Routine orphan = routineRepository.findById(orphanRoutineId).orElseThrow();
-        ReflectionTestUtils.setField(orphan, "originRoutineId", orphanRoutineId);
+        ReflectionTestUtils.setField(orphan, "originRoutineId", explicitOrigin ? orphanRoutineId : null);
         orphan.softDelete(Instant.now());
         Long orphanLogId = persistRoutineLog(orphan, TODAY.minusDays(5), 0);
+        Long orphanPhotoId = persistPhotoVerification(
+                routineLogRepository.findById(orphanLogId).orElseThrow());
         em.flush();
         em.clear();
 
@@ -460,6 +475,7 @@ class CategoryServiceIntegrationTest {
         assertThat(routineLogRepository.findById(lineageLogId)).isPresent();
         assertThat(photoVerificationRepository.findById(lineagePhotoId)).isPresent();
         assertThat(routineLogRepository.findById(orphanLogId)).isEmpty();
+        assertThat(photoVerificationRepository.findById(orphanPhotoId)).isEmpty();
     }
 
     // 기본은 과거·미지급 log — PURGE의 "오늘자 지급분 제외" 조건에 걸리지 않는 순수 삭제 대상
