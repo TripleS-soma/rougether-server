@@ -55,6 +55,7 @@ class AiUserRuntimeIntegrationTest {
     @Autowired AiUserJobs jobs;
     @Autowired AiUserProperties aiUserProperties;
     @Autowired AiUserControlService control;
+    @Autowired AiUserSocialActivity social;
     @Autowired AiUserMemoryProjection memoryProjection;
     @Autowired UserRepository users;
     @Autowired AdminRetentionMetricRepository retention;
@@ -178,25 +179,43 @@ class AiUserRuntimeIntegrationTest {
         });
     }
 
-    @Test void proactiveCommentsAreUniquePerAccountAndGloballyBoundedButHumanReplyIsAllowed() {
+    @Test void proactiveCommentsAreUniquePerAccountAndGloballyBoundedButLikesAndHumanRepliesAreAllowed() {
         User human=quietHuman();
         long post=quietPost(human,"독서 기록을 주제별로 정리하는 방법이 궁금해요");
+        assertThat(socialCandidateIds(ais.getFirst())).contains(post);
         var first=beginSocial(ais.getFirst());
         var payload=mapper.readTree("{\"postId\":"+post+",\"content\":\"기록을 주제로 나누면 다시 찾기 좋겠네요\"}");
         control.execute(first.id(),first.owner(),first.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"");
         jdbc.update("UPDATE ai_user_social_actions SET created_at=?",java.sql.Timestamp.from(Instant.now().minusSeconds(1900)));
+        assertThat(socialCandidateIds(first.userId())).doesNotContain(post);
+        assertThat(socialCandidateIds(ais.get(1))).contains(post);
         var duplicate=beginSocial(first.userId());
-        control.execute(duplicate.id(),duplicate.owner(),duplicate.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,payload,"");
+        // 내용 중복이 아닌 계정별 참여 제한으로 거절되는지 확인함.
+        control.execute(duplicate.id(),duplicate.owner(),duplicate.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
+                mapper.readTree("{\"postId\":"+post+",\"content\":\"같은 글에 새로운 내용으로 다시 참여해요\"}"),"");
         assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,duplicate.id())).isEqualTo("RECENT_PARTICIPATION");
+        // 후보를 본 뒤 다른 AI가 참여하면 실행 직전에 변경된 상한을 다시 확인해야 함.
+        assertThat(socialCandidateIds(ais.get(2))).contains(post);
+        var stalePayload=mapper.readTree("{\"postId\":"+post+",\"content\":\"세 번째 선제 댓글\"}");
         var second=beginSocial(ais.get(1));
         control.execute(second.id(),second.owner(),second.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
                 mapper.readTree("{\"postId\":"+post+",\"content\":\"저는 분류할 주제부터 작게 정해보려고요\"}"),"");
+        assertThat(socialCandidateIds(ais.get(2))).doesNotContain(post);
         jobs.enqueue(ais.get(2),"crowd-check",10,"SCHEDULE",null);
         var crowded=jobs.claim("crowd-check");
         control.execute(crowded.id(),crowded.owner(),crowded.fencingToken(),AiUserActionExecutor.Action.FEED_COMMENT,
-                mapper.readTree("{\"postId\":"+post+",\"content\":\"세 번째 선제 댓글\"}"),"");
+                stalePayload,"");
         assertThat(jdbc.queryForObject("SELECT wait_reason FROM ai_user_jobs WHERE id=?",String.class,crowded.id())).isEqualTo("RECENT_PARTICIPATION");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND proactive=TRUE",Integer.class,post)).isEqualTo(2);
+        // 선제댓글 참여 상한을 좋아요 실행 제한으로 확대하지 않음.
+        jobs.enqueue(ais.get(2),"crowded-post-like",10,"SCHEDULE",null);
+        var like=jobs.claim("crowded-post-like");
+        control.execute(like.id(),like.owner(),like.fencingToken(),AiUserActionExecutor.Action.FEED_LIKE,
+                mapper.readTree("{\"postId\":"+post+",\"liked\":true}"),"");
+        assertThat(jdbc.queryForObject("SELECT action_name FROM ai_user_jobs WHERE id=?",String.class,like.id()))
+                .isEqualTo("FEED_LIKE");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM feed_likes WHERE user_id=? AND post_id=?",
+                Integer.class,ais.get(2),post)).isEqualTo(1);
         feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"분류 기준을 두 가지로 시작해볼까요?"));
         var reply=jobs.claim("human-first");
         assertThat(reply.sourceType()).isEqualTo("FEED_COMMENT");
@@ -276,6 +295,13 @@ class AiUserRuntimeIntegrationTest {
             assertThat(seen.get(0).path("commentId").asLong()).isEqualTo(comments.getLast().commentId());
             assertThat(snapshot.toString()).doesNotContain("차단한 작성자의 원문");
         } finally { jdbc.update("DELETE FROM user_blocks WHERE blocker_user_id=? AND blocked_user_id=?",blocked.getId(),ai); }
+    }
+
+    private List<Long> socialCandidateIds(long user) {
+        var ids=new ArrayList<Long>();
+        for (var candidate:mapper.valueToTree(social.observe(user).state()).path("candidates"))
+            ids.add(candidate.path("postId").asLong());
+        return ids;
     }
 
     private AiUserJobs.Job beginSocial(long user) {

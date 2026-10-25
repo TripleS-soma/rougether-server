@@ -3,7 +3,6 @@ package com.triples.rougether.userapi.feed.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.feed.entity.*;
 import com.triples.rougether.domain.feed.repository.*;
-import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.userapi.feed.dto.*;
 import static com.triples.rougether.userapi.feed.error.FeedErrorCode.*;
 import java.util.*;
@@ -22,7 +21,6 @@ public class FeedQueryService {
     private final FeedImageRepository images;
     private final FeedLikeRepository likes;
     private final FeedCommentRepository comments;
-    private final UserBlockRepository blocks;
 
     public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size) {
         return list(viewer, authorId, cursor, size, null);
@@ -57,11 +55,7 @@ public class FeedQueryService {
         access.active(viewer);
         validatePage(cursor, size);
         visible(postId, viewer);
-        FeedComment parent = comments.findByIdAndPostId(parentId, postId)
-                .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
-        if (parent.getParentCommentId() != null
-                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
-            throw new BusinessException(FEED_COMMENT_NOT_FOUND);
+        access.requireThreadVisible(viewer, postId, parentId);
         return commentPage(viewer, comments.findReplies(viewer, postId, parentId, cursor,
                 PageRequest.of(0, size + 1)), size);
     }

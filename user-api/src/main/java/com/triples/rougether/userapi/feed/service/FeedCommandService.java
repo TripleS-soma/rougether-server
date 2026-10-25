@@ -159,7 +159,7 @@ public class FeedCommandService {
         FeedComment target = targetId == null ? null : replyTarget(userId, postId, targetId);
         Long parentId = target == null ? null
                 : target.getParentCommentId() == null ? target.getId() : target.getParentCommentId();
-        if (parentId != null && !parentId.equals(targetId)) requireThreadVisible(userId, postId, parentId);
+        if (parentId != null && !parentId.equals(targetId)) access.requireThreadVisible(userId, postId, parentId);
         FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(),
                 requestHash, content, parentId, targetId));
         if (aiEvents != null) aiEvents.comment(user, postId, comment.getId());
@@ -185,13 +185,6 @@ public class FeedCommandService {
                 || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, target.getAuthor().getId()))
             throw new BusinessException(FEED_COMMENT_NOT_FOUND);
         return target;
-    }
-    private void requireThreadVisible(Long viewer, Long postId, Long parentId) {
-        FeedComment parent = comments.findByIdAndPostId(parentId, postId)
-                .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
-        if (parent.getParentCommentId() != null
-                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
-            throw new BusinessException(FEED_COMMENT_NOT_FOUND);
     }
     public void deleteComment(Long userId, Long postId, Long commentId) {
         access.lockActive(userId);

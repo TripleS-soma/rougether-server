@@ -14,11 +14,6 @@ public interface PhotoVerificationRepository extends JpaRepository<PhotoVerifica
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from PhotoVerification p where p.routineLog.id in "
-            + "(select l.id from RoutineLog l where l.routine.id in "
-            + "(select r.id from Routine r where r.category.id = :categoryId "
-            + "  and not exists (select 1 from Routine live "
-            + "    where coalesce(live.originRoutineId, live.id) = coalesce(r.originRoutineId, r.id) "
-            + "    and live.deletedAt is null)) "
-            + "and not (l.routineDate = :today and l.rewardAmount > 0))")
+            + "(select l.id from RoutineLog l where " + CategoryPurgeQuery.LOG_CONDITION + ")")
     int deleteByCategoryId(@Param("categoryId") Long categoryId, @Param("today") LocalDate today);
 }

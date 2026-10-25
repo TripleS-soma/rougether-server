@@ -292,7 +292,7 @@ class FeedIntegrationTest {
     @Test void 원댓글작성자탈퇴도_남의답글과_익명자리만_유지한다() throws Exception {
         Long owner = user(), commenter = user(), actor = user(), id = createPost(owner);
         var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "탈퇴 원문"));
-        commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "남의 답글", root.commentId()));
+        var reply = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "남의 답글", root.commentId()));
         withdrawal.withdraw(commenter);
         var placeholder = query.comments(owner, id, null, 20, true).items().getFirst();
         assertThat(placeholder.deleted()).isTrue();
@@ -301,6 +301,24 @@ class FeedIntegrationTest {
         assertThat(query.get(owner, id).commentCount()).isEqualTo(1);
         cleanup.withdrawnContent();
         assertThat(query.replies(owner, id, root.commentId(), null, 20).items()).hasSize(1);
+        var followup = commands.comment(owner, id, new FeedCommentRequest(UUID.randomUUID(), "이어가기", reply.commentId()));
+        assertThat(followup.parentCommentId()).isEqualTo(root.commentId());
+        assertThat(followup.replyToCommentId()).isEqualTo(reply.commentId());
+        assertThat(query.replies(owner, id, root.commentId(), null, 20).items())
+                .extracting(FeedCommentResponse::commentId).containsExactly(reply.commentId(), followup.commentId());
+    }
+
+    @Test void 원댓글작성자가_요청자를_차단해도_요청자의_답글조회와_작성은_유지한다() throws Exception {
+        Long owner = user(), commenter = user(), actor = user(), viewer = user(), id = createPost(owner);
+        var root = commands.comment(commenter, id, new FeedCommentRequest(UUID.randomUUID(), "원댓글"));
+        var reply = commands.comment(actor, id, new FeedCommentRequest(UUID.randomUUID(), "답글", root.commentId()));
+        jdbc.update("insert into user_blocks (blocker_user_id,blocked_user_id,created_at) values (?,?,?)", commenter, viewer, Instant.now());
+
+        assertThat(query.replies(viewer, id, root.commentId(), null, 20).items())
+                .extracting(FeedCommentResponse::commentId).containsExactly(reply.commentId());
+        var followup = commands.comment(viewer, id, new FeedCommentRequest(UUID.randomUUID(), "이어가기", reply.commentId()));
+        assertThat(followup.parentCommentId()).isEqualTo(root.commentId());
+        assertThat(followup.replyToCommentId()).isEqualTo(reply.commentId());
     }
 
     @Test void 차단은_답글목록과_개수와_작성에_동일하게_적용한다() throws Exception {

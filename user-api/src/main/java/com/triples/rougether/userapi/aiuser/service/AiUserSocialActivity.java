@@ -39,8 +39,7 @@ public class AiUserSocialActivity {
                 + "OR (b.blocker_user_id=a.id AND b.blocked_user_id=?)) ORDER BY a.is_ai ASC,f.id DESC LIMIT 12",
                 Long.class,user,AiUserJobs.timestamp(now.minus(Duration.ofDays(7))),user,user);
         for (Long id:posts) {
-            if (count("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=? AND proactive_post_id=?",user,id)>0
-                    || count("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND action_name='FEED_COMMENT' AND proactive=TRUE",id)>=2)
+            if (hasReachedPostParticipationLimit(user,id))
                 continue;
             var post=feed.get(user,id);
             var comments=jdbc.queryForList("SELECT c.id,c.author_id,c.content,c.parent_comment_id,c.reply_to_comment_id FROM feed_comments c JOIN users a ON a.id=c.author_id "
@@ -123,8 +122,7 @@ public class AiUserSocialActivity {
         }
         if (action==AiUserActionExecutor.Action.FEED_COMMENT) {
             long post=AiUserActionExecutor.id(payload,"postId");
-            if (count("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=? AND proactive_post_id=?",job.userId(),post)>0
-                    || count("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND proactive=TRUE AND action_name='FEED_COMMENT'",post)>=2)
+            if (hasReachedPostParticipationLimit(job.userId(),post))
                 return AiUserWaitReason.RECENT_PARTICIPATION;
         }
         if (action==AiUserActionExecutor.Action.FEED_LIKE
@@ -148,6 +146,11 @@ public class AiUserSocialActivity {
                 + "VALUES (?,?,?,?,?,?,?,?,?)",job.id(),job.userId(),action.name(),post,proactive,
                 proactive && action==AiUserActionExecutor.Action.FEED_COMMENT?post:null,
                 proactive && !content.isBlank()?fingerprint(content):null,topic,AiUserJobs.timestamp(clock.instant()));
+    }
+
+    private boolean hasReachedPostParticipationLimit(long user,long post) {
+        return count("SELECT COUNT(*) FROM ai_user_social_actions WHERE user_id=? AND proactive_post_id=?",user,post)>0
+                || count("SELECT COUNT(*) FROM ai_user_social_actions WHERE post_id=? AND action_name='FEED_COMMENT' AND proactive=TRUE",post)>=2;
     }
 
     private AiUserWaitReason dailyRejection(long user,String action) {

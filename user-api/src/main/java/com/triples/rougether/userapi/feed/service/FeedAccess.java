@@ -2,7 +2,10 @@ package com.triples.rougether.userapi.feed.service;
 
 import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.feed.entity.FeedComment;
+import com.triples.rougether.domain.feed.repository.FeedCommentRepository;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.userapi.feed.error.FeedErrorCode;
 import java.util.stream.Stream;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -13,6 +16,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FeedAccess {
     private final UserRepository users;
+    private final FeedCommentRepository comments;
+    private final UserBlockRepository blocks;
 
     public User active(Long userId) {
         return requireActive(users.findById(userId).orElse(null));
@@ -35,6 +40,15 @@ public class FeedAccess {
         }
         return actor;
     }
+    // 삭제·탈퇴한 원댓글 아래의 살아 있는 답글은 계속 접근할 수 있음.
+    public void requireThreadVisible(Long viewer, Long postId, Long parentId) {
+        FeedComment parent = comments.findByIdAndPostId(parentId, postId)
+                .orElseThrow(() -> new BusinessException(FeedErrorCode.FEED_COMMENT_NOT_FOUND));
+        if (parent.getParentCommentId() != null
+                || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
+            throw new BusinessException(FeedErrorCode.FEED_COMMENT_NOT_FOUND);
+    }
+
     private User requireActive(User user) {
         if (user == null || user.isDeleted() || user.isBot()) throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
         return user;
