@@ -18,13 +18,30 @@ public interface MarketAssetRepository extends JpaRepository<MarketAsset, Long> 
     // 종목 카드 목록: 거래 중인 종목을 최근 상장순으로. 요청자(viewer)가 차단한 제작자의 종목은 뺌(#399).
     // 제작자가 탈퇴해 creator_user_id 가 null 이면 차단 대상이 아니므로 그대로 노출함.
     @Query(value = "select a from MarketAsset a where a.status = :status "
+            + "and exists (select o.id from MarketOrder o where o.assetId = a.id "
+            + "and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN) "
             + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer "
             + "and b.blockedUserId = a.creatorUserId) order by a.id desc",
             countQuery = "select count(a) from MarketAsset a where a.status = :status "
+            + "and exists (select o.id from MarketOrder o where o.assetId = a.id "
+            + "and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN) "
             + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer "
             + "and b.blockedUserId = a.creatorUserId)")
     Page<MarketAsset> findListedFor(@Param("viewer") Long viewer, @Param("status") MarketAssetStatus status,
                                     Pageable page);
+
+    @Query("select a from MarketAsset a where a.creatorUserId = :viewer or exists "
+            + "(select ui.id from UserItem ui where ui.user.id = :viewer and ui.item.id = a.itemId "
+            + "and ui.deletedAt is null) or exists (select o.id from MarketOrder o where o.assetId = a.id "
+            + "and o.userId = :viewer and o.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN) "
+            + "or exists (select c.id from MarketCommand c where c.assetId = a.id and c.userId = :viewer "
+            + "and c.type = com.triples.rougether.domain.market.entity.CommandType.PLACE "
+            + "and c.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and c.status = com.triples.rougether.domain.market.entity.CommandStatus.PENDING) order by a.id desc")
+    Page<MarketAsset> findManagedFor(@Param("viewer") Long viewer, Pageable page);
 
     // 발행 재고 매도 에스크로용. 동시 매도의 재고 이중 차감을 막음.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

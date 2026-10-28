@@ -102,9 +102,10 @@ class MarketOrderExpiryIntegrationTest {
     @Test
     void 칠일이_지난_매수_보유분_매도_발행_재고_매도가_만료되고_맡긴_것을_돌려받는다() {
         User buyer = newUser(100);
-        place(buyer, OrderSide.BUY, 20, 1, null);
         place(creator, OrderSide.SELL, 50, 2, OrderSource.ISSUANCE);
         place(creator, OrderSide.SELL, 60, 1, OrderSource.INVENTORY);
+        engine.runOnce();
+        place(buyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
         assertThat(coin(buyer)).isEqualTo(80);
         assertThat(assets.findById(assetId).orElseThrow().getUnissuedQuantity()).isEqualTo(2);
@@ -115,7 +116,7 @@ class MarketOrderExpiryIntegrationTest {
         engine.runOnce();
 
         assertThat(marketOrders.findAll()).allSatisfy(o -> {
-            assertThat(o.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+            assertThat(o.getStatus()).isEqualTo(o.getSide() == OrderSide.SELL ? OrderStatus.EXPIRED : OrderStatus.CANCELLED);
             assertThat(o.getEscrowRemaining()).isZero();
         });
         assertThat(coin(buyer)).isEqualTo(100);
@@ -125,6 +126,9 @@ class MarketOrderExpiryIntegrationTest {
 
     @Test
     void 아직_칠일이_안_된_주문은_건드리지_않는다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        jdbc.update("update market_orders set expires_at = expires_at + interval 1 day where side = 'SELL'");
         place(newUser(100), OrderSide.BUY, 20, 1, null);
         engine.runOnce();
 
@@ -136,8 +140,9 @@ class MarketOrderExpiryIntegrationTest {
 
     @Test
     void 여러_번_돌아도_주문당_만료_접수는_한_번이다() {
-        place(newUser(100), OrderSide.BUY, 20, 1, null);
         place(creator, OrderSide.SELL, 50, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        place(newUser(100), OrderSide.BUY, 20, 1, null);
         engine.runOnce();
         at(EXPIRY);
 
@@ -171,11 +176,14 @@ class MarketOrderExpiryIntegrationTest {
 
     @Test
     void 만료_처리에_실패해_남은_주문은_다음_만료를_막지_않고_따로_셈한다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        jdbc.update("update market_orders set expires_at = expires_at + interval 1 day where side = 'SELL'");
         User stuckBuyer = newUser(100);
         User nextBuyer = newUser(100);
         place(stuckBuyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
-        long stuckOrder = marketOrders.findAll().get(0).getId();
+        long stuckOrder = marketOrders.findAll().stream().filter(o -> o.getSide() == OrderSide.BUY).findFirst().orElseThrow().getId();
         // 만료 접수가 엔진 오류로 거절된 상태를 흉내냄(주문은 OPEN 그대로)
         jdbc.update("insert into market_commands (user_id, request_id, type, asset_id, status, reject_code, attempts, "
                         + "target_order_id, created_at) values (?, ?, 'EXPIRE', ?, 'REJECTED', 'MARKET_ENGINE_ERROR', 3, ?, ?)",
@@ -196,6 +204,9 @@ class MarketOrderExpiryIntegrationTest {
 
     @Test
     void 엔진이_꺼져_있거나_리스가_없으면_스케줄러는_아무것도_하지_않는다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        jdbc.update("update market_orders set expires_at = expires_at + interval 1 day where side = 'SELL'");
         place(newUser(100), OrderSide.BUY, 20, 1, null);
         engine.runOnce();
         at(EXPIRY);

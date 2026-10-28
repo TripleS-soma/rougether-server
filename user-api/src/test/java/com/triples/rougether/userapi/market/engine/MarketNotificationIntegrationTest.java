@@ -134,6 +134,8 @@ class MarketNotificationIntegrationTest {
 
     @Test
     void 대기하던_구매가_체결되면_구매자에게_구매_체결_알림이_간다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(100);
         long buyCommand = place(buyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
@@ -145,7 +147,7 @@ class MarketNotificationIntegrationTest {
             assertThat(n.get("ref_id")).isEqualTo(orderOf(buyCommand));
             assertThat(n.get("body")).isEqualTo("'고양이 소파'을(를) 20코인에 샀어요. 인벤토리를 확인해 보세요.");
         });
-        assertThat(notes(creator)).isEmpty(); // 판매자가 taker
+        assertThat(notes(creator)).noneMatch(n -> "MARKET_SELL_FILLED".equals(n.get("type"))); // 판매자가 taker
     }
 
     @Test

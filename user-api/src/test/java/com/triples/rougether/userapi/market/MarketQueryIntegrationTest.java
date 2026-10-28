@@ -102,6 +102,7 @@ class MarketQueryIntegrationTest {
         place(creator, OrderSide.SELL, 30, 2, OrderSource.ISSUANCE);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
         place(creator, OrderSide.SELL, 35, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(newUser(null, 100), OrderSide.BUY, 25, 1, null);
         place(newUser(null, 100), OrderSide.BUY, 25, 1, null);
         place(newUser(null, 100), OrderSide.BUY, 20, 1, null);
@@ -116,6 +117,8 @@ class MarketQueryIntegrationTest {
 
     @Test
     void 호가는_각_방향_최대_열_단계까지만_보여준다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         for (int price = 1; price <= 11; price++) {
             place(newUser(null, 100), OrderSide.BUY, price, 1, null);
         }
@@ -133,6 +136,7 @@ class MarketQueryIntegrationTest {
         User buyer = newUser(null, 100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
         place(creator, OrderSide.SELL, 40, 2, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(buyer, OrderSide.BUY, 30, 1, null);
         engine.runOnce();
 
@@ -149,16 +153,24 @@ class MarketQueryIntegrationTest {
 
     @Test
     void 거래_정지된_종목은_목록에_나오지_않고_최근_상장순이다() {
-        Long later = issue(newUser("철수", 0), 3);
-        Long suspended = issue(newUser("민수", 0), 3);
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        User laterCreator = newUser("철수", 0);
+        Long later = issue(laterCreator, 3);
+        orders.place(laterCreator.getId(), new PlaceOrderRequest(UUID.randomUUID().toString(), later, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE));
+        engine.runOnce();
+        User suspendedCreator = newUser("민수", 0);
+        Long suspended = issue(suspendedCreator, 3);
+        orders.place(suspendedCreator.getId(), new PlaceOrderRequest(UUID.randomUUID().toString(), suspended,
+                OrderSide.SELL, 100, 1, OrderSource.ISSUANCE));
+        engine.runOnce();
         jdbc.update("update market_assets set status = 'SUSPENDED' where id = ?", suspended);
 
         MarketAssetListResponse list = query.listAssets(creator.getId(), 0, 20);
 
         assertThat(list.items()).extracting(AssetCard::assetId).containsExactly(later, assetId);
         assertThat(list.totalElements()).isEqualTo(2);
-        assertThat(list.items().get(1).bestAskPrice()).isNull();
-        assertThat(list.items().get(1).askQuantity()).isZero();
+        assertThat(list.items().get(1).bestAskPrice()).isEqualTo(100);
+        assertThat(list.items().get(1).askQuantity()).isEqualTo(1);
     }
 
     @Test
@@ -179,6 +191,8 @@ class MarketQueryIntegrationTest {
 
     @Test
     void 구매_접수와_대기를_보유와_구분하고_취소하면_해제한다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(null, 100);
         assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isFalse();
         long command = place(buyer, OrderSide.BUY, 10, 1, null);
@@ -196,9 +210,9 @@ class MarketQueryIntegrationTest {
     @Test
     void 구매_체결은_대기에서_실제_보유로_바뀐다() {
         User buyer = newUser(null, 100);
-        place(buyer, OrderSide.BUY, 30, 1, null);
-        engine.runOnce();
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        place(buyer, OrderSide.BUY, 30, 1, null);
         engine.runOnce();
         MarketAssetResponse detail = query.getAsset(buyer.getId(), assetId);
         assertThat(detail.buyPending()).isFalse();
@@ -231,6 +245,8 @@ class MarketQueryIntegrationTest {
 
     @Test
     void 제작자가_탈퇴하면_닉네임을_내려주지_않는다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         jdbc.update("update users set deleted_at = ? where id = ?", java.sql.Timestamp.from(NOW), creator.getId());
         assertThat(query.getAsset(creator.getId(), assetId).creatorNickname()).isNull();
 
@@ -241,6 +257,8 @@ class MarketQueryIntegrationTest {
 
     @Test
     void 내_주문은_대기_중과_종료로_나눠_최신순으로_보여준다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(null, 100);
         long first = place(buyer, OrderSide.BUY, 10, 1, null);
         engine.runOnce();
@@ -257,13 +275,18 @@ class MarketQueryIntegrationTest {
             assertThat(o.status()).isEqualTo(OrderStatus.CANCELLED);
             assertThat(o.name()).isEqualTo("고양이 소파");
         });
-        assertThat(query.myOrders(creator.getId(), MyMarketOrderStatus.OPEN, 0, 20).items()).isEmpty();
+        assertThat(query.myOrders(creator.getId(), MyMarketOrderStatus.OPEN, 0, 20).items()).singleElement()
+                .satisfies(o -> assertThat(o.side()).isEqualTo(OrderSide.SELL));
     }
 
     @Test
     void 차단한_제작자의_종목은_차단한_사람의_목록에서만_빠지고_상세는_그대로다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User blockedCreator = newUser("철수", 0);
         Long blockedAsset = issue(blockedCreator, 3);
+        orders.place(blockedCreator.getId(), new PlaceOrderRequest(UUID.randomUUID().toString(), blockedAsset, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE));
+        engine.runOnce();
         User viewer = newUser(null, 100);
         jdbc.update("insert into user_blocks (blocker_user_id, blocked_user_id, created_at) values (?, ?, ?)",
                 viewer.getId(), blockedCreator.getId(), java.sql.Timestamp.from(NOW));

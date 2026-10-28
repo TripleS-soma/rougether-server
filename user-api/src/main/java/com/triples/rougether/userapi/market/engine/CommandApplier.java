@@ -16,6 +16,8 @@ import com.triples.rougether.domain.market.repository.MarketOrderRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class CommandApplier {
 
+    static final String NO_SELL_ORDERS = "MARKET_NO_SELL_ORDERS";
     static final String SELF_TRADE = "MARKET_SELF_TRADE";
     static final String ASSET_SUSPENDED = "MARKET_ASSET_SUSPENDED";
     static final String ORDER_NOT_OPEN = "MARKET_ORDER_NOT_OPEN";
@@ -70,6 +73,41 @@ public class CommandApplier {
         this.readOnly.setReadOnly(true);
     }
 
+    // 이전 정책에서 판매 없이 남은 구매 주문도 같은 펜싱·환불 경로로 정리한다.
+    public void reconcileUnlistedBids(OrderBook book, long fencingToken, int limit) {
+        transaction.executeWithoutResult(status -> {
+            MarketEngineLease lease = lockLease(fencingToken);
+            for (Long assetId : orderRepository.findAssetsWithOrphanBids(PageRequest.of(0, limit))) {
+                cancelBidsWithoutSellers(assetId, book, lease, clock.instant());
+            }
+        });
+    }
+
+    private void cancelBidsWithoutSellers(Long assetId, OrderBook book, MarketEngineLease lease, Instant now) {
+        if (orderRepository.existsByAssetIdAndSideAndStatus(assetId, OrderSide.SELL, OrderStatus.OPEN)) {
+            return;
+        }
+        List<MarketOrder> bids = orderRepository.findByAssetIdAndSideAndStatusOrderByIdAsc(
+                assetId, OrderSide.BUY, OrderStatus.OPEN);
+        List<MarketCommand> pending = commandRepository.findPendingBuys(assetId);
+        ledger.lockWallets(Stream.concat(bids.stream().map(MarketOrder::getUserId),
+                pending.stream().map(MarketCommand::getUserId)).toList());
+        for (MarketOrder bid : bids) {
+            MarketCommand cancellation = commandRepository.save(MarketCommand.cancel(bid.getUserId(),
+                    "no-sellers-" + UUID.randomUUID(), assetId, bid.getId(), now));
+            cancellation.stamp(lease.nextSeq());
+            ledger.refundOrder(bid, null, now);
+            cancellation.applied(bid.getId(), now);
+            bid.close(OrderStatus.CANCELLED, now);
+            book.remove(assetId, bid.getId());
+        }
+        for (MarketCommand command : pending) {
+            ledger.refundCommand(command, null, now);
+            command.stamp(lease.nextSeq());
+            command.rejected(NO_SELL_ORDERS, now);
+        }
+    }
+
     // 호가창(book)은 이 트랜잭션 안에서 바뀌므로, 호출 측은 예외가 나면 호가창을 DB 에서 다시 적재해야 함.
     public void apply(Long commandId, OrderBook book, long fencingToken) {
         transaction.executeWithoutResult(status -> {
@@ -88,6 +126,7 @@ public class CommandApplier {
             } else {
                 close(command, book, now);
             }
+            cancelBidsWithoutSellers(command.getAssetId(), book, lease, now);
         });
     }
 
@@ -141,6 +180,12 @@ public class CommandApplier {
         if (asset.isSuspended()) {
             ledger.refundCommand(command, asset, now);
             command.rejected(ASSET_SUSPENDED, now);
+            return;
+        }
+        if (command.getSide() == OrderSide.BUY
+                && !orderRepository.existsByAssetIdAndSideAndStatus(asset.getId(), OrderSide.SELL, OrderStatus.OPEN)) {
+            ledger.refundCommand(command, asset, now);
+            command.rejected(NO_SELL_ORDERS, now);
             return;
         }
         if (book.crossesOwn(asset.getId(), command.getUserId(), command.getSide(), command.getPrice())) {

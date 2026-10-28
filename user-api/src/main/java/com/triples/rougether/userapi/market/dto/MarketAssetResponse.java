@@ -34,7 +34,9 @@ public record MarketAssetResponse(
         @Schema(description = "판매 호가. 가격대별 합산, 가격 오름차순, 최대 10단계")
         List<PriceLevel> asks,
         @Schema(description = "구매 호가. 가격대별 합산, 가격 내림차순, 최대 10단계")
-        List<PriceLevel> bids
+        List<PriceLevel> bids,
+        @Schema(description = "이 종목의 본인 OPEN 판매 주문. 상세에서 취소할 주문 ID와 남은 수량 확인용")
+        List<MarketOrderResponse> mySellOrders
 ) {
 
     public record PriceLevel(
