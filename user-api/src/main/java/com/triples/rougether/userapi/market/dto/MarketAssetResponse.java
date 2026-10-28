@@ -27,6 +27,10 @@ public record MarketAssetResponse(
         Integer lastTradePrice,
         @Schema(description = "요청자가 이 가구를 인벤토리에 보유 중인지 여부(판매 등록으로 맡긴 것은 제외)", example = "true")
         boolean owned,
+        @Schema(description = "요청자의 구매 대기 여부. 엔진 처리 전 PLACE 접수와 OPEN 주문 포함")
+        boolean buyPending,
+        @Schema(description = "요청자의 판매 대기 여부. 보유분 및 발행 재고의 PLACE 접수와 OPEN 주문 포함")
+        boolean sellPending,
         @Schema(description = "판매 호가. 가격대별 합산, 가격 오름차순, 최대 10단계")
         List<PriceLevel> asks,
         @Schema(description = "구매 호가. 가격대별 합산, 가격 내림차순, 최대 10단계")
