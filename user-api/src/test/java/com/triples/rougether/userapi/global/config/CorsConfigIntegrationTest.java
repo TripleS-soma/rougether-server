@@ -39,6 +39,21 @@ class CorsConfigIntegrationTest {
     }
 
     @Test
+    void 네이티브_API_출처는_채팅_handshake에만_허용한다() throws Exception {
+        mockMvc.perform(options("/api/v1/chat/ws")
+                        .header(HttpHeaders.ORIGIN, "https://dkfiwkal2ezg9.cloudfront.net")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://dkfiwkal2ezg9.cloudfront.net"));
+        mockMvc.perform(options("/api/v1/auth/kakao")
+                        .header(HttpHeaders.ORIGIN, "https://dkfiwkal2ezg9.cloudfront.net")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
     void 허용되지_않은_출처의_preflight는_거부됨() throws Exception {
         mockMvc.perform(options("/api/v1/auth/kakao")
                         .header(HttpHeaders.ORIGIN, "https://evil.example")
