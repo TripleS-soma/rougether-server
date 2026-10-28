@@ -49,7 +49,7 @@ class MarketAssetControllerTest {
     @Test
     void 발행하면_201과_종목_상세를_반환한다() throws Exception {
         when(marketAssetService.issue(7L, 77L, 5)).thenReturn(new MarketAssetResponse(1L, 320L, "고양이 소파",
-                "furniture/photo/a.png", "영희", true, 5, 4, MarketAssetStatus.ACTIVE, null, true, List.of(), List.of()));
+                "furniture/photo/a.png", "영희", true, 5, 4, MarketAssetStatus.ACTIVE, null, true, false, false, List.of(), List.of()));
 
         mockMvc.perform(post("/api/v1/market/assets").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userItemId\":77,\"totalSupply\":5}"))

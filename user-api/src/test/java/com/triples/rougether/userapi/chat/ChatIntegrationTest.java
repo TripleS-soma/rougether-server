@@ -293,6 +293,15 @@ class ChatIntegrationTest {
     }
 
     @Test
+    void 기존_웹앱_출처도_소켓에_연결할_수_있다() throws Exception {
+        WebSocket socket = HttpClient.newHttpClient().newWebSocketBuilder()
+                .header("Origin", "https://app.rougether.com")
+                .buildAsync(URI.create("ws://localhost:" + port + "/api/v1/chat/ws"), new WebSocket.Listener() {})
+                .get(10, TimeUnit.SECONDS);
+        socket.abort();
+    }
+
+    @Test
     void 실제_WebSocket으로_전송과_읽음이_전달되고_강퇴하면_연결이_종료된다() throws Exception {
         Fixture f = fixture();
         try (Socket owner = connect(f.owner(), f.room()); Socket member = connect(f.member(), f.room())) {
@@ -390,7 +399,7 @@ class ChatIntegrationTest {
     Socket connect(Long user, Long room) throws Exception {
         Socket listener = new Socket();
         listener.socket = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Origin", "https://app.rougether.com")
+                .header("Origin", "https://dkfiwkal2ezg9.cloudfront.net")
                 .buildAsync(URI.create("ws://localhost:" + port + "/api/v1/chat/ws"), listener).get(10, TimeUnit.SECONDS);
         listener.socket.sendText(mapper.writeValueAsString(Map.of("type", "SUBSCRIBE", "roomId", room,
                 "accessToken", tokens.issueAccessToken(user, MemberRole.NORMAL), "includeMessages", true)), true).join();

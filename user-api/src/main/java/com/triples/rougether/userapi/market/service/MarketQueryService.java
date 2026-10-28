@@ -5,8 +5,10 @@ import com.triples.rougether.domain.market.entity.MarketAsset;
 import com.triples.rougether.domain.market.entity.MarketAssetStatus;
 import com.triples.rougether.domain.market.entity.MarketOrder;
 import com.triples.rougether.domain.market.entity.MarketTrade;
+import com.triples.rougether.domain.market.entity.OrderSide;
 import com.triples.rougether.domain.market.repository.MarketAskSummary;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
+import com.triples.rougether.domain.market.repository.MarketCommandRepository;
 import com.triples.rougether.domain.market.repository.MarketOrderRepository;
 import com.triples.rougether.domain.market.repository.MarketPriceLevel;
 import com.triples.rougether.domain.market.repository.MarketTradeRepository;
@@ -45,6 +47,7 @@ public class MarketQueryService {
 
     private final MarketAssetRepository assetRepository;
     private final MarketOrderRepository orderRepository;
+    private final MarketCommandRepository commandRepository;
     private final MarketTradeRepository tradeRepository;
     private final ItemRepository itemRepository;
     private final UserRepository userRepository;
@@ -52,8 +55,10 @@ public class MarketQueryService {
 
     public MarketQueryService(MarketAssetRepository assetRepository, MarketOrderRepository orderRepository,
                               MarketTradeRepository tradeRepository, ItemRepository itemRepository,
-                              UserRepository userRepository, UserItemRepository userItemRepository) {
+                              UserRepository userRepository, UserItemRepository userItemRepository,
+                              MarketCommandRepository commandRepository) {
         this.assetRepository = assetRepository;
+        this.commandRepository = commandRepository;
         this.orderRepository = orderRepository;
         this.tradeRepository = tradeRepository;
         this.itemRepository = itemRepository;
@@ -97,7 +102,13 @@ public class MarketQueryService {
                 nicknameOf(asset.getCreatorUserId()),
                 asset.isCreator(userId), asset.getTotalSupply(), asset.getUnissuedQuantity(), asset.getStatus(),
                 lastPrice, userItemRepository.existsByUserIdAndItemIdAndDeletedAtIsNull(userId, asset.getItemId()),
-                asks, bids);
+                hasPendingOrder(userId, assetId, OrderSide.BUY),
+                hasPendingOrder(userId, assetId, OrderSide.SELL), asks, bids);
+    }
+
+    private boolean hasPendingOrder(Long userId, Long assetId, OrderSide side) {
+        return orderRepository.existsOpenSide(userId, assetId, side)
+                || commandRepository.existsPendingPlace(userId, assetId, side);
     }
 
     public MarketTradeListResponse trades(Long assetId, int page, int size) {

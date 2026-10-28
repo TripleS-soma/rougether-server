@@ -1,6 +1,6 @@
 package com.triples.rougether.userapi.chat.realtime;
 
-import com.triples.rougether.userapi.global.config.CorsProperties;
+import com.triples.rougether.userapi.global.config.ChatWebSocketOrigins;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,12 +14,12 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @RequiredArgsConstructor
 public class ChatWebSocketConfig implements WebSocketConfigurer {
     private final ChatSocketHandler handler;
-    private final CorsProperties cors;
+    private final ChatWebSocketOrigins origins;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/api/v1/chat/ws")
-                .setAllowedOrigins(cors.allowedOrigins().toArray(String[]::new));
+                .setAllowedOrigins(origins.allowedOrigins().toArray(String[]::new));
     }
 
     @Bean(defaultCandidate = false)

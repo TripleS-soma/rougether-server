@@ -6,6 +6,8 @@ import com.triples.rougether.userapi.global.security.JwtAuthenticationFilter;
 import com.triples.rougether.userapi.global.security.RestAccessDeniedHandler;
 import com.triples.rougether.userapi.global.security.RestAuthenticationEntryPoint;
 import java.util.List;
+import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -75,7 +77,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
+    ChatWebSocketOrigins chatWebSocketOrigins(CorsProperties cors,
+            @Value("${chat.websocket.allowed-origins:https://dkfiwkal2ezg9.cloudfront.net}")
+            List<String> nativeOrigins) {
+        return new ChatWebSocketOrigins(Stream.concat(cors.allowedOrigins().stream(), nativeOrigins.stream())
+                .map(String::trim).filter(origin -> !origin.isEmpty()).distinct().toList());
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties, ChatWebSocketOrigins chatOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
         // 출처 목록은 설정(cors.allowed-origins)이 소유함 — 웹앱 도메인이 늘 때 코드 배포 없이 환경변수로 바꿈.
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
@@ -85,6 +95,11 @@ public class SecurityConfig {
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // 핸들러 전에 Security CorsFilter가 handshake를 검사하므로 정확 경로에 같은 정책을 적용한다.
+        CorsConfiguration chat = new CorsConfiguration(configuration);
+        chat.setAllowedOrigins(chatOrigins.allowedOrigins());
+        chat.setAllowedMethods(List.of("GET", "OPTIONS"));
+        source.registerCorsConfiguration("/api/v1/chat/ws", chat);
         source.registerCorsConfiguration("/api/**", configuration);
         return source;
     }

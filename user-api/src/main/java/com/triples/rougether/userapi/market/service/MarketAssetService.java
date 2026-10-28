@@ -81,6 +81,6 @@ public class MarketAssetService {
         // 방금 발행한 종목이라 호가·체결 이력이 없음
         return new MarketAssetResponse(asset.getId(), item.getId(), item.getName(), item.getAssetKey(),
                 creator.getNickname(), true, asset.getTotalSupply(), asset.getUnissuedQuantity(),
-                asset.getStatus(), null, true, List.of(), List.of());
+                asset.getStatus(), null, true, false, false, List.of(), List.of());
     }
 }

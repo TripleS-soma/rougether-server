@@ -178,6 +178,58 @@ class MarketQueryIntegrationTest {
     }
 
     @Test
+    void 구매_접수와_대기를_보유와_구분하고_취소하면_해제한다() {
+        User buyer = newUser(null, 100);
+        assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isFalse();
+        long command = place(buyer, OrderSide.BUY, 10, 1, null);
+        assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isTrue();
+        assertThat(query.getAsset(buyer.getId(), assetId).owned()).isFalse();
+        assertThat(query.getAsset(creator.getId(), assetId).buyPending()).isFalse();
+        engine.runOnce();
+        assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isTrue();
+        orders.cancel(buyer.getId(), orderIdOf(command), UUID.randomUUID().toString());
+        assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isTrue();
+        engine.runOnce();
+        assertThat(query.getAsset(buyer.getId(), assetId).buyPending()).isFalse();
+    }
+
+    @Test
+    void 구매_체결은_대기에서_실제_보유로_바뀐다() {
+        User buyer = newUser(null, 100);
+        place(buyer, OrderSide.BUY, 30, 1, null);
+        engine.runOnce();
+        place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
+        MarketAssetResponse detail = query.getAsset(buyer.getId(), assetId);
+        assertThat(detail.buyPending()).isFalse();
+        assertThat(detail.owned()).isTrue();
+        assertThat(detail.sellPending()).isFalse();
+    }
+
+    @Test
+    void 보유분_판매_접수와_대기를_표시하고_취소하면_보유로_돌아온다() {
+        long command = place(creator, OrderSide.SELL, 50, 1, OrderSource.INVENTORY);
+        assertThat(query.getAsset(creator.getId(), assetId).owned()).isFalse();
+        assertThat(query.getAsset(creator.getId(), assetId).sellPending()).isTrue();
+        engine.runOnce();
+        assertThat(query.getAsset(creator.getId(), assetId).sellPending()).isTrue();
+        orders.cancel(creator.getId(), orderIdOf(command), UUID.randomUUID().toString());
+        engine.runOnce();
+        assertThat(query.getAsset(creator.getId(), assetId).sellPending()).isFalse();
+        assertThat(query.getAsset(creator.getId(), assetId).owned()).isTrue();
+    }
+
+    @Test
+    void 발행재고_판매도_본인에게만_대기로_표시한다() {
+        User viewer = newUser(null, 100);
+        place(creator, OrderSide.SELL, 50, 2, OrderSource.ISSUANCE);
+        assertThat(query.getAsset(creator.getId(), assetId).sellPending()).isTrue();
+        engine.runOnce();
+        assertThat(query.getAsset(creator.getId(), assetId).sellPending()).isTrue();
+        assertThat(query.getAsset(viewer.getId(), assetId).sellPending()).isFalse();
+    }
+
+    @Test
     void 제작자가_탈퇴하면_닉네임을_내려주지_않는다() {
         jdbc.update("update users set deleted_at = ? where id = ?", java.sql.Timestamp.from(NOW), creator.getId());
         assertThat(query.getAsset(creator.getId(), assetId).creatorNickname()).isNull();

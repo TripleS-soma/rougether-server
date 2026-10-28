@@ -57,6 +57,11 @@ jwt:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.rougether.com,http://localhost:8081,http://127.0.0.1:8081}
 
+# 네이티브 WebSocket의 Origin은 API URL의 출처다. REST CORS 허용 목록에는 추가하지 않는다.
+chat:
+  websocket:
+    allowed-origins: ${CHAT_WEBSOCKET_ALLOWED_ORIGINS:https://dkfiwkal2ezg9.cloudfront.net}
+
 kakao:
   api-base-url: ${KAKAO_API_BASE_URL:https://kapi.kakao.com}
   app-id: ${KAKAO_APP_ID:1501738}
