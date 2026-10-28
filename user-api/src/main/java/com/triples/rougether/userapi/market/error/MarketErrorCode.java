@@ -10,6 +10,7 @@ public enum MarketErrorCode implements ErrorCode {
     ASSET_ALREADY_LISTED("MARKET_ASSET_ALREADY_LISTED", "이미 거래소에 발행된 가구입니다.", 409),
     ITEM_REVIEW_IN_PROGRESS("MARKET_ITEM_REVIEW_IN_PROGRESS", "가구를 다시 검토하는 중이라 발행할 수 없습니다.", 409),
     ASSET_NOT_FOUND("MARKET_ASSET_NOT_FOUND", "거래소에 없는 가구입니다.", 404),
+    NO_SELL_ORDERS("MARKET_NO_SELL_ORDERS", "판매 중인 주문이 없어 구매할 수 없습니다.", 409),
     ASSET_SUSPENDED("MARKET_ASSET_SUSPENDED", "거래가 정지된 가구입니다.", 409),
     INSUFFICIENT_COIN("MARKET_INSUFFICIENT_COIN", "코인이 부족합니다.", 409),
     ALREADY_HOLDING("MARKET_ALREADY_HOLDING", "이미 보유 중이거나 구매를 기다리는 가구입니다.", 409),

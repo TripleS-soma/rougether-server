@@ -81,6 +81,16 @@ public class MatchingEngine {
                 bookLoaded = true;
                 loadedToken = token;
             }
+            try {
+                applier.reconcileUnlistedBids(book, token, batchSize);
+            } catch (FencedOutException fenced) {
+                onFencedOut(fenced);
+                return 0;
+            } catch (RuntimeException failure) {
+                bookLoaded = false;
+                log.warn("market unlisted bid reconciliation failed; retrying", failure);
+                return -1;
+            }
             List<Long> pending = applier.pendingIds(batchSize);
             int processed = 0;
             for (Long commandId : pending) {

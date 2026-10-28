@@ -6,6 +6,7 @@ import com.triples.rougether.domain.market.entity.MarketAssetStatus;
 import com.triples.rougether.domain.market.entity.MarketOrder;
 import com.triples.rougether.domain.market.entity.MarketTrade;
 import com.triples.rougether.domain.market.entity.OrderSide;
+import com.triples.rougether.domain.market.entity.OrderStatus;
 import com.triples.rougether.domain.market.repository.MarketAskSummary;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
 import com.triples.rougether.domain.market.repository.MarketCommandRepository;
@@ -70,6 +71,14 @@ public class MarketQueryService {
     public MarketAssetListResponse listAssets(Long viewerId, int page, int size) {
         Page<MarketAsset> assets = assetRepository.findListedFor(viewerId, MarketAssetStatus.ACTIVE,
                 PageRequest.of(page, size));
+        return assetCards(assets, page, size);
+    }
+
+    public MarketAssetListResponse myAssets(Long viewerId, int page, int size) {
+        return assetCards(assetRepository.findManagedFor(viewerId, PageRequest.of(page, size)), page, size);
+    }
+
+    private MarketAssetListResponse assetCards(Page<MarketAsset> assets, int page, int size) {
         List<Long> assetIds = assets.getContent().stream().map(MarketAsset::getId).toList();
         Map<Long, Item> items = itemsById(assets.getContent().stream().map(MarketAsset::getItemId).toList());
         Map<Long, String> nicknames = nicknamesById(assets.getContent().stream().map(MarketAsset::getCreatorUserId).toList());
@@ -103,7 +112,9 @@ public class MarketQueryService {
                 asset.isCreator(userId), asset.getTotalSupply(), asset.getUnissuedQuantity(), asset.getStatus(),
                 lastPrice, userItemRepository.existsByUserIdAndItemIdAndDeletedAtIsNull(userId, asset.getItemId()),
                 hasPendingOrder(userId, assetId, OrderSide.BUY),
-                hasPendingOrder(userId, assetId, OrderSide.SELL), asks, bids);
+                hasPendingOrder(userId, assetId, OrderSide.SELL), asks, bids,
+                orderRepository.findByAssetIdAndUserIdAndSideAndStatusOrderByIdAsc(assetId, userId, OrderSide.SELL, OrderStatus.OPEN)
+                        .stream().map(order -> MarketOrderResponse.of(order, item)).toList());
     }
 
     private boolean hasPendingOrder(Long userId, Long assetId, OrderSide side) {

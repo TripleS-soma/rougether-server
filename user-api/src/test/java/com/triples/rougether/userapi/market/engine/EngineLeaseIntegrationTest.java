@@ -138,7 +138,6 @@ class EngineLeaseIntegrationTest {
         leaseA.tick();
         long stale = leaseA.fencingToken();
         long sell = place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
-        place(newUser(100), OrderSide.BUY, 30, 1, null);
         clock.advance(LEASE.plusSeconds(1)); // A 가 GC 로 멈춘 사이 B 가 인수
         leaseB.tick();
 
@@ -156,6 +155,7 @@ class EngineLeaseIntegrationTest {
     void 두_엔진이_동시에_돌아도_체결과_순번이_중복되지_않는다() throws Exception {
         leaseA.tick();
         place(creator, OrderSide.SELL, 30, 5, OrderSource.ISSUANCE);
+        engineA.runOnce();
         for (int i = 0; i < 8; i++) {
             place(newUser(100), OrderSide.BUY, 30, 1, null);
         }
@@ -185,7 +185,9 @@ class EngineLeaseIntegrationTest {
         }
 
         List<MarketCommand> processed = commands.findAll();
-        assertThat(processed).allSatisfy(c -> assertThat(c.getStatus()).isEqualTo(CommandStatus.APPLIED));
+        assertThat(processed).filteredOn(c -> c.getStatus() == CommandStatus.APPLIED).hasSize(6);
+        assertThat(processed).filteredOn(c -> c.getStatus() == CommandStatus.REJECTED).hasSize(3)
+                .allSatisfy(c -> assertThat(c.getRejectCode()).isEqualTo("MARKET_NO_SELL_ORDERS"));
         assertThat(processed.stream().map(MarketCommand::getEngineSeq).distinct().count()).isEqualTo(processed.size());
         assertThat(trades.count()).isEqualTo(5);
         assertThat(jdbc.queryForObject("select count(distinct buyer_user_id) from market_trades", Long.class)).isEqualTo(5);

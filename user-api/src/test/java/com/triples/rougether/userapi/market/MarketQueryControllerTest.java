@@ -20,6 +20,7 @@ import com.triples.rougether.userapi.market.service.MarketAssetService;
 import com.triples.rougether.userapi.market.service.MarketQueryService;
 import com.triples.rougether.userapi.market.web.MarketAssetController;
 import com.triples.rougether.userapi.market.web.MyMarketOrderController;
+import com.triples.rougether.userapi.market.web.MyMarketAssetController;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest({MarketAssetController.class, MyMarketOrderController.class})
+@WebMvcTest({MarketAssetController.class, MyMarketOrderController.class, MyMarketAssetController.class})
 @AutoConfigureMockMvc(addFilters = false)
 class MarketQueryControllerTest {
 
@@ -80,4 +81,15 @@ class MarketQueryControllerTest {
         verify(marketQueryService).myOrders(7L, MyMarketOrderStatus.OPEN, 0, 20);
         verify(marketQueryService).myOrders(7L, MyMarketOrderStatus.CLOSED, 0, 20);
     }
+    @Test
+    void 내_판매_관리는_인증된_사용자로_조회하고_페이지를_검증한다() throws Exception {
+        when(marketQueryService.myAssets(7L, 0, 20)).thenReturn(new MarketAssetListResponse(List.of(), 0, 20, 0));
+        mockMvc.perform(get("/api/v1/me/market/assets").param("userId", "99"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
+        verify(marketQueryService).myAssets(7L, 0, 20);
+        mockMvc.perform(get("/api/v1/me/market/assets").param("page", "-1")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/me/market/assets").param("size", "0")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/me/market/assets").param("size", "101")).andExpect(status().isBadRequest());
+    }
+
 }

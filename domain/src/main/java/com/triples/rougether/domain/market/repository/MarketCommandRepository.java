@@ -13,6 +13,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface MarketCommandRepository extends JpaRepository<MarketCommand, Long> {
 
+    @Query("select c from MarketCommand c where c.assetId = :assetId "
+            + "and c.side = com.triples.rougether.domain.market.entity.OrderSide.BUY "
+            + "and c.type = com.triples.rougether.domain.market.entity.CommandType.PLACE "
+            + "and c.status = com.triples.rougether.domain.market.entity.CommandStatus.PENDING order by c.id")
+    List<MarketCommand> findPendingBuys(@Param("assetId") Long assetId);
+
     Optional<MarketCommand> findByUserIdAndRequestId(Long userId, String requestId);
 
     Optional<MarketCommand> findByIdAndUserId(Long id, Long userId);

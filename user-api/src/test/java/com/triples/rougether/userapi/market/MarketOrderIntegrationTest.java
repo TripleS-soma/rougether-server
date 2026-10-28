@@ -99,6 +99,7 @@ class MarketOrderIntegrationTest {
         job.succeed(photoItem.getAssetKey(), creatorCopy.getId(), NOW);
         jobs.save(job);
         assetId = assetService.issue(creator.getId(), creatorCopy.getId(), 5).assetId();
+        openOrder(creator, OrderSide.SELL, OrderSource.ISSUANCE, null, 1000);
     }
 
     @AfterEach
@@ -130,7 +131,7 @@ class MarketOrderIntegrationTest {
         assertError(() -> orders.place(buyer.getId(), buy(101)), MarketErrorCode.INSUFFICIENT_COIN);
 
         assertThat(coin(buyer)).isEqualTo(100);
-        assertThat(commands.count()).isZero();
+        assertThat(commands.count()).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from wallet_histories where user_id = ? and reason = 'MARKET_ORDER_ESCROW'",
                 Long.class, buyer.getId())).isZero();
     }
@@ -172,7 +173,7 @@ class MarketOrderIntegrationTest {
         assertError(() -> orders.place(creator.getId(), sell(25, 5, OrderSource.ISSUANCE)), MarketErrorCode.INSUFFICIENT_SUPPLY);
 
         assertThat(assets.findById(assetId).orElseThrow().getUnissuedQuantity()).isEqualTo(4);
-        assertThat(commands.count()).isZero();
+        assertThat(commands.count()).isEqualTo(1);
     }
 
     @Test
@@ -182,7 +183,7 @@ class MarketOrderIntegrationTest {
         List<MarketCommandAcceptedResponse> responses = concurrently(4, () -> orders.place(buyer.getId(), request));
 
         assertThat(responses).extracting(MarketCommandAcceptedResponse::commandId).containsOnly(responses.get(0).commandId());
-        assertThat(commands.count()).isEqualTo(1);
+        assertThat(commands.count()).isEqualTo(2);
         assertThat(coin(buyer)).isEqualTo(70);
     }
 
@@ -287,13 +288,13 @@ class MarketOrderIntegrationTest {
         jdbc.update("insert into market_commands (user_id, request_id, type, asset_id, side, source, price, quantity, "
                         + "escrow_amount, status, attempts, created_at) values (?, ?, 'PLACE', ?, ?, ?, ?, 1, ?, 'APPLIED', 0, ?)",
                 owner.getId(), UUID.randomUUID().toString(), assetId, side.name(), source == null ? null : source.name(),
-                price, price, Timestamp.from(NOW));
+                price, side == OrderSide.BUY ? price : 1, Timestamp.from(NOW));
         Long commandId = jdbc.queryForObject("select max(id) from market_commands", Long.class);
         jdbc.update("insert into market_orders (command_id, asset_id, user_id, side, source, user_item_id, price, quantity, "
                         + "filled_quantity, escrow_remaining, engine_seq, status, expires_at, created_at, updated_at) "
                         + "values (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, 'OPEN', ?, ?, ?)",
                 commandId, assetId, owner.getId(), side.name(), source == null ? null : source.name(), userItemId,
-                price, price, commandId, Timestamp.from(NOW.plus(Duration.ofDays(7))), Timestamp.from(NOW), Timestamp.from(NOW));
+                price, side == OrderSide.BUY ? price : 1, commandId, Timestamp.from(NOW.plus(Duration.ofDays(7))), Timestamp.from(NOW), Timestamp.from(NOW));
         return jdbc.queryForObject("select id from market_orders where command_id = ?", Long.class, commandId);
     }
 

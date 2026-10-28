@@ -15,6 +15,20 @@ import org.springframework.data.repository.query.Param;
 
 public interface MarketOrderRepository extends JpaRepository<MarketOrder, Long> {
 
+    boolean existsByAssetIdAndSideAndStatus(Long assetId, OrderSide side, OrderStatus status);
+
+    List<MarketOrder> findByAssetIdAndSideAndStatusOrderByIdAsc(Long assetId, OrderSide side, OrderStatus status);
+
+    List<MarketOrder> findByAssetIdAndUserIdAndSideAndStatusOrderByIdAsc(
+            Long assetId, Long userId, OrderSide side, OrderStatus status);
+
+    @Query("select distinct o.assetId from MarketOrder o where o.side = com.triples.rougether.domain.market.entity.OrderSide.BUY "
+            + "and o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN "
+            + "and not exists (select s.id from MarketOrder s where s.assetId = o.assetId "
+            + "and s.side = com.triples.rougether.domain.market.entity.OrderSide.SELL "
+            + "and s.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN) order by o.assetId")
+    List<Long> findAssetsWithOrphanBids(Pageable page);
+
     Optional<MarketOrder> findByIdAndUserId(Long id, Long userId);
 
     // 호가창 적재: OPEN 주문을 처리 순서대로

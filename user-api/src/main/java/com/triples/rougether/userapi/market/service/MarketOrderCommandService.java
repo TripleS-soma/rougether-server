@@ -10,6 +10,7 @@ import com.triples.rougether.domain.market.entity.OrderStatus;
 import com.triples.rougether.domain.market.repository.MarketAssetRepository;
 import com.triples.rougether.domain.market.repository.MarketCommandRepository;
 import com.triples.rougether.domain.market.repository.MarketOrderRepository;
+import com.triples.rougether.domain.market.repository.MarketEngineLeaseRepository;
 import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
@@ -36,7 +37,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 거래소 주문 접수·취소(#400). 대가를 먼저 맡기고(에스크로) 접수 대장에 넣은 뒤 202 로 돌려줌. 체결은 엔진이 비동기로 처리.
-// 락 순서: user → (wallet | market_assets). 사용자 행 잠금을 트랜잭션 첫 문장으로 둬서 같은 사용자의 동시 접수를 직렬화하고,
+// 락 순서: (BUY: engine lease →) user → (wallet | market_assets). 같은 사용자의 동시 접수를 직렬화하고,
 // 이후 조회가 앞선 접수의 커밋 결과를 보게 함(1인 1개 판정·requestId 재요청 판정).
 @Service
 public class MarketOrderCommandService {
@@ -49,6 +50,7 @@ public class MarketOrderCommandService {
     private final RoomItemPlacementRepository roomItemPlacementRepository;
     private final PersonalRoomRepository personalRoomRepository;
     private final MarketAssetRepository marketAssetRepository;
+    private final MarketEngineLeaseRepository leaseRepository;
     private final MarketCommandRepository marketCommandRepository;
     private final MarketOrderRepository marketOrderRepository;
     private final WalletHistoryRecorder walletHistoryRecorder;
@@ -65,8 +67,10 @@ public class MarketOrderCommandService {
                                      MarketOrderRepository marketOrderRepository,
                                      WalletHistoryRecorder walletHistoryRecorder,
                                      Clock clock,
-                                     PlatformTransactionManager transactionManager) {
+                                     PlatformTransactionManager transactionManager,
+                                     MarketEngineLeaseRepository leaseRepository) {
         this.userRepository = userRepository;
+        this.leaseRepository = leaseRepository;
         this.userWalletRepository = userWalletRepository;
         this.userItemRepository = userItemRepository;
         this.roomItemPlacementRepository = roomItemPlacementRepository;
@@ -114,6 +118,11 @@ public class MarketOrderCommandService {
 
     private MarketCommandAcceptedResponse placeInTransaction(Long userId, PlaceOrderRequest request,
                                                              Predicate<MarketCommand> same) {
+        // 엔진과 같은 첫 잠금: 마지막 판매 종료와 구매 접수·에스크로를 직렬화한다.
+        // 판매 종료가 커밋된 뒤 끼어드는 구매 접수/미환불 command를 방지한다.
+        if (request.side() == OrderSide.BUY) {
+            leaseRepository.findForUpdate().orElseThrow();
+        }
         lockUser(userId);
         var existing = marketCommandRepository.findByUserIdAndRequestId(userId, request.requestId());
         if (existing.isPresent()) {
@@ -141,6 +150,9 @@ public class MarketOrderCommandService {
     private MarketCommandAcceptedResponse placeBuy(Long userId, PlaceOrderRequest request, MarketAsset asset, Instant now) {
         requireNotHolding(userId, asset);
         requireNoOwnOrder(userId, asset, OrderSide.SELL);
+        if (!marketOrderRepository.existsByAssetIdAndSideAndStatus(asset.getId(), OrderSide.SELL, OrderStatus.OPEN)) {
+            throw new BusinessException(MarketErrorCode.NO_SELL_ORDERS);
+        }
         UserWallet wallet = userWalletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.INSUFFICIENT_COIN));
         int amount = request.price() * request.quantity();

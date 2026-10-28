@@ -115,9 +115,10 @@ class MatchingEngineIntegrationTest {
     void 발행_재고를_사면_먼저_걸린_가격으로_체결되고_차액을_돌려받는다() {
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 2, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(buyer, OrderSide.BUY, 35, 1, null);
 
-        assertThat(engine.runOnce()).isEqualTo(2);
+        assertThat(engine.runOnce()).isEqualTo(1);
 
         MarketTrade trade = single(trades.findAll());
         assertThat(trade.getPrice()).isEqualTo(30);
@@ -141,11 +142,13 @@ class MatchingEngineIntegrationTest {
         User reseller = newUser(100);
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(reseller, OrderSide.BUY, 30, 1, null);
         engine.runOnce();
         int before = coin(creator) + coin(reseller) + coin(buyer);
 
         place(reseller, OrderSide.SELL, 40, 1, OrderSource.INVENTORY);
+        engine.runOnce();
         place(buyer, OrderSide.BUY, 40, 1, null);
         engine.runOnce();
 
@@ -165,11 +168,13 @@ class MatchingEngineIntegrationTest {
         User reseller = newUser(100);
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(reseller, OrderSide.BUY, 30, 1, null);
         engine.runOnce();
         jdbc.update("update market_assets set creator_user_id = null where id = ?", assetId);
 
         place(reseller, OrderSide.SELL, 40, 1, OrderSource.INVENTORY);
+        engine.runOnce();
         place(buyer, OrderSide.BUY, 40, 1, null);
         engine.runOnce();
 
@@ -182,9 +187,10 @@ class MatchingEngineIntegrationTest {
     @Test
     void 취소하면_맡긴_코인_보유분_발행_재고를_돌려받는다() {
         User buyer = newUser(100);
-        long buyCommand = place(buyer, OrderSide.BUY, 20, 1, null);
         long issuanceCommand = place(creator, OrderSide.SELL, 50, 2, OrderSource.ISSUANCE);
         long inventoryCommand = place(creator, OrderSide.SELL, 60, 1, OrderSource.INVENTORY);
+        engine.runOnce();
+        long buyCommand = place(buyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
         assertThat(coin(buyer)).isEqualTo(80);
         assertThat(assets.findById(assetId).orElseThrow().getUnissuedQuantity()).isEqualTo(2);
@@ -208,6 +214,8 @@ class MatchingEngineIntegrationTest {
 
     @Test
     void 만료_접수는_주문을_만료시키고_돌려준다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(100);
         long buyCommand = place(buyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
@@ -224,6 +232,8 @@ class MatchingEngineIntegrationTest {
 
     @Test
     void 같은_주문을_두_번_취소해도_환불은_한_번이다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(100);
         long buyCommand = place(buyer, OrderSide.BUY, 20, 1, null);
         engine.runOnce();
@@ -242,6 +252,8 @@ class MatchingEngineIntegrationTest {
 
     @Test
     void 거래가_정지되면_엔진이_새_주문을_거절하고_돌려준다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(100);
         long command = place(buyer, OrderSide.BUY, 30, 1, null);
         jdbc.update("update market_assets set status = 'SUSPENDED' where id = ?", assetId);
@@ -251,7 +263,7 @@ class MatchingEngineIntegrationTest {
         MarketCommand rejected = commands.findById(command).orElseThrow();
         assertThat(rejected.getRejectCode()).isEqualTo("MARKET_ASSET_SUSPENDED");
         assertThat(coin(buyer)).isEqualTo(100);
-        assertThat(marketOrders.count()).isZero();
+        assertThat(marketOrders.findAll()).allSatisfy(o -> assertThat(o.getSide()).isEqualTo(OrderSide.SELL));
     }
 
     @Test
@@ -271,11 +283,13 @@ class MatchingEngineIntegrationTest {
     @Test
     void 처리된_접수를_순서대로_재생하면_같은_체결이_나온다() {
         List<User> buyers = List.of(newUser(200), newUser(200), newUser(200), newUser(200));
-        place(creator, OrderSide.SELL, 30, 2, OrderSource.ISSUANCE);
+        place(creator, OrderSide.SELL, 30, 3, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(buyers.get(0), OrderSide.BUY, 25, 1, null);
         place(buyers.get(1), OrderSide.BUY, 31, 1, null);
         engine.runOnce();
         place(creator, OrderSide.SELL, 24, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         place(buyers.get(2), OrderSide.BUY, 40, 1, null);
         place(buyers.get(3), OrderSide.BUY, 30, 1, null);
         engine.runOnce();
@@ -346,7 +360,8 @@ class MatchingEngineIntegrationTest {
                     .filter(ui -> ui.getItem().getId().equals(photoItem.getId())).count()).isLessThanOrEqualTo(1);
         }
         assertThat(marketOrders.findAll().stream()
-                .filter(o -> o.getSide() == OrderSide.BUY && o.isOpen()).count()).isEqualTo(3);
+                .filter(o -> o.getSide() == OrderSide.BUY && o.isOpen()).count()).isZero();
+        assertThat(buyers.stream().filter(b -> !activeCopy(b))).allSatisfy(b -> assertThat(coin(b)).isEqualTo(100));
     }
 
     @Test
@@ -377,6 +392,8 @@ class MatchingEngineIntegrationTest {
 
     @Test
     void 반복_실패_후_환불까지_실패하면_수동_대사_코드로_남긴다() {
+        place(creator, OrderSide.SELL, 100, 1, OrderSource.ISSUANCE);
+        engine.runOnce();
         User buyer = newUser(100);
         place(buyer, OrderSide.BUY, 30, 1, null);
         engine.runOnce();
@@ -400,6 +417,7 @@ class MatchingEngineIntegrationTest {
     void 같은_가구에_내_판매가_있으면_살_수_없고_내_구매가_있으면_발행_재고를_팔_수_없다() {
         User buyer = newUser(100);
         place(creator, OrderSide.SELL, 30, 1, OrderSource.INVENTORY);
+        engine.runOnce();
         place(buyer, OrderSide.BUY, 30, 1, null);
         engine.runOnce(); // 제작자는 이제 보유분이 없음
         place(creator, OrderSide.SELL, 50, 1, OrderSource.ISSUANCE);
@@ -413,6 +431,8 @@ class MatchingEngineIntegrationTest {
         orders.cancel(creator.getId(), issuanceOrder, UUID.randomUUID().toString());
         engine.runOnce();
         jdbc.update("update user_wallets set balance = 100 where user_id = ? and currency_type = 'COIN'", creator.getId());
+        place(buyer, OrderSide.SELL, 50, 1, OrderSource.INVENTORY);
+        engine.runOnce();
         place(creator, OrderSide.BUY, 10, 1, null);
 
         assertError(() -> place(creator, OrderSide.SELL, 50, 1, OrderSource.ISSUANCE), MarketErrorCode.OWN_ORDER_CONFLICT);
