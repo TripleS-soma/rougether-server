@@ -116,6 +116,9 @@ llm:
 
 # 기존 LLM_API_KEY/LLM_BASE_URL을 재사용함. S3 권한 반영 및 모델 접근 확인 뒤 활성화함.
 furniture:
+  upload:
+    enabled: ${FURNITURE_UPLOAD_ENABLED:false}
+    multipart-lambda-enabled: ${FURNITURE_UPLOAD_MULTIPART_LAMBDA_ENABLED:false}
   generation:
     enabled: ${FURNITURE_GENERATION_ENABLED:false}
     model: ${FURNITURE_GENERATION_MODEL:gpt-6-astra}

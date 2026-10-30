@@ -12,6 +12,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -23,10 +24,13 @@ public class FurnitureGenerationService {
     private final FurnitureImages images;
     private final AssetStorageService storage;
     private final FurnitureGenerationProperties config;
+    private final ObjectProvider<FurnitureMultipartUploadService> multipartUpload;
 
     public FurnitureGenerationResponse submit(Long userId, UUID requestId, String hint, MultipartFile photo) {
         requireAvailable();
         String target = hint == null ? "" : hint.strip();
+        var remotePreprocessing = multipartUpload.getIfAvailable();
+        if (remotePreprocessing != null) return remotePreprocessing.submit(userId, requestId, target, photo);
         var input = images.photo(photo, target);
         FurnitureGenerationTransactions.Reservation reservation;
         try { reservation = transactions.reserve(userId, requestId.toString(), input.digest(), target); }

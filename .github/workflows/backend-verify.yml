@@ -51,6 +51,7 @@ jobs:
           bash .github/scripts/test-asset-privacy.sh
           bash .github/scripts/test-admin-cloudfront.sh
           python3 -m unittest discover -s deploy/terraform/monitoring/lambda/tests
+          python3 -m unittest discover -s deploy/furniture-lambda/tests -v
       - name: Run all assigned tests and package tested JARs
         run: |
           chmod +x ./gradlew
