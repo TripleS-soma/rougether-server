@@ -2,6 +2,20 @@ variable "enable_preprocessing" {
   type    = bool
   default = false
 }
+variable "enable_preprocess_trigger" {
+  description = "AI 트리거와 별도로 활성화함. 신규 접수 롤백 시 기존 업로드 drain까지 유지해야 함."
+  type        = bool
+  default     = false
+}
+variable "preprocess_concurrency" {
+  description = "전처리 Lambda 예약 동시성과 SQS 최대 동시성. 배포 환경에서 실측 후 설정함."
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.preprocess_concurrency >= 2 && var.preprocess_concurrency <= 100 && floor(var.preprocess_concurrency) == var.preprocess_concurrency
+    error_message = "전처리 동시성은 2~100 사이 정수여야 함."
+  }
+}
 locals {
   preprocess_zip = "${path.module}/../../furniture-lambda-preprocess/build/distributions/furniture-lambda-preprocess.zip"
 }
@@ -94,7 +108,7 @@ resource "aws_lambda_function" "preprocess" {
   source_code_hash               = var.enable_preprocessing ? filebase64sha256(local.preprocess_zip) : null
   timeout                        = 180
   memory_size                    = 1024
-  reserved_concurrent_executions = 2
+  reserved_concurrent_executions = var.preprocess_concurrency
   environment {
     variables = {
       CONTROL_FUNCTION_NAME   = aws_lambda_function.control.function_name
@@ -110,10 +124,10 @@ resource "aws_lambda_event_source_mapping" "preprocess" {
   count                   = var.enable_preprocessing ? 1 : 0
   event_source_arn        = aws_sqs_queue.preprocess[0].arn
   function_name           = aws_lambda_function.preprocess[0].arn
-  enabled                 = var.enable_trigger
+  enabled                 = var.enable_preprocess_trigger
   batch_size              = 1
   function_response_types = ["ReportBatchItemFailures"]
-  scaling_config { maximum_concurrency = 2 }
+  scaling_config { maximum_concurrency = var.preprocess_concurrency }
   depends_on = [aws_iam_role_policy.preprocess]
 }
 resource "aws_cloudwatch_metric_alarm" "preprocess_dead" {
