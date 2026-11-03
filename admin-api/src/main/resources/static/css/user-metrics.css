@@ -1,0 +1,81 @@
+.user-metrics-page { min-width: 0; }
+.user-metrics-page .upload-card { min-width: 0; }
+.metrics-dashboard + .user-operations { margin-top: 24px; }
+.metrics-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 30px 0 18px; }
+.metrics-heading h3 { font-size: 19px; line-height: 1.4; }
+.metrics-heading p, .metrics-card p { margin-top: 5px; color: var(--text-soft); font-size: 12px; line-height: 1.55; }
+.metrics-period { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.metrics-period select { min-width: 160px; height: 38px; }
+.metrics-timestamp { margin-top: 10px; color: var(--text-soft); font-size: 11px; line-height: 1.6; }
+.metrics-status { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text-soft); font-size: 12px; line-height: 1.5; }
+.metrics-status[hidden] { display: none; }
+.metrics-status.is-error { color: #b42318; border-color: #fecaca; background: #fff7f7; }
+.metrics-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; }
+.metrics-trends { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.metrics-segments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.metrics-card { min-width: 0; padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.metrics-card h4 { font-size: 14px; line-height: 1.4; }
+.metrics-card--north-star { background: linear-gradient(140deg, #f0fdfa, #f8faff); border-color: #c2e9e3; }
+.metrics-panel-state { display: grid; min-height: 158px; place-items: center; text-align: center; color: var(--text-soft); font-size: 12px; line-height: 1.65; }
+.metrics-comparison { margin-top: 22px; }
+.metrics-bar-row + .metrics-bar-row { margin-top: 18px; }
+.metrics-bar-label { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 12px; }
+.metrics-bar-label strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.metrics-bar-label strong.is-empty { color: var(--text-soft); font-size: 12px; }
+.metrics-bar-meta { margin-top: 5px; color: var(--text-soft); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.metrics-track { height: 10px; overflow: hidden; margin-top: 8px; border-radius: 3px; background-color: #eef0f7; background-image: linear-gradient(to right, transparent calc(100% - 1px), #d7dcea 1px); background-size: 25% 100%; }
+.metrics-track.is-empty { background: repeating-linear-gradient(135deg, #f4f5f8 0, #f4f5f8 5px, #e8ebf1 5px, #e8ebf1 6px); }
+.metrics-fill { height: 100%; border-radius: 3px; min-width: 0; }
+.metrics-axis { display: flex; justify-content: space-between; margin-top: 9px; color: var(--text-soft); font-size: 10px; font-variant-numeric: tabular-nums; }
+.metrics-north-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-top: 25px; }
+.metrics-north-value strong { color: #0f766e; font-size: 38px; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.metrics-north-value span { color: #0f766e; font-size: 12px; }
+.metrics-north-formula { margin: 8px 0 20px; color: var(--text-soft); font-size: 12px; line-height: 1.6; }
+.metrics-north-formula strong { color: var(--text); }
+.metrics-chart { margin-top: 18px; }
+.metrics-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.metrics-chart text { fill: var(--text-soft); font: 12px 'Pretendard', sans-serif; }
+.metrics-grid-line { stroke: #e7eaf2; stroke-width: 1; }
+.metrics-chart-point { cursor: pointer; outline: none; }
+.metrics-chart-point:focus-visible { stroke: #111827; stroke-width: 3; }
+.metrics-chart-point:hover { opacity: .72; }
+.metrics-chart-hint { margin-top: 8px; color: var(--text-soft); font-size: 10.5px; line-height: 1.5; }
+.metrics-readout { min-height: 42px; margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #f6f7fb; color: var(--text); font-size: 11.5px; line-height: 1.6; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.metrics-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; color: var(--text-soft); font-size: 11px; }
+.metrics-legend span { display: flex; align-items: center; gap: 5px; }
+.metrics-legend-symbol { display: inline-block; min-width: 12px; font-style: normal; font-size: 14px; }
+.metrics-segment-members { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: -6px 0 16px; color: var(--text-soft); font-size: 11px; }
+.metrics-details { margin-top: 22px; border: 1px solid var(--border); border-radius: 12px; }
+.metrics-details > summary { padding: 16px 18px; color: var(--primary-strong); font-size: 13px; font-weight: 750; cursor: pointer; }
+.metrics-details > summary:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 3px; }
+.metrics-details-content { min-width: 0; padding: 0 18px 18px; }
+.metrics-details h4 { margin: 18px 0 10px; font-size: 13px; }
+.metrics-details .observation-table { min-width: 660px; }
+.metrics-details caption { padding: 0 0 10px; text-align: left; color: var(--text-soft); font-size: 11px; }
+.metrics-dashboard .observation-note { flex-wrap: wrap; }
+.metrics-dashboard .observation-note em { display: block; margin-top: 4px; font-style: normal; }
+.user-operations .upload-head { margin-bottom: 12px; }
+.user-operations .upload-head p { max-width: 760px; }
+.user-metrics-page .slot-table-wrap { max-width: 100%; }
+
+@media (max-width: 1120px) {
+    .metrics-segments { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+    .metrics-overview, .metrics-trends { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+    .user-metrics-page { padding: 22px 14px 40px; }
+    .user-metrics-page .upload-card { padding: 18px; }
+    .user-metrics-page .observation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .user-metrics-page .observation-metric { min-height: 126px; padding: 14px; }
+    .user-metrics-page .observation-metric > span { font-size: 11px; }
+    .user-metrics-page .observation-metric strong { font-size: 25px; }
+    .user-metrics-page .observation-metric small { font-size: 10px; line-height: 1.4; margin-top: 12px; }
+    .metrics-card { padding: 18px 14px; }
+    .metrics-heading { margin-top: 25px; }
+    .metrics-period { width: 100%; }
+    .metrics-period select { width: 100%; }
+    .metrics-details-content { padding: 0 10px 14px; }
+    .user-metrics-page .observation-filters { padding: 14px; }
+}
