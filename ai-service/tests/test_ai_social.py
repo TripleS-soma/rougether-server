@@ -1,9 +1,13 @@
 import json
+from collections import Counter
+from datetime import date, timedelta
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from rougether_ai.ai_user_policy import ACTION_HELP, code_plan, parse_plan, planning_actions
+from rougether_ai.ai_user_policy import (
+    ACTION_HELP, SOCIAL_VOICES, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
+)
 from rougether_ai.app import create_app
 from test_ai_users import AUTH, CONFIG, active
 
@@ -212,3 +216,67 @@ def test_a_closing_human_reaction_can_end_without_another_comment():
         response=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert response.status_code==200
         assert response.json()["action"]=="WAIT"
+
+
+@pytest.mark.parametrize("day", ["2026-11-03", "2026-12-31", "2028-02-29"])
+def test_daily_post_topic_opportunities_favor_everyday_chatter_across_personas(day):
+    briefs = [social_post_brief({**social_state(), "date": day, "personaKey": persona})
+              for persona in SOCIAL_VOICES]
+    assert Counter(brief["category"] for brief in briefs) == {"EVERYDAY": 7, "HABIT": 2, "APP": 1}
+    everyday = [brief["subject"] for brief in briefs if brief["category"] == "EVERYDAY"]
+    assert len(set(everyday)) == 7
+
+
+@pytest.mark.parametrize("persona", SOCIAL_VOICES)
+def test_each_persona_gets_the_topic_mix_over_ten_dates_without_visit_time_bias(persona):
+    start = date(2026, 12, 27)
+    briefs = []
+    for offset in range(10):
+        state = {**social_state(), "personaKey": persona, "date": (start + timedelta(days=offset)).isoformat()}
+        brief = social_post_brief(state)
+        assert social_post_brief({**state, "localTime": "23:15:00", "jobId": 999}) == brief
+        assert social_post_brief({**state, "actions": list(reversed(state["actions"]))}) == brief
+        briefs.append(brief)
+    assert Counter(brief["category"] for brief in briefs) == {"EVERYDAY": 7, "HABIT": 2, "APP": 1}
+
+
+@pytest.mark.parametrize("changes", [
+    {"date": None}, {"date": ""}, {"date": "2026-02-30"}, {"date": 20261103},
+    {"personaKey": None}, {"personaKey": "a-new-persona"},
+])
+def test_older_or_unknown_social_context_defaults_to_an_everyday_topic(changes):
+    assert social_post_brief({**social_state(), **changes})["category"] == "EVERYDAY"
+
+
+@pytest.mark.parametrize("source", ["FEED_POST", "FEED_COMMENT", "CHAT", "SCHEDULE"])
+def test_post_topic_brief_does_not_redirect_other_events(source):
+    state = {**social_state(), "source": {"type": source}}
+    assert social_post_brief(state) is None
+    assert "새 글 글감:" not in decision_system(state)
+
+
+def test_post_topic_brief_is_absent_when_new_posts_are_not_allowed():
+    state = {**social_state(), "actions": ["FEED_COMMENT", "FEED_LIKE", "WAIT"]}
+    assert social_post_brief(state) is None
+    assert "새 글 글감:" not in decision_system(state)
+
+
+@pytest.mark.parametrize("content", ["저녁 메뉴 추천 좀", "난 치킨", "주말에 뭐 하지\n영화나 볼까"])
+def test_generation_receives_post_brief_and_accepts_short_everyday_posts_unchanged(content):
+    state = social_state()
+    calls = []
+    def handler(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        brief_line = next(line for line in body["system"].splitlines() if line.startswith("새 글 글감: "))
+        assert json.loads(brief_line.removeprefix("새 글 글감: ")) == social_post_brief(state)
+        assert set(json.loads(body["messages"][0]["content"])["actionFormats"]) == {
+            "FEED_POST", "FEED_COMMENT", "FEED_LIKE", "WAIT"}
+        return httpx.Response(200, json={"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps({
+            "action": "FEED_POST", "payload": {"boardType": "FREE", "content": content, "imageIds": [], "topic": "일상 선택"},
+            "memory": ""})}]})
+    with TestClient(create_app(CONFIG, ai_users=active(handler))) as client:
+        response = client.post("/internal/v1/ai-users/decide", headers=AUTH, json={"aiUserId": 1, "state": state})
+        assert response.status_code == 200
+        assert response.json()["payload"]["content"] == content
+    assert len(calls) == 1

@@ -160,8 +160,8 @@ public class AiUserObserver {
         String persona=(String)state.get("personaKey");
         context.state().put("preference",persona.startsWith("social-")?"관심 있는 기존 글에 구체적인 댓글로 먼저 참여. 질문은 필요할 때만 함.":
                 persona.startsWith("observe-")?"읽는 비중이 높음. 관심사와 직접 연결되는 글에만 가끔 댓글이나 좋아요.":
-                persona.startsWith("decorate-")?"실제 앱의 구매, 배치, 거래와 관련된 주제에 참여. 소유하지 않은 물건이나 거래 경험은 만들지 않음.":
-                "루틴, 기록, 작은 계획의 구체적인 새 주제를 공유하거나 관련 글에 반응.");
+                persona.startsWith("decorate-")?"가구 취향을 유지하되 음식, 콘텐츠 같은 일상 잡담에도 참여. 소유하지 않은 물건이나 거래 경험은 만들지 않음.":
+                "관심 가는 일상 글에 반응하거나 취향과 선택을 짧게 공유. 루틴과 기록을 모든 대화의 주제로 삼지 않음.");
         var references=new java.util.LinkedHashSet<>(context.references());
         state.put("social",context.state());
         state.put("actions",context.state().get("allowedActions"));

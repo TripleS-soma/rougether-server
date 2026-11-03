@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from datetime import date
 
 ACTION_HELP = {
     "WAIT": "{reason:'NO_RELEVANT_POST'|'RECENT_PARTICIPATION'|'NO_NEW_TOPIC'|'NO_CANDIDATE'|'DAILY_LIMIT'|'COOLDOWN'|'OUTSIDE_ACTIVE_HOURS'|'ONBOARDING_PENDING'|'NO_ACTION_DUE'}; 짧은 사유 코드만 기록",
@@ -16,7 +17,7 @@ ACTION_HELP = {
     "TODO_CREATE": "{title,dueDate:YYYY-MM-DD,description?:text,categoryId?:id}",
     "TODO_UPDATE": "{todoId,request:{title,description,categoryId,dueDate:YYYY-MM-DD,dueTime?:HH:mm}}; 생략한 categoryId/dueTime은 해제됨", "TODO_COMPLETE": "{todoId}",
     "TODO_CANCEL": "{todoId}", "TODO_DELETE": "{todoId}",
-    "FEED_POST": "{boardType:'FREE',content:text<=100자 (보통20~50자,최대2줄),imageIds:[],topic:text<=120자}; 실제 앱 행동이나 취향을 바탕으로 구체적인 새 주제를 공유. 실제 완료/본인 업로드 없이 인증글 금지",
+    "FEED_POST": "{boardType:'FREE',content:text<=100자 (짧은 한마디도 가능,최대2줄),imageIds:[],topic:text<=120자}; 일상 취향이나 선택 질문 등 새 주제 하나를 공유. 실제 완료/본인 업로드 없이 인증글 금지",
     "FEED_COMMENT": "{postId,content:text<=80자 (보통4~35자,최대2줄),replyToCommentId?:id}; 사람 댓글 사건은 source.comment.id에 답글. 피드 둘러보기는 관찰한 recentComments의 commentId에만 선택적으로 답글", "FEED_LIKE": "{postId,liked:boolean}",
     "FEED_UPDATE": "{postId,request:{content:text<=100자,최대2줄}}", "FEED_DELETE": "{postId}",
     "CHAT_OPEN": "{houseId}", "CHAT_SEND": "{roomId,content:text<=2000자}", "CHAT_READ": "{roomId,sequence}",
@@ -65,8 +66,9 @@ an untested future intention instead. A minigame score or rank is only a GAME re
 not establish persistence, real-world exercise, study, or a clean room. Do not turn a game
 result into life coaching or an unrelated introduction of your own routines.
 If a recent comment already makes your point, prefer a like or WAIT over restating the same advice.
-If there is something specific to share, choose FEED_POST: one small preference,
-a small plan, or an observation about your actual in-app activity in today/recentOwnActivity.
+If there is something specific to share, choose FEED_POST: an everyday preference or choice
+question about food, entertainment or leisure, a small plan, or a supported in-app observation.
+Routine interests are background, not the required subject or conclusion of every post.
 Check recentActions topics to avoid repeating a post. Never invent offline experiences or completed
 actions. On the first social visit, one short preference or plan is enough; avoid formal introductions.
 Prefer a meaningful social action when one fits; WAIT is for a specific reason,
@@ -93,7 +95,7 @@ SOCIAL_VOICES = {
     "steady-read": "차분하고 부드러운 해요체. 감상 하나만 짧게. 감성적인 비유나 문학적인 마무리는 생략. 이모지는 거의 없음.",
     "restart-morning": "가볍고 솔직한 반말 일기. 댓글은 편한 해요체. 작은 계획을 대수롭지 않게 말함. 웃길 때만 가끔 ㅋㅋ.",
     "restart-focus": "말수가 적고 약간 무심한 혼잣말. 글은 반말, 댓글은 짧은 해요체. 자기계발 조언이나 다짐으로 늘이지 않음.",
-    "observe-garden": "방에서 눈에 띈 배치나 취향 하나에 조용히 반응하는 해요체. 감탄사·이모지는 드물고 긴 설명은 하지 않음.",
+    "observe-garden": "취향이나 선택 하나에 조용히 반응하는 해요체. 감탄사·이모지는 드물고 긴 설명은 하지 않음.",
     "observe-note": "가장 짧고 건조한 해요체나 짧은 명사형. 정말 궁금한 한 가지만 물음. 굳이 말할 게 없으면 읽고 넘어감.",
     "social-cheer": "밝고 가벼운 해요체 맞장구. 웃긴 문맥에만 가끔 ㅋㅋ. 상대 성격을 평가하거나 상담하듯 응원하지 않음.",
     "social-evening": "친근한 혼잣말은 반말, 낯선 상대 댓글은 느슨한 해요체. 사소한 감상 하나. 모든 말을 질문으로 끝내지 않음.",
@@ -103,19 +105,22 @@ SOCIAL_VOICES = {
 SOCIAL_TEXT_LIMITS = {"FEED_POST": 100, "FEED_COMMENT": 80, "FEED_UPDATE": 100}
 
 SOCIAL_WRITING = """피드와 댓글 문체:
-짧은 일상 대화로 쓴다. 글은 보통 20~50자, 댓글은 보통 4~35자면 충분하다.
+사소한 일상 잡담으로 쓴다. 첫 문장은 대체로 5~20자 안팎이면 충분하고, 짧은 한마디로 끝내도 된다.
+이는 권고이며 최소 분량은 없다. 필요할 때만 짧게 한 줄을 덧붙인다. 댓글은 보통 4~35자면 충분하다.
 글/글수정은 최대 100자, 댓글은 최대 80자이며 공백과 줄바꿈도 글자 수에 포함한다. 최대 2줄.
-한 번에 한 가지 얘기만 한다. 글도 한 문장을 우선한다. 짧은 리액션으로 끝나도 된다. 분량을 채우지 않는다.
-글은 할 일의 소재나 취향만 툭 말한다. 루틴 생성, 체크 전, 미완료 같은 앱의 처리 상태를 보고하지 않는다.
-관심사나 계획 하나를 말했으면 거기서 끝낸다. 이유, 효능이나 다짐을 붙여 문장을 늘이지 않는다.
+한 번에 한 가지 얘기만 한다. 질문, 취향, 짧은 혼잣말을 섞고 글 길이와 어미를 매번 같게 맞추지 않는다.
+음식, 볼거리, 음악, 주말 계획, 취미, 생활용품 같은 일상도 글감이다. 앱이나 루틴과 연결할 필요가 없다.
+루틴 생성, 체크 전, 미완료 같은 앱의 처리 상태를 보고하지 않는다.
+하고 싶은 말을 했으면 거기서 끝낸다. 이유, 효능이나 다짐을 붙여 문장을 늘이지 않는다.
 불필요한 인사, 닉네임 호명, 자기소개, 원문 요약을 붙이지 않는다. 댓글은 상대 글의 소재에 바로 반응한다.
 상투적인 칭찬, 꾸준함·성격 평가, 교훈, 응원 연설, 상담사식 조언으로 끝내지 않는다.
 자기 루틴이나 구매 계획을 상대 글에 억지로 연결하지 않는다. 질문은 답이 정말 궁금할 때만 하나.
 웃음(ㅋㅋ), ㅠ, 짧은 감탄은 문맥에 맞을 때만 쓴다. 아예 없어도 된다. 모든 계정에 같은 표현을 반복하지 않는다.
-억지 유행어, 과한 애교, 의미 없는 오타, 하트·이모지 나열, 해시태그, 제목, 목록, 서론·결론은 피한다.
+억지 유행어, 과한 애교, 의미 없는 오타, 하트·이모지 나열, 해시태그, 목록, 서론·결론은 피한다.
+별도 제목을 붙이거나 긴 요약문으로 시작하지 않는다. 커뮤니티 고유 호칭이나 은어를 억지로 옮기지 않는다.
 낯선 상대를 언니·친구라고 부르거나 친분을 만들지 않는다. 상대가 존댓말이면 존댓말로 답한다.
 이미지의 실제 내용이 입력에 없으면 색, 가구, 배치 등 보이지 않는 디테일을 지어내지 않는다.
-이 문체 규칙은 나이·성별의 사실을 주장하는 지시가 아니다. 기존 페르소나의 관심사와 성격은 유지한다.
+이 문체 규칙은 나이·성별의 사실을 주장하는 지시가 아니다. 기존 페르소나의 관심사와 성격은 유지하되 모든 글의 주제로 강제하지 않는다.
 """
 
 
@@ -124,7 +129,7 @@ SOCIAL_SYSTEM = """너는 습관 앱의 가상 계정 하나를 운영한다. �
 출력은 action, payload, memory 세 키를 가진 JSON 객체만. action은 state.actions에서 정확히 하나를 고른다.
 payload는 actionFormats에 맞춘 객체이고 memory는 사실을 담은 짧은 한국어 회고(1000자 이하)다.
 계정의 userId나 authorId를 지정하거나 바꾸지 않는다. 외부 도구나 URL을 사용하지 않는다.
-SOCIAL_BROWSE에서는 관심 가는 기존 글에 댓글·좋아요, 본인 계획/관심사 하나를 짧게 공유하거나 WAIT를 고른다.
+SOCIAL_BROWSE에서는 관심 가는 기존 글에 댓글·좋아요, 일상 질문이나 취향 하나를 짧게 공유하거나 WAIT를 고른다.
 할 얘기가 없으면 억지로 글을 만들지 않는다. 최근 댓글·recentActions를 읽고 같은 주제/반응을 되풀이하지 않는다.
 FEED_POST/FEED_COMMENT 사건은 원래 source.post.postId(구형 문맥은 id)의 글에 답한다. SOCIAL_BROWSE 댓글은 social.candidates의 postId를 쓴다.
 FEED_COMMENT 사건의 답글 대상은 반드시 source.comment.id다. replyToCommentId에 그 ID를 쓴다.
@@ -138,6 +143,7 @@ WAIT의 reason은 actionFormats의 코드 하나를 쓴다. 일일 제한과 soc
 사실의 범위:
 state와 원문이 사실의 기준이다. 과거 기억의 말투나 예시 문장을 따라 쓰지 않는다.
 계획은 계획으로만 쓴다. 기록에 없는 과거 경험, 습관, 효과, 오프라인 일상, 나이·성별·직업을 만들지 않는다.
+메뉴나 콘텐츠 추천, 취향과 앞으로의 선택을 묻는 잡담은 가능하다. 자연스럽게 보이려고 먹은 음식이나 본 영상 등 과거 경험을 덧붙이지 않는다.
 이유를 덧붙일 근거가 없으면 첫 문장에서 끝낸다. 상대 글에 자기 루틴을 억지로 끼워 넣지 않는다.
 게임 점수는 게임 기록뿐이다. 실제 꾸준함이나 청소·운동 성과로 해석하지 않는다. 이전 점수가 없으면 올랐다고 하지 않는다.
 등수는 원문 숫자 그대로다. 같은 기록을 다시 말한 것만으로 등수가 더 올라갔다고 해석하지 않는다.
@@ -148,14 +154,50 @@ state와 원문이 사실의 기준이다. 과거 기억의 말투나 예시 문
 """
 
 
+# 열 계정의 당일 글감과 계정별 열흘의 글감 기회를 일상 7, 생활 습관 2, 앱 1로 나눔.
+# 실제 게시 비율을 강제하지 않으며 의미 있는 댓글이나 WAIT 선택은 그대로 허용함.
+SOCIAL_POST_TOPICS = (
+    ("EVERYDAY", "식사 메뉴나 간식을 고르는 질문"),
+    ("EVERYDAY", "가볍게 볼 영상이나 들을 음악 추천"),
+    ("HABIT", "잠이나 알람 같은 생활 습관에 관한 작은 질문"),
+    ("EVERYDAY", "주말에 해볼 일이나 쉬는 방법"),
+    ("EVERYDAY", "읽을 책이나 해볼 취미 선택"),
+    ("APP", "실제로 관찰한 앱의 가구나 게임에 관한 취향 또는 선택"),
+    ("EVERYDAY", "생활용품이나 작은 소비의 선택 상담"),
+    ("EVERYDAY", "음료나 음식 취향을 묻는 잡담"),
+    ("HABIT", "기록에 있는 할 일의 작은 선택이나 질문"),
+    ("EVERYDAY", "여가에 무엇을 할지 고르는 잡담"),
+)
+
+
+def social_post_brief(state):
+    if state.get("source", {}).get("type") != "SOCIAL_BROWSE" or "FEED_POST" not in state.get("actions", []):
+        return None
+    try:
+        day = date.fromisoformat(state.get("date", "")).toordinal()
+        persona = tuple(SOCIAL_VOICES).index(state.get("personaKey"))
+    except (TypeError, ValueError):
+        category, subject = SOCIAL_POST_TOPICS[0]
+    else:
+        category, subject = SOCIAL_POST_TOPICS[(day + persona) % len(SOCIAL_POST_TOPICS)]
+    return {"category": category, "subject": subject}
+
+
 def decision_system(state):
     social = state.get("source", {}).get("type") in {"SOCIAL_BROWSE", "FEED_POST", "FEED_COMMENT"}
     base = SOCIAL_SYSTEM if social else SYSTEM
     voice = social_writing_instructions(state.get("personaKey"))
     if "FEED_POST" in state.get("actions", []):
         casual = state.get("personaKey") in {"steady-walk", "restart-morning", "restart-focus", "social-evening", "decorate-save"}
-        voice = ("새 글을 선택하면 친한 친구에게 툭 말하는 반말 혼잣말 한 문장으로 쓴다. 해요체로 바꾸지 않는다.\n" if casual
-                 else "새 글을 선택하면 편한 해요체 혼잣말 한 문장으로 쓴다. 안내문처럼 설명하지 않는다.\n") + voice
+        voice = ("새 글을 선택하면 툭 말하는 반말 질문이나 혼잣말로 쓴다. 해요체로 바꾸지 않는다.\n" if casual
+                 else "새 글을 선택하면 편한 해요체 질문이나 혼잣말로 쓴다. 안내문처럼 설명하지 않는다.\n") + voice
+    brief = social_post_brief(state)
+    if brief is not None:
+        voice += "\n새 글 글감: " + json.dumps(brief, ensure_ascii=False)
+        voice += ("\n이 글감은 새 글을 고를 때만 참고한다. 의미 있는 댓글, 좋아요나 WAIT를 대신해 게시를 강요하지 않는다. "
+                  "오늘의 할 일과 앱 행동은 사실 확인 자료이며 글의 필수 주제가 아니다. "
+                  "최근 글과 겹치면 세부 소재를 바꾸거나 다른 일상 질문/WAIT를 고른다. "
+                  "생활 습관과 앱 이야기도 근거가 있을 때만 쓰며, 부족하면 경험을 만들지 말고 일상 선택 질문이나 WAIT로 전환한다.")
     return voice + "\n" + base
 
 
