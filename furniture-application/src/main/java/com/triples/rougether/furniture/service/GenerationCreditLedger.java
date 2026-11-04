@@ -3,7 +3,13 @@ package com.triples.rougether.furniture.service;
 import com.triples.rougether.common.error.*;
 import com.triples.rougether.domain.billing.entity.*;
 import com.triples.rougether.domain.billing.repository.*;
+import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,40 +19,94 @@ import org.springframework.transaction.annotation.*;
 @Service
 @Transactional(propagation = Propagation.MANDATORY)
 public class GenerationCreditLedger {
+    public static final int COIN_COST = 100;
+
     private final UserRepository users;
     private final FurnitureCreditAccountRepository accounts;
     private final FurnitureCreditReservationRepository reservations;
     private final FurnitureCreditEntryRepository entries;
+    private final UserWalletRepository wallets;
+    private final WalletHistoryRepository walletHistories;
     private final Clock clock;
     private final boolean requireCredits;
+
     public GenerationCreditLedger(UserRepository users, FurnitureCreditAccountRepository accounts,
             FurnitureCreditReservationRepository reservations, FurnitureCreditEntryRepository entries,
+            UserWalletRepository wallets, WalletHistoryRepository walletHistories,
             Clock clock, @Value("${billing.require-credits:true}") boolean requireCredits) {
-        this.users=users; this.accounts=accounts; this.reservations=reservations;
-        this.entries=entries; this.clock=clock; this.requireCredits=requireCredits;
+        this.users = users;
+        this.accounts = accounts;
+        this.reservations = reservations;
+        this.entries = entries;
+        this.wallets = wallets;
+        this.walletHistories = walletHistories;
+        this.clock = clock;
+        this.requireCredits = requireCredits;
     }
+
     public void reserve(Long userId, String jobId) {
         if (!requireCredits) return;
-        var user=users.findByIdForUpdate(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
-        if (user.getDeletedAt()!=null) throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
-        if (reservations.existsById(jobId)) return;
-        var account=account(userId);
-        if (account.getBalance()<1) throw new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED);
-        account.reserve(); reservations.save(new FurnitureCreditReservation(jobId,userId,clock.instant()));
-        record(account,jobId,FurnitureCreditEntry.Reason.RESERVE,-1);
+        var user = users.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
+        if (user.getDeletedAt() != null) throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
+        var existing = reservations.findById(jobId).orElse(null);
+        if (existing != null) {
+            requireOwner(existing, userId);
+            return;
+        }
+        var account = account(userId);
+        if (account.getBalance() >= 1) {
+            account.reserve();
+            reservations.save(new FurnitureCreditReservation(jobId, userId, clock.instant()));
+            record(account, jobId, FurnitureCreditEntry.Reason.RESERVE, -1);
+            return;
+        }
+        var wallet = wallets.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
+                .orElseThrow(() -> new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED));
+        if (wallet.getBalance() < COIN_COST) throw new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED);
+        wallet.spend(COIN_COST);
+        reservations.save(new FurnitureCreditReservation(jobId, userId,
+                FurnitureCreditReservation.PaymentType.COIN, COIN_COST, clock.instant()));
+        recordCoins(wallet, -COIN_COST, WalletHistoryReason.FURNITURE_GENERATION);
     }
+
     public void settle(Long userId, String jobId, boolean success) {
         users.findByIdForUpdate(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
-        var reservation=reservations.findById(jobId).orElse(null);
-        if (reservation==null || reservation.getStatus()!=FurnitureCreditReservation.Status.RESERVED) return;
-        if (!reservation.getUserId().equals(userId)) throw new IllegalStateException("생성권 작업 소유자 불일치");
-        var account=account(userId); account.settle(success); reservation.settle(success,clock.instant());
-        record(account,jobId,success ? FurnitureCreditEntry.Reason.SPEND : FurnitureCreditEntry.Reason.RELEASE,success?0:1);
+        var reservation = reservations.findById(jobId).orElse(null);
+        if (reservation == null) return;
+        requireOwner(reservation, userId);
+        if (reservation.getStatus() != FurnitureCreditReservation.Status.RESERVED) return;
+        if (reservation.getPaymentType() == FurnitureCreditReservation.PaymentType.COIN) {
+            if (!success) {
+                var wallet = wallets.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
+                        .orElseThrow(() -> new IllegalStateException("코인 결제 지갑 없음"));
+                wallet.add(reservation.getPaymentAmount());
+                recordCoins(wallet, reservation.getPaymentAmount(), WalletHistoryReason.FURNITURE_GENERATION_REFUND);
+            }
+        } else {
+            var account = account(userId);
+            account.settle(success);
+            record(account, jobId, success ? FurnitureCreditEntry.Reason.SPEND : FurnitureCreditEntry.Reason.RELEASE,
+                    success ? 0 : 1);
+        }
+        reservation.settle(success, clock.instant());
     }
+
+    private void requireOwner(FurnitureCreditReservation reservation, Long userId) {
+        if (!reservation.getUserId().equals(userId)) throw new IllegalStateException("생성권 작업 소유자 불일치");
+    }
+
     private FurnitureCreditAccount account(Long id) {
         return accounts.findForUpdate(id).orElseGet(() -> accounts.save(new FurnitureCreditAccount(id)));
     }
-    private void record(FurnitureCreditAccount a,String id,FurnitureCreditEntry.Reason reason,long delta) {
-        entries.save(new FurnitureCreditEntry(a.getUserId(),id,reason,delta,a.getBalance(),clock.instant()));
+
+    private void record(FurnitureCreditAccount account, String id, FurnitureCreditEntry.Reason reason, long delta) {
+        entries.save(new FurnitureCreditEntry(account.getUserId(), id, reason, delta, account.getBalance(), clock.instant()));
+    }
+
+    private void recordCoins(UserWallet wallet, int amount, WalletHistoryReason reason) {
+        // 작업 UUID와 결제액은 예약 테이블에 저장함. 지갑 원장의 sourceId는 숫자 식별자만 지원함.
+        walletHistories.save(WalletHistory.record(wallet.getUser(), CurrencyType.COIN, amount, reason,
+                wallet.getBalance(), WalletHistory.SOURCE_FURNITURE_GENERATION, null));
     }
 }

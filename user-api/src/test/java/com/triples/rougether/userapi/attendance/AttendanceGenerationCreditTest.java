@@ -154,15 +154,16 @@ class AttendanceGenerationCreditTest {
     }
 
     @Test
-    void 미완주자는_생성을_접수할수없고_하루빠지면_첫날부터_시작한다() {
+    void 미완주자도_100코인으로_생성할수있고_하루빠지면_첫날부터_시작한다() {
         setToday(STARTS_ON.plusDays(7));
         var result = attendanceEventService.checkIn(user.getId());
         assertThat(result.status().currentStreak()).isEqualTo(1);
         assertThat(result.rewardGrantedNow()).isFalse();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                generation.reserve(user.getId(), java.util.UUID.randomUUID().toString(), "digest", "의자"))
-                .isInstanceOf(com.triples.rougether.common.error.BusinessException.class);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM furniture_generation_jobs WHERE user_id = ?", Long.class, user.getId())).isZero();
+        int before = userWalletRepository.findByUserIdAndCurrencyType(user.getId(), CurrencyType.COIN).orElseThrow().getBalance();
+        generation.reserve(user.getId(), java.util.UUID.randomUUID().toString(), "digest", "의자");
+        assertThat(userWalletRepository.findByUserIdAndCurrencyType(user.getId(), CurrencyType.COIN).orElseThrow().getBalance())
+                .isEqualTo(before - 100);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM furniture_generation_jobs WHERE user_id = ?", Long.class, user.getId())).isEqualTo(1);
     }
 
     private void setToday(LocalDate date) {

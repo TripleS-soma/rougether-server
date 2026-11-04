@@ -8,7 +8,7 @@ public enum BillingErrorCode implements ErrorCode {
     BILLING_PRODUCT_UNAVAILABLE("판매 중인 생성권 상품이 아닙니다.", 400),
     BILLING_VERIFICATION_LIMIT("잠시 후 구매 내역을 다시 확인해 주세요.", 429),
     BILLING_NOTIFICATION_INVALID("유효한 스토어 알림이 아닙니다.", 401),
-    FURNITURE_CREDITS_REQUIRED("가구 생성권이 필요합니다.", 402);
+    FURNITURE_CREDITS_REQUIRED("가구 생성권 1회 또는 100코인이 필요합니다.", 402);
     private final String message; private final int status;
     BillingErrorCode(String message, int status) { this.message = message; this.status = status; }
     public String code() { return name(); }
