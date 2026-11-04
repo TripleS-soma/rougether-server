@@ -59,7 +59,7 @@ import org.springframework.test.context.bean.override.mockito.*;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-@SpringBootTest(properties = {"billing.enabled=true", "billing.require-credits=true", "billing.environment=SANDBOX", "billing.worker-enabled=false",
+@SpringBootTest(properties = {"billing.enabled=true", "billing.require-credits=true", "billing.coin-fallback-enabled=true", "billing.environment=SANDBOX", "billing.worker-enabled=false",
         "billing.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "billing.apple.products.pack3=3", "billing.apple.products.pack7=7", "billing.google.products.pack3=3",
         "furniture.generation.enabled=true",

@@ -29,11 +29,13 @@ public class GenerationCreditLedger {
     private final WalletHistoryRepository walletHistories;
     private final Clock clock;
     private final boolean requireCredits;
+    private final boolean coinFallbackEnabled;
 
     public GenerationCreditLedger(UserRepository users, FurnitureCreditAccountRepository accounts,
             FurnitureCreditReservationRepository reservations, FurnitureCreditEntryRepository entries,
             UserWalletRepository wallets, WalletHistoryRepository walletHistories,
-            Clock clock, @Value("${billing.require-credits:true}") boolean requireCredits) {
+            Clock clock, @Value("${billing.require-credits:true}") boolean requireCredits,
+            @Value("${billing.coin-fallback-enabled:false}") boolean coinFallbackEnabled) {
         this.users = users;
         this.accounts = accounts;
         this.reservations = reservations;
@@ -42,6 +44,7 @@ public class GenerationCreditLedger {
         this.walletHistories = walletHistories;
         this.clock = clock;
         this.requireCredits = requireCredits;
+        this.coinFallbackEnabled = coinFallbackEnabled;
     }
 
     public void reserve(Long userId, String jobId) {
@@ -61,6 +64,7 @@ public class GenerationCreditLedger {
             record(account, jobId, FurnitureCreditEntry.Reason.RESERVE, -1);
             return;
         }
+        if (!coinFallbackEnabled) throw new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED);
         var wallet = wallets.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
                 .orElseThrow(() -> new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED));
         if (wallet.getBalance() < COIN_COST) throw new BusinessException(BillingErrorCode.FURNITURE_CREDITS_REQUIRED);
