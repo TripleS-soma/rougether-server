@@ -2002,3 +2002,92 @@ body {
     .pose-admin-row { align-items: flex-start; flex-direction: column; }
     .pose-admin-row span { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* 유저 퍼널(이탈 지점) - 유저 운영 관측 화면 */
+.funnel-window {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 700;
+}
+.funnel-window .observation-select--compact { width: 84px; }
+.funnel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+.funnel-row {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr) 84px minmax(0, 340px);
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+.funnel-row--drop {
+    border-color: #fecaca;
+    background: var(--danger-soft);
+}
+.funnel-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.funnel-badge {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.funnel-track {
+    height: 22px;
+    border-radius: 999px;
+    background: var(--bg);
+    overflow: hidden;
+}
+.funnel-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--gradient);
+    transition: width .35s ease;
+}
+.funnel-row--drop .funnel-fill { background: linear-gradient(135deg, #f97316, #dc2626); }
+.funnel-count {
+    text-align: right;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+}
+.funnel-stat {
+    color: var(--text-soft);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.funnel-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-top: 12px;
+    color: var(--text-soft);
+    font-size: 12.5px;
+}
+.funnel-summary strong { color: var(--text); }
+.funnel-summary-item--drop { color: var(--danger); }
+.funnel-summary-item--drop strong { color: var(--danger); }
+@media (max-width: 760px) {
+    .funnel-row { grid-template-columns: minmax(0, 1fr) 84px; }
+    .funnel-track,
+    .funnel-stat { grid-column: 1 / -1; }
+    .funnel-stat { white-space: normal; }
+}
