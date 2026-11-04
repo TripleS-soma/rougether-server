@@ -148,6 +148,31 @@
                 </table>
             </div>
 
+            <div class="observation-result-head">
+                <strong>유저 퍼널 · 이탈 지점</strong>
+                <label class="funnel-window">
+                    <span>가입 기간</span>
+                    <select id="funnelSignupDays" class="observation-select observation-select--compact">
+                        <option value="7">7일</option>
+                        <option value="14">14일</option>
+                        <option value="30" selected>30일</option>
+                        <option value="90">90일</option>
+                        <option value="0">전체</option>
+                    </select>
+                </label>
+            </div>
+            <div class="funnel" id="funnel" role="list" aria-label="가입 이후 활성화 퍼널">
+                <p class="observation-empty">퍼널 조회 중…</p>
+            </div>
+            <div class="funnel-summary" id="funnelSummary"></div>
+            <div class="observation-note">
+                <strong>퍼널 기준</strong>
+                <span>각 단계는 이전 단계를 모두 거친 사용자만 누적해 세므로 막대는 항상 줄어듭니다(탈퇴·봇·AI 제외).
+                    온보딩은 목표 + 대표 캐릭터, 생성은 루틴·투두를 한 번이라도 만든 경우(삭제돼도 유지), 첫 완료는 현재 남아 있는
+                    루틴 로그·투두 완료 기록(완료 취소·카테고리 정리로 지워지면 제외), 재방문은 마지막 인증 접속의 KST 날짜가 가입일보다
+                    뒤인 경우입니다. 공동집 참여(가입자 대비)와 탈퇴(가입자+탈퇴자 대비)는 순서와 무관한 부가 지표입니다.</span>
+            </div>
+
             <div class="observation-filters">
                 <label class="observation-filter observation-filter--search">
                     <span>사용자 검색</span>
@@ -244,6 +269,19 @@
         let total = 0;
         let characterOptions = [];
 
+        const FUNNEL_STAGE_LABELS = {
+            SIGNED_UP: '가입',
+            ONBOARDED: '온보딩 완료',
+            ROUTINE_CREATED: '루틴·투두 생성',
+            FIRST_COMPLETED: '첫 완료',
+            RETURNED: '다음날 이후 재방문'
+        };
+        const funnelSignupDaysInput = document.getElementById('funnelSignupDays');
+        let funnelRequestSeq = 0;
+        funnelSignupDaysInput.addEventListener('change', loadFunnel);
+
+        // 퍼널은 목록 표시를 막지 않도록 따로 부름.
+        loadFunnel();
         Promise.all([loadSummary(), loadRetentionMetrics(), loadCharacters()]).then(load);
 
         async function loadSummary() {
@@ -291,6 +329,108 @@
             } catch (err) {
                 showError('리텐션 KPI 조회 중 오류: ' + err.message);
             }
+        }
+
+        async function loadFunnel() {
+            const seq = ++funnelRequestSeq;
+            try {
+                const res = await fetch('/admin/users/funnel?signupDays=' +
+                    encodeURIComponent(funnelSignupDaysInput.value));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const funnel = await res.json();
+                // 기간을 빠르게 바꾸면 응답 순서가 뒤섞일 수 있어 마지막 요청만 그림.
+                if (seq !== funnelRequestSeq) return;
+                renderFunnel(funnel);
+            } catch (err) {
+                if (seq !== funnelRequestSeq) return;
+                renderFunnelUnavailable();
+                showError('퍼널 조회 중 오류: ' + err.message);
+            }
+        }
+
+        function renderFunnelUnavailable() {
+            const empty = document.createElement('p');
+            empty.className = 'observation-empty';
+            empty.textContent = '퍼널을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.';
+            document.getElementById('funnel').replaceChildren(empty);
+            document.getElementById('funnelSummary').replaceChildren();
+        }
+
+        // 막대 폭은 가입자 대비 비율. 최대 이탈 구간의 도착 단계를 강조해 어디서 가장 많이 빠지는지 바로 보이게 함.
+        function renderFunnel(funnel) {
+            const dropStage = funnel.biggestDrop ? funnel.biggestDrop.toStage : null;
+            const rows = funnel.stages.map(stage => {
+                const row = document.createElement('div');
+                row.className = 'funnel-row' + (stage.stage === dropStage ? ' funnel-row--drop' : '');
+                row.setAttribute('role', 'listitem');
+
+                const label = document.createElement('div');
+                label.className = 'funnel-label';
+                label.textContent = FUNNEL_STAGE_LABELS[stage.stage] ?? stage.stage;
+                if (stage.stage === dropStage) {
+                    const badge = document.createElement('span');
+                    badge.className = 'funnel-badge';
+                    badge.textContent = '최대 이탈';
+                    label.append(badge);
+                }
+
+                const track = document.createElement('div');
+                track.className = 'funnel-track';
+                const fill = document.createElement('div');
+                fill.className = 'funnel-fill';
+                fill.style.width = (stage.userCount > 0 ? Math.max(stage.signupPercentage, 1.5) : 0) + '%';
+                track.append(fill);
+
+                const count = document.createElement('strong');
+                count.className = 'funnel-count';
+                count.textContent = stage.userCount.toLocaleString() + '명';
+
+                const stat = document.createElement('div');
+                stat.className = 'funnel-stat';
+                stat.textContent = stage.stage === 'SIGNED_UP'
+                    ? '기준 100%'
+                    : '가입 대비 ' + stage.signupPercentage.toFixed(1) + '% · 직전 대비 ' +
+                        stage.previousStagePercentage.toFixed(1) + '% · 이탈 ' +
+                        stage.droppedFromPrevious.toLocaleString() + '명';
+
+                row.append(label, track, count, stat);
+                return row;
+            });
+            document.getElementById('funnel').replaceChildren(...rows);
+            renderFunnelSummary(funnel);
+        }
+
+        function renderFunnelSummary(funnel) {
+            const items = [];
+            items.push(funnelSummaryItem('가입 기간',
+                funnel.signupPeriod
+                    ? funnel.signupPeriod.fromDate + ' ~ ' + funnel.signupPeriod.toDate +
+                        ' (' + funnel.signupPeriod.days + '일)'
+                    : '전체 기간', false));
+            items.push(funnelSummaryItem('최대 이탈 구간',
+                funnel.biggestDrop
+                    ? (FUNNEL_STAGE_LABELS[funnel.biggestDrop.fromStage] ?? funnel.biggestDrop.fromStage) + ' → ' +
+                        (FUNNEL_STAGE_LABELS[funnel.biggestDrop.toStage] ?? funnel.biggestDrop.toStage) + ' · ' +
+                        funnel.biggestDrop.droppedUserCount.toLocaleString() + '명 (' +
+                        funnel.biggestDrop.dropPercentage.toFixed(1) + '%)'
+                    : '이탈 없음', Boolean(funnel.biggestDrop)));
+            items.push(funnelSummaryItem('공동집 참여',
+                funnel.sharedHouse.userCount.toLocaleString() + '명 (가입자 대비 ' +
+                funnel.sharedHouse.percentage.toFixed(1) + '%)', false));
+            items.push(funnelSummaryItem('탈퇴',
+                funnel.withdrawn.userCount.toLocaleString() + '명 (가입자+탈퇴자 ' +
+                funnel.withdrawn.denominatorCount.toLocaleString() + '명 대비 ' +
+                funnel.withdrawn.percentage.toFixed(1) + '%)', false));
+            document.getElementById('funnelSummary').replaceChildren(...items);
+        }
+
+        function funnelSummaryItem(label, value, highlight) {
+            const item = document.createElement('span');
+            item.className = 'funnel-summary-item' + (highlight ? ' funnel-summary-item--drop' : '');
+            const strong = document.createElement('strong');
+            strong.textContent = label;
+            item.append(strong, ' ' + value);
+            return item;
         }
 
         function renderRetentionCard(valueId, formulaId, metric) {
@@ -609,6 +749,7 @@
         document.getElementById('refresh').addEventListener('click', () => {
             loadSummary();
             loadRetentionMetrics();
+            loadFunnel();
             load();
         });
         document.getElementById('prev').addEventListener('click', () => {
