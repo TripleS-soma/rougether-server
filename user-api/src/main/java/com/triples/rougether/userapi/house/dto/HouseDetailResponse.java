@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house.dto;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +34,9 @@ public record HouseDetailResponse(
         @Schema(description = "초대코드 (소유자에게만 값, 그 외 null). 초대코드 참여(POST /api/v1/houses/join-by-code)와 미리보기(GET /api/v1/houses/by-code/{inviteCode})에 사용, 재발급은 POST /api/v1/houses/{houseId}/invite-code", example = "ABCD2345")
         String inviteCode,
         @Schema(description = "초대코드 만료 시각 (소유자에게만 값, 그 외 null)")
-        Instant inviteExpiresAt) {
+        Instant inviteExpiresAt,
+        @Schema(description = "집 보기 방식. DIORAMA(기본), CLASSIC(기존 집)", example = "DIORAMA")
+        HouseDisplayMode displayMode) {
 
     public static HouseDetailResponse of(House house, int currentMemberCount,
                                          HouseMemberRole myRole, List<GoalSummary> goals) {
@@ -51,6 +54,6 @@ public record HouseDetailResponse(
                 goals,
                 myRole,
                 owner ? house.getInviteCode() : null,
-                owner ? house.getInviteExpiresAt() : null);
+                owner ? house.getInviteExpiresAt() : null, house.getDisplayMode());
     }
 }

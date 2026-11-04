@@ -6,6 +6,7 @@ import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
 import com.triples.rougether.userapi.house.dto.HouseMissionListResponse.MissionSummary;
 import com.triples.rougether.userapi.room.dto.RoomRenderResponse;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -38,7 +39,9 @@ public record HousePreviewDetailResponse(
         @Schema(description = "단체미션 요약 (최신 생성순). 비구성원도 읽기 전용으로 조회 가능")
         List<MissionSummary> missions,
         @Schema(description = "구성원별 방 렌더 데이터 (가입순, ACTIVE 구성원만). 미리보기 화면의 구성원 타일 렌더용")
-        List<MemberRoomSummary> memberRooms) {
+        List<MemberRoomSummary> memberRooms,
+        @Schema(description = "집 보기 방식", example = "DIORAMA")
+        HouseDisplayMode displayMode) {
 
     // isFull 은 "사람이 더 들어갈 수 없음" — 정원이 찼어도 비켜줄 동거 봇(#309)이 있으면 false 로 내려 참여 버튼을 살린다.
     public static HousePreviewDetailResponse of(House house, int currentMemberCount,
@@ -60,7 +63,7 @@ public record HousePreviewDetailResponse(
                 isFull,
                 myJoinRequestStatus,
                 missions,
-                memberRooms);
+                memberRooms, house.getDisplayMode());
     }
 
     // 구성원 1명의 방 타일. 활동 정보 없이 렌더 데이터만 - userId·role 등 구성원 관리 필드는

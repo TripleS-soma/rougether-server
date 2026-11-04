@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.house.dto;
 
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 // 집 설정 수정 응답 - 갱신된 설정.
@@ -15,5 +16,7 @@ public record HouseUpdateResponse(
         @Schema(description = "최대 구성원 수", example = "6")
         Integer maxMembers,
         @Schema(description = "공개 여부. true면 집 탐색에 노출", example = "true")
-        boolean isPublic) {
+        boolean isPublic,
+        @Schema(description = "집 보기 방식", example = "DIORAMA")
+        HouseDisplayMode displayMode) {
 }

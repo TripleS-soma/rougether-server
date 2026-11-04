@@ -4,6 +4,8 @@ import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.support.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -41,6 +43,10 @@ public class House extends BaseEntity {
 
     @Column(name = "cover_image_key", length = 255)
     private String coverImageKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "display_mode", length = 16, nullable = false)
+    private HouseDisplayMode displayMode = HouseDisplayMode.DIORAMA;
 
     @Column(name = "max_members")
     private Integer maxMembers;
@@ -130,6 +136,12 @@ public class House extends BaseEntity {
         // (isPublic=true 필터 쿼리들이 걸러냄). 초대코드 흐름은 공개 여부와 무관하게 유지.
         if (isPublic != null) {
             this.isPublic = isPublic;
+        }
+    }
+
+    public void changeDisplayMode(HouseDisplayMode displayMode) {
+        if (displayMode != null) {
+            this.displayMode = displayMode;
         }
     }
 

@@ -3,6 +3,7 @@ package com.triples.rougether.userapi.house.dto;
 import com.triples.rougether.domain.house.entity.HouseJoinRequest;
 import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
 import com.triples.rougether.userapi.house.dto.HouseListResponse.GoalSummary;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -26,7 +27,9 @@ public record MyJoinRequestListResponse(List<MyJoinRequestSummary> items) {
             @Schema(description = "신청 상태", example = "PENDING")
             HouseJoinRequestStatus status,
             @Schema(description = "신청 시각")
-            Instant requestedAt) {
+            Instant requestedAt,
+            @Schema(description = "집 보기 방식", example = "DIORAMA")
+            HouseDisplayMode displayMode) {
 
         public static MyJoinRequestSummary of(HouseJoinRequest request, List<GoalSummary> goals) {
             return new MyJoinRequestSummary(
@@ -36,7 +39,7 @@ public record MyJoinRequestListResponse(List<MyJoinRequestSummary> items) {
                     request.getHouse().getCoverImageKey(),
                     goals,
                     request.getStatus(),
-                    request.getRequestedAt());
+                    request.getRequestedAt(), request.getHouse().getDisplayMode());
         }
     }
 }
