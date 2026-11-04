@@ -23,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MarketAssetService {
 
+    @org.springframework.beans.factory.annotation.Value("${market.fixed-price.enabled:true}")
+    private boolean fixedPriceEnabled;
+
     static final String TRADABLE_THEME_CODE = "photo_furniture";
 
     private final UserItemRepository userItemRepository;
@@ -45,6 +48,7 @@ public class MarketAssetService {
 
     @Transactional
     public MarketAssetResponse issue(Long userId, Long userItemId, int totalSupply) {
+        if (fixedPriceEnabled) throw new BusinessException(MarketErrorCode.ORDERBOOK_RETIRED);
         UserItem owned = userItemRepository.findOwnedWithItem(userId, userItemId)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.ITEM_NOT_OWNED));
         Item item = owned.getItem();

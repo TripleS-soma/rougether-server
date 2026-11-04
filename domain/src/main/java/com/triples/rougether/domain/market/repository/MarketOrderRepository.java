@@ -15,6 +15,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface MarketOrderRepository extends JpaRepository<MarketOrder, Long> {
 
+    boolean existsByStatus(OrderStatus status);
+
+    @Query("select o from MarketOrder o where o.status = com.triples.rougether.domain.market.entity.OrderStatus.OPEN "
+            + "and not exists (select c.id from MarketCommand c where c.userId = o.userId "
+            + "and c.requestId = concat('fixed-price-close-', str(o.id))) order by o.id")
+    List<MarketOrder> findLegacyOrdersToClose(Pageable page);
+
     boolean existsByAssetIdAndSideAndStatus(Long assetId, OrderSide side, OrderStatus status);
 
     List<MarketOrder> findByAssetIdAndSideAndStatusOrderByIdAsc(Long assetId, OrderSide side, OrderStatus status);

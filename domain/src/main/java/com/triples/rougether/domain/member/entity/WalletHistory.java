@@ -38,6 +38,7 @@ public class WalletHistory extends BaseCreatedEntity {
     public static final String SOURCE_MARKET_ORDER = "MARKET_ORDER";
     public static final String SOURCE_FURNITURE_GENERATION = "FURNITURE_GENERATION";
     public static final String SOURCE_MARKET_TRADE = "MARKET_TRADE";
+    public static final String SOURCE_MARKET_PURCHASE = "MARKET_PURCHASE";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
