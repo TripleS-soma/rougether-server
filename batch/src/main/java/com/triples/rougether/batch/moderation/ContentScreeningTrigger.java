@@ -41,11 +41,12 @@ public class ContentScreeningTrigger {
             return;
         }
         Instant now = clock.instant();
-        List<ScreeningCandidate> candidates = reader.read(now);
+        List<ScreeningTarget> candidates = reader.read(now);
         int flagged = 0;
         int failed = 0;
         int consecutiveOutages = 0;
-        for (ScreeningCandidate candidate : candidates) {
+        for (ScreeningTarget target : candidates) {
+            ScreeningCandidate candidate = target.candidate();
             JevVerdict verdict;
             try {
                 verdict = jev.classify(candidate.getContent(), candidate.getContext());
@@ -70,7 +71,7 @@ public class ContentScreeningTrigger {
             try {
                 ScreeningJudgement judgement = ScreeningJudgement.of(verdict.probabilities(),
                         properties.flagThreshold());
-                recorder.record(candidate, sha256(candidate.getContent()), verdict, judgement, now);
+                recorder.record(target, sha256(candidate.getContent()), verdict, judgement, now);
                 if (judgement.flagged()) {
                     flagged++;
                 }

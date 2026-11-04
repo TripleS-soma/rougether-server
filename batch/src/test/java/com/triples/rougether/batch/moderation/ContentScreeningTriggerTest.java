@@ -33,12 +33,12 @@ class ContentScreeningTriggerTest {
         return new ContentScreeningTrigger(properties, reader, jev, recorder, notifier, clock);
     }
 
-    private static ScreeningCandidate candidate(long id) {
+    private static ScreeningTarget candidate(long id) {
         ScreeningCandidate candidate = mock(ScreeningCandidate.class);
         when(candidate.getTargetType()).thenReturn("FEED_POST");
         when(candidate.getTargetId()).thenReturn(id);
         when(candidate.getContent()).thenReturn("본문" + id);
-        return candidate;
+        return new ScreeningTarget(candidate, false);
     }
 
     @Test
@@ -49,7 +49,7 @@ class ContentScreeningTriggerTest {
 
     @Test
     void 인증_실패면_남은_후보를_호출하지_않고_운영_알림을_한_번_보낸다() {
-        List<ScreeningCandidate> candidates = List.of(candidate(1), candidate(2));
+        List<ScreeningTarget> candidates = List.of(candidate(1), candidate(2));
         when(reader.read(any())).thenReturn(candidates);
         when(jev.classify(anyString(), any())).thenThrow(new JevAuthException("Jev 인증 실패 status=401", null));
 
@@ -62,7 +62,7 @@ class ContentScreeningTriggerTest {
 
     @Test
     void 재시도를_소진한_장애가_3건_연속이면_그_실행을_중단한다() {
-        List<ScreeningCandidate> candidates = List.of(candidate(1), candidate(2), candidate(3), candidate(4));
+        List<ScreeningTarget> candidates = List.of(candidate(1), candidate(2), candidate(3), candidate(4));
         when(reader.read(any())).thenReturn(candidates);
         when(jev.classify(anyString(), any())).thenThrow(new JevException("Jev 오류 status=503", true));
 
@@ -75,8 +75,8 @@ class ContentScreeningTriggerTest {
 
     @Test
     void 일반_호출_실패는_그_건만_건너뛰고_다음_후보를_판정한다() {
-        ScreeningCandidate first = candidate(1);
-        ScreeningCandidate second = candidate(2);
+        ScreeningTarget first = candidate(1);
+        ScreeningTarget second = candidate(2);
         when(reader.read(any())).thenReturn(List.of(first, second));
         when(jev.classify(eq("본문1"), any())).thenThrow(new JevException("Jev 오류 status=400", false));
         when(jev.classify(eq("본문2"), any())).thenReturn(new JevVerdict("jev-1.14.0",

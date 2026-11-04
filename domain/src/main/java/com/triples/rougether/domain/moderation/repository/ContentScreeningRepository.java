@@ -17,6 +17,9 @@ public interface ContentScreeningRepository extends JpaRepository<ContentScreeni
 
     Optional<ContentScreening> findByTargetTypeAndTargetId(ContentReportTargetType targetType, Long targetId);
 
+    // 운영자 대기열 한 페이지의 대상 판정 점수(#479)
+    List<ContentScreening> findByTargetTypeAndTargetIdIn(ContentReportTargetType targetType, List<Long> targetIds);
+
     // 재판정 시 기존 행을 잠가, 동시 실행이 둘 다 "대기 신고 없음"을 보고 자동 신고를 중복 생성하지 않게 함.
     // 첫 판정의 동시 INSERT 는 uk_content_screenings_target 이 한쪽 트랜잭션(신고 포함)을 롤백시킴.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
