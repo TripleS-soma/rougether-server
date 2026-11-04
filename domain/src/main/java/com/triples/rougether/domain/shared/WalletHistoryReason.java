@@ -14,5 +14,7 @@ public enum WalletHistoryReason {
     MARKET_ROYALTY,          // 거래소 되팔기 로열티 적립(제작자)
     GACHA_DRAW,              // 뽑기 실행 차감
     SHOP_PURCHASE,           // 상점 아이템 구매 차감
+    FURNITURE_GENERATION,     // AI 가구 생성 코인 차감
+    FURNITURE_GENERATION_REFUND, // AI 가구 생성 실패 코인 반환
     MARKET_ORDER_ESCROW      // 거래소 매수 주문 코인 맡김 차감
 }

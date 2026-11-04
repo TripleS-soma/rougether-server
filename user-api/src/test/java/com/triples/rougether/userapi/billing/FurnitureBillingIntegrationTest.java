@@ -16,6 +16,12 @@ import com.triples.rougether.domain.billing.repository.*;
 import com.triples.rougether.domain.furniture.entity.FurnitureGenerationJob.Status;
 import com.triples.rougether.domain.furniture.repository.*;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
+import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.domain.shared.CurrencyType;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
@@ -53,7 +59,7 @@ import org.springframework.test.context.bean.override.mockito.*;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-@SpringBootTest(properties = {"billing.enabled=true", "billing.require-credits=true", "billing.environment=SANDBOX", "billing.worker-enabled=false",
+@SpringBootTest(properties = {"billing.enabled=true", "billing.require-credits=true", "billing.coin-fallback-enabled=true", "billing.environment=SANDBOX", "billing.worker-enabled=false",
         "billing.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "billing.apple.products.pack3=3", "billing.apple.products.pack7=7", "billing.google.products.pack3=3",
         "furniture.generation.enabled=true",
@@ -61,6 +67,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @AutoConfigureMockMvc
 class FurnitureBillingIntegrationTest {
     @Autowired FurnitureCreditTransactions credits;
+    @Autowired UserWalletRepository wallets;
+    @MockitoSpyBean WalletHistoryRepository walletHistories;
+    @Autowired FurnitureGenerationTransactions generation;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired FurnitureBillingService billing;
     @Autowired PurchaseReferenceCipher cipher;
     @Autowired FurnitureGenerationService furniture;
@@ -153,11 +163,140 @@ class FurnitureBillingIntegrationTest {
         assertThat(credits.balance(user.getId()).available()).isZero();
     }
 
-    @Test void 생성권이_없으면_작업과_원본업로드를_만들지_않음() {
+    @Test void 생성권과_코인이_없으면_작업과_원본업로드를_만들지_않음() {
         assertCode(this::submit, "FURNITURE_CREDITS_REQUIRED");
         assertThat(jobs.count()).isZero();
         verify(storage, never()).upload(any(), anyString(), anyString());
         verify(ai, never()).extract(any(), anyString());
+    }
+
+    @Test void 생성권이_있으면_코인이_충분해도_생성권부터_사용() {
+        fundCoins(300);
+        grant("1");
+        var job = submit();
+        assertThat(coinBalance()).isEqualTo(300);
+        assertThat(reservations.findById(job.id()).orElseThrow().getPaymentType())
+                .isEqualTo(FurnitureCreditReservation.PaymentType.CREDIT);
+        assertThat(credits.balance(user.getId()).available()).isEqualTo(2);
+        assertThat(coinHistories()).isEmpty();
+    }
+
+    @Test void 생성권이_없으면_정확히_100코인으로_생성하고_재전송과_중복정산은_추가차감하지_않음() {
+        fundCoins(100);
+        UUID requestId = UUID.randomUUID();
+        var job = furniture.submit(user.getId(), requestId, "의자", photo());
+        assertThat(coinBalance()).isZero();
+        var reservation = reservations.findById(job.id()).orElseThrow();
+        assertThat(reservation.getPaymentType()).isEqualTo(FurnitureCreditReservation.PaymentType.COIN);
+        assertThat(reservation.getPaymentAmount()).isEqualTo(100);
+        assertThat(furniture.submit(user.getId(), requestId, "의자", photo()).id()).isEqualTo(job.id());
+        lambda.runNext(); lambda.runNext(); lambda.runNext();
+        settle(job.id(), true);
+        settle(job.id(), false);
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.SUCCEEDED);
+        assertThat(coinBalance()).isZero();
+        assertThat(coinHistories()).singleElement().satisfies(history -> {
+            assertThat(history.getAmount()).isEqualTo(-100);
+            assertThat(history.getBalanceAfter()).isZero();
+            assertThat(history.getReason()).isEqualTo(WalletHistoryReason.FURNITURE_GENERATION);
+        });
+        assertThat(credits.balance(user.getId()).available()).isZero();
+        assertThat(credits.balance(user.getId()).reserved()).isZero();
+        assertThat(reservations.findById(job.id()).orElseThrow().getStatus())
+                .isEqualTo(FurnitureCreditReservation.Status.SPENT);
+    }
+
+    @Test void 생성권과_100코인이_모두_없으면_잔액과_원장을_변경하지_않음() {
+        fundCoins(99);
+        assertCode(this::submit, "FURNITURE_CREDITS_REQUIRED");
+        assertThat(coinBalance()).isEqualTo(99);
+        assertThat(coinHistories()).isEmpty();
+        assertThat(jobs.count()).isZero();
+        assertThat(reservations.count()).isZero();
+        verify(storage, never()).upload(any(), anyString(), anyString());
+    }
+
+    @Test void 코인으로_예약후_업로드실패는_코인으로_반환() {
+        fundCoins(150);
+        doThrow(new IllegalStateException("storage failed")).when(storage).upload(any(), anyString(), anyString());
+        var job = submit();
+        assertThat(job.status()).isEqualTo(Status.FAILED);
+        settle(job.id(), false);
+        assertCoinRefund(job.id(), 150);
+    }
+
+    @Test void 코인으로_예약후_공급자실패는_중복정리에도_한번만_반환() {
+        fundCoins(100);
+        var job = submit();
+        when(ai.extract(any(), anyString())).thenThrow(new FurnitureAiFailure("PROVIDER_RATE_LIMITED"));
+        lambda.runNext(); maintenance.maintain(); maintenance.maintain();
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertCoinRefund(job.id(), 100);
+    }
+
+    @Test void 코인으로_예약후_대기작업_만료는_한번만_반환() {
+        fundCoins(100);
+        var job = submit();
+        now = now.plus(Duration.ofHours(25));
+        maintenance.maintain(); maintenance.maintain();
+        assertThat(queries.get(user.getId(), job.id()).status()).isEqualTo(Status.FAILED);
+        assertCoinRefund(job.id(), 100);
+    }
+
+    @Test void 코인_예약원장_실패는_차감과_작업을_함께_롤백() {
+        fundCoins(100);
+        doThrow(new IllegalStateException("coin history failed")).when(walletHistories).save(any());
+        assertThatThrownBy(this::submit).isInstanceOf(IllegalStateException.class);
+        assertThat(coinBalance()).isEqualTo(100);
+        assertThat(jobs.count()).isZero();
+        assertThat(reservations.count()).isZero();
+        assertThat(coinHistories()).isEmpty();
+        verify(storage, never()).upload(any(), anyString(), anyString());
+    }
+
+    @Test void 코인_반환원장_실패는_환급과_정산을_함께_롤백하고_재시도할수있음() {
+        fundCoins(100);
+        var reservation = generation.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "의자");
+        String jobId = reservation.job().id();
+        doThrow(new IllegalStateException("coin refund history failed")).when(walletHistories)
+                .save(argThat(history -> history != null && history.getReason() == WalletHistoryReason.FURNITURE_GENERATION_REFUND));
+        assertThatThrownBy(() -> generation.uploadFailed(user.getId(), jobId)).isInstanceOf(IllegalStateException.class);
+        assertThat(coinBalance()).isZero();
+        assertThat(reservations.findById(jobId).orElseThrow().getStatus()).isEqualTo(FurnitureCreditReservation.Status.RESERVED);
+        assertThat(jobs.findById(jobId).orElseThrow().getStatus()).isEqualTo(Status.UPLOADING);
+        reset(walletHistories);
+        generation.uploadFailed(user.getId(), jobId);
+        assertCoinRefund(jobId, 100);
+    }
+
+    @Test void 코인결제후_생성권이_지급되어도_실패시_코인으로_환급() {
+        fundCoins(100);
+        var reservation = generation.reserve(user.getId(), UUID.randomUUID().toString(), "digest", "의자");
+        grant("later");
+        generation.uploadFailed(user.getId(), reservation.job().id());
+        assertThat(coinBalance()).isEqualTo(100);
+        assertThat(credits.balance(user.getId()).available()).isEqualTo(3);
+        assertThat(credits.balance(user.getId()).reserved()).isZero();
+    }
+
+    @Test void 같은_요청의_동시접수는_100코인을_한번만_차감() throws Exception {
+        fundCoins(100);
+        String requestId = UUID.randomUUID().toString();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            var tasks = new ArrayList<Future<FurnitureGenerationTransactions.Reservation>>();
+            for (int i = 0; i < 2; i++) tasks.add(executor.submit(() -> {
+                start.await(); return generation.reserve(user.getId(), requestId, "digest", "의자");
+            }));
+            start.countDown();
+            var first = tasks.get(0).get(15, TimeUnit.SECONDS);
+            var second = tasks.get(1).get(15, TimeUnit.SECONDS);
+            assertThat(first.job().id()).isEqualTo(second.job().id());
+            assertThat(first.created()).isNotEqualTo(second.created());
+        }
+        assertThat(coinBalance()).isZero();
+        assertThat(coinHistories()).hasSize(1);
+        assertThat(reservations.count()).isEqualTo(1);
     }
 
     @Test void 같은_날에도_생성권이_있으면_계속_생성하고_소진하면_접수를_막음() {
@@ -421,6 +560,29 @@ class FurnitureBillingIntegrationTest {
         assertThat(output.getAll()).doesNotContain("test-purchase-secret", "test-reference-secret");
         verify(apple, never()).verify(anyString());
         verify(google, never()).verify(anyString());
+    }
+
+    private void settle(String jobId, boolean success) {
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> credits.settle(user.getId(), jobId, success));
+    }
+    private void fundCoins(int amount) {
+        wallets.save(UserWallet.createWithBalance(user, CurrencyType.COIN, amount));
+    }
+    private int coinBalance() {
+        return wallets.findByUserIdAndCurrencyType(user.getId(), CurrencyType.COIN).orElseThrow().getBalance();
+    }
+    private List<WalletHistory> coinHistories() {
+        return walletHistories.findHistories(user.getId(), CurrencyType.COIN, null,
+                org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+    }
+    private void assertCoinRefund(String jobId, int expectedBalance) {
+        assertThat(coinBalance()).isEqualTo(expectedBalance);
+        assertThat(coinHistories()).extracting(WalletHistory::getAmount).containsExactly(100, -100);
+        assertThat(coinHistories().getFirst().getReason()).isEqualTo(WalletHistoryReason.FURNITURE_GENERATION_REFUND);
+        assertThat(reservations.findById(jobId).orElseThrow().getStatus()).isEqualTo(FurnitureCreditReservation.Status.RELEASED);
+        assertThat(credits.balance(user.getId()).available()).isZero();
+        assertThat(credits.balance(user.getId()).reserved()).isZero();
     }
 
     private Verified verified(Store store, String reference, String product, int refundable) {
