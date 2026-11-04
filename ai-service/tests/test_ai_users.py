@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from rougether_ai.ai_user_models import DecisionRequest
+from rougether_ai.ai_user_policy import MEMORY_GUARD, PROMPT_VERSION
 from rougether_ai.ai_user_service import AiUserService, ClaudeGateway
 from rougether_ai.ai_user_settings import AiUserSettings
 from rougether_ai.app import create_app
@@ -90,9 +91,11 @@ def test_decision_uses_human_model_and_source_checked_facts():
             "state": {"aiUserId": 1, "actions": ["FEED_COMMENT"], "source": {"type": "FEED_COMMENT"}}, "facts": [FACT]})
         assert response.status_code == 200
         assert response.json()["payload"]["postId"] == 10
+        assert response.json()["promptVersion"] == PROMPT_VERSION
     assert len(calls) == 1
     assert calls[0]["model"] == "claude-sonnet-5-5"
     assert calls[0]["thinking"] == {"type": "between_tools"}
+    assert calls[0]["system"].endswith(MEMORY_GUARD)
     assert json.loads(calls[0]["messages"][0]["content"])["state"]["longTermMemories"] == [{"text":FACT["text"]}]
 
 
@@ -107,7 +110,8 @@ def test_deterministic_action_requires_no_model():
         result = client.post("/internal/v1/ai-users/decide", headers=AUTH, json={"aiUserId": 1,
             "state": {"aiUserId": 1, "actions": ["WAIT"], "source": {"type": "SCHEDULE"},
                       "localTime": "03:00", "personaKey": "steady-walk"}})
-        assert result.json() == {"action": "WAIT", "payload": {"reason": "OUTSIDE_ACTIVE_HOURS"}, "memory": ""}
+        assert result.json() == {"action": "WAIT", "payload": {"reason": "OUTSIDE_ACTIVE_HOURS"}, "memory": "",
+                                 "promptVersion": "code"}
 
 
 def test_provider_error_does_not_retry_or_leak_response():
