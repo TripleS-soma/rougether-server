@@ -163,8 +163,9 @@ public class HouseCommandService {
         houseCoverImageCatalog.validatePublished(request.coverImageKey());
         house.updateSettings(request.name(), request.description(), request.coverImageKey(), request.maxMembers(),
                 request.isPublic());
+        house.changeDisplayMode(request.displayMode());
         return new HouseUpdateResponse(house.getId(), house.getName(), house.getDescription(),
-                house.getCoverImageKey(), house.getMaxMembers(), house.isPublic());
+                house.getCoverImageKey(), house.getMaxMembers(), house.isPublic(), house.getDisplayMode());
     }
 
     // 닉네임 확정 시 기본 이름 그대로인 소유 집을 "{닉네임}의 집"으로 개명(#350) - MemberService 가

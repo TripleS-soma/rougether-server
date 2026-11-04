@@ -59,7 +59,7 @@ class HouseMemberCountDisplayIntegrationTest {
         User owner = userRepository.save(User.signUp("count-explore@rougether.dev"));
         House starter = houseCommandService.createStarterHouse(owner);
         houseCommandService.updateSettings(owner.getId(), starter.getId(),
-                new HouseUpdateRequest(null, null, null, null, true));
+                new HouseUpdateRequest(null, null, null, null, true, null));
 
         User viewer = userRepository.save(User.signUp("count-viewer@rougether.dev"));
         // 탐색은 최신 생성순이라 방금 만든 집이 첫 페이지에 있다

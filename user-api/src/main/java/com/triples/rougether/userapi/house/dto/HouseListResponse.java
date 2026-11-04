@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseJoinRequestStatus;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -30,12 +31,14 @@ public record HouseListResponse(
             int level,
             List<GoalSummary> goals,
             @Schema(description = "내 최근 입주 신청 상태. 신청 이력이 없으면 null", example = "PENDING")
-            HouseJoinRequestStatus myJoinRequestStatus) {
+            HouseJoinRequestStatus myJoinRequestStatus,
+            @Schema(description = "집 보기 방식", example = "DIORAMA")
+            HouseDisplayMode displayMode) {
 
         public HouseSummary(Long houseId, String name, String coverImageKey,
                             int currentMemberCount, Integer maxMembers, int level,
                             List<GoalSummary> goals) {
-            this(houseId, name, coverImageKey, currentMemberCount, maxMembers, level, goals, null);
+            this(houseId, name, coverImageKey, currentMemberCount, maxMembers, level, goals, null, HouseDisplayMode.DIORAMA);
         }
 
         public static HouseSummary of(House house, int currentMemberCount, List<GoalSummary> goals,
@@ -48,7 +51,7 @@ public record HouseListResponse(
                     house.getMaxMembers(),
                     house.getLevel(),
                     goals,
-                    myJoinRequestStatus);
+                    myJoinRequestStatus, house.getDisplayMode());
         }
     }
 

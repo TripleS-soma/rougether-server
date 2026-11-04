@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.house;
 
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -63,7 +65,7 @@ class MyJoinRequestControllerTest {
                 .thenReturn(new MyJoinRequestListResponse(List.of(new MyJoinRequestSummary(
                         21L, 1L, "아침 루틴 하우스", "house/cover.png",
                         List.of(new GoalSummary(1L, "morning_routine", "아침 루틴")),
-                        HouseJoinRequestStatus.PENDING, Instant.parse("2026-08-01T00:00:00Z")))));
+                        HouseJoinRequestStatus.PENDING, Instant.parse("2026-08-01T00:00:00Z"), HouseDisplayMode.DIORAMA))));
 
         mockMvc.perform(get("/api/v1/me/join-requests"))
                 .andExpect(status().isOk())

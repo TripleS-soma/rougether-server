@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.house.entity.House;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 // GET /api/v1/houses/by-code/{inviteCode} 응답 - 참여 전 미리보기.
@@ -19,7 +20,9 @@ public record HousePreviewResponse(
         @Schema(description = "초대코드 만료 여부. true 면 이 코드로는 참여(POST /api/v1/houses/join-by-code)할 수 없어 코드를 공유한 구성원의 재발급이 필요하므로 화면에 만료 안내 표시", example = "false")
         boolean inviteExpired,
         @Schema(description = "방장 승인 대기 여부. 집 공용 코드(소유자 공유)는 false(즉시가입), 구성원 개인 코드는 true(참여 시 입주 신청이 생성되고 방장 수락 후 입주 확정)", example = "false")
-        boolean requiresApproval) {
+        boolean requiresApproval,
+        @Schema(description = "집 보기 방식", example = "DIORAMA")
+        HouseDisplayMode displayMode) {
 
     public static HousePreviewResponse of(House house, int currentMemberCount,
                                           boolean inviteExpired, boolean requiresApproval) {
@@ -30,6 +33,6 @@ public record HousePreviewResponse(
                 currentMemberCount,
                 house.getMaxMembers(),
                 inviteExpired,
-                requiresApproval);
+                requiresApproval, house.getDisplayMode());
     }
 }

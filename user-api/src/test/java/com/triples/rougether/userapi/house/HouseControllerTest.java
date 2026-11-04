@@ -1,5 +1,7 @@
 package com.triples.rougether.userapi.house;
 
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
+
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -391,7 +393,7 @@ class HouseControllerTest {
         when(houseQueryService.getHouseDetail(7L, 1L)).thenReturn(new HouseDetailResponse(
                 1L, "아침 루틴 하우스", "같이 아침 루틴", "house/cover.png", 4, true, 3, 2, 120,
                 java.util.List.of(new HouseListResponse.GoalSummary(1L, "morning_routine", "아침 루틴")),
-                HouseMemberRole.OWNER, "ABCD2345", Instant.parse("2026-07-10T00:00:00Z")));
+                HouseMemberRole.OWNER, "ABCD2345", Instant.parse("2026-07-10T00:00:00Z"), HouseDisplayMode.DIORAMA));
 
         mockMvc.perform(get("/api/v1/houses/1"))
                 .andExpect(status().isOk())
@@ -548,7 +550,7 @@ class HouseControllerTest {
     void 집_설정_수정_응답_계약() throws Exception {
         authAsUser7();
         when(houseCommandService.updateSettings(eq(7L), eq(1L), any())).thenReturn(
-                new HouseUpdateResponse(1L, "새 이름", "새 소개", "house/new.png", 6, true));
+                new HouseUpdateResponse(1L, "새 이름", "새 소개", "house/new.png", 6, true, HouseDisplayMode.DIORAMA));
 
         mockMvc.perform(put("/api/v1/houses/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -587,7 +589,7 @@ class HouseControllerTest {
     void 초대코드_미리보기_응답_계약() throws Exception {
         authAsUser7();
         when(houseJoinService.preview("ABCD2345")).thenReturn(
-                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false, true));
+                new HousePreviewResponse(1L, "아침 루틴 하우스", "house/cover.png", 3, 4, false, true, HouseDisplayMode.DIORAMA));
 
         mockMvc.perform(get("/api/v1/houses/by-code/ABCD2345"))
                 .andExpect(status().isOk())
@@ -632,7 +634,7 @@ class HouseControllerTest {
                                         new RoomResponse.RoomCobwebResponse(
                                                 "items/common/decor/room-corner-cobweb.png",
                                                 Instant.parse("2026-08-10T03:30:00Z"), true))),
-                        new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null))));
+                        new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null)), HouseDisplayMode.DIORAMA));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))
                 .andExpect(status().isOk())
@@ -703,4 +705,13 @@ class HouseControllerTest {
                 .andExpect(jsonPath("$.memberRooms[0].lastAccessedAt").doesNotExist())
                 .andExpect(jsonPath("$.memberRooms[0].userId").doesNotExist());
     }
+    @Test
+    void 알_수_없는_집_보기_방식은_400() throws Exception {
+        authAsUser7();
+        mockMvc.perform(put("/api/v1/houses/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayMode\":\"UNKNOWN\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
 }

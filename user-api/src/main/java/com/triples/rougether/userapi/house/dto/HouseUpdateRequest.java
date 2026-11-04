@@ -1,5 +1,6 @@
 package com.triples.rougether.userapi.house.dto;
 
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -18,5 +19,7 @@ public record HouseUpdateRequest(
         @Min(1) @Max(10) Integer maxMembers,
         @Schema(description = "공개 여부 (미지정 시 유지). true면 집 탐색·비구성원 미리보기에 노출, false면 초대코드로만 참여 가능. "
                 + "가입 시 지급되는 기본 집은 비공개로 시작하며 여기서 공개로 전환할 수 있음", example = "true")
-        Boolean isPublic) {
+        Boolean isPublic,
+        @Schema(description = "집 보기 방식. DIORAMA(기본 리디자인 집), CLASSIC(기존 집). 방장만 변경 가능, 미지정 시 유지", example = "DIORAMA")
+        HouseDisplayMode displayMode) {
 }

@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.house.dto;
 
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMemberRole;
+import com.triples.rougether.domain.house.entity.HouseDisplayMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +28,9 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
             @Schema(description = "이 집에서 내 역할. OWNER(소유자 — 설정 수정·초대코드 재발급·강퇴·소유권 양도 가능), MEMBER(일반 구성원)", example = "OWNER")
             HouseMemberRole myRole,
             @Schema(description = "내 가입 시각. 직접 순서를 정하지 않은 집끼리의 정렬 기준")
-            Instant joinedAt) {
+            Instant joinedAt,
+            @Schema(description = "집 보기 방식", example = "DIORAMA")
+            HouseDisplayMode displayMode) {
 
         public static MyHouseSummary of(HouseMember member, int currentMemberCount) {
             return new MyHouseSummary(
@@ -39,7 +42,7 @@ public record MyHouseListResponse(List<MyHouseSummary> items) {
                     member.getHouse().getMaxMembers(),
                     member.getHouse().isPublic(),
                     member.getRole(),
-                    member.getJoinedAt());
+                    member.getJoinedAt(), member.getHouse().getDisplayMode());
         }
     }
 }
