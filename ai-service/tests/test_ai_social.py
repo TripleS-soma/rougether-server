@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from rougether_ai.ai_user_policy import (
-    ACTION_HELP, SOCIAL_VOICES, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
+    ACTION_HELP, SOCIAL_VOICES, casualize_social_text, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
 )
 from rougether_ai.app import create_app
 from test_ai_users import AUTH, CONFIG, active
@@ -87,10 +87,10 @@ def test_social_limits_reject_long_blank_or_wrong_type_without_truncating(action
 
 
 @pytest.mark.parametrize("persona,voice", [
-    ("restart-morning","가볍고 솔직한 반말 일기"),
-    ("steady-read","차분하고 부드러운 해요체"),
+    ("restart-morning","솔직한 반말 혼잣말"),
+    ("steady-read","조용한 음슴체"),
     ("observe-note","가장 짧고 건조한"),
-    (None,"담백한 짧은 해요체"),
+    (None,"짧은 반말·음슴체"),
 ])
 def test_existing_db_persona_gets_current_voice_at_generation_time(persona,voice):
     def handler(request):
@@ -103,7 +103,7 @@ def test_existing_db_persona_gets_current_voice_at_generation_time(persona,voice
         assert prompt["state"]["persona"]=="기존 DB에 저장된 페르소나와 관심사"
         assert prompt["state"]["social"]["candidates"][0]["postId"]==7
         return httpx.Response(200,json={"stop_reason":"end_turn","content":[{"type":"text","text":json.dumps({
-            "action":"FEED_COMMENT","payload":{"postId":7,"content":"제목만 적는 것도 괜찮겠어요"},"memory":""})}]})
+            "action":"FEED_COMMENT","payload":{"postId":7,"content":"제목만 적어도 될 듯"},"memory":""})}]})
     state=social_state()
     state.update(persona="기존 DB에 저장된 페르소나와 관심사",perception={"canSeeImages":True})
     if persona is None:
@@ -113,7 +113,7 @@ def test_existing_db_persona_gets_current_voice_at_generation_time(persona,voice
     with TestClient(create_app(CONFIG,ai_users=active(handler))) as client:
         result=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert result.status_code==200
-        assert result.json()["payload"]=={"postId":7,"content":"제목만 적는 것도 괜찮겠어요"}
+        assert result.json()["payload"]=={"postId":7,"content":"제목만 적어도 될 듯"}
 
 
 def test_provider_overlong_social_text_is_not_published_or_retried():
@@ -280,3 +280,46 @@ def test_generation_receives_post_brief_and_accepts_short_everyday_posts_unchang
         assert response.status_code == 200
         assert response.json()["payload"]["content"] == content
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("오늘 아침 걷기는 아직이다. 점심 전에 나가봐야지.", "오늘 아침 걷기는 아직이다 점심 전에 나가봐야지"),
+    ("주말에 할 거 없음.\n영화나 볼까.", "주말에 할 거 없음\n영화나 볼까"),
+    ("음... 글쎄", "음... 글쎄"),
+    ("평점 3.5면 볼 만함?", "평점 3.5면 볼 만함?"),
+    ("ㅋㅋ.", "ㅋㅋ"),
+])
+def test_sentence_periods_are_removed_without_touching_ellipsis_or_numbers(raw, expected):
+    assert casualize_social_text(raw) == expected
+
+
+@pytest.mark.parametrize("action,payload,expected", [
+    ("FEED_POST", {"boardType": "FREE", "content": "저녁 뭐 먹냐.", "imageIds": []}, "저녁 뭐 먹냐"),
+    ("FEED_COMMENT", {"postId": 7, "content": "나도 보리차파."}, "나도 보리차파"),
+])
+def test_parsed_social_text_drops_trailing_periods(action, payload, expected):
+    result = parse_plan({"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(
+        {"action": action, "payload": payload, "memory": ""}, ensure_ascii=False)}]}, [action])
+    assert result["payload"]["content"] == expected
+    assert payload["content"].endswith(".")
+
+
+def test_feed_update_request_is_casualized_without_mutating_input():
+    payload = {"postId": 3, "request": {"content": "제목 바꿈."}}
+    result = parse_plan({"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(
+        {"action": "FEED_UPDATE", "payload": payload, "memory": ""}, ensure_ascii=False)}]}, ["FEED_UPDATE"])
+    assert result["payload"] == {"postId": 3, "request": {"content": "제목 바꿈"}}
+
+
+@pytest.mark.parametrize("persona", [*SOCIAL_VOICES, None])
+def test_social_prompt_asks_for_community_casual_voice_for_every_persona(persona):
+    state = social_state()
+    state["personaKey"] = persona
+    system = decision_system(state)
+    assert "반말·음슴체" in system and "마침표(.)를 찍지 않는다" in system
+    assert "해요체(~요" in system and "쓰지 않는다" in system
+    assert "~노" in system  # 비하 어미 금지가 함께 전달됨
+    assert "예시 문장이나 예시의 소재" in system  # 예시 복사 방지
+    assert "가벼운 일상 경험과 취향" in system and "state에 있는 그대로만" in system
+    for voice in SOCIAL_VOICES.values():
+        assert "해요체" not in voice
