@@ -21,7 +21,10 @@ import com.triples.rougether.domain.moderation.entity.ContentReport;
 import com.triples.rougether.domain.moderation.entity.ContentReportReason;
 import com.triples.rougether.domain.moderation.entity.ContentReportStatus;
 import com.triples.rougether.domain.moderation.entity.ContentReportTargetType;
+import com.triples.rougether.domain.moderation.entity.ContentScreening;
 import com.triples.rougether.domain.moderation.repository.ContentReportRepository;
+import com.triples.rougether.domain.moderation.repository.ContentScreeningRepository;
+import java.math.BigDecimal;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.ThemeRepository;
@@ -59,6 +62,7 @@ class ContentReportAdminTest {
     @Autowired ThemeRepository themes;
     @Autowired ItemRepository items;
     @Autowired ContentReportRepository reports;
+    @Autowired ContentScreeningRepository screenings;
     @Autowired EntityManager em;
     @MockitoBean S3Client s3Client;
 
@@ -204,6 +208,72 @@ class ContentReportAdminTest {
         mockMvc.perform(post("/admin/reports/{id}/resolve", report.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"action\":\"HIDE\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    private void screened(ContentReportTargetType type, Long targetId, String probability) {
+        ContentScreening screening = ContentScreening.first(type, targetId);
+        screening.record("a".repeat(64), "jev-1.14.0", new BigDecimal(probability), ContentReportReason.ABUSE,
+                "{\"ABUSE\":" + probability + "}", 10, false, NOW);
+        screenings.save(screening);
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void 대기열은_기본이_위험도순이고_출처와_점수를_싣는다() throws Exception {
+        FeedPost low = feedPost("낮은 위험");
+        FeedPost high = feedPost("높은 위험");
+        FeedPost unscored = feedPost("판정 전");
+        ContentReport lowReport = report(reporter, ContentReportTargetType.FEED_POST, low.getId());
+        ContentReport unscoredReport = report(reporter, ContentReportTargetType.FEED_POST, unscored.getId());
+        ContentReport autoReport = reports.save(ContentReport.auto(ContentReportTargetType.FEED_POST, high.getId(),
+                owner.getId(), ContentReportReason.ABUSE, "auto: ABUSE p=0.9100", NOW));
+        screened(ContentReportTargetType.FEED_POST, low.getId(), "0.2000");
+        screened(ContentReportTargetType.FEED_POST, high.getId(), "0.9100");
+
+        mockMvc.perform(get("/admin/reports").param("status", "RECEIVED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].reportId").value(autoReport.getId()))
+                .andExpect(jsonPath("$.items[0].source").value("AUTO"))
+                .andExpect(jsonPath("$.items[0].reporterUserId").isEmpty())
+                .andExpect(jsonPath("$.items[0].harmProbability").value(0.91))
+                .andExpect(jsonPath("$.items[0].aiReason").value("ABUSE"))
+                .andExpect(jsonPath("$.items[1].reportId").value(lowReport.getId()))
+                .andExpect(jsonPath("$.items[1].source").value("USER"))
+                .andExpect(jsonPath("$.items[2].reportId").value(unscoredReport.getId()))
+                .andExpect(jsonPath("$.items[2].harmProbability").isEmpty())
+                .andExpect(jsonPath("$.items[2].aiReason").isEmpty());
+
+        mockMvc.perform(get("/admin/reports").param("status", "RECEIVED").param("sort", "recent"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].reportId").value(autoReport.getId()))
+                .andExpect(jsonPath("$.items[1].reportId").value(unscoredReport.getId()))
+                .andExpect(jsonPath("$.items[2].reportId").value(lowReport.getId()));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void 처리된_목록은_정렬값과_무관하게_최신순이고_거래소_신고는_점수가_없다() throws Exception {
+        FeedPost scored = feedPost("처리된 글");
+        ContentReport scoredReport = report(reporter, ContentReportTargetType.FEED_POST, scored.getId());
+        screened(ContentReportTargetType.FEED_POST, scored.getId(), "0.9900");
+        resolve(scoredReport.getId(), "DISMISS");
+        ContentReport assetReport = report(reporter, ContentReportTargetType.MARKET_ASSET, asset().getId());
+        resolve(assetReport.getId(), "DISMISS");
+
+        mockMvc.perform(get("/admin/reports").param("status", "DISMISSED").param("sort", "risk"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].reportId").value(assetReport.getId()))
+                .andExpect(jsonPath("$.items[0].harmProbability").isEmpty())
+                .andExpect(jsonPath("$.items[1].reportId").value(scoredReport.getId()))
+                .andExpect(jsonPath("$.items[1].harmProbability").value(0.99));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void 허용되지_않은_정렬은_400() throws Exception {
+        mockMvc.perform(get("/admin/reports").param("status", "RECEIVED").param("sort", "score"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_SORT_INVALID"));
     }
 
     @Test

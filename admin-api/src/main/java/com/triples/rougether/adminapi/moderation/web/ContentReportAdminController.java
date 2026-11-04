@@ -6,6 +6,7 @@ import com.triples.rougether.adminapi.moderation.dto.AdminContentReportResolveRe
 import com.triples.rougether.adminapi.moderation.error.ContentReportAdminException;
 import com.triples.rougether.adminapi.moderation.service.ContentReportAdminService;
 import com.triples.rougether.adminapi.moderation.service.ContentReportAdminService.Action;
+import com.triples.rougether.adminapi.moderation.service.ContentReportAdminService.Sort;
 import com.triples.rougether.common.error.ErrorResponse;
 import com.triples.rougether.domain.moderation.entity.ContentReportStatus;
 import java.security.Principal;
@@ -35,9 +36,11 @@ public class ContentReportAdminController {
         this.service = service;
     }
 
-    // status 생략 시 전체. 최신 신고순.
+    // status 생략 시 전체(최신순). sort=risk(기본)면 처리 대기 목록을 자동 판정 위험도순으로, recent 면 최신순으로 줌.
+    // 다른 상태·전체 목록은 sort 와 무관하게 최신순(#479).
     @GetMapping
     public AdminContentReportPageResponse list(@RequestParam(value = "status", required = false) String status,
+                                               @RequestParam(value = "sort", defaultValue = "risk") String sort,
                                                @RequestParam(value = "page", defaultValue = "0") int page,
                                                @RequestParam(value = "size", defaultValue = "20") int size) {
         if (page < 0 || size < 1 || size > MAX_SIZE) {
@@ -45,7 +48,12 @@ public class ContentReportAdminController {
         }
         ContentReportStatus parsed = (status == null || status.isBlank()) ? null
                 : parse(ContentReportStatus.class, status, "REPORT_STATUS_INVALID", "허용되지 않은 상태입니다: ");
-        return service.list(parsed, page, size);
+        Sort parsedSort = switch (sort) {
+            case "risk" -> Sort.RISK;
+            case "recent" -> Sort.RECENT;
+            default -> throw new ContentReportAdminException("REPORT_SORT_INVALID", "허용되지 않은 정렬입니다: " + sort, 400);
+        };
+        return service.list(parsed, parsedSort, page, size);
     }
 
     // action: HIDE(숨김·거래 정지 → ACTIONED) | DISMISS(조치 없음 → DISMISSED). 같은 대상의 대기 신고를 함께 닫음.

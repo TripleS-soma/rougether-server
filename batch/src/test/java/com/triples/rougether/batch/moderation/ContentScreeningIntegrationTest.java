@@ -15,6 +15,7 @@ import com.triples.rougether.batch.alert.BatchFailureAlertNotifier;
 import com.triples.rougether.domain.moderation.entity.ContentReportStatus;
 import com.triples.rougether.domain.moderation.entity.ContentReportTargetType;
 import com.triples.rougether.domain.moderation.repository.ContentReportRepository;
+import com.triples.rougether.domain.moderation.repository.ScreeningCandidate;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -60,6 +61,7 @@ class ContentScreeningIntegrationTest {
     @MockitoBean private JevClient jev;
     @MockitoBean private BatchFailureAlertNotifier notifier;
     @Autowired private ContentScreeningTrigger trigger;
+    @Autowired private ContentScreeningRecorder recorder;
     @Autowired private ContentReportRepository reports;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private TransactionTemplate tx;
@@ -189,6 +191,87 @@ class ContentScreeningIntegrationTest {
         assertThat(screening.get("probabilities").toString()).contains("\"ABUSE\"").contains("\"NONE\"");
         assertThat(screening.get("screened_at")).isNotNull();
         verify(jev, times(1)).classify(eq(content(post)), any());
+    }
+
+    @Test
+    void 일곱일_지난_글도_신고되면_점수만_붙이고_자동_신고는_만들지_않으며_거래소_신고는_판정하지_않는다() {
+        Instant now = Instant.now();
+        Long author = user(false, false, false);
+        Long reporter = user(false, false, false);
+        Long oldReported = post(author, HARMFUL + " 오래된 신고 글 " + UUID.randomUUID(), now.minus(Duration.ofDays(30)));
+        Long oldUnreported = post(author, HARMFUL + " 오래된 미신고 글", now.minus(Duration.ofDays(30)));
+        insertReport(reporter, "FEED_POST", oldReported, author, now);
+        long marketAssetId = 900_000_000L + (System.nanoTime() % 1_000_000L);
+        insertReport(reporter, "MARKET_ASSET", marketAssetId, author, now);
+
+        trigger.screen();
+
+        Map<String, Object> screening = screening("FEED_POST", oldReported);
+        assertThat(screening.get("flagged")).isEqualTo(true);
+        assertThat(screening.get("report_id")).isNull();
+        assertThat(jdbc.queryForList("SELECT source FROM content_reports WHERE target_type = 'FEED_POST' "
+                + "AND target_id = ?", String.class, oldReported)).containsExactly("USER");
+        assertThat(screened("FEED_POST", oldUnreported)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM content_screenings WHERE target_id = ?",
+                Integer.class, marketAssetId)).isZero();
+    }
+
+    @Test
+    void 신고된_대상은_판정_사이에_신고가_처리돼도_자동_신고를_만들지_않는다() {
+        Instant now = Instant.now();
+        Long author = user(false, false, false);
+        Long post = post(author, HARMFUL + " 처리된 신고 " + UUID.randomUUID(), now.minus(Duration.ofDays(20)));
+        // 대기 신고가 없는 상태(읽은 뒤 운영자가 처리한 경우)를 재현 — 기존 RECEIVED 가드로는 막히지 않음
+        ScreeningTarget reported = new ScreeningTarget(candidate("FEED_POST", post, author, content(post)), true);
+        ScreeningJudgement judgement = ScreeningJudgement.of(verdict(0.8).probabilities(), 0.6);
+
+        recorder.record(reported, ContentScreeningTrigger.sha256(content(post)), verdict(0.8), judgement, now);
+
+        assertThat(screening("FEED_POST", post).get("flagged")).isEqualTo(true);
+        assertThat(screening("FEED_POST", post).get("report_id")).isNull();
+        assertThat(reportCount("FEED_POST", post)).isZero();
+    }
+
+    @Test
+    void 신고된_오래된_댓글은_원글_문맥과_함께_한_번만_판정되고_삭제된_댓글은_제외된다() {
+        Instant now = Instant.now();
+        Long author = user(false, false, false);
+        Long first = user(false, false, false);
+        Long second = user(false, false, false);
+        Long post = post(author, "원글 본문 " + UUID.randomUUID(), now.minus(Duration.ofDays(40)));
+        Long comment = comment(post, author, HARMFUL + " 오래된 댓글 " + UUID.randomUUID(), now.minus(Duration.ofDays(30)));
+        Long deletedComment = comment(post, author, HARMFUL + " 삭제된 댓글", now.minus(Duration.ofDays(30)));
+        jdbc.update("UPDATE feed_comments SET deleted_at = ? WHERE id = ?", Timestamp.from(now), deletedComment);
+        insertReport(first, "FEED_COMMENT", comment, author, now);
+        insertReport(second, "FEED_COMMENT", comment, author, now);
+        insertReport(first, "FEED_COMMENT", deletedComment, author, now);
+
+        trigger.screen();
+        trigger.screen();
+
+        String commentContent = jdbc.queryForObject("SELECT content FROM feed_comments WHERE id = ?", String.class,
+                comment);
+        verify(jev, times(1)).classify(eq(commentContent), eq(content(post)));
+        assertThat(screening("FEED_COMMENT", comment).get("report_id")).isNull();
+        assertThat(jdbc.queryForList("SELECT source FROM content_reports WHERE target_type = 'FEED_COMMENT' "
+                + "AND target_id = ?", String.class, comment)).containsExactly("USER", "USER");
+        assertThat(screened("FEED_COMMENT", deletedComment)).isFalse();
+    }
+
+    private static ScreeningCandidate candidate(String type, Long id, Long owner, String content) {
+        return new ScreeningCandidate() {
+            public String getTargetType() { return type; }
+            public Long getTargetId() { return id; }
+            public Long getOwnerUserId() { return owner; }
+            public String getContent() { return content; }
+            public String getContext() { return null; }
+        };
+    }
+
+    private void insertReport(Long reporter, String type, Long targetId, Long owner, Instant at) {
+        jdbc.update("INSERT INTO content_reports (reporter_user_id, target_type, target_id, target_owner_user_id, "
+                + "reason, status, created_at) VALUES (?, ?, ?, ?, 'ABUSE', 'RECEIVED', ?)",
+                reporter, type, targetId, owner, Timestamp.from(at));
     }
 
     @Test
