@@ -136,6 +136,12 @@ house:
       - code: coral_aquarium
         name: 산호 수족관 집
         cover-image-key: house/coral-aquarium/house-unified-coral-aquarium-frame.png
+      - code: evening_brick
+        name: 저녁빛 벽돌집
+        cover-image-key: house/evening-brick/house-evening-brick-frame-v1.png
+      - code: forest_canopy
+        name: 초록 나무집
+        cover-image-key: house/forest-canopy/house-forest-canopy-frame-v1.png
       - code: mushroom_forest
         name: 버섯 숲 집
         cover-image-key: house/mushroom-forest/house-unified-mushroom-forest-frame.png
