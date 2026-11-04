@@ -319,5 +319,7 @@ def test_social_prompt_asks_for_community_casual_voice_for_every_persona(persona
     assert "반말·음슴체" in system and "마침표(.)를 찍지 않는다" in system
     assert "해요체(~요" in system and "쓰지 않는다" in system
     assert "~노" in system  # 비하 어미 금지가 함께 전달됨
+    assert "예시 문장이나 예시의 소재" in system  # 예시 복사 방지
+    assert "가벼운 일상 경험과 취향" in system and "state에 있는 그대로만" in system
     for voice in SOCIAL_VOICES.values():
         assert "해요체" not in voice
