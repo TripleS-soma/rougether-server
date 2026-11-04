@@ -198,6 +198,9 @@ PROMPT_SOURCES = ("ACTION_HELP", "SYSTEM", "SOCIAL_VOICES", "DEFAULT_SOCIAL_VOIC
                   "SOCIAL_WRITING", "SOCIAL_SYSTEM", "SOCIAL_POST_TOPICS", "POST_VOICE_LEAD",
                   "POST_BRIEF_GUIDE", "MEMORY_GUARD")
 _PROMPT_VERSION_FORMAT = re.compile(r"[A-Za-z0-9._-]{1,40}")
+# 워커가 promptVersion 등 확장 판단 응답을 받을 수 있음을 알리는 요청 헤더. 없으면 기존 세 키 응답을 유지함.
+DECISION_FORMAT_HEADER = "X-Ai-Decision-Format"
+VERSIONED_DECISION_FORMAT = "versioned"
 
 
 def prompt_fingerprint(sources=None):

@@ -9,7 +9,7 @@ from rougether_ai.ai_user_policy import (
     ACTION_HELP, PROMPT_VERSION, SOCIAL_VOICES, casualize_social_text, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
 )
 from rougether_ai.app import create_app
-from test_ai_users import AUTH, CONFIG, active
+from test_ai_users import AUTH, CONFIG, VERSIONED, active
 
 
 def social_state():
@@ -138,7 +138,7 @@ def test_photo_only_feed_never_fabricates_a_comment_or_calls_provider():
     with TestClient(create_app(CONFIG,ai_users=active())) as client:
         result=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert result.status_code==200
-        assert result.json()=={"action":"FEED_LIKE","payload":{"postId":7,"liked":True},"memory":"","promptVersion":"code"}
+        assert result.json()=={"action":"FEED_LIKE","payload":{"postId":7,"liked":True},"memory":""}
         state["social"]["candidates"][0]["likedByMe"]=True
         result=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert result.json()["payload"]=={"reason":"NO_RELEVANT_POST"}
@@ -153,7 +153,9 @@ def test_mixed_feed_cannot_publish_photo_guess_or_store_its_memory():
     with TestClient(create_app(CONFIG,ai_users=active(handler))) as client:
         result=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert result.status_code==200
-        # 모델을 호출한 뒤 코드가 WAIT로 바꾼 경우이므로 모델 프롬프트 버전이 붙음.
+        assert result.json()=={"action":"WAIT","payload":{"reason":"NO_RELEVANT_POST"},"memory":""}
+        # 모델을 호출한 뒤 코드가 WAIT로 바꾼 경우라도 호출 비용은 모델 프롬프트 버전에 귀속됨.
+        result=client.post("/internal/v1/ai-users/decide",headers=VERSIONED,json={"aiUserId":1,"state":state})
         assert result.json()=={"action":"WAIT","payload":{"reason":"NO_RELEVANT_POST"},"memory":"","promptVersion":PROMPT_VERSION}
 
 

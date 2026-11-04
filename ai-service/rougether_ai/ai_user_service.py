@@ -69,7 +69,10 @@ class AiUserService:
         finally:
             self.slots.release()
 
-    async def decide(self, request):
+    async def decide(self, request, versioned=False):
+        """versioned는 호출자가 확장 응답을 요청한 경우에만 켬. 구형 워커는 추가 키를 거부하기 때문임."""
+        def finish(plan, version):
+            return with_prompt_version(plan, version) if versioned else plan
         async with self.operation():
             state = dict(request.state)
             if state.get("aiUserId") != request.aiUserId:
@@ -82,7 +85,7 @@ class AiUserService:
             state["perception"] = {"canSeeImages": False}
             direct = code_plan(state)
             if direct is not None:
-                return with_prompt_version(direct, CODE_PROMPT_VERSION)
+                return finish(direct, CODE_PROMPT_VERSION)
             state["longTermMemories"] = []
             def packed():
                 return json.dumps({"state": state,"actionFormats":{a:ACTION_HELP[a] for a in state["actions"]}},ensure_ascii=False)
@@ -106,7 +109,7 @@ class AiUserService:
                     if "WAIT" not in state["actions"]:
                         raise ValueError("No text context for comment")
                     plan = {"action": "WAIT", "payload": {"reason": "NO_RELEVANT_POST"}, "memory": ""}
-                return with_prompt_version(plan, PROMPT_VERSION)
+                return finish(plan, PROMPT_VERSION)
             except (ValueError, TypeError, KeyError):
                 raise AiError("AI_INVALID_ACTION_RESULT", 502) from None
 

@@ -15,7 +15,8 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ai-service"))
 from rougether_ai.ai_user_policy import (
-    ACTION_HELP, CODE_PROMPT_VERSION, SYSTEM, code_plan, parse_plan, planning_actions, split_prompt_version,
+    ACTION_HELP, CODE_PROMPT_VERSION, DECISION_FORMAT_HEADER, SYSTEM, VERSIONED_DECISION_FORMAT, code_plan, parse_plan,
+    planning_actions, split_prompt_version,
 )
 
 log = logging.getLogger("ai-user-worker")
@@ -85,8 +86,10 @@ class Worker:
                               {"Authorization": "Bearer " + self.settings.control_token}, timeout=30)
 
     def ai(self, path, body):
-        return self.http.post(self.settings.ai_service_url + "/internal/v1/ai-users" + path, body,
-                              {"Authorization": "Bearer " + self.settings.ai_service_token},
+        headers = {"Authorization": "Bearer " + self.settings.ai_service_token}
+        if path == "/decide":
+            headers = {**headers, DECISION_FORMAT_HEADER: VERSIONED_DECISION_FORMAT}
+        return self.http.post(self.settings.ai_service_url + "/internal/v1/ai-users" + path, body, headers,
                               timeout=190 if path=="/episodes" else 60 if path=="/decide" else 30)
 
     def tick(self):

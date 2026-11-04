@@ -132,7 +132,9 @@ class WorkerTest(unittest.TestCase):
         Worker(self.settings(), http).tick()
         for url,_,headers in http.calls:
             expected = "a"*32 if url.startswith("https://ai.test") else "c"*32
-            self.assertEqual(headers, {"Authorization": "Bearer "+expected})
+            extra = {"X-Ai-Decision-Format": "versioned"} if url.endswith("/decide") else {}
+            self.assertEqual(headers, {"Authorization": "Bearer "+expected, **extra})
+        self.assertTrue(any(url.endswith("/decide") for url,_,_ in http.calls))
         self.assertNotIn("c"*32, repr(self.settings()))
 
     def test_insecure_remote_origins_are_rejected_by_default(self):
