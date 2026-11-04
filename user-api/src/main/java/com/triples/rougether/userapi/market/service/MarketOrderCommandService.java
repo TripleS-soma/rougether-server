@@ -42,6 +42,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class MarketOrderCommandService {
 
+    @org.springframework.beans.factory.annotation.Value("${market.fixed-price.enabled:true}")
+    private boolean fixedPriceEnabled;
+
     private static final String REQUEST_UNIQUE = "uk_market_commands_request";
 
     private final UserRepository userRepository;
@@ -84,6 +87,7 @@ public class MarketOrderCommandService {
     }
 
     public MarketCommandAcceptedResponse place(Long userId, PlaceOrderRequest request) {
+        if (fixedPriceEnabled) throw new BusinessException(MarketErrorCode.ORDERBOOK_RETIRED);
         Predicate<MarketCommand> same = existing -> existing.isSamePlace(request.assetId(), request.side(),
                 request.source(), request.price(), request.quantity());
         return onceByRequestId(userId, request.requestId(), same, () -> placeInTransaction(userId, request, same));
@@ -95,6 +99,7 @@ public class MarketOrderCommandService {
     }
 
     public MarketCommandAcceptedResponse amend(Long userId, Long orderId, String requestId, int quantity) {
+        if (fixedPriceEnabled) throw new BusinessException(MarketErrorCode.ORDERBOOK_RETIRED);
         Predicate<MarketCommand> same = existing -> existing.isSameAmend(orderId, quantity);
         return onceByRequestId(userId, requestId, same,
                 () -> amendInTransaction(userId, orderId, requestId, quantity, same));

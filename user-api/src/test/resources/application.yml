@@ -81,3 +81,6 @@ invite:
 feed:
   cleanup:
     enabled: false
+
+# 기존 주문 엔진 회귀는 구정책을 검증하고 고정가 통합테스트에서 새정책을 켬.
+market.fixed-price.enabled: false

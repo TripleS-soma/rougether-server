@@ -4,6 +4,11 @@ import com.triples.rougether.common.error.ErrorCode;
 
 public enum MarketErrorCode implements ErrorCode {
 
+    ORDERBOOK_RETIRED("MARKET_ORDERBOOK_RETIRED", "거래소가 고정가 구매 방식으로 바뀌었습니다. 앱을 업데이트해 주세요.", 409),
+    NOT_FOR_SALE("MARKET_NOT_FOR_SALE", "판매 중인 가구가 아닙니다.", 409),
+    PRICE_CHANGED("MARKET_PRICE_CHANGED", "판매 가격이 바뀌었습니다. 새 가격을 확인해 주세요.", 409),
+    TRANSITION_PENDING("MARKET_TRANSITION_PENDING", "기존 거래 정산 중입니다. 잠시 후 다시 시도해 주세요.", 409),
+
     ITEM_NOT_OWNED("MARKET_ITEM_NOT_OWNED", "보유하지 않은 가구입니다.", 403),
     NOT_CREATOR("MARKET_NOT_CREATOR", "가구를 만든 사람만 발행할 수 있습니다.", 403),
     ITEM_NOT_TRADABLE("MARKET_ITEM_NOT_TRADABLE", "거래소에 올릴 수 없는 가구입니다.", 409),

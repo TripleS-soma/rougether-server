@@ -13,6 +13,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface MarketCommandRepository extends JpaRepository<MarketCommand, Long> {
 
+    @Query("select count(c) > 0 from MarketCommand c where "
+            + "(c.status = com.triples.rougether.domain.market.entity.CommandStatus.PENDING "
+            + "and c.type in (com.triples.rougether.domain.market.entity.CommandType.PLACE, "
+            + "com.triples.rougether.domain.market.entity.CommandType.AMEND)) "
+            + "or c.rejectCode = 'MARKET_ENGINE_ERROR_UNREFUNDED'")
+    boolean hasUnsettledLegacyEscrow();
+
     @Query("select c from MarketCommand c where c.assetId = :assetId "
             + "and c.side = com.triples.rougether.domain.market.entity.OrderSide.BUY "
             + "and c.type = com.triples.rougether.domain.market.entity.CommandType.PLACE "
