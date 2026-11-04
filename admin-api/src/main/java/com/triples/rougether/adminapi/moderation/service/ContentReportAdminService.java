@@ -22,7 +22,9 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.moderation.entity.ContentReport;
 import com.triples.rougether.domain.moderation.entity.ContentReportStatus;
 import com.triples.rougether.domain.moderation.entity.ContentReportTargetType;
+import com.triples.rougether.domain.moderation.entity.ContentScreening;
 import com.triples.rougether.domain.moderation.repository.ContentReportRepository;
+import com.triples.rougether.domain.moderation.repository.ContentScreeningRepository;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import java.time.Clock;
@@ -61,14 +63,17 @@ public class ContentReportAdminService {
     private final UserRepository users;
     private final AdminUserRepository adminUsers;
     private final AssetStorageService storage;
+    private final ContentScreeningRepository screeningRepository;
     private final Clock clock;
 
     public ContentReportAdminService(ContentReportRepository reports, FeedPostRepository posts,
                                      FeedCommentRepository comments, FeedLikeRepository likes,
                                      FeedImageRepository images, MarketAssetRepository assets,
                                      ItemRepository items, UserRepository users, AdminUserRepository adminUsers,
-                                     AssetStorageService storage, Clock clock) {
+                                     AssetStorageService storage, ContentScreeningRepository screeningRepository,
+                                     Clock clock) {
         this.reports = reports;
+        this.screeningRepository = screeningRepository;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -81,12 +86,22 @@ public class ContentReportAdminService {
         this.clock = clock;
     }
 
-    public AdminContentReportPageResponse list(ContentReportStatus status, int page, int size) {
-        Page<ContentReport> found = status == null
-                ? reports.findAllByOrderByIdDesc(PageRequest.of(page, size))
-                : reports.findByStatusOrderByIdDesc(status, PageRequest.of(page, size));
+    // 대기열 정렬(#479). RISK 는 처리 대기(RECEIVED) 목록에만 적용되고, 다른 상태·전체 목록은 항상 최신순.
+    public enum Sort { RISK, RECENT }
+
+    public AdminContentReportPageResponse list(ContentReportStatus status, Sort sort, int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<ContentReport> found;
+        if (status == null) {
+            found = reports.findAllByOrderByIdDesc(pageRequest);
+        } else if (status == ContentReportStatus.RECEIVED && sort == Sort.RISK) {
+            found = reports.findReceivedByRisk(pageRequest);
+        } else {
+            found = reports.findByStatusOrderByIdDesc(status, pageRequest);
+        }
         List<ContentReport> rows = found.getContent();
         Map<ContentReportTargetType, Map<Long, TargetPreview>> previews = previews(rows);
+        Map<ContentReportTargetType, Map<Long, ContentScreening>> scores = screenings(rows);
         Map<Long, String> nicknames = users.findAllById(rows.stream().map(ContentReport::getTargetOwnerUserId)
                         .filter(Objects::nonNull).distinct().toList()).stream()
                 .filter(user -> user.getNickname() != null)
@@ -94,7 +109,8 @@ public class ContentReportAdminService {
         List<AdminContentReportResponse> responses = rows.stream()
                 .map(r -> AdminContentReportResponse.of(r, nicknames.get(r.getTargetOwnerUserId()),
                         previews.getOrDefault(r.getTargetType(), Map.of())
-                                .getOrDefault(r.getTargetId(), TargetPreview.missing())))
+                                .getOrDefault(r.getTargetId(), TargetPreview.missing()),
+                        scores.getOrDefault(r.getTargetType(), Map.of()).get(r.getTargetId())))
                 .toList();
         return new AdminContentReportPageResponse(responses, page, size, found.getTotalElements());
     }
@@ -148,6 +164,21 @@ public class ContentReportAdminService {
             case FEED_COMMENT -> comments.findById(targetId).ifPresent(comment -> comment.delete(now));
             case MARKET_ASSET -> assets.findWithLockById(targetId).ifPresent(asset -> asset.suspend(now));
         }
+    }
+
+    // 페이지 대상의 자동 판정 점수(#479). 판정하는 대상(글·댓글)만 종류별 한 번씩 조회함.
+    private Map<ContentReportTargetType, Map<Long, ContentScreening>> screenings(List<ContentReport> rows) {
+        Map<ContentReportTargetType, Map<Long, ContentScreening>> result = new HashMap<>();
+        for (ContentReportTargetType type : List.of(ContentReportTargetType.FEED_POST,
+                ContentReportTargetType.FEED_COMMENT)) {
+            List<Long> ids = rows.stream().filter(r -> r.getTargetType() == type)
+                    .map(ContentReport::getTargetId).distinct().toList();
+            if (!ids.isEmpty()) {
+                result.put(type, screeningRepository.findByTargetTypeAndTargetIdIn(type, ids).stream()
+                        .collect(Collectors.toMap(ContentScreening::getTargetId, Function.identity())));
+            }
+        }
+        return result;
     }
 
     private Map<ContentReportTargetType, Map<Long, TargetPreview>> previews(List<ContentReport> rows) {
