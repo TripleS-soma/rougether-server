@@ -13,6 +13,25 @@ import org.junit.jupiter.api.Test;
 
 class HouseCoverImageCatalogTest {
 
+    @Test
+    void 실제_게시_manifest에서_승인된_신규_테마와_기존_테마를_함께_허용한다() throws java.io.IOException {
+        var source = new org.springframework.boot.env.YamlPropertySourceLoader()
+                .load("application", new org.springframework.core.io.FileSystemResource("src/main/resources/application.yml"))
+                .getFirst();
+        var properties = new org.springframework.boot.context.properties.bind.Binder(
+                org.springframework.boot.context.properties.source.ConfigurationPropertySources.from(source))
+                .bind("house.cover-images", HouseCoverImageProperties.class).get();
+        var catalog = new HouseCoverImageCatalog(properties);
+
+        assertThat(catalog.items()).hasSize(6);
+        catalog.validatePublished("house/forest-canopy/house-forest-canopy-frame-v1.png");
+        catalog.validatePublished("house/evening-brick/house-evening-brick-frame-v1.png");
+        catalog.validatePublished("house/cloud-balloon/house-unified-cloud-balloon-frame.png");
+        catalog.validatePublished("house/coral-aquarium/house-unified-coral-aquarium-frame.png");
+        catalog.validatePublished("house/mushroom-forest/house-unified-mushroom-forest-frame.png");
+        catalog.validatePublished("house/night-observatory/house-unified-night-observatory-frame-v3.png");
+    }
+
     private Entry entry(String code, String name, String key) {
         return new Entry(code, name, key);
     }
