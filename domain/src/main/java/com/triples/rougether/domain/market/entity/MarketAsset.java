@@ -51,6 +51,17 @@ public class MarketAsset {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    private Integer salePrice;
+    @Column(nullable = false) private boolean saleActive;
+
+    // 원본이나 과거 발행 수량은 움직이지 않고 판매 가격과 노출만 변경함.
+    public void updateSale(int price, boolean active, Instant now) {
+        if (price < 1 || price > 1000) throw new IllegalArgumentException("price out of range");
+        this.salePrice = price;
+        this.saleActive = active;
+        this.updatedAt = now;
+    }
+
     private MarketAsset(Long itemId, Long creatorUserId, int totalSupply, Instant now) {
         this.itemId = itemId;
         this.creatorUserId = creatorUserId;

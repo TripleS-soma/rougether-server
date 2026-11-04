@@ -32,6 +32,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class CommandApplier {
 
+    @org.springframework.beans.factory.annotation.Value("${market.fixed-price.enabled:true}")
+    private boolean fixedPriceEnabled;
+
     static final String NO_SELL_ORDERS = "MARKET_NO_SELL_ORDERS";
     static final String SELF_TRADE = "MARKET_SELF_TRADE";
     static final String ASSET_SUSPENDED = "MARKET_ASSET_SUSPENDED";
@@ -119,7 +122,13 @@ public class CommandApplier {
             long seq = lease.nextSeq();
             command.stamp(seq);
             Instant now = clock.instant();
-            if (command.getType() == CommandType.PLACE) {
+            if (fixedPriceEnabled && (command.getType() == CommandType.PLACE || command.getType() == CommandType.AMEND)) {
+                if (command.getType() == CommandType.PLACE || command.getEscrowAmount() > 0) {
+                    MarketAsset asset = command.getSource() == OrderSource.ISSUANCE ? loadAsset(command.getAssetId(), true) : null;
+                    ledger.refundCommand(command, asset, now);
+                }
+                command.rejected("MARKET_ORDERBOOK_RETIRED", now);
+            } else if (command.getType() == CommandType.PLACE) {
                 place(command, seq, book, now);
             } else if (command.getType() == CommandType.AMEND) {
                 amend(command, seq, book, now);

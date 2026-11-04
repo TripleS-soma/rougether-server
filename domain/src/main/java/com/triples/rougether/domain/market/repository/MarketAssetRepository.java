@@ -15,6 +15,23 @@ public interface MarketAssetRepository extends JpaRepository<MarketAsset, Long> 
 
     boolean existsByItemId(Long itemId);
 
+    Optional<MarketAsset> findByItemId(Long itemId);
+
+    @Query("select a.id from MarketAsset a where a.itemId = :itemId")
+    Optional<Long> findIdByItemId(@Param("itemId") Long itemId);
+
+    @Query("select a.creatorUserId from MarketAsset a where a.id = :id")
+    Optional<Long> findCreatorId(@Param("id") Long id);
+
+    @Query("select a from MarketAsset a where a.saleActive = true and a.salePrice is not null "
+            + "and a.status = com.triples.rougether.domain.market.entity.MarketAssetStatus.ACTIVE "
+            + "and exists (select u.id from User u where u.id = a.creatorUserId and u.deletedAt is null) "
+            + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer "
+            + "and b.blockedUserId = a.creatorUserId) order by a.id desc")
+    Page<MarketAsset> findFixedPriceListings(@Param("viewer") Long viewer, Pageable page);
+
+    Page<MarketAsset> findByCreatorUserIdOrderByIdDesc(Long creatorUserId, Pageable page);
+
     // 종목 카드 목록: 거래 중인 종목을 최근 상장순으로. 요청자(viewer)가 차단한 제작자의 종목은 뺌(#399).
     // 제작자가 탈퇴해 creator_user_id 가 null 이면 차단 대상이 아니므로 그대로 노출함.
     @Query(value = "select a from MarketAsset a where a.status = :status "
