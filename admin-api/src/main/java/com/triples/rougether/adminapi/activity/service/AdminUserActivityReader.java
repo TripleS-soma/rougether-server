@@ -66,7 +66,7 @@ public class AdminUserActivityReader {
             return cached.snapshot();
         }
         List<FeatureRecord> records = repository.findDailyRecords(date,
-                date.atStartOfDay(KST).toInstant(), date.plusDays(1).atStartOfDay(KST).toInstant());
+                date.atStartOfDay(KST).toEpochSecond(), date.plusDays(1).atStartOfDay(KST).toEpochSecond());
         Snapshot snapshot = new Snapshot(clock.instant(), List.copyOf(records));
         if (ttlNanos > 0) {
             cache.put(date, new CachedSnapshot(ticker.getAsLong(), snapshot));
