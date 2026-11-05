@@ -1,0 +1,45 @@
+.activity-main { display: grid; gap: 20px; }
+.activity-page .brand, .activity-page .header-right { flex-shrink: 0; white-space: nowrap; }
+.activity-page .app-nav { min-width: 0; }
+.activity-heading, .activity-result-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.activity-heading h2 { margin: 8px 0; font-size: 27px; }
+.activity-heading p, .activity-result-head p { color: var(--text-soft); font-size: 14px; line-height: 1.6; }
+.activity-eyebrow { color: var(--primary-strong); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+.activity-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; }
+.activity-filters .btn-primary { height: 41px; min-width: 80px; padding: 0 18px; margin: 0; white-space: nowrap; }
+.activity-filters label { display: grid; gap: 7px; font-size: 13px; color: var(--text-soft); }
+.activity-filters input[type="search"] { width: 220px; }
+.activity-filters input:not([type="checkbox"]), .activity-filters select { border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; background: var(--surface); color: var(--text); font: inherit; }
+.activity-filters .activity-check { display: flex; align-items: center; gap: 7px; min-height: 41px; }
+.activity-basis { margin-top: 22px; padding: 17px 20px; border-radius: 12px; background: var(--primary-soft); line-height: 1.7; font-size: 13px; }
+.activity-basis strong { display: block; margin-bottom: 5px; }
+.activity-basis p + p { margin-top: 5px; }
+.activity-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.activity-metrics article { display: grid; gap: 9px; padding: 23px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.activity-metrics span { font-size: 13px; color: var(--text-soft); }
+.activity-metrics strong { font-size: 30px; letter-spacing: -.03em; }
+.activity-metrics small { color: var(--text-soft); font-size: 11px; }
+.activity-result-head { margin-bottom: 15px; }
+.activity-result-head h3 { font-size: 18px; margin-bottom: 5px; }
+#loadStatus { color: var(--text-soft); font-size: 12px; }
+.activity-table-scroll { overflow-x: auto; }
+.activity-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.activity-table th { padding: 13px 12px; color: var(--text-soft); background: var(--bg); font-weight: 600; white-space: nowrap; }
+.activity-table td { padding: 18px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.activity-table td:first-child { min-width: 140px; }
+.activity-table td:nth-child(2) { min-width: 330px; }
+.activity-table td:nth-child(3), .activity-table td:nth-child(4) { white-space: nowrap; }
+.activity-user-name { display: block; font-weight: 700; margin-bottom: 5px; }
+.activity-muted { color: var(--text-soft); font-size: 12px; }
+.activity-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.activity-pill { display: inline-flex; gap: 6px; padding: 5px 9px; border-radius: 7px; background: var(--primary-soft); color: var(--primary-strong); font-size: 12px; }
+.activity-details { margin-top: 10px; }
+.activity-details summary { cursor: pointer; color: var(--text-soft); font-size: 12px; }
+.activity-details ul { list-style: none; display: grid; gap: 10px; margin-top: 13px; }
+.activity-details li { display: grid; gap: 4px; padding: 10px 12px; border-left: 2px solid var(--border); line-height: 1.6; }
+.activity-pagination { display: flex; justify-content: center; align-items: center; gap: 18px; margin-top: 22px; }
+.activity-pagination span { color: var(--text-soft); font-size: 13px; }
+.activity-empty { text-align: center; padding: 40px 15px; color: var(--text-soft); line-height: 1.8; }
+.activity-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 1050px) { .activity-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .activity-metrics { grid-template-columns: 1fr; } .activity-heading { align-items: flex-start; } .activity-filters label { width: 100%; } .activity-filters input[type="search"] { width: 100%; } }

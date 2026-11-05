@@ -6,10 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.triples.rougether.domain.character.entity.Character;
 import com.triples.rougether.domain.character.repository.CharacterAccessoryRenderProfileRepository;
@@ -348,10 +346,8 @@ class CharacterAccessoryRenderProfileAdminTest {
     @WithMockUser(roles = "ADMIN")
     void 렌더_프로필_관리_화면을_연다() throws Exception {
         mockMvc.perform(get("/accessory-render-profiles"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("accessory-render-profiles"))
-                .andExpect(model().attribute("username", "user"))
-                .andExpect(model().attributeExists("s3BaseUrl"));
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/user-activities"));
     }
 
     private Long createProfile() throws Exception {
