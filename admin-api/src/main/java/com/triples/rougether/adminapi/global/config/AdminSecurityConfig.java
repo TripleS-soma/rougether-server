@@ -38,6 +38,8 @@ public class AdminSecurityConfig {
                                 "/admin/recommendations/**",
                                 "/admin/notification-digests/**",
                                 "/users",
+                                "/user-activities",
+                                "/admin/user-activities/**",
                                 "/admin/retention/**"
                         ).hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated()

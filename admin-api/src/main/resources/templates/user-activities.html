@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 사용자 활동</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <link rel="stylesheet" th:href="@{/css/user-activities.css}">
+    <script defer th:src="@{/js/user-activities.js}"></script>
+</head>
+<body class="app-body activity-page">
+    <header class="app-header">
+        <div class="brand brand-sm"><span class="brand-mark">R</span><h1>Rougether <span class="badge">ADMIN</span></h1></div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a><a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/asset-foundry}">Asset Foundry</a><a th:href="@{/catalog}">카탈로그</a>
+            <a th:href="@{/item-slots}">가구 관리</a><a th:href="@{/user-activities}" class="active" aria-current="page">사용자 활동</a>
+            <a th:href="@{/users}">유저 관리</a><a th:href="@{/weekly-reports}">AI 회고</a>
+            <a th:href="@{/recommendations}">AI 추천</a><a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/bug-reports}">버그 제보</a><a th:href="@{/content-reports}">신고</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post"><button type="submit" class="btn-ghost">로그아웃</button></form>
+        </div>
+    </header>
+    <main class="app-main app-main--wide activity-main">
+        <section class="upload-card activity-heading">
+            <div><span class="activity-eyebrow">DAILY ACTIVITY</span><h2>사용자 활동</h2><p>사용자별로 어떤 기능의 활동 기록이 남았는지 확인합니다.</p></div>
+            <button id="refresh" type="button" class="btn-ghost">새로고침</button>
+        </section>
+        <section class="upload-card">
+            <form id="activity-filter" class="activity-filters">
+                <label>조회 날짜 (KST)<input type="date" id="date" name="date" th:value="${today}" th:max="${today}" th:min="${minDate}" required></label>
+                <button type="button" id="today" class="btn-ghost">오늘</button>
+                <label>사용자 검색<input type="search" id="query" name="query" placeholder="닉네임 또는 사용자 ID" maxlength="120"></label>
+                <label>사용한 기능<select id="feature" name="feature"><option value="">전체 기능</option></select></label>
+                <label class="activity-check"><input type="checkbox" id="actionsOnly">행동 기록 있는 사용자만</label>
+                <button type="submit" class="btn-primary">조회</button>
+            </form>
+            <div class="activity-basis">
+                <strong>기록을 읽는 기준</strong>
+                <p>기존 서버 작업 기록을 KST 하루 단위로 조회합니다. 단순 화면 열기·조회·클릭은 포함하지 않으며, 건수는 화면 방문 횟수가 아닙니다. 취소·삭제·덮어쓰기로 보존되지 않은 기록은 누락될 수 있습니다. 봇·AI·탈퇴 계정은 제외합니다.</p>
+                <p>‘접속 기록만 확인’은 기능을 사용하지 않았다는 뜻이 아닙니다. 인증 기록은 로그인·토큰 갱신과 하루 최초 인증 요청 기준이며 실시간 온라인 상태가 아닙니다. 일별 인증 여부만 남은 경우 시각은 표시하지 않습니다.</p>
+            </div>
+        </section>
+        <div id="error" class="alert alert-error" role="alert" hidden></div>
+        <section class="activity-metrics" aria-label="조회 조건에 맞는 사용자 요약">
+            <article><span>기록이 확인된 사용자</span><strong id="usersWithRecords">—</strong><small>조회 조건에 맞는 사용자</small></article>
+            <article><span>행동 기록이 있는 사용자</span><strong id="usersWithActions">—</strong><small>접속 기록 외 작업이 있는 사용자</small></article>
+            <article><span>확인된 행동 기록</span><strong id="actionRecords">—</strong><small>조회된 사용자의 작업 기록 합계</small></article>
+            <article><span>사용한 기능 종류</span><strong id="featuresUsed">—</strong><small>접속 기록 제외</small></article>
+        </section>
+        <section class="upload-card" id="results" aria-busy="true">
+            <div class="activity-result-head"><div><h3 id="resultDate">활동 기록</h3><p id="updatedAt">조회 중</p></div><span id="loadStatus" role="status" aria-live="polite">불러오는 중…</span></div>
+            <div class="activity-table-scroll">
+                <table class="activity-table"><caption class="activity-sr-only">사용자별 기능 사용 기록과 마지막 확인 시각</caption>
+                    <thead><tr><th scope="col">사용자</th><th scope="col">확인된 기능</th><th scope="col">행동 기록</th><th scope="col">마지막 기록 (KST)</th></tr></thead>
+                    <tbody id="activity-rows"></tbody>
+                </table>
+            </div>
+            <p id="empty" class="activity-empty" hidden>이 조건에서 확인된 기록이 없습니다. 화면 조회 등 수집하지 않은 활동이 있을 수 있습니다.</p>
+            <nav class="activity-pagination" aria-label="활동 목록 페이지">
+                <button type="button" class="btn-ghost" id="previous" disabled>이전</button><span id="pageInfo">—</span><button type="button" class="btn-ghost" id="next" disabled>다음</button>
+            </nav>
+        </section>
+    </main>
+</body>
+</html>
