@@ -63,6 +63,9 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 활동 집계의 epoch SQL과 기존 UTC 저장 계약을 모든 새 연결에 명시한다.
+      connection-init-sql: "SET SESSION time_zone = '+00:00'"
   # 운영 공유 DB 에서는 user-api 만 migration 을 실행함. admin 은 검증만 수행.
   flyway:
     enabled: false

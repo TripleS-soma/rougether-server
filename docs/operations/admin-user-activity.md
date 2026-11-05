@@ -39,7 +39,8 @@
 시간 선두 인덱스가 없는 테이블도 있어 누적 데이터가 늘면 조회 비용을 재확인해야 한다.
 날짜 경계와 반환 시각은 숫자형 UTC epoch로 전달한다. 운영 JDBC의 `serverTimezone=Asia/Seoul` 설정에서
 native TIMESTAMP를 직접 Instant로 투영하면 시각이 어긋나므로 이 변환 경로를 피한다.
-범위 조건은 `FROM_UNIXTIME` 상수와 원본 시각 컬럼을 비교하며, DB 세션은 기존 운영 UTC 설정을 유지한다.
+범위 조건은 `FROM_UNIXTIME` 상수와 원본 시각 컬럼을 비교한다. 이 집계는 UTC DB 세션을 전제로 한다.
+관리자 MySQL 프로필의 Hikari 초기화 SQL로 새 연결마다 `SET SESSION time_zone = '+00:00'`을 적용한다.
 
 - 날짜별 결과는 빈 결과를 포함해 15초간 재사용하며 최대 8일을 보관한다. 실패는 캐시하지 않는다.
 - 관리자 프로세스당 DB 집계는 한 번에 하나만 실행한다. 잠금을 200ms 내 얻지 못하면 503 `ADMIN_ACTIVITY_BUSY`를 반환한다.
