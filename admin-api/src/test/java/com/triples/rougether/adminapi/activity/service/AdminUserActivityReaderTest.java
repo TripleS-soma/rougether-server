@@ -27,31 +27,33 @@ class AdminUserActivityReaderTest {
 
     @Test
     void 성공한빈결과도캐시하고_TTL경계에서다시조회한다() {
-        when(repository.findDailyRecords(any(), any(), any())).thenReturn(List.of());
+        when(repository.findDailyRecords(any(), anyLong(), anyLong())).thenReturn(List.of());
         var first = reader.read(date);
+        verify(repository).findDailyRecords(date, Instant.parse("2030-08-19T15:00:00Z").getEpochSecond(),
+                Instant.parse("2030-08-20T15:00:00Z").getEpochSecond());
         nanos.set(Duration.ofSeconds(15).toNanos() - 1);
         assertThat(reader.read(date)).isSameAs(first);
-        verify(repository, times(1)).findDailyRecords(eq(date), any(), any());
+        verify(repository, times(1)).findDailyRecords(eq(date), anyLong(), anyLong());
         nanos.incrementAndGet();
         assertThat(reader.read(date)).isNotSameAs(first);
-        verify(repository, times(2)).findDailyRecords(eq(date), any(), any());
+        verify(repository, times(2)).findDailyRecords(eq(date), anyLong(), anyLong());
     }
 
     @Test
     void 실패는캐시하지않고_최대8일만보관한다() {
-        when(repository.findDailyRecords(any(), any(), any())).thenThrow(new IllegalStateException("DB failure"))
+        when(repository.findDailyRecords(any(), anyLong(), anyLong())).thenThrow(new IllegalStateException("DB failure"))
                 .thenReturn(List.of());
         assertThatThrownBy(() -> reader.read(date)).isInstanceOf(IllegalStateException.class);
         for (int i = 0; i < 9; i++) reader.read(date.minusDays(i));
         reader.read(date);
-        verify(repository, times(11)).findDailyRecords(any(), any(), any());
+        verify(repository, times(11)).findDailyRecords(any(), anyLong(), anyLong());
     }
 
     @Test
     void 집계가진행중이면_다른날짜요청을_짧은대기후거절한다() throws Exception {
         var started = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        when(repository.findDailyRecords(any(), any(), any())).thenAnswer(invocation -> {
+        when(repository.findDailyRecords(any(), anyLong(), anyLong())).thenAnswer(invocation -> {
             started.countDown();
             if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
             return List.of();
@@ -61,7 +63,7 @@ class AdminUserActivityReaderTest {
             try {
                 assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
                 assertThatThrownBy(() -> reader.read(date.minusDays(1))).isInstanceOf(AdminActivityBusyException.class);
-                verify(repository, times(1)).findDailyRecords(any(), any(), any());
+                verify(repository, times(1)).findDailyRecords(any(), anyLong(), anyLong());
             } finally {
                 release.countDown();
             }

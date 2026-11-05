@@ -31,12 +31,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = "admin.activity.cache-ttl=0s")
 @AutoConfigureMockMvc
 @Transactional
+// 이 클래스만 쓰는 고정 Clock/캐시 설정의 컨텍스트를 남겨 다음 관리자 테스트의 힙을 점유하지 않는다.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AdminUserActivityIntegrationTest {
     private static final LocalDate TODAY = LocalDate.of(2030, 8, 20);
     private static final Instant START = Instant.parse("2030-08-19T15:00:00Z");

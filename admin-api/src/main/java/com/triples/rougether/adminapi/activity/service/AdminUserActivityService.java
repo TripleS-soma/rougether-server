@@ -8,6 +8,7 @@ import com.triples.rougether.adminapi.activity.dto.AdminUserActivityResponse.Use
 import com.triples.rougether.adminapi.activity.dto.UserActivityFeature;
 import com.triples.rougether.adminapi.activity.error.AdminActivityDateInvalidException;
 import com.triples.rougether.domain.activity.repository.AdminUserActivityRepository.FeatureRecord;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -77,6 +78,12 @@ public class AdminUserActivityService {
                 items, page, size, users.size());
     }
 
+    // JDBC의 serverTimezone 해석을 거치지 않는 UTC epoch로 전송한다.
+    static Instant toInstant(BigDecimal epoch) {
+        if (epoch == null) return null;
+        return Instant.ofEpochSecond(epoch.longValue(), epoch.remainder(BigDecimal.ONE).movePointRight(9).longValue());
+    }
+
     private UserActivity toUser(List<FeatureRecord> records) {
         FeatureRecord first = records.getFirst();
         List<FeatureActivity> features = records.stream()
@@ -84,16 +91,16 @@ public class AdminUserActivityService {
                 .map(record -> {
                     UserActivityFeature feature = UserActivityFeature.valueOf(record.getFeature());
                     return new FeatureActivity(feature, feature.label(), feature.description(), record.getRecordCount(),
-                            record.getFirstRecordedAt(), record.getLastRecordedAt());
+                            toInstant(record.getFirstRecordedEpoch()), toInstant(record.getLastRecordedEpoch()));
                 })
                 .sorted(Comparator.comparing(FeatureActivity::lastRecordedAt).reversed()
                         .thenComparing(FeatureActivity::code))
                 .toList();
         boolean authenticated = records.stream().anyMatch(record -> record.getFeature().equals("ACCESS"));
         // 일별 인증 기록의 created_at은 배치 적재 시각이다. 실제 요청 시각으로 표시하지 않는다.
-        Instant firstAt = records.stream().map(FeatureRecord::getFirstRecordedAt).filter(Objects::nonNull)
+        Instant firstAt = records.stream().map(record -> toInstant(record.getFirstRecordedEpoch())).filter(Objects::nonNull)
                 .min(Instant::compareTo).orElse(null);
-        Instant lastAt = records.stream().map(FeatureRecord::getLastRecordedAt).filter(Objects::nonNull)
+        Instant lastAt = records.stream().map(record -> toInstant(record.getLastRecordedEpoch())).filter(Objects::nonNull)
                 .max(Instant::compareTo).orElse(null);
         return new UserActivity(first.getUserId(), first.getNickname(), authenticated, firstAt, lastAt,
                 features.stream().mapToLong(FeatureActivity::recordCount).sum(), features);
