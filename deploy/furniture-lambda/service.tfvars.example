@@ -15,5 +15,7 @@ db_username           = "rougether"
 ai_concurrency        = 50
 control_concurrency   = 16
 enable_trigger        = false
-enable_preprocessing  = false
+enable_preprocessing      = false
+enable_preprocess_trigger = false
+preprocess_concurrency    = 2
 # alarm_topic_arn을 연결하기 전에는 CloudWatch 상태만 기록하며 외부 알림은 보내지 않는다.

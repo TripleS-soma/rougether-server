@@ -95,14 +95,14 @@ SHA-256: 264d3092d69de80f5acdb71c930efec8db5bd9627f41659ed3416566b9ae34b4
 ./gradlew test :furniture-lambda-control:buildZip :furniture-lambda-preprocess:buildZip \
   -PvipsNativeDir=/absolute/path/to/sharp-libvips-linux-arm64/lib --no-daemon
 python3 qa/furniture-preprocess/run_native.py \
-  --fixtures /absolute/path/to/fixtures --output output/preprocess-native \
+  --output output/preprocess-native \
   --java-home /absolute/path/to/jdk25
 terraform -chdir=deploy/furniture-lambda fmt -check
 terraform -chdir=deploy/furniture-lambda validate
 git diff --check
 ```
 
-`run_native.py`는 배포 ZIP을 풀어 Linux ARM64 컨테이너에서 네트워크를 끄고 실행한다. 컨테이너 한도는 메모리 512MiB·CPU 2, JVM heap 128MiB다. fixture 디렉터리는 `mac-mini.jpg`, `bear-cake.jpg`, `orientation-1.jpg`~`orientation-8.jpg`, `alpha.png`를 준비한다. 사적 사진을 저장소에 추가하지 않는다. 결과 디렉터리에 PNG, JSON 결과, ZIP/네이티브 해시, 실행 로그를 남긴다.
+`run_native.py`는 배포 ZIP을 풀어 Linux ARM64 컨테이너에서 네트워크를 끄고 실행한다. 2026-10-30에 재현 도구를 저장소에 추가했다. 컨테이너 한도는 메모리 512MiB, CPU 2, JVM heap 256MiB다. 사적 사진 대신 probe가 합성 JPEG/PNG와 EXIF 방향 8종을 만든다. 결과 디렉터리에 PNG, JSON 결과, ZIP/네이티브 해시, 실행 로그를 남긴다.
 
 ## 배포 구성과 확인할 항목
 
@@ -120,11 +120,9 @@ visibility는 [AWS 문서의 함수 timeout 6배 권장](https://docs.aws.amazon
 - DLQ와 queue age SNS 알람을 구성했다. 실제 수신 연결 및 Lambda Errors/Throttles/Duration/Max Memory Used, DB 제어 지연, 일반 API p95, 실패·환불·큐 대기를 DEV에서 검증한다.
 - 롤백은 새 접수 플래그를 끄고 이미 예약된 업로드가 완료/만료되도록 전처리 트리거·유지보수를 유지한다. 큐/DB를 일괄 초기화하거나 이미 수행한 AI를 다시 호출하지 않는다. 기존 클라이언트의 multipart 경로는 계속 API에서 전처리한다.
 
-## 마이그레이션 충돌 — 배포 전 해결 필요
+## 과거 마이그레이션 충돌 기록 (해결됨)
 
-2026-09-11에 fetch한 `origin/main=d08dcad6` 기준이다. 이 worktree의 기존 V69(워커 용량), V70(Lambda outbox)는 DEV 전용 실험 스키마에서 사용한 이력이 있다. main에는 V69 알림 삭제와 V69 방 성장 파일이 동시에 있고 V70 방 성장 최고 레벨이 있다. 이번에 추가한 V71은 아직 외부 DB에 적용하지 않았다.
-
-main 자체의 중복 V69와 worktree의 V69/V70 충돌을 먼저 조율하고, 대상 환경의 `flyway_schema_history`와 실제 스키마를 대조해야 한다. 이미 적용한 migration 파일을 단순 개명/수정하거나 flyway repair로 덮지 않는다. 이번 로컬 검증은 worktree 단독 migration 이력에서 실행했으므로 main 병합·DEV 배포 준비가 끝났다는 근거로 사용하지 않는다.
+초기 worktree의 V69/V70/V71 충돌은 main 병합 전에 V72(용량), V73(outbox), V74(직접 업로드)로 정리했다. 이 절의 과거 미해결 상태를 현재 배포 차단 사유로 사용하지 않는다. 이미 적용한 migration은 수정하지 않는다. 2026-10-30 후속 작업과 현재 검토 범위는 [전처리 전환 준비](furniture-preprocess-rollout.md)를 따른다.
 
 ## 검증 기록
 
