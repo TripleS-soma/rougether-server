@@ -1,7 +1,8 @@
 package com.triples.rougether.userapi.house.service;
 
 import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.isDailyAchieved;
-import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.ratePercent;
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.dailyCurrentValue;
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.isDaily;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
@@ -81,7 +82,7 @@ public class HouseMissionService {
         this.routineRepository = routineRepository;
     }
 
-    // 미션 등록 - 소유자 전용. MVP 는 DAILY_MEMBER_RATE/WEEKLY_MEMBER_COUNT 2종만 허용.
+    // 미션 등록 - 소유자 전용. DAILY_MEMBER_RATE/DAILY_MEMBER_COUNT/WEEKLY_MEMBER_COUNT 허용(STREAK_DAYS 미지원).
     @Transactional
     public HouseMissionResponse create(Long userId, Long houseId, HouseMissionCreateRequest request) {
         House house = requireHouse(houseId);
@@ -99,6 +100,11 @@ public class HouseMissionService {
                 && request.targetValue() > DAILY_TARGET_MAX_PERCENT) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_TARGET_INVALID);
         }
+        // 인원 목표는 집 정원을 넘을 수 없다 - 넘으면 영원히 달성할 수 없는 미션이 된다.
+        if (request.missionType() == HouseMissionType.DAILY_MEMBER_COUNT
+                && request.targetValue() > house.getMaxMembers()) {
+            throw new BusinessException(HouseErrorCode.HOUSE_MISSION_TARGET_INVALID);
+        }
         if (request.startsAt() != null && request.endsAt() != null
                 && !request.endsAt().isAfter(request.startsAt())) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_PERIOD_INVALID);
@@ -106,7 +112,7 @@ public class HouseMissionService {
         HouseMission mission = houseMissionRepository.save(HouseMission.create(
                 house, request.title(), request.missionType(),
                 request.targetValue(), request.startsAt(), request.endsAt()));
-        if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
+        if (isDaily(mission.getMissionType())) {
             return HouseMissionResponse.of(mission, 0, 0, false, false);
         }
         return HouseMissionResponse.of(mission, 0, 0);
@@ -210,12 +216,13 @@ public class HouseMissionService {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_ALREADY_CONTRIBUTED);
         }
 
-        if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
+        if (isDaily(mission.getMissionType())) {
             long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(missionId, today);
             return new HouseMissionContributeResponse(
                     missionId, participant.getContributionValue(),
-                    ratePercent(todayCount, house.getCurrentMemberCount()),
-                    isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue()));
+                    dailyCurrentValue(mission.getMissionType(), todayCount, house.getCurrentMemberCount()),
+                    isDailyAchieved(mission.getMissionType(), todayCount,
+                            house.getCurrentMemberCount(), mission.getTargetValue()));
         }
         // JPQL 실행 전 auto-flush 로 이번 +1 이 합산에 반영된다.
         long currentValue = participantRepository.sumContributionByMissionId(missionId);
@@ -243,7 +250,7 @@ public class HouseMissionService {
         HouseMember me = requireActiveMember(userId, houseId);
         HouseMission mission = houseMissionRepository.findWithLockByIdAndHouseId(missionId, houseId)
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_FOUND));
-        if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
+        if (isDaily(mission.getMissionType())) {
             return claimDaily(house, me, mission);
         }
         if (mission.getStatus() == HouseMissionStatus.COMPLETED) {
@@ -284,7 +291,8 @@ public class HouseMissionService {
         }
         // 판정에 쓰는 멤버 수도 claim() 진입 시 잠근 house 의 값을 쓴다.
         long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(mission.getId(), today);
-        if (!isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue())) {
+        if (!isDailyAchieved(mission.getMissionType(), todayCount,
+                house.getCurrentMemberCount(), mission.getTargetValue())) {
             throw new BusinessException(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED);
         }
         try {

@@ -13,11 +13,11 @@ public record HouseMissionResponse(
         Long missionId,
         @Schema(description = "미션 제목", example = "이번 주 다같이 루틴 지키기")
         String title,
-        @Schema(description = "미션 유형. DAILY_MEMBER_RATE(일일 구성원 달성률, 매일 반복), WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수)", example = "WEEKLY_MEMBER_COUNT")
+        @Schema(description = "미션 유형. DAILY_MEMBER_RATE(일일 구성원 달성률 %, 매일 반복), DAILY_MEMBER_COUNT(하루 N명 이상 달성, 매일 반복), WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수)", example = "WEEKLY_MEMBER_COUNT")
         HouseMissionType missionType,
-        @Schema(description = "목표 수치. WEEKLY 는 기여 합산 목표(1~1000), DAILY 는 오늘 달성률 %(1~100)", example = "20")
+        @Schema(description = "목표 수치. WEEKLY 는 기여 합산 목표(1~1000), DAILY_MEMBER_RATE 는 오늘 달성률 %(1~100), DAILY_MEMBER_COUNT 는 목표 인원(1~집 정원)", example = "20")
         int targetValue,
-        @Schema(description = "현재 진행 수치. WEEKLY 는 구성원 기여 누적 합, DAILY 는 오늘(KST) 기여 멤버 비율 %(내림)", example = "12")
+        @Schema(description = "현재 진행 수치. WEEKLY 는 구성원 기여 누적 합, DAILY_MEMBER_RATE 는 오늘(KST) 기여 멤버 비율 %(내림), DAILY_MEMBER_COUNT 는 오늘(KST) 기여 멤버 수", example = "12")
         long currentValue,
         @Schema(description = "상태. ACTIVE(진행 중), COMPLETED(달성 — 보상 지급됨, WEEKLY 전용), EXPIRED(기간 만료 — endsAt 경과 시 매시 배치로 전이). DAILY 는 COMPLETED 전환 없이 매일 반복", example = "ACTIVE")
         HouseMissionStatus status,
@@ -27,7 +27,7 @@ public record HouseMissionResponse(
         Instant endsAt,
         @Schema(description = "내 누적 기여 수치 (유형 무관 누적 체크 횟수)", example = "3")
         int myContribution,
-        @Schema(description = "목표 달성 여부. WEEKLY 는 currentValue >= targetValue, DAILY 는 오늘 달성률 기준. 달성 시 보상 받기(claim) 가능", example = "false")
+        @Schema(description = "목표 달성 여부. WEEKLY 는 currentValue >= targetValue, DAILY 는 오늘 기준(RATE 는 달성률, COUNT 는 기여 멤버 수). 달성 시 보상 받기(claim) 가능", example = "false")
         boolean achieved,
         @Schema(description = "오늘 보상 수령 여부 (DAILY 전용, WEEKLY 는 null 생략). true 면 오늘은 claim 불가, 내일 다시 가능", example = "false")
         @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -41,7 +41,7 @@ public record HouseMissionResponse(
                 currentValue >= mission.getTargetValue(), null);
     }
 
-    // DAILY 응답 - currentValue 는 오늘 달성률 %, achieved 는 오늘 판정
+    // DAILY 응답 - currentValue 는 오늘 달성률 %(RATE) 또는 오늘 기여 멤버 수(COUNT), achieved 는 오늘 판정
     public static HouseMissionResponse of(HouseMission mission, long currentValue, int myContribution,
                                           boolean achieved, boolean todayClaimed) {
         return build(mission, currentValue, myContribution, achieved, todayClaimed);

@@ -2,6 +2,8 @@ package com.triples.rougether.userapi.house.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.triples.rougether.domain.house.entity.HouseMissionType;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -35,5 +37,26 @@ class HouseMissionProgressCalculatorTest {
         assertThat(HouseMissionProgressCalculator.isDailyAchieved(memberCount, memberCount, 100)).isTrue();
         assertThat(HouseMissionProgressCalculator.isDailyAchieved((long) memberCount - 1, memberCount, 100))
                 .isFalse();
+    }
+
+    @Test
+    void COUNT_유형은_오늘_기여_멤버_수를_그대로_진행값으로_쓰고_목표_인원_이상이면_달성한다() {
+        assertThat(HouseMissionProgressCalculator.dailyCurrentValue(HouseMissionType.DAILY_MEMBER_COUNT, 2L, 4))
+                .isEqualTo(2);
+        assertThat(HouseMissionProgressCalculator.isDailyAchieved(HouseMissionType.DAILY_MEMBER_COUNT, 2L, 4, 2))
+                .isTrue();
+        assertThat(HouseMissionProgressCalculator.isDailyAchieved(HouseMissionType.DAILY_MEMBER_COUNT, 1L, 4, 2))
+                .isFalse();
+        // 멤버 수가 늘어도 필요한 인원은 그대로 - RATE 와 다른 점
+        assertThat(HouseMissionProgressCalculator.isDailyAchieved(HouseMissionType.DAILY_MEMBER_COUNT, 2L, 10, 2))
+                .isTrue();
+    }
+
+    @Test
+    void RATE_유형은_기존_비율_계산을_그대로_쓴다() {
+        assertThat(HouseMissionProgressCalculator.dailyCurrentValue(HouseMissionType.DAILY_MEMBER_RATE, 1L, 3))
+                .isEqualTo(33);
+        assertThat(HouseMissionProgressCalculator.isDailyAchieved(HouseMissionType.DAILY_MEMBER_RATE, 2L, 3, 66))
+                .isTrue();
     }
 }
