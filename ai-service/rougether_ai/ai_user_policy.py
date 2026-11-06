@@ -24,7 +24,7 @@ ACTION_HELP = {
     "HOUSE_JOIN": "{inviteCode}; 실제 공유받은 유효 초대코드만 사용",
     "HOUSE_REQUEST": "{houseId}; 공개 집은 신청 후 소유자 승인을 기다림", "HOUSE_LEAVE": "{houseId}",
     "HOUSE_CREATE": "{name,goalIds:[id],isPublic:boolean}",
-    "MISSION_CREATE": "{houseId,request:{title,missionType:'DAILY_MEMBER_RATE'|'WEEKLY_MEMBER_COUNT',targetValue:1..1000,startsAt?:ISO-instant,endsAt?:ISO-instant}}; 집 소유자만 생성, DAILY 목표 최대100",
+    "MISSION_CREATE": "{houseId,request:{title,missionType:'DAILY_MEMBER_RATE'|'DAILY_MEMBER_COUNT'|'WEEKLY_MEMBER_COUNT',targetValue:1..1000,startsAt?:ISO-instant,endsAt?:ISO-instant}}; 집 소유자만 생성, DAILY_MEMBER_RATE 목표 최대100, DAILY_MEMBER_COUNT 목표는 집 정원 이하",
     "MISSION_CONTRIBUTE": "{houseId,missionId}", "MISSION_CLAIM": "{houseId,missionId}",
     "SHOP_PURCHASE": "{itemId}", "GACHA_DRAW": "{gachaId,request:{count:1}}",
     "ROOM_LAYOUT": "{baseRevision,surfaceSlots:[{slotType,userItemId}],placements:[{userItemId,positionX,positionY,zIndex}]}",

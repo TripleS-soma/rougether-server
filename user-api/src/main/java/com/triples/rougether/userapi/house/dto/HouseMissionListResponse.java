@@ -16,11 +16,11 @@ public record HouseMissionListResponse(List<MissionSummary> items) {
             Long missionId,
             @Schema(description = "미션 제목", example = "이번 주 다같이 루틴 지키기")
             String title,
-            @Schema(description = "미션 유형. DAILY_MEMBER_RATE(일일 구성원 달성률), WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수)", example = "WEEKLY_MEMBER_COUNT")
+            @Schema(description = "미션 유형. DAILY_MEMBER_RATE(일일 구성원 달성률 %), DAILY_MEMBER_COUNT(하루 N명 이상 달성), WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수)", example = "WEEKLY_MEMBER_COUNT")
             HouseMissionType missionType,
-            @Schema(description = "목표 수치. WEEKLY 는 기여 합산 목표(1~1000), DAILY 는 오늘 달성률 %(1~100)", example = "20")
+            @Schema(description = "목표 수치. WEEKLY 는 기여 합산 목표(1~1000), DAILY_MEMBER_RATE 는 오늘 달성률 %(1~100), DAILY_MEMBER_COUNT 는 목표 인원(1~집 정원)", example = "20")
             int targetValue,
-            @Schema(description = "현재 진행 수치. WEEKLY 는 구성원 기여 누적 합, DAILY 는 오늘(KST) 기여 멤버 비율 %(내림)", example = "12")
+            @Schema(description = "현재 진행 수치. WEEKLY 는 구성원 기여 누적 합, DAILY_MEMBER_RATE 는 오늘(KST) 기여 멤버 비율 %(내림), DAILY_MEMBER_COUNT 는 오늘(KST) 기여 멤버 수", example = "12")
             long currentValue,
             @Schema(description = "상태. ACTIVE(진행 중), COMPLETED(달성 — 보상 지급됨, WEEKLY 전용), EXPIRED(기간 만료 — endsAt 경과 시 매시 배치로 전이). DAILY 는 COMPLETED 전환 없이 매일 반복", example = "ACTIVE")
             HouseMissionStatus status,
@@ -51,7 +51,7 @@ public record HouseMissionListResponse(List<MissionSummary> items) {
             return build(mission, currentValue, null, myContribution, contributedToday);
         }
 
-        // DAILY 행 - currentValue 는 오늘 달성률 %. 미리보기용 — 개인 기여값 없음.
+        // DAILY 행 - currentValue 는 오늘 달성률 %(RATE) 또는 오늘 기여 멤버 수(COUNT). 미리보기용 — 개인 기여값 없음.
         public static MissionSummary ofDaily(HouseMission mission, long todayRatePercent, boolean todayClaimed) {
             return build(mission, todayRatePercent, todayClaimed, null, null);
         }

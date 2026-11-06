@@ -244,4 +244,61 @@ class HouseMissionDailyIntegrationTest {
         assertThat(weeklyRow.myContribution()).isZero();
         assertThat(weeklyRow.contributedToday()).isFalse();
     }
+
+    // ---- DAILY_MEMBER_COUNT: 하루 N명 이상 (멤버 수가 바뀌어도 필요한 인원이 그대로) ----
+
+    private Long createDailyCount(Fixture f, int targetMembers) {
+        return houseMissionService.create(f.owner().getId(), f.house().getId(),
+                new HouseMissionCreateRequest("두 명 이상", HouseMissionType.DAILY_MEMBER_COUNT,
+                        targetMembers, null, null)).missionId();
+    }
+
+    @Test
+    void DAILY_COUNT_등록은_목표_인원이_집_정원을_넘으면_400() {
+        Fixture f = fixture(); // 정원 4
+        assertThatThrownBy(() -> createDailyCount(f, 5))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_TARGET_INVALID));
+        assertThat(createDailyCount(f, 4)).isNotNull();
+    }
+
+    @Test
+    void DAILY_COUNT_진행값은_오늘_기여한_멤버_수이고_목표_인원_이상이면_달성() {
+        Fixture f = fixture();
+        Long missionId = createDailyCount(f, 2);
+
+        HouseMissionContributeResponse first =
+                houseMissionService.contribute(f.owner().getId(), f.house().getId(), missionId);
+        assertThat(first.currentValue()).isEqualTo(1);
+        assertThat(first.achieved()).isFalse();
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), missionId))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_NOT_ACHIEVED));
+
+        HouseMissionContributeResponse second =
+                houseMissionService.contribute(f.member().getId(), f.house().getId(), missionId);
+        assertThat(second.currentValue()).isEqualTo(2);
+        assertThat(second.achieved()).isTrue();
+    }
+
+    @Test
+    void DAILY_COUNT_claim_은_20포인트_하루_1회이고_목록에_todayClaimed_가_내려온다() {
+        Fixture f = fixture();
+        Long missionId = createDailyCount(f, 1);
+        houseMissionService.contribute(f.owner().getId(), f.house().getId(), missionId);
+
+        HouseMissionClaimResponse claimed =
+                houseMissionService.claim(f.member().getId(), f.house().getId(), missionId);
+        assertThat(claimed.grantedGrowthPoints()).isEqualTo(20);
+        assertThat(claimed.status()).isEqualTo(HouseMissionStatus.ACTIVE);
+        assertThatThrownBy(() -> houseMissionService.claim(f.owner().getId(), f.house().getId(), missionId))
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(HouseErrorCode.HOUSE_MISSION_ALREADY_CLAIMED));
+
+        var row = houseMissionQueryService.getMissions(f.owner().getId(), f.house().getId()).items().stream()
+                .filter(item -> item.missionId().equals(missionId))
+                .findFirst().orElseThrow();
+        assertThat(row.currentValue()).isEqualTo(1);
+        assertThat(row.todayClaimed()).isTrue();
+    }
 }

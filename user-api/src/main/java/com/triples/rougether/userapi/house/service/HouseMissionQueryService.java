@@ -1,14 +1,14 @@
 package com.triples.rougether.userapi.house.service;
 
 import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.isDailyAchieved;
-import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.ratePercent;
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.dailyCurrentValue;
+import static com.triples.rougether.userapi.house.service.HouseMissionProgressCalculator.isDaily;
 
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.house.entity.House;
 import com.triples.rougether.domain.house.entity.HouseMember;
 import com.triples.rougether.domain.house.entity.HouseMission;
 import com.triples.rougether.domain.house.entity.HouseMissionParticipant;
-import com.triples.rougether.domain.house.entity.HouseMissionType;
 import com.triples.rougether.domain.house.repository.HouseMemberRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionDailyContributionRepository;
 import com.triples.rougether.domain.house.repository.HouseMissionDailyRewardRepository;
@@ -76,13 +76,14 @@ public class HouseMissionQueryService {
         int myContribution = participantRepository.findByMissionIdAndMemberId(missionId, me.getId())
                 .map(HouseMissionParticipant::getContributionValue)
                 .orElse(0);
-        if (mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE) {
+        if (isDaily(mission.getMissionType())) {
             LocalDate today = LocalDate.now(KST);
             long todayCount = dailyContributionRepository.countActiveByMissionIdAndContributionDate(missionId, today);
             return HouseMissionResponse.of(mission,
-                    ratePercent(todayCount, house.getCurrentMemberCount()),
+                    dailyCurrentValue(mission.getMissionType(), todayCount, house.getCurrentMemberCount()),
                     myContribution,
-                    isDailyAchieved(todayCount, house.getCurrentMemberCount(), mission.getTargetValue()),
+                    isDailyAchieved(mission.getMissionType(), todayCount,
+                            house.getCurrentMemberCount(), mission.getTargetValue()),
                     dailyRewardRepository.existsByMissionIdAndRewardDate(missionId, today));
         }
         long currentValue = participantRepository.sumContributionByMissionId(missionId);
@@ -99,7 +100,7 @@ public class HouseMissionQueryService {
         Map<Long, Integer> myContributions = myContributionsByMissionIds(memberId, missions);
         Set<Long> contributedTodayIds = missionIdsContributedOn(memberId, missions, today);
         List<Long> dailyIds = missions.stream()
-                .filter(mission -> mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE)
+                .filter(mission -> isDaily(mission.getMissionType()))
                 .map(HouseMission::getId)
                 .toList();
         Map<Long, Long> todayCounts = countTodayByMissionIds(dailyIds, today);
@@ -109,10 +110,11 @@ public class HouseMissionQueryService {
 
         return missions.stream()
                 .map(mission -> {
-                    long currentValue = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE
-                            ? ratePercent(todayCounts.getOrDefault(mission.getId(), 0L), house.getCurrentMemberCount())
+                    boolean daily = isDaily(mission.getMissionType());
+                    long currentValue = daily
+                            ? dailyCurrentValue(mission.getMissionType(),
+                                    todayCounts.getOrDefault(mission.getId(), 0L), house.getCurrentMemberCount())
                             : sums.getOrDefault(mission.getId(), 0L);
-                    boolean daily = mission.getMissionType() == HouseMissionType.DAILY_MEMBER_RATE;
                     boolean todayClaimed = todayClaimedIds.contains(mission.getId());
                     if (memberId == null) {
                         return daily

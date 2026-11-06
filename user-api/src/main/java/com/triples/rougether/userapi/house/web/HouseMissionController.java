@@ -51,8 +51,8 @@ public class HouseMissionController {
 
     @Operation(summary = "단체 미션 등록",
             description = "집에 단체 미션을 등록합니다. 소유자(OWNER)만 등록할 수 있습니다. "
-                    + "미션 유형은 MVP 에서 DAILY_MEMBER_RATE(일일 구성원 달성률, 매일 반복)·WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수) 2종만 지원합니다. "
-                    + "targetValue 는 WEEKLY 가 기여 합산 목표(1~1000), DAILY 가 오늘 달성률 %(1~100)입니다. "
+                    + "미션 유형은 DAILY_MEMBER_RATE(일일 구성원 달성률 %, 매일 반복)·DAILY_MEMBER_COUNT(하루 N명 이상 달성, 매일 반복 — 목표 1~집 정원)·WEEKLY_MEMBER_COUNT(주간 구성원 달성 횟수)를 지원합니다. "
+                    + "targetValue 는 WEEKLY 가 기여 합산 목표(1~1000), DAILY_MEMBER_RATE 가 오늘 달성률 %(1~100), DAILY_MEMBER_COUNT 가 목표 인원(1~집 정원)입니다. "
                     + "startsAt·endsAt 은 선택이고, 둘 다 지정하면 endsAt 이 startsAt 보다 뒤여야 합니다. "
                     + "등록된 미션은 ACTIVE 상태로 시작합니다.")
     @ResponseStatus(HttpStatus.CREATED)
@@ -66,7 +66,7 @@ public class HouseMissionController {
 
     @Operation(summary = "단체 미션 상세 조회",
             description = "미션 하나의 진행 상황을 반환합니다. 해당 집의 ACTIVE 구성원만 조회할 수 있으며, "
-                    + "진행 수치(currentValue — WEEKLY 는 기여 누적 합, DAILY 는 오늘 달성률 %)와 내 누적 기여(myContribution)를 함께 내려줍니다. "
+                    + "진행 수치(currentValue — WEEKLY 는 기여 누적 합, DAILY 는 오늘 달성률 % 또는 오늘 기여 멤버 수)와 내 누적 기여(myContribution)를 함께 내려줍니다. "
                     + "DAILY 미션은 오늘 판정 기준 achieved 와 오늘 보상 수령 여부 todayClaimed 를 추가로 내려줍니다.")
     @GetMapping("/{missionId}")
     public HouseMissionResponse getMission(@CurrentUser AuthUser user,
@@ -82,7 +82,7 @@ public class HouseMissionController {
                     + "공동 미션은 구성원이 미션 자체를 직접 수행 체크하는 방식이며 개인 루틴 완료와는 무관합니다. "
                     + "해당 집의 ACTIVE 구성원만, KST(Asia/Seoul) 기준 하루 1회만 기여할 수 있으며 "
                     + "진행 중(ACTIVE)이고 미션 기간 내일 때만 가능합니다. "
-                    + "응답 currentValue 는 WEEKLY 가 기여 누적 합, DAILY 가 오늘 달성률 %(내림)입니다.")
+                    + "응답 currentValue 는 WEEKLY 가 기여 누적 합, DAILY 가 오늘 달성률 %(내림, RATE) 또는 오늘 기여 멤버 수(COUNT)입니다.")
     @PostMapping("/{missionId}/contribute")
     public HouseMissionContributeResponse contribute(@CurrentUser AuthUser user,
                                                      @Parameter(description = "집 ID. GET /api/v1/me/houses (내 집 목록) 응답의 houseId 값")
