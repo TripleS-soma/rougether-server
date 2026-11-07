@@ -1,0 +1,653 @@
+{
+  "conditions": {
+    "before": {
+      "hold": {
+        "count": 403531.0,
+        "sum_seconds": 3424.6789999999996,
+        "mean_ms": 8.48678044561632
+      },
+      "acquire": {
+        "mean_ms": 5.7423700882338355,
+        "count": 403530.0,
+        "seconds": 2317.218601705,
+        "start": "2026-11-06T15:45:58.451418+00:00",
+        "end": "2026-11-06T15:50:27.427736+00:00",
+        "sampled_timer_max_ms": 675.986492
+      },
+      "mean_active": 13.688715953307392
+    },
+    "after": {
+      "hold": {
+        "count": 403643.0,
+        "sum_seconds": 2539.746,
+        "mean_ms": 6.292060062976442
+      },
+      "acquire": {
+        "mean_ms": 5.814363967861169,
+        "count": 403655.0,
+        "seconds": 2346.997087447,
+        "start": "2026-11-07T05:31:30.928425+00:00",
+        "end": "2026-11-07T05:35:59.985373+00:00",
+        "sampled_timer_max_ms": 435.080657
+      },
+      "mean_active": 10.01908396946565
+    }
+  },
+  "reference_windows": [
+    {
+      "kst": "2026-11-07T14:23:20+09:00",
+      "system_pct": 28.2,
+      "rds_group": 11.5,
+      "http_p95": null
+    },
+    {
+      "kst": "2026-11-07T14:28:20+09:00",
+      "system_pct": 33.2,
+      "rds_group": 12.5,
+      "http_p95": null
+    },
+    {
+      "kst": "2026-11-07T14:31:20+09:00",
+      "system_pct": 28.2,
+      "rds_group": 11.5,
+      "http_p95": 115.5166934
+    },
+    {
+      "kst": "2026-11-07T14:32:20+09:00",
+      "system_pct": 22.7,
+      "rds_group": 8.5,
+      "http_p95": 114.8383132
+    },
+    {
+      "kst": "2026-11-07T14:33:20+09:00",
+      "system_pct": 38.5,
+      "rds_group": 10.5,
+      "http_p95": 460.6870446
+    },
+    {
+      "kst": "2026-11-07T14:34:20+09:00",
+      "system_pct": 22.5,
+      "rds_group": 8.5,
+      "http_p95": 94.44102339999999
+    },
+    {
+      "kst": "2026-11-07T14:35:20+09:00",
+      "system_pct": 25.5,
+      "rds_group": 8.5,
+      "http_p95": 125.89643905
+    },
+    {
+      "kst": "2026-11-07T14:38:20+09:00",
+      "system_pct": 28.1,
+      "rds_group": 10.5,
+      "http_p95": null
+    }
+  ],
+  "timeline": [
+    {
+      "kst": "2026-11-07T14:33:17+09:00",
+      "http": {
+        "count": 1501,
+        "p50": 4.812359,
+        "p95": 8.34756,
+        "p99": 11.430255,
+        "max": 19.144104
+      },
+      "endpoint_p95_ms": {
+        "me": 5.0,
+        "complete": 10.0,
+        "today": 7.0
+      },
+      "starts": 1501,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:17.172424+00:00",
+      "previous_sample": "2026-11-07T05:33:16.140713+00:00",
+      "pool": {
+        "active": 7.0,
+        "idle": 33.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1546.0,
+          "sum_seconds": 0.0011925470000733185,
+          "mean_ms": 0.0007713758085855876
+        },
+        "usage": {
+          "count": 1545.0,
+          "sum_seconds": 5.097999999999956,
+          "mean_ms": 3.2996763754045024
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 7.3,
+        "system": 16.1,
+        "wait": 5.9,
+        "idle": 13.7,
+        "user": 0.0,
+        "total": 86.4,
+        "steal": 0.0,
+        "nice": 57.1
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 1.5
+      },
+      "mysqld_thread_cpu_sum": 76.5,
+      "disk": {
+        "writeKbPS": 2948.0,
+        "readIOsPS": 0.0,
+        "await": 0.5,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 100.0,
+        "avgQueueLen": 0.52,
+        "tps": 1047.0,
+        "readKb": 0,
+        "writeKb": 2948,
+        "avgReqSz": 5.63,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1047.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 26.95402320804364,
+      "api_cpu": 0.27293577981651373,
+      "gc_delta_s": 0.0
+    },
+    {
+      "kst": "2026-11-07T14:33:18+09:00",
+      "http": {
+        "count": 1501,
+        "p50": 4.86336,
+        "p95": 10.033903,
+        "p99": 19.638432,
+        "max": 29.602062
+      },
+      "endpoint_p95_ms": {
+        "today": 10.0,
+        "me": 7.0,
+        "complete": 14.050000000000011
+      },
+      "starts": 1500,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:18.203301+00:00",
+      "previous_sample": "2026-11-07T05:33:17.172424+00:00",
+      "pool": {
+        "active": 5.0,
+        "idle": 35.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1546.0,
+          "sum_seconds": 0.001197137999952247,
+          "mean_ms": 0.000774345407472346
+        },
+        "usage": {
+          "count": 1548.0,
+          "sum_seconds": 6.003999999999905,
+          "mean_ms": 3.878552971576166
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 9.5,
+        "system": 12.8,
+        "wait": 5.2,
+        "idle": 13.7,
+        "user": 0.9,
+        "total": 86.2,
+        "steal": 0.0,
+        "nice": 57.8
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 1.0
+      },
+      "mysqld_thread_cpu_sum": 78.0,
+      "disk": {
+        "writeKbPS": 2848.0,
+        "readIOsPS": 0.0,
+        "await": 0.3,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 100.0,
+        "avgQueueLen": 0.32,
+        "tps": 1050.0,
+        "readKb": 0,
+        "writeKb": 2848,
+        "avgReqSz": 5.42,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1050.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 12.709104099767519,
+      "api_cpu": 0.2911694510739857,
+      "gc_delta_s": 0.007000000000000006
+    },
+    {
+      "kst": "2026-11-07T14:33:19+09:00",
+      "http": {
+        "count": 1215,
+        "p50": 5.314171,
+        "p95": 156.4028597,
+        "p99": 201.3368573199999,
+        "max": 244.590617
+      },
+      "endpoint_p95_ms": {
+        "complete": 169.09999999999997,
+        "me": 154.79999999999995,
+        "today": 154.99999999999977
+      },
+      "starts": 1500,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:19.233927+00:00",
+      "previous_sample": "2026-11-07T05:33:18.203301+00:00",
+      "pool": {
+        "active": 6.0,
+        "idle": 34.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1546.0,
+          "sum_seconds": 0.0011356130000876874,
+          "mean_ms": 0.0007345491591770293
+        },
+        "usage": {
+          "count": 1545.0,
+          "sum_seconds": 5.2000000000000455,
+          "mean_ms": 3.365695792880288
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 5.7,
+        "system": 9.0,
+        "wait": 5.2,
+        "idle": 13.2,
+        "user": 0.5,
+        "total": 86.9,
+        "steal": 0.0,
+        "nice": 66.5
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 1.0
+      },
+      "mysqld_thread_cpu_sum": 79.5,
+      "disk": {
+        "writeKbPS": 2788.0,
+        "readIOsPS": 0.0,
+        "await": 0.29,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 100.0,
+        "avgQueueLen": 0.29,
+        "tps": 1016.0,
+        "readKb": 0,
+        "writeKb": 2788,
+        "avgReqSz": 5.49,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1016.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 12.142309451986739,
+      "api_cpu": 0.27699530516431925,
+      "gc_delta_s": 0.0
+    },
+    {
+      "kst": "2026-11-07T14:33:20+09:00",
+      "http": {
+        "count": 1315,
+        "p50": 358.311198,
+        "p95": 460.6870446,
+        "p99": 523.01773982,
+        "max": 655.820017
+      },
+      "endpoint_p95_ms": {
+        "me": 434.79999999999995,
+        "today": 466.89999999999986,
+        "complete": 464.2999999999999
+      },
+      "starts": 1500,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:20.264716+00:00",
+      "previous_sample": "2026-11-07T05:33:19.233927+00:00",
+      "pool": {
+        "active": 40.0,
+        "idle": 0.0,
+        "pending": 160.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1089.0,
+          "sum_seconds": 64.17814332199987,
+          "mean_ms": 58.933097632690426
+        },
+        "usage": {
+          "count": 1054.0,
+          "sum_seconds": 26.399000000000115,
+          "mean_ms": 25.046489563567473
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 5.4,
+        "system": 38.5,
+        "wait": 1.5,
+        "idle": 3.4,
+        "user": 14.1,
+        "total": 96.6,
+        "steal": 0.0,
+        "nice": 37.1
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 10.5
+      },
+      "mysqld_thread_cpu_sum": 47.0,
+      "disk": {
+        "writeKbPS": 1732.0,
+        "readIOsPS": 0.0,
+        "await": 0.42,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 82.0,
+        "avgQueueLen": 0.24,
+        "tps": 571.0,
+        "readKb": 0,
+        "writeKb": 1732,
+        "avgReqSz": 6.07,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 571.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 9.446800751730866,
+      "api_cpu": 0.20634920634920637,
+      "gc_delta_s": 0.0
+    },
+    {
+      "kst": "2026-11-07T14:33:21+09:00",
+      "http": {
+        "count": 1910,
+        "p50": 176.04772100000002,
+        "p95": 348.9426479,
+        "p99": 416.41099333000005,
+        "max": 576.443232
+      },
+      "endpoint_p95_ms": {
+        "me": 313.9,
+        "today": 352.9,
+        "complete": 367.5499999999999
+      },
+      "starts": 1499,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:21.294831+00:00",
+      "previous_sample": "2026-11-07T05:33:20.264716+00:00",
+      "pool": {
+        "active": 40.0,
+        "idle": 0.0,
+        "pending": 160.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1682.0,
+          "sum_seconds": 171.00918941600003,
+          "mean_ms": 101.67014828537458
+        },
+        "usage": {
+          "count": 1687.0,
+          "sum_seconds": 40.93599999999992,
+          "mean_ms": 24.265560165975057
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 9.5,
+        "system": 20.5,
+        "wait": 0.5,
+        "idle": 0.5,
+        "user": 2.0,
+        "total": 99.5,
+        "steal": 0.0,
+        "nice": 67.0
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 3.5
+      },
+      "mysqld_thread_cpu_sum": 95.0,
+      "disk": {
+        "writeKbPS": 2996.0,
+        "readIOsPS": 0.0,
+        "await": 0.45,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 97.0,
+        "avgQueueLen": 0.47,
+        "tps": 1041.0,
+        "readKb": 0,
+        "writeKb": 2996,
+        "avgReqSz": 5.76,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1041.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 28.577123970807005,
+      "api_cpu": 0.3609022556390977,
+      "gc_delta_s": 0.01100000000000001
+    },
+    {
+      "kst": "2026-11-07T14:33:22+09:00",
+      "http": {
+        "count": 1561,
+        "p50": 5.184584,
+        "p95": 40.722496,
+        "p99": 60.845921800000056,
+        "max": 88.167555
+      },
+      "endpoint_p95_ms": {
+        "complete": 55.0,
+        "today": 42.0,
+        "me": 30.0
+      },
+      "starts": 1501,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:22.326344+00:00",
+      "previous_sample": "2026-11-07T05:33:21.294831+00:00",
+      "pool": {
+        "active": 4.0,
+        "idle": 36.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1869.0,
+          "sum_seconds": 97.98756084499996,
+          "mean_ms": 52.42780141519527
+        },
+        "usage": {
+          "count": 1897.0,
+          "sum_seconds": 32.666999999999916,
+          "mean_ms": 17.220347917764848
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 8.1,
+        "system": 17.8,
+        "wait": 1.5,
+        "idle": 4.6,
+        "user": 0.5,
+        "total": 95.4,
+        "steal": 0.0,
+        "nice": 67.5
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 1.0
+      },
+      "mysqld_thread_cpu_sum": 91.0,
+      "disk": {
+        "writeKbPS": 3064.0,
+        "readIOsPS": 0.0,
+        "await": 0.48,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 100.0,
+        "avgQueueLen": 0.53,
+        "tps": 1111.0,
+        "readKb": 0,
+        "writeKb": 3064,
+        "avgReqSz": 5.52,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1111.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 14.738205392003877,
+      "api_cpu": 0.3975903614457831,
+      "gc_delta_s": 0.0
+    },
+    {
+      "kst": "2026-11-07T14:33:23+09:00",
+      "http": {
+        "count": 1499,
+        "p50": 4.848716,
+        "p95": 9.095975699999999,
+        "p99": 17.059582940000002,
+        "max": 32.782538
+      },
+      "endpoint_p95_ms": {
+        "today": 8.049999999999955,
+        "me": 6.0,
+        "complete": 11.099999999999966
+      },
+      "starts": 1500,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:23.357433+00:00",
+      "previous_sample": "2026-11-07T05:33:22.326344+00:00",
+      "pool": {
+        "active": 7.0,
+        "idle": 33.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1546.0,
+          "sum_seconds": 0.0011882770002102916,
+          "mean_ms": 0.0007686138423093736
+        },
+        "usage": {
+          "count": 1548.0,
+          "sum_seconds": 5.2000000000000455,
+          "mean_ms": 3.3591731266150164
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 5.2,
+        "system": 13.7,
+        "wait": 5.7,
+        "idle": 13.3,
+        "user": 0.0,
+        "total": 86.7,
+        "steal": 0.0,
+        "nice": 62.1
+      },
+      "db_process_groups": {
+        "OS processes": 0.0,
+        "RDS processes": 0.5
+      },
+      "mysqld_thread_cpu_sum": 76.0,
+      "disk": {
+        "writeKbPS": 2812.0,
+        "readIOsPS": 0.0,
+        "await": 0.46,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 100.0,
+        "avgQueueLen": 0.48,
+        "tps": 1034.0,
+        "readKb": 0,
+        "writeKb": 2812,
+        "avgReqSz": 5.44,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1034.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 12.076114353182597,
+      "api_cpu": 0.27251732101616627,
+      "gc_delta_s": 0.0
+    },
+    {
+      "kst": "2026-11-07T14:33:24+09:00",
+      "http": {
+        "count": 1500,
+        "p50": 5.054297,
+        "p95": 9.76640765,
+        "p99": 17.557154379999997,
+        "max": 38.668857
+      },
+      "endpoint_p95_ms": {
+        "complete": 14.0,
+        "today": 9.0,
+        "me": 6.0
+      },
+      "starts": 1500,
+      "drops": 0,
+      "sample": "2026-11-07T05:33:24.388147+00:00",
+      "previous_sample": "2026-11-07T05:33:23.357433+00:00",
+      "pool": {
+        "active": 6.0,
+        "idle": 34.0,
+        "pending": 0.0
+      },
+      "interval_ms": {
+        "acquire": {
+          "count": 1545.0,
+          "sum_seconds": 0.0011425199998029711,
+          "mean_ms": 0.0007394951455035412
+        },
+        "usage": {
+          "count": 1538.0,
+          "sum_seconds": 5.863000000000056,
+          "mean_ms": 3.812093628088463
+        }
+      },
+      "db_cpu": {
+        "guest": 0.0,
+        "irq": 8.6,
+        "system": 18.2,
+        "wait": 5.6,
+        "idle": 14.1,
+        "user": 0.0,
+        "total": 85.9,
+        "steal": 0.0,
+        "nice": 53.5
+      },
+      "db_process_groups": null,
+      "mysqld_thread_cpu_sum": 80.0,
+      "disk": {
+        "writeKbPS": 2784.0,
+        "readIOsPS": 0.0,
+        "await": 0.5,
+        "readKbPS": 0.0,
+        "rrqmPS": 0.0,
+        "util": 99.0,
+        "avgQueueLen": 0.51,
+        "tps": 1023.0,
+        "readKb": 0,
+        "writeKb": 2784,
+        "avgReqSz": 5.44,
+        "wrqmPS": 0.0,
+        "writeIOsPS": 1023.0,
+        "device": "rdsdev"
+      },
+      "gen_cpu": 27.00937053845913,
+      "api_cpu": 0.28438228438228436,
+      "gc_delta_s": 0.008000000000000007
+    }
+  ]
+}
