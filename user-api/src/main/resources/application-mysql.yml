@@ -4,6 +4,13 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 트랜잭션마다 auto-commit을 껐다 켜는 DB 왕복을 생략한다.
+      auto-commit: false
+  jpa:
+    properties:
+      # Hikari의 auto-commit=false와 함께 유지한다.
+      hibernate.connection.provider_disables_autocommit: true
 
 # 별도 클라우드 자원 없이 요청 스레드에서 활동 기록을 묶어 커밋함.
 activity:
