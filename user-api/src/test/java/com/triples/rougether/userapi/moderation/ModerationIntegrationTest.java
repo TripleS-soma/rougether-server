@@ -165,9 +165,10 @@ class ModerationIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reportId").value(Long.parseLong(first.replaceAll(".*\"reportId\":(\\d+).*", "$1"))));
 
-        var row = jdbc.queryForMap("select count(*) cnt, max(reason) reason, max(detail) detail, max(target_owner_user_id) owner "
-                + "from content_reports where reporter_user_id = ?", reporter);
+        var row = jdbc.queryForMap("select count(*) cnt, max(reason) reason, max(detail) detail, max(target_owner_user_id) owner, "
+                + "max(source) source from content_reports where reporter_user_id = ?", reporter);
         assertThat(((Number) row.get("cnt")).intValue()).isEqualTo(1);
+        assertThat(row.get("source")).isEqualTo("USER");
         assertThat(row.get("reason")).isEqualTo("ABUSE");
         assertThat(row.get("detail")).isEqualTo("욕설이 있어요");
         assertThat(((Number) row.get("owner")).longValue()).isEqualTo(owner);
