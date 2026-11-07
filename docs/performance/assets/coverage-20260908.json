@@ -1,0 +1,220 @@
+{
+  "date": "2026-09-08",
+  "commit": "5e5c6470da0be2db4e249568dad41b7506d70e9d",
+  "scope": "Historical Java coverage, not a measurement of November main",
+  "coverage": [
+    {
+      "module": "admin-api",
+      "LINE": {
+        "covered": 2091,
+        "missed": 138,
+        "total": 2229,
+        "percent": 93.8089
+      },
+      "BRANCH": {
+        "covered": 623,
+        "missed": 179,
+        "total": 802,
+        "percent": 77.6808
+      }
+    },
+    {
+      "module": "aggregate",
+      "LINE": {
+        "covered": 10873,
+        "missed": 762,
+        "total": 11635,
+        "percent": 93.4508
+      },
+      "BRANCH": {
+        "covered": 3472,
+        "missed": 900,
+        "total": 4372,
+        "percent": 79.4145
+      }
+    },
+    {
+      "module": "batch",
+      "LINE": {
+        "covered": 1225,
+        "missed": 114,
+        "total": 1339,
+        "percent": 91.4862
+      },
+      "BRANCH": {
+        "covered": 446,
+        "missed": 82,
+        "total": 528,
+        "percent": 84.4697
+      }
+    },
+    {
+      "module": "common",
+      "LINE": {
+        "covered": 34,
+        "missed": 0,
+        "total": 34,
+        "percent": 100.0
+      },
+      "BRANCH": {
+        "covered": 33,
+        "missed": 5,
+        "total": 38,
+        "percent": 86.8421
+      }
+    },
+    {
+      "module": "domain",
+      "LINE": {
+        "covered": 1317,
+        "missed": 47,
+        "total": 1364,
+        "percent": 96.5543
+      },
+      "BRANCH": {
+        "covered": 321,
+        "missed": 82,
+        "total": 403,
+        "percent": 79.6526
+      }
+    },
+    {
+      "module": "infra",
+      "LINE": {
+        "covered": 0,
+        "missed": 0,
+        "total": 0,
+        "percent": null
+      },
+      "BRANCH": {
+        "covered": 0,
+        "missed": 0,
+        "total": 0,
+        "percent": null
+      }
+    },
+    {
+      "module": "infra-fcm",
+      "LINE": {
+        "covered": 20,
+        "missed": 41,
+        "total": 61,
+        "percent": 32.7869
+      },
+      "BRANCH": {
+        "covered": 3,
+        "missed": 13,
+        "total": 16,
+        "percent": 18.75
+      }
+    },
+    {
+      "module": "infra-llm",
+      "LINE": {
+        "covered": 142,
+        "missed": 28,
+        "total": 170,
+        "percent": 83.5294
+      },
+      "BRANCH": {
+        "covered": 64,
+        "missed": 16,
+        "total": 80,
+        "percent": 80.0
+      }
+    },
+    {
+      "module": "user-api",
+      "LINE": {
+        "covered": 6044,
+        "missed": 394,
+        "total": 6438,
+        "percent": 93.8801
+      },
+      "BRANCH": {
+        "covered": 1982,
+        "missed": 523,
+        "total": 2505,
+        "percent": 79.1218
+      }
+    }
+  ],
+  "tests": [
+    {
+      "module": "common",
+      "suites": 2,
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 9,
+      "nonpassing": []
+    },
+    {
+      "module": "domain",
+      "suites": 10,
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 62,
+      "nonpassing": []
+    },
+    {
+      "module": "user-api",
+      "suites": 218,
+      "tests": 1415,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 1414,
+      "nonpassing": [
+        {
+          "class": "com.triples.rougether.userapi.furniture.FurnitureGenerationLiveSmokeTest",
+          "name": "실제_사진을_Astra로_생성_검수하고_보관함에_연결()",
+          "status": "skipped"
+        }
+      ]
+    },
+    {
+      "module": "admin-api",
+      "suites": 36,
+      "tests": 230,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 230,
+      "nonpassing": []
+    },
+    {
+      "module": "batch",
+      "suites": 24,
+      "tests": 172,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 172,
+      "nonpassing": []
+    },
+    {
+      "module": "infra/fcm",
+      "suites": 1,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 5,
+      "nonpassing": []
+    },
+    {
+      "module": "infra/llm",
+      "suites": 4,
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 26,
+      "nonpassing": []
+    }
+  ]
+}

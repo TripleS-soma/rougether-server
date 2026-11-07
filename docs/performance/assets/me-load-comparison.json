@@ -1,0 +1,104 @@
+{
+  "before": {
+    "api_count": 1,
+    "total_pool": 40,
+    "db_class": "db.m6g.large",
+    "http": {
+      "rate": 1499.9511705682874,
+      "requests": 450002,
+      "p95_ms": 95.40651734999962,
+      "p99_ms": 215.49537868999982,
+      "not_issued": 0,
+      "unexpected_errors": 0
+    },
+    "endpoint_counts": {
+      "me": 180001.0,
+      "today": 180001.0,
+      "complete": 90000.0
+    },
+    "business_tps": 1499.9511705682874,
+    "completion_tps": 299.9889008296538,
+    "db_cpu": {
+      "n": 270,
+      "mean": 88.1774074074074,
+      "p95": 96.355,
+      "max": 100.0
+    },
+    "pool_acquire": {
+      "mean_ms": 5.7423700882338355,
+      "count": 403530.0,
+      "seconds": 2317.218601705,
+      "start": "2026-11-06T15:45:58.451418+00:00",
+      "end": "2026-11-06T15:50:27.427736+00:00",
+      "sampled_timer_max_ms": 675.986492
+    },
+    "pool_pending": {
+      "n": 257,
+      "mean": 9.793774319066149,
+      "p95": 97.59999999999997,
+      "max": 160.0
+    },
+    "db_audit_passed": true,
+    "warmup_passed": true,
+    "generator_headroom_passed": true,
+    "verdict": {
+      "passed": false,
+      "classification": "capacity_failed",
+      "failures": [
+        "sent_requests + dropped_iterations must match expected_requests within 1 (450002.0 != 450000.0)"
+      ]
+    },
+    "api_image": "sha256:0c5ee93996d7f86b7205a3348f771c75f34ce72e9c7c86b2eec18767c57499f5",
+    "runner_image": "sha256:16e8d925a8fa85529ad2670f776dab7e7735e3316f6e1305114769fe5d9e4adf"
+  },
+  "after": {
+    "api_count": 1,
+    "total_pool": 40,
+    "db_class": "db.m6g.large",
+    "http": {
+      "rate": 1499.3024671880517,
+      "requests": 450001,
+      "p95_ms": 93.558344,
+      "p99_ms": 168.488414,
+      "not_issued": 0,
+      "unexpected_errors": 0
+    },
+    "endpoint_counts": {
+      "me": 180001.0,
+      "today": 180000.0,
+      "complete": 90000.0
+    },
+    "business_tps": 1499.3024671880517,
+    "completion_tps": 299.85982708243904,
+    "db_cpu": {
+      "n": 270,
+      "mean": 88.84037037037037,
+      "p95": 96.6,
+      "max": 99.5
+    },
+    "pool_acquire": {
+      "mean_ms": 5.814363967861169,
+      "count": 403655.0,
+      "seconds": 2346.997087447,
+      "start": "2026-11-07T05:31:30.928425+00:00",
+      "end": "2026-11-07T05:35:59.985373+00:00",
+      "sampled_timer_max_ms": 435.080657
+    },
+    "pool_pending": {
+      "n": 262,
+      "mean": 9.202290076335878,
+      "p95": 92.59999999999991,
+      "max": 160.0
+    },
+    "db_audit_passed": true,
+    "warmup_passed": true,
+    "generator_headroom_passed": true,
+    "verdict": {
+      "passed": true,
+      "classification": "capacity_passed",
+      "failures": []
+    },
+    "api_image": "sha256:0e03ac8381b59c4ce4ff20b77d1c4445b3d7ebe8fbdb722c080044c1ae4e1769",
+    "runner_image": "sha256:16e8d925a8fa85529ad2670f776dab7e7735e3316f6e1305114769fe5d9e4adf"
+  }
+}
