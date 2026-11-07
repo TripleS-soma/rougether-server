@@ -103,6 +103,24 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(http.calls[-1][0].endswith("/fail"))
         self.assertFalse(any(url.endswith("/execute") for url,_,_ in http.calls))
 
+    def test_prompt_version_survives_revalidation_without_changing_execute_contract(self):
+        http = FakeHttp([job()], {"action": "WAIT", "payload": {"reason": "NO_ACTION_DUE"}, "memory": "",
+                                  "promptVersion": "2026-11-04.1"})
+        with self.assertLogs("ai-user-worker", level="INFO") as logs:
+            Worker(self.settings(), http).tick()
+        executed = next(body for url, body, _ in http.calls if url.endswith("/execute"))
+        self.assertEqual(executed["action"], "WAIT")
+        self.assertNotIn("promptVersion", executed)
+        self.assertTrue(any("prompt_version=2026-11-04.1 completed" in line for line in logs.output))
+
+    def test_malformed_prompt_version_is_dropped_but_action_still_runs(self):
+        http = FakeHttp([job()], {"action": "WAIT", "payload": {"reason": "NO_ACTION_DUE"}, "memory": "",
+                                  "promptVersion": "bad version!"})
+        with self.assertLogs("ai-user-worker", level="INFO") as logs:
+            Worker(self.settings(), http).tick()
+        self.assertTrue(any(url.endswith("/execute") for url, _, _ in http.calls))
+        self.assertTrue(any("prompt_version= completed" in line for line in logs.output))
+
     def test_actor_override_rejected(self):
         response = {"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps({
             "action": "WAIT", "payload": {"userId": 99}, "memory": ""})}]}
@@ -114,7 +132,9 @@ class WorkerTest(unittest.TestCase):
         Worker(self.settings(), http).tick()
         for url,_,headers in http.calls:
             expected = "a"*32 if url.startswith("https://ai.test") else "c"*32
-            self.assertEqual(headers, {"Authorization": "Bearer "+expected})
+            extra = {"X-Ai-Decision-Format": "versioned"} if url.endswith("/decide") else {}
+            self.assertEqual(headers, {"Authorization": "Bearer "+expected, **extra})
+        self.assertTrue(any(url.endswith("/decide") for url,_,_ in http.calls))
         self.assertNotIn("c"*32, repr(self.settings()))
 
     def test_insecure_remote_origins_are_rejected_by_default(self):

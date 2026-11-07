@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 
 from .ai_user_models import DecisionRequest, EpisodeRequest, ForgetRequest, InventoryRequest, RecallRequest
+from .ai_user_policy import DECISION_FORMAT_HEADER, VERSIONED_DECISION_FORMAT
 from .provider import AiError
 
 router = APIRouter(prefix="/internal/v1/ai-users")
@@ -36,7 +37,9 @@ async def ingest(body: EpisodeRequest, request: Request):
 
 @router.post("/decide")
 async def decide(body: DecisionRequest, request: Request):
-    return await service(request).decide(body)
+    # 본문 모델은 extra="forbid"라 새 필드를 넣으면 구형 서비스가 422를 냄. 그래서 확장 응답은 헤더로 요청받음.
+    versioned = request.headers.get(DECISION_FORMAT_HEADER) == VERSIONED_DECISION_FORMAT
+    return await service(request).decide(body, versioned=versioned)
 
 
 @router.post("/forget")
