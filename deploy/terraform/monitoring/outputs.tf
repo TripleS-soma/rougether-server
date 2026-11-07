@@ -15,6 +15,7 @@ output "alarm_names" {
       aws_cloudwatch_metric_alarm.host_memory_high.alarm_name,
       aws_cloudwatch_metric_alarm.host_metrics_missing.alarm_name,
       aws_cloudwatch_metric_alarm.service_metrics_missing.alarm_name,
+      aws_cloudwatch_metric_alarm.batch_unhealthy.alarm_name,
       aws_cloudwatch_metric_alarm.forwarder_errors.alarm_name,
       aws_cloudwatch_metric_alarm.forwarder_dlq_not_empty.alarm_name,
     ],

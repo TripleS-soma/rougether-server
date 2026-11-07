@@ -17,15 +17,17 @@ app EC2(`rougether-dev-app`)의 메모리 추세를 CloudWatch 지표로 모으�
   - 전송이 실패하면 예외를 올려 Lambda 비동기 재시도(최대 2회)에 맡깁니다. Webex가 401/403을 돌려주면 토큰 캐시를 비워 재시도가 SSM의 새 값을 읽게 합니다. 로그 그룹 보존 기간은 30일입니다.
   - 재시도까지 실패한 이벤트는 on-failure destination인 SQS DLQ `rougether-dev-alarm-webex-dlq`(보존 14일, SSE-SQS)로 갑니다.
   - SNS 토픽은 암호화하지 않습니다. 알람 데이터는 비밀이 아니고, CloudWatch 알람은 `aws/sns` 관리형 키로 암호화된 토픽에 게시할 수 없습니다.
-- 지표(네임스페이스 `Rougether/Dev`, 60초 주기)
+- 지표(네임스페이스 `Rougether/Dev`)
   - `mem_used_percent`, `swap_used_percent`: CloudWatch Agent가 보냅니다. `omit_hostname`으로 차원 없이 보내므로 인스턴스를 교체해도 알람이 그대로 맞습니다.
   - `container_memory_working_set`(Bytes, 차원 `Service=user-api|admin-api|batch`): 배포 스크립트가 설치하는 1분 timer(`rougether-memory-metrics`)가 보냅니다. 값은 컨테이너 cgroup의 `memory.current - inactive_file`입니다. blue/green 슬롯이 둘 다 떠 있으면 큰 값을 보냅니다.
+  - `batch_healthy`(Count, `Service=batch`)는 전용 systemd 타이머가 매분 05초와 35초에 고해상도 표본으로 발행합니다. 배치의 `/actuator/health`가 HTTP 200과 최상위 `status=UP`을 반환하면 1, 컨테이너가 없거나 응답이 비정상이면 0입니다.
   - 서비스별 값을 procstat으로 모으지 않는 이유가 있습니다. 세 이미지가 모두 같은 `java -jar /app/app.jar`로 떠서 procstat의 `pattern`·`exe`로는 서비스를 가를 수 없습니다. 또 `docker --memory` 상한이 거는 값은 프로세스 RSS가 아니라 cgroup 사용량입니다.
 - 알람(모두 ALARM과 OK를 SNS로 보냅니다)
   - `rougether-dev-host-memory-high`: `mem_used_percent` 평균 ≥ 90%가 1분 구간 5개 연속입니다. 차원은 없습니다.
   - `rougether-dev-user-api-memory-high`, `rougether-dev-admin-api-memory-high`, `rougether-dev-batch-memory-high`: `container_memory_working_set` 최댓값 ≥ 상한의 90%가 1분 구간 5개 연속입니다. 상한 기본값은 #418과 같습니다(user-api 1280MiB, admin-api·batch 768MiB). 지표가 없으면(컨테이너 중단) OK로 봅니다. 중단 자체는 #418 감시가 알립니다.
   - `rougether-dev-host-metrics-missing`: `mem_used_percent` 표본이 10분(5분 구간 2개) 동안 없으면 ALARM입니다(`treat_missing_data=breaching`). 에이전트 중단, 권한 오류, 인스턴스 정지를 잡습니다.
   - `rougether-dev-service-metrics-missing`: `container_memory_working_set`(`Service=user-api`) 표본이 10분 동안 없으면 ALARM입니다. 서비스 알람은 지표가 없으면 OK로 보므로, 수집기가 멈추는 것은 이 heartbeat가 잡습니다. user-api는 항상 떠 있어야 하는 서비스라 기준으로 삼았습니다.
+  - `rougether-dev-batch-unhealthy`는 `batch_healthy`의 30초 최솟값을 평가합니다. 2개 구간 모두 0이면 장애, 정상 표본이 들어와 평가 조건이 풀리면 복구를 알립니다. 수집 누락도 장애로 평가하므로 이때는 호스트와 수집기를 함께 확인합니다. [훈련 실측 기록](../../../docs/performance/batch-health-comparison.md)
 - 알림 경로 실패 알람(fallback 토픽 `rougether-dev-ops-alarms-fallback`으로 보냄)
   - `rougether-dev-alarm-webex-errors`: 전달 Lambda `Errors` 합 ≥ 1(1분)
   - `rougether-dev-alarm-webex-dlq-not-empty`: DLQ `ApproximateNumberOfMessagesVisible` 최댓값 ≥ 1(5분)
@@ -66,8 +68,8 @@ Terraform 1.10 이상이면 DynamoDB 대신 `-backend-config=use_lockfile=true`�
 
 ## 적용 순서
 
-1. **배포 먼저**: 이 변경이 들어간 배포(`DEPLOY_MODE`가 `hold`가 아닐 때)가 CloudWatch Agent와 `rougether-memory-metrics` timer를 설치합니다. 정책이 붙기 전에는 지표 전송이 권한 오류로 실패만 하고, 배포는 계속됩니다. 배포 모드가 `hold`이면 아무것도 설치되지 않습니다.
-   apply 전에 설치 여부를 확인합니다: `aws ssm send-command --instance-ids i-05dcf7064de948c4e --document-name AWS-RunShellScript --parameters 'commands=["systemctl is-active amazon-cloudwatch-agent rougether-memory-metrics.timer"]'` 결과가 두 줄 모두 `active`여야 합니다(`aws ssm get-command-invocation`으로 출력 확인).
+1. **배포 먼저**: 이 변경이 들어간 배포(`DEPLOY_MODE`가 `hold`가 아닐 때)가 CloudWatch Agent와 `rougether-memory-metrics`, `rougether-batch-health` timer를 설치합니다. 정책이 붙기 전에는 지표 전송이 권한 오류로 실패만 하고, 배포는 계속됩니다. 배포 모드가 `hold`이면 아무것도 설치되지 않습니다.
+   apply 전에 설치 여부를 확인합니다: `aws ssm send-command --instance-ids i-05dcf7064de948c4e --document-name AWS-RunShellScript --parameters 'commands=["systemctl is-active amazon-cloudwatch-agent rougether-memory-metrics.timer rougether-batch-health.timer"]'` 결과가 세 줄 모두 `active`여야 합니다(`aws ssm get-command-invocation`으로 출력 확인).
 2. **terraform apply**: 정책이 붙으면 몇 분 안에 지표가 들어옵니다. 배포 전에 apply하면 `host-metrics-missing`·`service-metrics-missing`이 곧바로 ALARM을 보내고, 배포 후 OK로 돌아옵니다.
 
 ```bash
@@ -84,13 +86,13 @@ terraform plan -out=monitoring.tfplan
 terraform apply monitoring.tfplan
 ```
 
-apply하면 기본값에서 20개 리소스가 생깁니다(`fallback_email`을 주면 이메일 구독까지 21개). Lambda zip은 `.build/`에 만들어집니다(git 제외). 적용 후 지표가 들어오는지 확인합니다.
+`fallback_email`을 지정하면 이메일 구독도 생성합니다. Lambda zip은 `.build/`에 만들어집니다(git 제외). 적용 후 지표가 들어오는지 확인합니다.
 
 ```bash
 aws cloudwatch list-metrics --namespace Rougether/Dev --output table
 ```
 
-`mem_used_percent`, `swap_used_percent`(차원 없음)와 `container_memory_working_set`(Service 3개)이 보여야 합니다. 호스트에서는 `systemctl status amazon-cloudwatch-agent rougether-memory-metrics.timer`, `journalctl -u rougether-memory-metrics -n 20`으로 확인합니다.
+`mem_used_percent`, `swap_used_percent`(차원 없음)와 `container_memory_working_set`(Service 3개), `batch_healthy`(Service=batch)가 보여야 합니다. 호스트에서는 `systemctl status amazon-cloudwatch-agent rougether-memory-metrics.timer rougether-batch-health.timer`, `journalctl -u rougether-memory-metrics -n 20`으로 확인합니다.
 
 ## 알람 전달 시험
 
@@ -117,8 +119,8 @@ python3 -m unittest discover -s lambda/tests
 
 ## 비용(월, 서울 리전 추정)
 
-- 커스텀 지표 5개(에이전트 2 + 서비스 3): 약 $1.5. 계정의 무료 10개 안이면 0입니다.
-- PutMetricData 호출(에이전트·수집기 각 분당 1회): 약 $0.9
-- 알람 8개: $0.8. 무료 10개 중 계정에 이미 8개가 있어 실제 초과분은 약 $0.6입니다.
+- 커스텀 지표는 호스트 2개, 서비스 메모리 3개, 배치 헬스 1개입니다.
+- 배치 헬스가 기존 메모리 수집과 별도로 분당 2회 PutMetricData를 호출합니다.
+- 배치 헬스는 30초 주기의 고해상도 경보로 과금됩니다.
 - 대시보드 1개: 계정당 3개까지 무료입니다.
 - Lambda·SNS·SQS·로그: 무료 구간 안입니다.

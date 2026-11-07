@@ -659,7 +659,7 @@ flowchart LR
 3. 사용자 API와 관리자 API 각각에 대해 비활성 슬롯을 띄워 헬스를 확인하고 nginx의 대상 포트를 전환한다. 안정 포트 헬스를 다시 검사한 뒤 배치를 재시작한다. 배치는 한 인스턴스로 예약 작업을 수행한다.
 4. 전환 과정에 오류가 발생하면 스크립트가 이전 슬롯, 이미지, 배치 상태를 복구하고 헬스를 재검사한다. 복구가 실패한 경우 SSM 작업 출력과 systemd 서비스 로그에서 실패 단계를 확인한다. 이후 워크플로는 외부 헬스 경로도 검사한다. [배포 워크플로](.github/workflows/docker-publish.yml) · [전환과 롤백 구현](.github/scripts/deploy-ec2-with-rollback.sh) · [롤백 테스트](.github/scripts/test-deploy-ec2-with-rollback.sh)
 
-개발 EC2에서는 1분마다 컨테이너 working set을 수집한다. 서비스 상한의 90% 이상이 5분 연속이면 메모리 경보가 발생한다. CloudWatch 경보의 장애·복구 전환은 SNS와 전달 Lambda를 거쳐 Webex로 간다. 메모리 경보는 누락된 표본을 정상으로 취급한다. 별도 지표 누락 경보는 호스트와 사용자 API를 감시하므로 배치만 꺼진 경우의 실제 수신은 별도의 검증 항목이다. [경보와 알림 경로](https://github.com/TripleS-soma/rougether-server/blob/main/deploy/terraform/monitoring/README.md) · [배치 장애 경보 #496](https://github.com/TripleS-soma/rougether-server/issues/496)
+개발 EC2에서는 1분마다 컨테이너 working set을 수집한다. 서비스 상한의 90% 이상이 5분 연속이면 메모리 경보가 발생한다. CloudWatch 경보의 장애·복구 전환은 SNS와 전달 Lambda를 거쳐 Webex로 간다. 메모리 경보는 누락된 표본을 정상으로 취급한다. 격리 훈련에서 배치 헬스를 30초마다 측정한 뒤 Webex 장애 알림까지 걸린 시간이 8분 8초에서 1분 37초로 줄었다. 복구 알림은 첫 정상 헬스 확인 후에 왔다. [배치 경보 전후 비교](docs/performance/batch-health-comparison.md) [경보와 알림 경로](https://github.com/TripleS-soma/rougether-server/blob/main/deploy/terraform/monitoring/README.md) · [배치 장애 경보 #496](https://github.com/TripleS-soma/rougether-server/issues/496)
 
 ## 성능과 장애 복구
 
@@ -738,4 +738,4 @@ flowchart LR
 - [소셜 로그인 DB 처리](https://github.com/TripleS-soma/rougether-server/blob/main/docs/work/social-login-db.md): 카카오·구글·애플의 토큰 검증은 다르지만 회원을 찾고 계정을 연결하는 저장 규칙은 공유한다.
 - [운영 지표와 리텐션 집계](https://github.com/TripleS-soma/rougether-server/blob/main/docs/operations/product-metrics.md): 사용자 활동 데이터가 어떤 기간과 사용자 집단을 뜻하는지 기록했다.
 
-기능별 계약은 [제품 명세](https://github.com/TripleS-soma/rougether-spec), 작업·검토 방식은 [기여 규칙](CONTRIBUTING.md)과 [저장소 작업 안내](CLAUDE.md)를 따른다. 부하 실험에서 남은 두 과제는 [세 API의 동시 지연 #495](https://github.com/TripleS-soma/rougether-server/issues/495)와 [배치 단독 중단 알림 #496](https://github.com/TripleS-soma/rougether-server/issues/496)이다.
+기능별 계약은 [제품 명세](https://github.com/TripleS-soma/rougether-spec), 작업·검토 방식은 [기여 규칙](CONTRIBUTING.md)과 [저장소 작업 안내](CLAUDE.md)를 따른다. QA 보드에서 [세 API의 동시 지연 #495](https://github.com/TripleS-soma/rougether-server/issues/495)과 [배치 경보의 개발 환경 적용 및 작업 지연 감지 #496](https://github.com/TripleS-soma/rougether-server/issues/496)을 추적한다.
