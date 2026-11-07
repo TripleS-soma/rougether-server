@@ -2715,21 +2715,42 @@ main() {
   return "$status"
 }
 
-main "$@"
+batch_is_healthy() {
+  local response
+  response="$(curl --silent --max-time 4 --write-out $'\n%{http_code}' "$1")" || return 1
+  [ "${response##*$'\n'}" = 200 ] || return 1
+  python3 -c 'import json, sys; sys.exit(json.load(sys.stdin).get("status") != "UP")' <<< "${response%$'\n'*}" 2>/dev/null
+}
+
+publish_batch_health() {
+  local healthy=0
+  if batch_is_healthy http://127.0.0.1:8082/actuator/health; then
+    healthy=1
+  fi
+  bounded "$PUBLISH_TIMEOUT_SECONDS" aws cloudwatch put-metric-data ${REGION:+--region "$REGION"} \
+    --namespace "$NAMESPACE" \
+    --metric-data "MetricName=batch_healthy,Dimensions=[{Name=Service,Value=batch}],Value=$healthy,Unit=Count,StorageResolution=1"
+}
+
+if [ "${1:-}" = "--batch-health" ]; then
+  publish_batch_health
+else
+  main "$@"
+fi
 ROUGETHER_METRICS_SCRIPT
 }
 
 write_memory_metrics_service() {
   cat <<EOF
 [Unit]
-Description=Rougether container memory metrics to CloudWatch
+Description=${1:-Rougether container memory metrics to CloudWatch}
 After=docker.service
 
 [Service]
 Type=oneshot
 Environment=ROUGETHER_METRICS_NAMESPACE=$CW_NAMESPACE
 Environment=ROUGETHER_METRICS_REGION=$AWS_REGION
-ExecStart=$MEMORY_METRICS_SCRIPT_PATH
+ExecStart=$MEMORY_METRICS_SCRIPT_PATH${2:+ $2}
 TimeoutStartSec=50
 Nice=10
 EOF
@@ -2750,8 +2771,27 @@ WantedBy=timers.target
 EOF
 }
 
+write_batch_health_service() {
+  write_memory_metrics_service "Rougether batch health to CloudWatch" --batch-health
+}
+
+write_batch_health_timer() {
+  cat <<'EOF'
+[Unit]
+Description=Check Rougether batch health every 30 seconds
+
+[Timer]
+OnCalendar=*-*-* *:*:05,35
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+EOF
+}
+
 install_memory_metrics() {
-  local changed=false timer_changed=false result writer destination mode
+  local changed=false result writer destination mode timer
+  local -a changed_timers=()
 
   cw_namespace_valid || { echo "invalid CloudWatch namespace: $CW_NAMESPACE" >&2; return 1; }
   [[ "$AWS_REGION" =~ ^[a-z]{2}(-[a-z]+)+-[0-9]+$ ]] || { echo "invalid AWS region: $AWS_REGION" >&2; return 1; }
@@ -2761,10 +2801,12 @@ install_memory_metrics() {
   }
   mkdir -p "$(dirname "$MEMORY_METRICS_SCRIPT_PATH")" "$SYSTEMD_DIR" || return 1
 
-  for writer in write_memory_metrics_script write_memory_metrics_service write_memory_metrics_timer; do
+  for writer in write_memory_metrics_script write_memory_metrics_service write_memory_metrics_timer write_batch_health_service write_batch_health_timer; do
     case "$writer" in
       write_memory_metrics_script) destination="$MEMORY_METRICS_SCRIPT_PATH"; mode=755 ;;
       write_memory_metrics_service) destination="$SYSTEMD_DIR/$MEMORY_METRICS_UNIT_NAME.service"; mode=644 ;;
+      write_batch_health_service) destination="$SYSTEMD_DIR/rougether-batch-health.service"; mode=644 ;;
+      write_batch_health_timer) destination="$SYSTEMD_DIR/rougether-batch-health.timer"; mode=644 ;;
       write_memory_metrics_timer) destination="$SYSTEMD_DIR/$MEMORY_METRICS_UNIT_NAME.timer"; mode=644 ;;
     esac
     result=0
@@ -2772,7 +2814,7 @@ install_memory_metrics() {
     [ "$result" -ne 2 ] || return 1
     if [ "$result" -eq 0 ]; then
       changed=true
-      [ "$writer" != write_memory_metrics_timer ] || timer_changed=true
+      case "$destination" in *.timer) changed_timers+=("${destination##*/}") ;; esac
     fi
   done
 
@@ -2781,10 +2823,12 @@ install_memory_metrics() {
     echo "memory metrics publisher installed or updated"
   fi
   systemctl enable --now "$MEMORY_METRICS_UNIT_NAME.timer" || return 1
+  systemctl enable --now rougether-batch-health.timer || return 1
   # enable --now 는 이미 도는 timer 에 바뀐 주기를 다시 걸지 않으므로 timer 파일이 바뀌면 재시작한다.
-  if [ "$timer_changed" = true ]; then
-    systemctl restart "$MEMORY_METRICS_UNIT_NAME.timer" || return 1
-  fi
+  if [ "${#changed_timers[@]}" -eq 0 ]; then return 0; fi
+  for timer in "${changed_timers[@]}"; do
+    systemctl restart "$timer" || return 1
+  done
 }
 
 # BEGIN_DEPLOY_EXECUTION

@@ -1,0 +1,168 @@
+{
+  "alarm": "rougether-qa-drill-batch-missing-20261107T073911Z",
+  "namespace": "Rougether/QA/BatchAlarm1107",
+  "timing_basis": "Docker FinishedAt/StartedAt to Webex API HTTP 200 as logged by the SNS forwarder",
+  "delivery": [
+    {
+      "state": "ALARM",
+      "docker_utc": "2026-11-07T07:43:15.983553+00:00",
+      "cloudwatch": "2026-11-07T16:51:20.568000+09:00",
+      "sns": "2026-11-07T16:51:20.617000+09:00",
+      "webex_http_200": "2026-11-07T07:51:23.840000+00:00",
+      "elapsed_seconds": 487.856,
+      "delivery_seconds": 3.272,
+      "actions_and_success_logs_in_window": [
+        1,
+        1
+      ]
+    },
+    {
+      "state": "OK",
+      "docker_utc": "2026-11-07T07:51:21.240827+00:00",
+      "cloudwatch": "2026-11-07T16:53:20.569000+09:00",
+      "sns": "2026-11-07T16:53:20.616000+09:00",
+      "webex_http_200": "2026-11-07T07:53:21.232000+00:00",
+      "elapsed_seconds": 119.991,
+      "delivery_seconds": 0.663,
+      "actions_and_success_logs_in_window": [
+        1,
+        1
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:42:01.692444+00:00",
+      "services": [
+        "user-api",
+        "batch"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:43:07.544744+00:00",
+      "services": [
+        "user-api",
+        "batch"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:44:09.694410+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:45:06.070458+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:46:06.635970+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:47:07.930331+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:48:08.954998+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:49:05.393750+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:50:05.673685+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:51:08.385008+00:00",
+      "services": [
+        "user-api"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:52:07.775149+00:00",
+      "services": [
+        "user-api",
+        "batch"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    },
+    {
+      "event": "sample",
+      "utc": "2026-11-07T07:53:09.285423+00:00",
+      "services": [
+        "user-api",
+        "batch"
+      ],
+      "api_http": 200,
+      "sql": "1"
+    }
+  ],
+  "health_observations": [
+    {
+      "event": "ok",
+      "utc": "2026-11-07T07:53:22.219626+00:00",
+      "transition": "2026-11-07T16:53:20.569000+09:00",
+      "reason": "Threshold Crossed: 1 out of the last 2 datapoints [1.0 (07/11/26 07:52:00)] was not less than the threshold (1.0) and 1 missing datapoint was treated as [Breaching] (minimum 1 datapoint for ALARM -> OK transition).",
+      "api_http": 200,
+      "batch_http": 0
+    },
+    {
+      "event": "healthy",
+      "utc": "2026-11-07T07:54:44.295194+00:00",
+      "api_http": 200,
+      "batch_http": 200
+    },
+    {
+      "event": "alarm_deleted",
+      "utc": "2026-11-07T07:54:44.478582+00:00",
+      "remaining": 0
+    }
+  ]
+}

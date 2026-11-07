@@ -83,6 +83,24 @@ resource "aws_cloudwatch_metric_alarm" "service_metrics_missing" {
   ok_actions          = local.alarm_actions
 }
 
+# 배치가 실행 중이고 Actuator가 HTTP 200 및 UP을 반환할 때만 1을 보낸다.
+resource "aws_cloudwatch_metric_alarm" "batch_unhealthy" {
+  alarm_name          = "${var.name}-batch-unhealthy"
+  alarm_description   = "배치 헬스 이상 또는 수집 누락. 배치 컨테이너, /actuator/health 및 수집기 확인"
+  namespace           = var.metric_namespace
+  metric_name         = "batch_healthy"
+  dimensions          = { Service = "batch" }
+  statistic           = "Minimum"
+  period              = 30
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
 # 아래 두 알람은 알림 경로 자체의 실패를 알린다. 같은 SNS→Lambda 로 보내면 실패가 순환하므로 fallback 토픽으로 보낸다.
 resource "aws_cloudwatch_metric_alarm" "forwarder_errors" {
   alarm_name          = "${local.forwarder_name}-errors"

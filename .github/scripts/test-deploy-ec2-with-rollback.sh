@@ -2194,6 +2194,40 @@ set_container_memory() {
   fi
 }
 
+test_batch_health_publishes_explicit_status() {
+  reset_scenario "batch-health"
+  systemctl() { return 0; }
+  install_memory_metrics >/dev/null
+  assert_contains "^ExecStart=$MEMORY_METRICS_SCRIPT_PATH --batch-health$" "$SYSTEMD_DIR/rougether-batch-health.service" "timer must run the health probe"
+  assert_contains 'OnCalendar=.*:05,35$' "$SYSTEMD_DIR/rougether-batch-health.timer" "probe must run twice a minute"
+  local fake="$TEST_ROOT/batch-health/probe"
+  mkdir -p "$fake"
+  cat > "$fake/curl" <<EOF
+#!/usr/bin/env bash
+[ "\${*: -1}" = http://127.0.0.1:8082/actuator/health ] || exit 1
+cat "$fake/response"
+EOF
+  cat > "$fake/aws" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$fake/args"
+EOF
+  chmod 755 "$fake/curl" "$fake/aws"
+
+  check_health_value() {
+    PATH="$fake:$PATH" bash "$MEMORY_METRICS_SCRIPT_PATH" --batch-health || return 1
+    assert_contains "^MetricName=batch_healthy,Dimensions=\[.*Name=Service,Value=batch.*\],Value=$1,Unit=Count,StorageResolution=1$" "$fake/args" "metric must represent observed health at high resolution"
+  }
+  printf '{"status":"UP"}\n200' > "$fake/response"; check_health_value 1
+  local response
+  for response in $'{"status":"DOWN"}\n200' $'{"status":"UP"}\n503' $'not-json\n200'; do
+    printf '%s' "$response" > "$fake/response"; check_health_value 0
+  done
+  rm "$fake/response"
+  check_health_value 0
+  unset -f check_health_value
+  echo "ok - batch health reports one only on HTTP 200 and UP"
+}
+
 test_memory_metrics_script_publishes_max_working_set_per_service() {
   reset_scenario "metrics-script"
   systemctl() { return 0; }
@@ -2351,6 +2385,7 @@ test_cloudwatch_agent_install_is_idempotent_and_restarts_only_on_config_change
 test_cloudwatch_agent_failures_are_reported_and_retried
 test_monitoring_install_failure_does_not_block_deploy
 test_memory_metrics_install_is_idempotent
+test_batch_health_publishes_explicit_status
 test_memory_metrics_script_publishes_max_working_set_per_service
 test_metric_contract_matches_terraform_alarms
 test_ssm_failure_keeps_existing_credentials

@@ -66,6 +66,6 @@ HTTP는 5분 전체를, DB와 풀은 첫 30초를 제외한 270초를 집계했�
 |---|---|---|
 | 완료 | [#493](https://github.com/TripleS-soma/rougether-server/issues/493), [#494](https://github.com/TripleS-soma/rougether-server/issues/494), [#498](https://github.com/TripleS-soma/rougether-server/issues/498) | 배치 중단 복구, 1,000 RPS 수평확장, 발생기 CPU 포화 수정 및 재측정 |
 | 진행 중 | [#495 공통 응답 지연](https://github.com/TripleS-soma/rougether-server/issues/495) | 풀에서 대기한 구간은 확인했다. 같은 시각 부하가 달라진 DB 내부의 개별 작업을 특정하는 일은 남았다. |
-| 예정 | [#496 배치 단독 중단 경보](https://github.com/TripleS-soma/rougether-server/issues/496) | 사용자 API가 정상이어도 배치만 멈춘 상황을 감지하고, 장애와 복구 알림이 Webex에 도착하는지 확인해야 한다. |
+| 격리 훈련 완료 | [#496 배치 단독 중단 경보](https://github.com/TripleS-soma/rougether-server/issues/496) | 30초 헬스 검사로 바꾼 회차에서 종료 후 1분 37초에 Webex가 장애 알림을 수락했다. 복구는 첫 정상 헬스 확인 37초 후였다. [전후 실측](batch-health-comparison.md) |
 
 현재 결과는 **수동으로 지정한 API 대수에서의 5분 처리량**이다. 부하에 따라 태스크가 자동으로 늘어나는 시점, 증가에 걸리는 시간, 대수별 최대 처리량은 별도 검증 범위다. 테스트 환경은 ECS Fargate와 ALB를 선택했다. API Gateway 도입이나 Elastic Beanstalk 비교는 해당 기술을 별도 평가하기로 할 때 다룬다.

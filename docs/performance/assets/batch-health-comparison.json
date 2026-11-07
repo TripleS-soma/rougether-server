@@ -1,0 +1,249 @@
+{
+  "60s": {
+    "alarm": "rougether-qa-drill-batch-health-20261107T080531Z",
+    "delivery": [
+      {
+        "state": "ALARM",
+        "docker_utc": "2026-11-07T08:09:16.404696+00:00",
+        "cloudwatch": "2026-11-07T17:12:55.876000+09:00",
+        "sns": "2026-11-07T17:12:55.921000+09:00",
+        "webex_http_200": "2026-11-07T08:12:59.164000+00:00",
+        "elapsed_seconds": 222.759,
+        "delivery_seconds": 3.288,
+        "actions_and_success_logs_in_window": [
+          1,
+          1
+        ]
+      },
+      {
+        "state": "OK",
+        "docker_utc": "2026-11-07T08:12:57.561737+00:00",
+        "cloudwatch": "2026-11-07T17:16:55.877000+09:00",
+        "sns": "2026-11-07T17:16:55.916000+09:00",
+        "webex_http_200": "2026-11-07T08:16:56.614000+00:00",
+        "elapsed_seconds": 239.052,
+        "delivery_seconds": 0.737,
+        "actions_and_success_logs_in_window": [
+          1,
+          1
+        ]
+      }
+    ],
+    "first_observed_up": "2026-11-07T08:14:20.817502+00:00",
+    "first_metric_one_after_restart": "2026-11-07T08:15:16.082231+00:00",
+    "health_to_webex_seconds": 155.796,
+    "outage_within_180s": false,
+    "webex_after_healthy": true,
+    "samples": [
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:08:14.018390+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:08:13.252338+00:00",
+        "phase": "baseline",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:09:16.175566+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:09:15.371957+00:00",
+        "phase": "baseline",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:10:15.366644+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:10:14.619938+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:11:17.769835+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:11:16.666108+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:12:16.797138+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:12:16.070403+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:13:17.422303+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:13:16.735413+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:14:17.155876+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:14:16.822144+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:15:16.835043+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:15:16.082231+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:16:15.798353+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:16:15.193780+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      }
+    ]
+  },
+  "30s": {
+    "alarm": "rougether-qa-drill-batch-health30-20261107T081703Z",
+    "delivery": [
+      {
+        "state": "ALARM",
+        "docker_utc": "2026-11-07T08:18:07.403959+00:00",
+        "cloudwatch": "2026-11-07T17:19:43.113000+09:00",
+        "sns": "2026-11-07T17:19:43.157000+09:00",
+        "webex_http_200": "2026-11-07T08:19:44.064000+00:00",
+        "elapsed_seconds": 96.66,
+        "delivery_seconds": 0.951,
+        "actions_and_success_logs_in_window": [
+          1,
+          1
+        ]
+      },
+      {
+        "state": "OK",
+        "docker_utc": "2026-11-07T08:19:44.450127+00:00",
+        "cloudwatch": "2026-11-07T17:21:43.114000+09:00",
+        "sns": "2026-11-07T17:21:43.151000+09:00",
+        "webex_http_200": "2026-11-07T08:21:43.831000+00:00",
+        "elapsed_seconds": 119.381,
+        "delivery_seconds": 0.717,
+        "actions_and_success_logs_in_window": [
+          1,
+          1
+        ]
+      }
+    ],
+    "first_observed_up": "2026-11-07T08:21:06.389304+00:00",
+    "first_metric_one_after_restart": "2026-11-07T08:21:06.389843+00:00",
+    "health_to_webex_seconds": 37.442,
+    "outage_within_180s": true,
+    "webex_after_healthy": true,
+    "samples": [
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:17:05.705550+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:17:04.407704+00:00",
+        "phase": "baseline",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:17:38.519428+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:17:36.317035+00:00",
+        "phase": "baseline",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:18:07.170565+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:18:05.978598+00:00",
+        "phase": "baseline",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:18:37.390916+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:18:36.071351+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:19:08.818473+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:19:07.891795+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:19:37.471929+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:19:36.204971+00:00",
+        "phase": "down",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:20:06.487307+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:20:05.107919+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:20:37.943369+00:00",
+        "value": 0,
+        "metric_time": "2026-11-07T08:20:36.434852+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:21:06.982357+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:21:06.389843+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      },
+      {
+        "event": "sample",
+        "utc": "2026-11-07T08:21:38.025454+00:00",
+        "value": 1,
+        "metric_time": "2026-11-07T08:21:37.454110+00:00",
+        "phase": "recovering",
+        "api_http": 200,
+        "sql": "1"
+      }
+    ]
+  }
+}
