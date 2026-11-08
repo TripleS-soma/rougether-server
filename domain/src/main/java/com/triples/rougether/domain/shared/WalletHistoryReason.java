@@ -9,6 +9,7 @@ public enum WalletHistoryReason {
     INVITE_REWARD,           // 친구 초대 보상 적립
     COBWEB_CLEAN,            // 장기 미접속 방 거미줄 청소 보상 적립
     ATTENDANCE_REWARD,       // 연속 출석 이벤트 코인 적립
+    LOGIN_GIFT,              // 기념일 접속 선물 코인 적립
     MARKET_ESCROW_REFUND,    // 거래소 맡긴 코인 환불 적립(취소·만료·거절·체결 차액)
     MARKET_SALE,             // 거래소 판매 대금 적립(로열티·수수료 차감 후)
     MARKET_ROYALTY,          // 거래소 되팔기 로열티 적립(제작자)

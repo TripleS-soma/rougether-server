@@ -95,6 +95,7 @@ class WithdrawalPurgeTriggerTest {
                     """, userId);
             jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM login_gift_participations WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
             jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
             jdbcTemplate.update("""
@@ -244,6 +245,12 @@ class WithdrawalPurgeTriggerTest {
                 userId, itemId, now());
         Long userItemId = lastId("user_items");
         jdbcTemplate.update("""
+                INSERT INTO login_gift_participations
+                    (event_id, user_id, eligible_at, granted_at, reward_user_item_id)
+                SELECT id, ?, '2026-11-10 15:00:00', ?, ?
+                FROM login_gift_events WHERE code = 'PEPERO_DAY_20261111'
+                """, userId, now(), userItemId);
+        jdbcTemplate.update("""
                 INSERT INTO attendance_check_ins
                     (event_id, user_id, attendance_date, streak_day, coin_reward_amount,
                      reward_user_item_id, reward_newly_granted, reward_processed_at, created_at)
@@ -377,6 +384,7 @@ class WithdrawalPurgeTriggerTest {
                 {"room_item_placements", "room_user_id"}, {"room_surface_slots", "room_user_id"},
                 {"room_cobwebs", "room_user_id"},
                 {"user_characters", "user_id"}, {"attendance_check_ins", "user_id"},
+                {"login_gift_participations", "user_id"},
                 {"user_items", "user_id"}, {"user_wallets", "user_id"},
                 {"daily_incomplete_digests", "user_id"},
                 {"notification", "user_id"}, {"notification_setting", "user_id"},

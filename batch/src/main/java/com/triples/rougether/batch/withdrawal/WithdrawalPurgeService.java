@@ -78,6 +78,7 @@ public class WithdrawalPurgeService {
                 """, userId);
         jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM login_gift_participations WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
 
