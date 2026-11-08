@@ -96,3 +96,36 @@ k6 run qa/scale/scenarios/fixture-init-self-check.js
 ```
 
 참고: [k6 arrival-rate](https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/constant-arrival-rate/), [발생기 자원과 VU](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/arrival-rate-vu-allocation/), [대규모 테스트의 발생기 관측](https://grafana.com/docs/k6/latest/testing-guides/running-large-tests/).
+
+## DB QPS
+
+본부하 직전과 k6 종료 직후 MySQL의 전역 `Questions`를 읽는다. 두 값의 차이를 카운터를 읽은 실제 시간 간격으로 나눈 결과가 `db-qps.json`에 남는다. 새 회차에서는 이 파일이 빠지거나 원본으로 다시 계산한 값이 다르면 검증을 실패 처리한다. 예열과 종료 후 업무 데이터 검증은 이 구간 밖에서 수행한다. 계측 SQL과 같은 MySQL 인스턴스의 다른 클라이언트 요청도 포함된다.
+
+| 지표 | 무엇을 세나 |
+| --- | --- |
+| HTTP RPS | 측정한 HTTP 요청 수를 시간으로 나눈다. 투두 완료를 재시도하면 HTTP 요청이 하나 더 쌓인다. |
+| 업무 TPS | DB에서 완료와 보상 반영을 검증한 서로 다른 투두 수를 시간으로 나눈다. |
+| DB QPS | MySQL 서버가 처리한 클라이언트 명령의 증가율을 잰다. 요청 하나가 SQL 여러 개를 실행할 수 있다. |
+
+### ECS k6 실행기
+
+기존 통제 실험의 경량 k6 실행기로 새 이미지를 만들 때는 아래 빌드 컨텍스트를 사용한다. 기반 이미지에는 기존 경량 계측 실행기가 들어 있어야 한다. 예열을 건너뛰고 본부하에서만 QPS를 수집하며, 파일을 기존 증거 버킷에 함께 올린다.
+
+```bash
+docker build -f qa/scale/ecs/Dockerfile --build-arg BASE="$CONTROLLED_RUNNER_IMAGE" -t scale-k6-qps qa/scale
+```
+
+### API 태스크 중단 실험
+
+[2026-11-08 실측 결과](reports/2026-11-08-api-task-loss.md)
+
+`qa/scale/failover/run.py`는 격리된 테스트 서비스에 API 두 대를 배포하고 새 스키마에만 데이터를 넣는다. ALB를 통해 조회와 투두 완료 요청을 계속 보내면서 정상 대상 한 개에 ECS StopTask를 실행한다. 투두는 같은 ID로 한 번 더 호출하고 종료 후 DB의 완료 상태, 지갑 원장, 지갑 잔액, 개인 방 성장치를 검사한다.
+
+Terraform 출력 JSON 경로는 `ROUGETHER_SCALE_OUTPUTS`, 사용자 API JAR 경로는 `DRILL_JAR`, 테스트 ECR에 준비한 Java/Python/MySQLdb 런타임의 digest는 `DRILL_RUNTIME_DIGEST`, 새 로컬 결과 디렉터리는 `DRILL_OUTPUT`으로 지정한다. 원래 서비스가 지정된 태스크 정의 한 대이고 테스트 RDS가 `db.t4g.medium`인 경우에만 시작한다.
+
+```bash
+python3 qa/scale/failover/run.py --execute
+python3 qa/scale/failover/report.py "$DRILL_OUTPUT"
+```
+
+집계는 HTTP 시작 시각으로 중단 전, 중단 지시부터 교체 태스크 healthy 관측까지, 복구 후로 나눈다. 요청별 원본은 로컬 전용 결과 디렉터리에 둔다.

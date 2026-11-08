@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 from telemetry import Sampler, api_json, database_snapshot, endpoint_counts, utc_now
 import index_experiment
+import qps
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -104,7 +105,7 @@ def main():
     env = os.environ.copy()
     env.update({"SCALE_API_PORT": str(args.port), "SCALE_RESULT_DIR": str(directory),
                 "SCALE_JWT_SECRET": secrets.token_hex(32)})
-    manifest = {"schema_version": 1, "run_id": run_id, "scenario": args.scenario,
+    manifest = {"schema_version": 1, "qps_required": True, "run_id": run_id, "scenario": args.scenario,
                 "project": project, "rate": args.rate, "duration_seconds": args.duration,
                 "expected_requests": args.rate * args.duration, "users": args.users,
                 "todos": args.todos, "preallocated_vus": args.vus, "max_vus": args.vus,
@@ -241,13 +242,20 @@ def main():
         manifest["started_at"] = utc_now()
         write_json(directory / "manifest.json", manifest)
         print(f"load: {args.scenario} {args.rate} RPS × {args.duration}s", flush=True)
+        def query_rows(sql):
+            return [row.split("\t") for row in mysql(sql + ";").splitlines()]
+
         with (directory / "console.txt").open("w") as stream:
+            qps_before = qps.sample(query_rows)
+            write_json(directory / "db-qps-before.json", qps_before)
             load_process = subprocess.Popen(k6_command(args.scenario, args.duration, args.rate,
                                                        "summary.json"), stdout=stream,
                                             stderr=subprocess.STDOUT)
             sampler = Sampler(compose, base_url, token, directory)
             sampler.start(load_process)
             manifest["k6_exit_code"] = load_process.wait(timeout=args.duration + 60)
+            qps_after = qps.sample(query_rows)
+            write_json(directory / "db-qps.json", qps.rate(qps_before, qps_after))
             sampler.stop()
         manifest["completed_at"] = utc_now()
         manifest["finished_date"] = kst_date()

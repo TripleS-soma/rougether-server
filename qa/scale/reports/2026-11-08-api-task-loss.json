@@ -1,0 +1,175 @@
+{
+  "checks": {
+    "survivor_was_only_healthy_target": true,
+    "qps_matches_counter": true,
+    "traffic_in_all_phases": true,
+    "http_counts_match": true,
+    "one_replay_per_write": true,
+    "all_rewards_correct": true,
+    "cleanup": true
+  },
+  "stop_to_event_seconds": {
+    "stop_ack": 0.047,
+    "victim_unhealthy_or_draining_at": 40.929,
+    "victim_absent_at": 71.617,
+    "replacement_running_at": 88.06,
+    "replacement_healthy_at": 99.817,
+    "finish_sent": 121.078
+  },
+  "total": {
+    "http": 8840,
+    "first": 7367,
+    "retry": 1473,
+    "status": {
+      "200": 5894,
+      "201": 1473,
+      "409": 1473
+    },
+    "unexpected": 0,
+    "expected_409": 1473,
+    "transport_error": 0,
+    "http_5xx": 0,
+    "p95_ms": 26.13,
+    "p99_ms": 39.95
+  },
+  "phases": {
+    "before_stop": {
+      "http": 1532,
+      "first": 1277,
+      "retry": 255,
+      "status": {
+        "200": 1022,
+        "201": 255,
+        "409": 255
+      },
+      "unexpected": 0,
+      "expected_409": 255,
+      "transport_error": 0,
+      "http_5xx": 0,
+      "p95_ms": 30.21,
+      "p99_ms": 224.44
+    },
+    "during_recovery": {
+      "http": 5989,
+      "first": 4991,
+      "retry": 998,
+      "status": {
+        "200": 3993,
+        "201": 998,
+        "409": 998
+      },
+      "unexpected": 0,
+      "expected_409": 998,
+      "transport_error": 0,
+      "http_5xx": 0,
+      "p95_ms": 24.16,
+      "p99_ms": 32.86
+    },
+    "after_recovery": {
+      "http": 1319,
+      "first": 1099,
+      "retry": 220,
+      "status": {
+        "200": 879,
+        "201": 220,
+        "409": 220
+      },
+      "unexpected": 0,
+      "expected_409": 220,
+      "transport_error": 0,
+      "http_5xx": 0,
+      "p95_ms": 29.7,
+      "p99_ms": 74.08
+    }
+  },
+  "single_healthy_target": {
+    "http": 3533,
+    "first": 2944,
+    "retry": 589,
+    "status": {
+      "200": 2355,
+      "201": 589,
+      "409": 589
+    },
+    "unexpected": 0,
+    "expected_409": 589,
+    "transport_error": 0,
+    "http_5xx": 0,
+    "p95_ms": 20.95,
+    "p99_ms": 26.05
+  },
+  "reads": {
+    "http": 5894,
+    "first": 5894,
+    "retry": 0,
+    "status": {
+      "200": 5894
+    },
+    "unexpected": 0,
+    "expected_409": 0,
+    "transport_error": 0,
+    "http_5xx": 0,
+    "p95_ms": 16.9,
+    "p99_ms": 37.74
+  },
+  "writes": {
+    "http": 1473,
+    "first": 1473,
+    "retry": 0,
+    "status": {
+      "201": 1473
+    },
+    "unexpected": 0,
+    "expected_409": 0,
+    "transport_error": 0,
+    "http_5xx": 0,
+    "p95_ms": 32.4,
+    "p99_ms": 53.67
+  },
+  "retries": {
+    "http": 1473,
+    "first": 0,
+    "retry": 1473,
+    "status": {
+      "409": 1473
+    },
+    "unexpected": 0,
+    "expected_409": 1473,
+    "transport_error": 0,
+    "http_5xx": 0,
+    "p95_ms": 17.44,
+    "p99_ms": 23.72
+  },
+  "db_audit": {
+    "expected": 1473,
+    "checked": 1473,
+    "correct": 1473,
+    "outside_ledger": 0
+  },
+  "measurement_seconds": 147.33527795099997,
+  "questions_delta": 68960,
+  "db_qps": 468.04812098657305,
+  "http_rps": 59.99920808470571,
+  "confirmed_todo_tps": 9.997605600539764,
+  "max_primary_gap_ms": 43.83,
+  "counter_before": 49733,
+  "counter_after": 118693,
+  "restoration": {
+    "original_definition": true,
+    "api_desired": 1,
+    "api_running": 1,
+    "api_pending": 0,
+    "deployments": 1,
+    "rollout": "COMPLETED",
+    "healthy_alb_targets": 1,
+    "nonhealthy_alb_targets": 0,
+    "db_class": "db.t4g.medium",
+    "db_status": "available",
+    "db_pending_changes": false,
+    "all_runner_tasks_stopped": true,
+    "schema_drop_exited_zero": true,
+    "all_experiment_task_definitions_inactive": true,
+    "remaining_s3_versions": 0,
+    "transient_ecr_tag_removed": true
+  }
+}

@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import sys
+import qps
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,16 @@ class Verifier:
 
         if manifest is not None:
             self._verify_manifest(manifest)
+            if manifest.get("qps_required"):
+                samples = self._read_json("db-qps.json")
+                if samples is not None:
+                    try:
+                        measured = qps.rate(samples["before"], samples["after"])
+                        if samples != measured:
+                            raise ValueError("QPS 원본과 집계가 다름")
+                        self.details["db_questions_per_second"] = measured["questions_per_second"]
+                    except (KeyError, ValueError, TypeError) as error:
+                        self.failures.append(f"invalid db-qps.json: {error}")
         if summary is not None and manifest is not None:
             self._verify_summary(summary, manifest)
         if audit is not None:
