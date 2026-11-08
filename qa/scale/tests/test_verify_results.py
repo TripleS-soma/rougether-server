@@ -9,6 +9,7 @@ from pathlib import Path
 
 VERIFY_PATH = Path(__file__).resolve().parents[1] / "verify-results.py"
 AUDIT_PATH = Path(__file__).resolve().parents[1] / "seed" / "audit.py"
+sys.path.insert(0, str(VERIFY_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("verify_results", VERIFY_PATH)
 verify_results = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = verify_results
@@ -209,6 +210,10 @@ class VerifyResultsTest(unittest.TestCase):
             written = json.loads((run_dir / "verdict.json").read_text(encoding="utf-8"))
             self.assertFalse(written["passed"])
             self.assertIn("sent_requests", "\n".join(written["failures"]))
+
+    def test_new_measurement_requires_db_qps(self):
+        verdict = self.verify(lambda manifest, *_: manifest.update(qps_required=True))
+        self.assertFailsWith(verdict, "missing required artifact: db-qps.json")
 
     def test_missing_manifest_field_fails(self):
         verdict = self.verify(lambda manifest, _summary, _audit, _telemetry: manifest.pop("source_sha"))
