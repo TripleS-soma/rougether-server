@@ -35,6 +35,9 @@ class AuthControllerTest {
     private AuthService authService;
 
     @MockitoBean
+    private com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder loginGiftAccessRecorder;
+
+    @MockitoBean
     private TokenService tokenService;
     @MockitoBean
     private CurrentUserArgumentResolver currentUserArgumentResolver;
