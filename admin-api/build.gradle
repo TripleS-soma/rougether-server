@@ -27,3 +27,11 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 }
+
+// 운영 FCM과 분리하고 전체 Spring 테스트의 컨텍스트 캐시와 메모리를 제한함.
+tasks.named('test') {
+	environment 'FIREBASE_CREDENTIALS_PATH', ''
+	maxHeapSize = '1g'
+	systemProperty 'spring.test.context.cache.maxSize', '8'
+	jvmArgs '-XX:+ExitOnOutOfMemoryError'
+}

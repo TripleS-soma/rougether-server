@@ -94,6 +94,10 @@ public class Notification extends BaseCreatedEntity {
         this.pushStatus = PushStatus.BLOCKED;
     }
 
+    public void markPushNotRequested() {
+        this.pushStatus = PushStatus.NOT_REQUESTED;
+    }
+
     // 알림함에서 삭제. 이미 삭제된 행은 최초 삭제 시각을 유지함.
     public void softDelete(Instant now) {
         if (deletedAt == null) {

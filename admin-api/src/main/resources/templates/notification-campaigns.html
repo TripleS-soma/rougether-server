@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin - 알림 발송</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <link rel="stylesheet" th:href="@{/css/notification-campaigns.css}">
+    <script defer th:src="@{/js/notification-campaigns.js}"></script>
+</head>
+<body class="app-body">
+<header class="app-header">
+    <div class="brand brand-sm"><span class="brand-mark">R</span><h1>Rougether <span class="badge">ADMIN</span></h1></div>
+    <nav class="app-nav">
+        <a th:href="@{/}">에셋 업로드</a>
+        <a th:href="@{/assets}">에셋 조회</a>
+        <a th:href="@{/asset-foundry}">Asset Foundry</a>
+        <a th:href="@{/catalog}">카탈로그</a>
+        <a th:href="@{/item-slots}">가구 관리</a>
+        <a th:href="@{/user-activities}">사용자 활동</a>
+        <a th:href="@{/users}">유저 관리</a>
+        <a th:href="@{/weekly-reports}">AI 회고</a>
+        <a th:href="@{/recommendations}">AI 추천</a>
+        <a th:href="@{/banned-words}">금칙어</a>
+        <a th:href="@{/bug-reports}">버그 제보</a>
+        <a th:href="@{/notification-campaigns}" class="active">알림 발송</a>
+        <a th:href="@{/content-reports}">신고</a>
+    </nav>
+    <div class="header-right">
+        <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+        <form th:action="@{/logout}" method="post"><button type="submit" class="btn-ghost">로그아웃</button></form>
+    </div>
+</header>
+<main class="app-main app-main--wide campaign-main">
+    <section class="upload-card">
+        <div class="upload-head">
+            <h2>알림 발송</h2>
+            <p>대상과 내용을 확인해 초안을 저장한 뒤 발송합니다. 푸시는 별도로 선택할 때만 전송합니다.</p>
+        </div>
+        <div id="campaignError" class="alert alert-error" role="alert" hidden></div>
+        <p id="campaignMessage" class="campaign-message" role="status" aria-live="polite" hidden></p>
+        <div class="campaign-compose-layout">
+            <form id="campaignForm" class="campaign-form">
+                <fieldset id="campaignFields">
+                    <legend class="campaign-legend">알림 작성</legend>
+                    <label class="campaign-label" for="campaignTitle">제목 <span id="titleCount" class="campaign-limit">0 / 255</span></label>
+                    <input id="campaignTitle" class="slot-search" maxlength="255" required autocomplete="off" placeholder="제목을 입력해 주세요">
+                    <label class="campaign-label" for="campaignBody">내용 <span id="bodyCount" class="campaign-limit">0 / 1000</span></label>
+                    <textarea id="campaignBody" class="slot-search" rows="6" maxlength="1000" required placeholder="알림함과 푸시에 표시할 내용을 입력해 주세요"></textarea>
+                    <label class="campaign-label" for="campaignAudience">발송 대상</label>
+                    <select id="campaignAudience" class="slot-select">
+                        <option value="SELECTED" selected>선택한 사용자</option>
+                        <option value="ALL">전체 사용자</option>
+                    </select>
+                    <div id="selectedUsersField">
+                        <label class="campaign-label" for="campaignUserIds">사용자 ID</label>
+                        <textarea id="campaignUserIds" class="slot-search" rows="2" inputmode="numeric" placeholder="예: 12, 34, 56" aria-describedby="recipientHelp"></textarea>
+                    </div>
+                    <p id="recipientHelp" class="campaign-help">쉼표나 공백으로 구분합니다. 탈퇴한 사용자, 봇, AI 계정에는 발송하지 않습니다.</p>
+                    <span class="campaign-label">발송 방식</span>
+                    <p class="campaign-inbox-channel">앱 알림함에 저장</p>
+                    <label class="campaign-checkbox" for="campaignPushEnabled"><input id="campaignPushEnabled" type="checkbox"> 푸시도 보내기</label>
+                    <p class="campaign-help">선택하면 사용자의 푸시 설정을 따릅니다. 푸시를 꺼도 앱 알림함에는 저장됩니다.</p>
+                </fieldset>
+                <div class="campaign-actions">
+                    <button id="previewCampaign" type="button" class="btn-ghost">대상과 내용 미리보기</button>
+                    <button id="saveCampaign" type="button" class="btn-primary" disabled>초안 저장</button>
+                </div>
+                <p id="previewRequirement" class="campaign-help">미리보기를 확인한 뒤 초안을 저장할 수 있습니다.</p>
+            </form>
+            <section class="campaign-preview" aria-label="알림 미리보기">
+                <h3>미리보기</h3>
+                <div class="campaign-notice-preview">
+                    <span class="campaign-preview-app">루게더</span>
+                    <strong id="previewTitle">제목을 입력해 주세요</strong>
+                    <p id="previewBody">입력한 내용이 여기에 표시됩니다.</p>
+                </div>
+                <p id="previewStatus" class="campaign-help" aria-live="polite">아직 대상을 확인하지 않았습니다.</p>
+                <dl id="previewCounts" class="campaign-counts" hidden>
+                    <div><dt>알림함 저장 대상</dt><dd id="previewRecipientCount">0명</dd></div>
+                    <div><dt>푸시 전송 가능</dt><dd id="previewPushAllowedCount">0명</dd></div>
+                    <div><dt>푸시 설정 차단</dt><dd id="previewBlockedCount">0명</dd></div>
+                    <div><dt>등록된 기기 없음</dt><dd id="previewTokenlessCount">0명</dd></div>
+                </dl>
+                <p class="campaign-help">미리보기와 초안 저장만으로는 사용자에게 알림이 가지 않습니다.</p>
+            </section>
+        </div>
+    </section>
+    <section class="upload-card campaign-history">
+        <div class="campaign-history-head"><h2>발송 이력과 초안</h2><button id="refreshCampaigns" type="button" class="btn-ghost">새로고침</button></div>
+        <p class="campaign-help">최근 50개를 표시합니다. 처리 완료는 알림함 저장 작업이 끝났다는 뜻이며, 푸시 접수는 기기의 수신이나 읽음 확인이 아닙니다.</p>
+        <p id="campaignListStatus" class="campaign-help" aria-live="polite">목록을 불러오는 중입니다.</p>
+        <div class="campaign-table-scroll"><table class="slot-table campaign-table">
+            <thead><tr><th>알림</th><th>대상 / 방식</th><th>상태</th><th>처리 결과</th><th>작성 / 발송 승인</th><th>작업</th></tr></thead>
+            <tbody id="campaignRows"></tbody>
+        </table></div>
+    </section>
+</main>
+<dialog id="campaignSendDialog" class="campaign-send-dialog" aria-labelledby="sendDialogTitle">
+    <div class="campaign-dialog-body">
+        <h2 id="sendDialogTitle">알림을 발송할까요?</h2>
+        <p id="sendDialogAudience" class="campaign-help"></p>
+        <div class="campaign-dialog-notice"><strong id="sendDialogNoticeTitle"></strong><p id="sendDialogNoticeBody"></p></div>
+        <p id="sendDialogChannel" class="campaign-help"></p>
+        <label class="campaign-checkbox" for="confirmCampaignSend"><input id="confirmCampaignSend" type="checkbox"> 대상과 내용을 확인했습니다.</label>
+        <div class="campaign-actions campaign-dialog-actions">
+            <button id="cancelCampaignSend" type="button" class="btn-ghost">취소</button>
+            <button id="confirmCampaignSendButton" type="button" class="btn-primary" disabled>발송하기</button>
+        </div>
+    </div>
+</dialog>
+</body>
+</html>
