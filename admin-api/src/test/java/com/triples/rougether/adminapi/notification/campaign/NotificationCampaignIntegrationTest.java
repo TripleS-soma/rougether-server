@@ -17,6 +17,7 @@ import com.triples.rougether.domain.notification.entity.*;
 import com.triples.rougether.domain.notification.repository.*;
 import com.triples.rougether.infra.fcm.FcmDelivery;
 import com.triples.rougether.infra.fcm.FcmDeliveryResult;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -309,9 +310,14 @@ class NotificationCampaignIntegrationTest {
             assertThat(sent.createdByUsername()).isEqualTo(admin.getUsername());
             assertThat(sent.approvedByUsername()).isEqualTo(approver.getUsername());
             assertThat(sent.approvedAt()).isNotNull();
+            var persisted = query.get(draft.id());
+            // 첫 응답의 나노초와 TIMESTAMP(6) 저장값은 다를 수 있음. 보존 기준은 실제 DB 값임.
+            assertThat(persisted.approvedAt()).isNotNull();
+            assertThat(Duration.between(sent.approvedAt(), persisted.approvedAt()).abs())
+                    .isLessThanOrEqualTo(Duration.ofNanos(1000));
             var repeated = command.send(draft.id(), new NotificationCampaignSendRequest(true, 1), admin.getUsername());
             assertThat(repeated.approvedByUsername()).isEqualTo(approver.getUsername());
-            assertThat(repeated.approvedAt()).isEqualTo(sent.approvedAt());
+            assertThat(repeated.approvedAt()).isEqualTo(persisted.approvedAt());
             assertThat(notificationCount(first.getId())).isZero();
             verifyNoInteractions(delivery);
         } finally {
