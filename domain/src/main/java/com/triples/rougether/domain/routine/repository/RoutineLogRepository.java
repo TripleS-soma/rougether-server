@@ -126,6 +126,15 @@ public interface RoutineLogRepository extends JpaRepository<RoutineLog, Long> {
             @Param("routineDate") LocalDate routineDate,
             @Param("status") RoutineLogStatus status);
 
+    // 시즌 보너스를 제외한 원금만 일일 기본 한도에서 소진함.
+    @Query("select coalesce(sum(coalesce(l.baseRewardAmount, l.rewardAmount)), 0) from RoutineLog l "
+            + "where l.routine.user.id = :userId and l.routineDate = :routineDate "
+            + "and l.status = :status")
+    int sumBaseRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
+            @Param("userId") Long userId,
+            @Param("routineDate") LocalDate routineDate,
+            @Param("status") RoutineLogStatus status);
+
     // 주간 회고 대상 사용자(#286): 기간 내 COMPLETED/FAILED log가 있는 사용자. 탈퇴(익명화) 회원과
     // soft-deleted 루틴의 log는 제외한다(회고 결정값). 동거 봇(#308)도 제외 — 봇 로그로 LLM 을 호출하지 않는다.
     // afterUserId 초과분을 user id 오름차순으로 keyset 순회함.

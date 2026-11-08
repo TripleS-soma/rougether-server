@@ -27,6 +27,7 @@ import com.triples.rougether.userapi.house.service.HouseMissionService;
 import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.userapi.todo.service.TodoService;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import java.time.Instant;
@@ -86,7 +87,7 @@ class DailyRewardCapAggregateIntegrationTest {
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                dailyRewardService, recorder);
+                dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
@@ -103,109 +104,109 @@ class DailyRewardCapAggregateIntegrationTest {
     }
 
     @Test
-    void 루틴4_투두1로_50코인을_소진하면_다음완료는_0지급() {
-        // 루틴 4건 완료 (40코인)
-        for (int i = 0; i < 4; i++) {
+    void 루틴9_투두1로_100코인을_소진하면_다음완료는_0지급() {
+        // 루틴 9건 완료 (90코인)
+        for (int i = 0; i < 9; i++) {
             Long routineId = persistRoutine();
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
-        // 투두 1건 완료 (10코인) — 합산 50 소진
+        // 투두 1건 완료 (10코인) — 합산 100 소진
         Long todoId = todoService.create(userId,
                 new TodoCreateRequest("투두", null, null, TODAY, null, null, null)).id();
         todoService.complete(userId, todoId);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
         // 다음 루틴 완료 — 0 지급 (상한 도달)
         Long extraRoutineId = persistRoutine();
         var routineResponse = routineLogService.complete(userId, extraRoutineId,
                 new RoutineLogCreateRequest(null));
         assertThat(routineResponse.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
         // 다음 투두 완료도 0 지급
         Long extraTodoId = todoService.create(userId,
                 new TodoCreateRequest("투두2", null, null, TODAY, null, null, null)).id();
         var todoResponse = todoService.complete(userId, extraTodoId);
         assertThat(todoResponse.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
-    void 루틴_투두_혼합으로_50코인_소진_후_추가는_모두_0지급() {
-        // 루틴 3 + 투두 2 = 50코인
-        for (int i = 0; i < 3; i++) {
+    void 루틴_투두_혼합으로_100코인_소진_후_추가는_모두_0지급() {
+        // 루틴 6 + 투두 4 = 100코인
+        for (int i = 0; i < 6; i++) {
             Long routineId = persistRoutine();
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 4; i++) {
             Long todoId = todoService.create(userId,
                     new TodoCreateRequest("투두 " + i, null, null, TODAY, null, null, null)).id();
             todoService.complete(userId, todoId);
         }
-        assertThat(walletBalance()).isEqualTo(50); // 10×3 + 10×2
+        assertThat(walletBalance()).isEqualTo(100); // 10×6 + 10×4
 
         // 이후 완료는 종류 무관 모두 0
         Long extraRoutineId = persistRoutine();
         var extraRoutine = routineLogService.complete(userId, extraRoutineId,
                 new RoutineLogCreateRequest(null));
         assertThat(extraRoutine.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
         Long extraTodoId = todoService.create(userId,
                 new TodoCreateRequest("투두 extra", null, null, TODAY, null, null, null)).id();
         var extraTodo = todoService.complete(userId, extraTodoId);
         assertThat(extraTodo.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 하나_취소_후_새로운_완료는_다시_지급된다() {
-        // 루틴 4 + 투두 1 = 50코인
-        Long[] routines = new Long[4];
-        for (int i = 0; i < 4; i++) {
+        // 루틴 9 + 투두 1 = 100코인
+        Long[] routines = new Long[9];
+        for (int i = 0; i < 9; i++) {
             routines[i] = persistRoutine();
             routineLogService.complete(userId, routines[i], new RoutineLogCreateRequest(null));
         }
         Long todoId = todoService.create(userId,
                 new TodoCreateRequest("투두", null, null, TODAY, null, null, null)).id();
         todoService.complete(userId, todoId);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 루틴 하나 취소 (10 회수, 40코인)
+        // 루틴 하나 취소 (10 회수, 90코인)
         routineLogService.cancel(userId, routines[0], TODAY);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
-        // 새 루틴 완료 (10 지급, 50코인)
+        // 새 루틴 완료 (10 지급, 100코인)
         Long newRoutineId = persistRoutine();
         var newResponse = routineLogService.complete(userId, newRoutineId,
                 new RoutineLogCreateRequest(null));
         assertThat(newResponse.rewardAmount()).isEqualTo(10);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
-    void 루틴_투두_합산_잔여가_정가보다_적으면_부분_지급되고_지갑은_50을_넘지_않는다() {
-        // 루틴 4건(40) + 이전 정책으로 5코인 지급된 투두 1건 = 45 소진
-        for (int i = 0; i < 4; i++) {
+    void 루틴_투두_합산_잔여가_정가보다_적으면_부분_지급되고_지갑은_100을_넘지_않는다() {
+        // 루틴 9건(90) + 이전 정책으로 5코인 지급된 투두 1건 = 95 소진
+        for (int i = 0; i < 9; i++) {
             Long routineId = persistRoutine();
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
         persistLegacyCompletedTodoRewardedWith(5);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 투두 완료 — 잔여 5만 지급
         Long partialTodoId = todoService.create(userId,
                 new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, partialTodoId).rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
 
-        // 루틴 완료도 이제 0 — 지급 합계는 45 + legacy 5 = 상한 50
+        // 루틴 완료도 이제 0 — 지급 합계는 95 + legacy 5 = 상한 100
         Long nextRoutineId = persistRoutine();
         assertThat(routineLogService.complete(userId, nextRoutineId,
                 new RoutineLogCreateRequest(null)).rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
     }
 
     // 지급액이 10의 배수가 아닌 이력(정책 변경 전 5코인 투두)을 흉내내 부분 지급 경계를 만듦.

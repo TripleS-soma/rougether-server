@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -50,7 +51,7 @@ class RoutineLogServiceCompleteRetryTest {
     private final DailyRewardService dailyRewardService = mock(DailyRewardService.class);
     private final WalletHistoryRecorder recorder = mock(WalletHistoryRecorder.class);
     private final CompletionRewardService completionRewardService = new CompletionRewardService(
-            dailyRewardService, recorder);
+            dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 
     private final RoutineLogService service = new RoutineLogService(routineRepository,

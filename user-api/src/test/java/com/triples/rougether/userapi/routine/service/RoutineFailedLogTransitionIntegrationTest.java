@@ -31,6 +31,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
@@ -90,7 +91,7 @@ class RoutineFailedLogTransitionIntegrationTest {
     void setUp() {
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                new DailyRewardService(routineLogRepository, todoRepository), recorder);
+                new DailyRewardService(routineLogRepository, todoRepository), recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         service = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),

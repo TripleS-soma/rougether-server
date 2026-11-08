@@ -171,6 +171,19 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             @Param("kstDayEnd") Instant kstDayEnd,
             @Param("status") TodoStatus status);
 
+    // 삭제된 완료도 원금 한도를 소진함. 추가 이벤트 코인은 기본 한도에 포함하지 않음.
+    @Query("""
+            select coalesce(sum(coalesce(t.baseRewardAmount, t.rewardAmount)), 0) from Todo t
+            where t.user.id = :userId
+              and t.completedAt >= :kstDayStart and t.completedAt < :kstDayEnd
+              and t.status = :status
+            """)
+    int sumBaseRewardAmountByUserIdAndCompletedAtInKstDay(
+            @Param("userId") Long userId,
+            @Param("kstDayStart") Instant kstDayStart,
+            @Param("kstDayEnd") Instant kstDayEnd,
+            @Param("status") TodoStatus status);
+
     @Query("select t.user.id as userId, count(t.id) as metricCount from Todo t "
             + "where t.user.id in :userIds and t.status = :status and t.completedAt >= :completedAfter "
             + "group by t.user.id")

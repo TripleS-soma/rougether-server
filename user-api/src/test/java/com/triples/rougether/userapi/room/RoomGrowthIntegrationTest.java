@@ -321,7 +321,7 @@ class RoomGrowthIntegrationTest {
     void 하루_상한과_부분_보상은_성장에도_같이_적용되고_삭제로_한도가_복구되지_않는다() {
         Long legacyId = todo(today);
         tx.executeWithoutResult(status -> todoRepository.findById(legacyId).orElseThrow()
-                .complete(CurrencyType.COIN, 45, Instant.now()));
+                .complete(CurrencyType.COIN, 95, Instant.now()));
         Long partialId = todo(today);
         assertThat(todoService.complete(user.getId(), partialId).rewardAmount()).isEqualTo(5);
         assertRoom(5, 0);
@@ -412,15 +412,15 @@ class RoomGrowthIntegrationTest {
     @Test
     void 루틴과_투두를_동시_완료해도_누락과_하루_상한_초과가_없다() throws Exception {
         List<Callable<Boolean>> tasks = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 6; i++) {
             Long routineId = routine();
             Long todoId = todo(today);
             tasks.add(() -> { completeRoutine(routineId); return true; });
             tasks.add(() -> { todoService.complete(user.getId(), todoId); return true; });
         }
-        assertThat(concurrently(tasks)).containsOnly(true).hasSize(8);
-        assertRoom(50, 2);
-        assertThat(balance()).isEqualTo(50);
+        assertThat(concurrently(tasks)).containsOnly(true).hasSize(12);
+        assertRoom(100, 4);
+        assertThat(balance()).isEqualTo(100);
     }
 
     @Test

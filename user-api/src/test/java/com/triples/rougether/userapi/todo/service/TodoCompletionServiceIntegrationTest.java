@@ -21,6 +21,7 @@ import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
@@ -72,7 +73,7 @@ class TodoCompletionServiceIntegrationTest {
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                dailyRewardService, recorder);
+                dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, completionRewardService,
                 recorder,

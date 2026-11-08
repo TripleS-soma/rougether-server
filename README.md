@@ -417,7 +417,7 @@ sequenceDiagram
     end
 ```
 
-당일 마감은 최대 10코인을 지급하며 루틴과 투두의 일일 합산 상한은 50코인이다. 남은 한도가 10보다 작으면 그만큼만 지급한다. 과거 마감 또는 마감일이 없는 투두는 보상 없이 완료할 수 있다. 성공한 요청을 다시 보내면 409가 반환되므로 코인과 성장 포인트가 중복 지급되지 않는다. 지급 도중 실패하면 완료 상태 변경도 롤백된다. [완료 통합 테스트](user-api/src/test/java/com/triples/rougether/userapi/todo/service/TodoCompletionServiceIntegrationTest.java)
+당일 마감은 최대 10코인을 지급하며 루틴과 투두의 일일 합산 기본 보상 상한은 100코인이다. 크리스마스 가구 보너스는 이 원금 한도에 별도로 추가하며 성장 포인트에는 포함하지 않는다. 남은 한도가 10보다 작으면 그만큼만 지급한다. 과거 마감 또는 마감일이 없는 투두는 보상 없이 완료할 수 있다. 성공한 요청을 다시 보내면 409가 반환되므로 코인과 성장 포인트가 중복 지급되지 않는다. 지급 도중 실패하면 완료 상태 변경도 롤백된다. [완료 통합 테스트](user-api/src/test/java/com/triples/rougether/userapi/todo/service/TodoCompletionServiceIntegrationTest.java)
 
 예를 들어 오늘 마감인 내 투두(예시 ID 42)를 처음 완료하고 일일 지급 한도가 충분할 때의 응답은 다음과 같다. 실제 호출에는 유효한 사용자 토큰이 필요하다.
 

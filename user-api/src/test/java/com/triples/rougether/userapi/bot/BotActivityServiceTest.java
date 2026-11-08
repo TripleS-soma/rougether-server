@@ -166,9 +166,9 @@ class BotActivityServiceTest {
             }
         }
         assertThat(due).hasSizeGreaterThanOrEqualTo(3);
-        // 오늘 이미 45코인을 받은 상태로 만든다 → 상한(50)까지 5코인만 남음
+        // 오늘 이미 95코인을 받은 상태로 만든다 → 상한(100)까지 5코인만 남음
         Todo filler = Todo.create(bot, category, "상한 채우기", null, today, null);
-        filler.complete(CurrencyType.COIN, 45, Instant.now().minusSeconds(60));
+        filler.complete(CurrencyType.COIN, 95, Instant.now().minusSeconds(60));
         todoRepository.save(filler);
         long walletBefore = coinBalance(bot.getId());
 
@@ -192,7 +192,7 @@ class BotActivityServiceTest {
         }
         int rewardedTotal = routineLogRepository.sumRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
                 bot.getId(), today, RoutineLogStatus.COMPLETED);
-        assertThat(rewardedTotal).isEqualTo(5); // 첫 완료 5(잔여), 이후 0 — 상한 50 초과 지급 없음
+        assertThat(rewardedTotal).isEqualTo(5); // 첫 완료 5(잔여), 이후 0 — 상한 100 초과 지급 없음
         assertThat(coinBalance(bot.getId()) - walletBefore).isEqualTo(5);
         assertThat(streakRepository.findByUserId(bot.getId())).isPresent();
 

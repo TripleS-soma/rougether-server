@@ -68,6 +68,9 @@ public class Todo extends BaseEntity {
     @Column(name = "reward_amount", nullable = false)
     private int rewardAmount;
 
+    @Column(name = "base_reward_amount")
+    private Integer baseRewardAmount;
+
     @Column(name = "growth_reward_amount", nullable = false)
     private int growthRewardAmount;
 
@@ -128,10 +131,19 @@ public class Todo extends BaseEntity {
     }
 
     public void complete(CurrencyType rewardCurrencyType, int rewardAmount, Instant completedAt) {
+        complete(rewardCurrencyType, rewardAmount, rewardAmount, completedAt);
+    }
+
+    public void complete(CurrencyType rewardCurrencyType, int rewardAmount, int baseRewardAmount, Instant completedAt) {
+        if (baseRewardAmount < 0 || rewardAmount < baseRewardAmount) {
+            throw new IllegalArgumentException("실제 코인 지급액은 음수가 아닌 원금 이상이어야 함");
+        }
         this.status = TodoStatus.COMPLETED;
         this.completedAt = completedAt;
         this.rewardCurrencyType = rewardCurrencyType;
         this.rewardAmount = rewardAmount;
+        // 보너스가 없으면 NULL로 두어 구버전 writer도 실지급액을 원금으로 갱신할 수 있게 함.
+        this.baseRewardAmount = baseRewardAmount == rewardAmount ? null : baseRewardAmount;
     }
 
     public void cancelComplete() {
@@ -139,11 +151,12 @@ public class Todo extends BaseEntity {
         this.completedAt = null;
         this.rewardCurrencyType = null;
         this.rewardAmount = 0;
+        this.baseRewardAmount = null;
         this.growthRewardAmount = 0;
     }
 
     public void recordGrowthReward(int amount) {
-        if (status != TodoStatus.COMPLETED || amount < 0 || amount > rewardAmount
+        if (status != TodoStatus.COMPLETED || amount < 0 || amount > getBaseRewardAmount()
                 || growthRewardAmount != 0) {
             throw new IllegalStateException("완료 보상 범위에서 성장 포인트를 한 번만 기록할 수 있음");
         }
@@ -152,5 +165,10 @@ public class Todo extends BaseEntity {
 
     public void softDelete(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    // 혼합 배포 중 구버전이 저장한 NULL 원금은 기존 총 지급액과 동일하게 해석함.
+    public int getBaseRewardAmount() {
+        return baseRewardAmount != null ? baseRewardAmount : rewardAmount;
     }
 }

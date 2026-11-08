@@ -27,6 +27,7 @@ import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.userapi.category.error.CategoryErrorCode;
 import com.triples.rougether.userapi.global.config.JpaConfig;
@@ -78,7 +79,7 @@ class TodoServiceIntegrationTest {
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                dailyRewardService, recorder);
+                dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         service = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, completionRewardService,
                 recorder,
@@ -333,7 +334,7 @@ class TodoServiceIntegrationTest {
         doReturn(false).when(racing).existsByUserIdAndExternalSourceAndExternalId(any(), anyString(), anyString());
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                new DailyRewardService(routineLogRepository, todoRepository), recorder);
+                new DailyRewardService(routineLogRepository, todoRepository), recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         TodoService racingService = new TodoService(racing, categoryRepository, userRepository,
                 userWalletRepository, completionRewardService, recorder,
                 new RoomGrowthService(personalRoomRepository, userRepository));

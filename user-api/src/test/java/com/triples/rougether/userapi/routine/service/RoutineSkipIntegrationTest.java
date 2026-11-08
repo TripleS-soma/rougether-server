@@ -33,6 +33,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.error.RoutineLogErrorCode;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -80,7 +81,7 @@ class RoutineSkipIntegrationTest {
     void setUp() {
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                new DailyRewardService(routineLogRepository, todoRepository), recorder);
+                new DailyRewardService(routineLogRepository, todoRepository), recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         service = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),

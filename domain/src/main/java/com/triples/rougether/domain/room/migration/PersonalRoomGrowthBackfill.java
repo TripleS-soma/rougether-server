@@ -86,16 +86,16 @@ public class PersonalRoomGrowthBackfill {
             }
         }
         List<Reward> routines = rewards(connection, """
-                SELECT l.id, l.reward_amount - l.growth_reward_amount
+                SELECT l.id, COALESCE(l.base_reward_amount, l.reward_amount) - l.growth_reward_amount
                 FROM routine_logs l
                 WHERE l.routine_id IN (SELECT id FROM routines WHERE user_id = ?) AND l.status = 'COMPLETED' AND l.reward_currency_type = 'COIN'
-                  AND l.growth_reward_amount >= 0 AND l.reward_amount > l.growth_reward_amount
+                  AND l.growth_reward_amount >= 0 AND COALESCE(l.base_reward_amount, l.reward_amount) > l.growth_reward_amount
                 ORDER BY l.id FOR UPDATE
                 """, userId);
         List<Reward> todos = rewards(connection, """
-                SELECT id, reward_amount - growth_reward_amount FROM todos
+                SELECT id, COALESCE(base_reward_amount, reward_amount) - growth_reward_amount FROM todos
                 WHERE user_id = ? AND status = 'COMPLETED' AND reward_currency_type = 'COIN'
-                  AND growth_reward_amount >= 0 AND reward_amount > growth_reward_amount
+                  AND growth_reward_amount >= 0 AND COALESCE(base_reward_amount, reward_amount) > growth_reward_amount
                 ORDER BY id FOR UPDATE
                 """, userId);
         long points = 0;
@@ -116,8 +116,8 @@ public class PersonalRoomGrowthBackfill {
                 statement.executeUpdate();
             }
             addPoints(connection, userId, points);
-            markRewards(connection, "UPDATE routine_logs SET growth_reward_amount = reward_amount WHERE id = ?", routines);
-            markRewards(connection, "UPDATE todos SET growth_reward_amount = reward_amount WHERE id = ?", todos);
+            markRewards(connection, "UPDATE routine_logs SET growth_reward_amount = COALESCE(base_reward_amount, reward_amount) WHERE id = ?", routines);
+            markRewards(connection, "UPDATE todos SET growth_reward_amount = COALESCE(base_reward_amount, reward_amount) WHERE id = ?", todos);
         }
         return points;
     }
