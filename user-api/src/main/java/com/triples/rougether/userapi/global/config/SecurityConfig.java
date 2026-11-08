@@ -3,6 +3,8 @@ package com.triples.rougether.userapi.global.config;
 import com.triples.rougether.userapi.activity.filter.UserDailyActivityFilter;
 import com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder;
 import com.triples.rougether.userapi.global.security.JwtAuthenticationFilter;
+import com.triples.rougether.userapi.logingift.filter.LoginGiftAccessFilter;
+import com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder;
 import com.triples.rougether.userapi.global.security.RestAccessDeniedHandler;
 import com.triples.rougether.userapi.global.security.RestAuthenticationEntryPoint;
 import java.util.List;
@@ -30,6 +32,7 @@ public class SecurityConfig {
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
     private final UserDailyActivityRecorder userDailyActivityRecorder;
+    private final LoginGiftAccessRecorder loginGiftAccessRecorder;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -71,7 +74,8 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(userDailyActivityFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(new LoginGiftAccessFilter(loginGiftAccessRecorder), JwtAuthenticationFilter.class)
+                .addFilterAfter(userDailyActivityFilter, LoginGiftAccessFilter.class);
 
         return http.build();
     }
