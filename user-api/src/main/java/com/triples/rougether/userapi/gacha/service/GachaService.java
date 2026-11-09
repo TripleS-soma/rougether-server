@@ -33,6 +33,13 @@ import com.triples.rougether.userapi.gacha.error.GachaErrorCode;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.time.Instant;
+import java.time.Clock;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.triples.rougether.domain.shop.policy.EventItemEligibility;
+import com.triples.rougether.userapi.christmas.service.ChristmasEventPolicy;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -65,6 +72,9 @@ public class GachaService {
     private final WalletHistoryRecorder walletHistoryRecorder;
     private final CharacterUnlockPolicy characterUnlockPolicy;
     private final GachaDrawPolicy gachaDrawPolicy;
+    private final ChristmasGachaDrawPolicy christmasDrawPolicy;
+    private final ChristmasEventPolicy christmasEventPolicy;
+    private final Clock clock;
 
     public GachaService(GachaRepository gachaRepository,
                         GachaPoolEntryRepository poolRepository,
@@ -75,6 +85,24 @@ public class GachaService {
                         WalletHistoryRecorder walletHistoryRecorder,
                         CharacterUnlockPolicy characterUnlockPolicy,
                         GachaDrawPolicy gachaDrawPolicy) {
+        this(gachaRepository, poolRepository, userItemRepository, userCharacterRepository,
+                walletRepository, userRepository, walletHistoryRecorder, characterUnlockPolicy,
+                gachaDrawPolicy, new ChristmasGachaDrawPolicy(), new ChristmasEventPolicy(false), Clock.systemUTC());
+    }
+
+    @Autowired
+    public GachaService(GachaRepository gachaRepository,
+                        GachaPoolEntryRepository poolRepository,
+                        UserItemRepository userItemRepository,
+                        UserCharacterRepository userCharacterRepository,
+                        UserWalletRepository walletRepository,
+                        UserRepository userRepository,
+                        WalletHistoryRecorder walletHistoryRecorder,
+                        CharacterUnlockPolicy characterUnlockPolicy,
+                        GachaDrawPolicy gachaDrawPolicy,
+                        ChristmasGachaDrawPolicy christmasDrawPolicy,
+                        ChristmasEventPolicy christmasEventPolicy,
+                        Clock clock) {
         this.gachaRepository = gachaRepository;
         this.poolRepository = poolRepository;
         this.userItemRepository = userItemRepository;
@@ -84,14 +112,17 @@ public class GachaService {
         this.walletHistoryRecorder = walletHistoryRecorder;
         this.characterUnlockPolicy = characterUnlockPolicy;
         this.gachaDrawPolicy = gachaDrawPolicy;
+        this.christmasDrawPolicy = christmasDrawPolicy;
+        this.christmasEventPolicy = christmasEventPolicy;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
     public GachaListResponse getGachaList() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.getCategory() == null)
-                .filter(gacha -> gacha.isAvailableAt(now))
+                .filter(gacha -> isAvailable(gacha, now))
                 .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
                 .toList();
         return new GachaListResponse(items);
@@ -99,10 +130,10 @@ public class GachaService {
 
     @Transactional(readOnly = true)
     public GachaListResponse getCategoryGachaList() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         List<GachaResponse> items = gachaRepository.findAllWithTheme().stream()
                 .filter(gacha -> gacha.getCategory() != null)
-                .filter(gacha -> gacha.isAvailableAt(now))
+                .filter(gacha -> isAvailable(gacha, now))
                 .sorted(Comparator.comparing(Gacha::getCategory))
                 .map(gacha -> GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha)))
                 .toList();
@@ -113,14 +144,16 @@ public class GachaService {
     public GachaResponse getGacha(Long gachaId) {
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        return GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha));
+        return GachaResponse.of(gacha, GachaGiftBoxCatalog.assetKeyFor(gacha),
+                (isChristmas(gacha) || isChristmasTheme(gacha))
+                        ? isAvailable(gacha, clock.instant()) : gacha.isActive());
     }
 
     @Transactional(readOnly = true)
     public GachaRewardListResponse getRewards(Long userId, Long gachaId) {
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        if (!gacha.isAvailableAt(Instant.now())) {
+        if (!isAvailable(gacha, clock.instant())) {
             throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 
@@ -128,10 +161,24 @@ public class GachaService {
         Set<Long> ownedCharacterIds =
                 new HashSet<>(userCharacterRepository.findOwnedCharacterIdsByUserId(userId));
 
-        List<GachaRewardResponse> rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
-                .filter(entry -> isEligibleReward(gacha, entry))
-                .map(entry -> toRewardResponse(entry, ownedItemIds, ownedCharacterIds))
-                .toList();
+        List<GachaRewardResponse> rewards;
+        if (isChristmas(gacha)) {
+            EventPools pools = eventPools(gacha, clock.instant());
+            var prepared = christmasDrawPolicy.prepare(pools.christmas(), pools.regular());
+            rewards = new ArrayList<>();
+            for (GachaPoolEntry entry : pools.christmas()) {
+                rewards.add(toRewardResponse(entry, ownedItemIds, ownedCharacterIds)
+                        .withProbabilityPercent(prepared.probabilityPercent(entry, true)));
+            }
+            for (GachaPoolEntry entry : pools.regular()) {
+                rewards.add(toRewardResponse(entry, ownedItemIds, ownedCharacterIds)
+                        .withProbabilityPercent(prepared.probabilityPercent(entry, false)));
+            }
+        } else {
+            rewards = poolRepository.findActiveRewardsByGachaId(gachaId).stream()
+                    .filter(entry -> isEligibleReward(gacha, entry))
+                    .map(entry -> toRewardResponse(entry, ownedItemIds, ownedCharacterIds)).toList();
+        }
         return new GachaRewardListResponse(rewards);
     }
 
@@ -143,9 +190,19 @@ public class GachaService {
             throw new BusinessException(GachaErrorCode.INVALID_DRAW_COUNT);
         }
 
+        // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
+        // 첫 일반 SELECT 전에 user → wallet 순서로 잠가 RR snapshot도 이전 지급 커밋 뒤에 생성함.
+        userRepository.findByIdForUpdate(userId)
+                .filter(user -> !user.isDeleted())
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
+        // 행 락으로 동시 뽑기의 이중 차감을 막는다.
+        UserWallet wallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
+                .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
+
         Gacha gacha = gachaRepository.findById(gachaId)
                 .orElseThrow(() -> new BusinessException(GachaErrorCode.GACHA_NOT_FOUND));
-        if (!gacha.isAvailableAt(Instant.now())) {
+        Instant drawTime = clock.instant();
+        if (!isAvailable(gacha, drawTime)) {
             throw new BusinessException(GachaErrorCode.GACHA_INACTIVE);
         }
 
@@ -154,16 +211,14 @@ public class GachaService {
                 ? gacha.getCostAmount() * BONUS_DRAW_COST_MULTIPLIER
                 : gacha.getCostAmount();
 
-        // 캐릭터 보유 판정(중복 환급)을 다른 획득 경로(온보딩 선택·착용 교체·어드민 지급)와 직렬화한다 —
-        // 전부 같은 user 행 락을 잡으므로 동시 지급이 같은 캐릭터를 2행 만들 수 없다. 락 순서: user → wallet.
-        userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(MemberErrorCode.USER_NOT_FOUND));
-        // 행 락으로 동시 뽑기의 이중 차감을 막는다.
-        UserWallet wallet = walletRepository.findWithLockByUserIdAndCurrencyType(userId, CurrencyType.COIN)
-                .orElseThrow(() -> new BusinessException(GachaErrorCode.INSUFFICIENT_COIN));
-        List<GachaPoolEntry> pool = poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
-                .filter(entry -> isEligibleReward(gacha, entry))
-                .toList();
+        EventPools eventPools = isChristmas(gacha) ? eventPools(gacha, drawTime) : null;
+        List<GachaPoolEntry> pool = eventPools != null
+                ? eventPools.christmas() : poolRepository.findByGachaIdAndActiveIsTrue(gachaId).stream()
+                .filter(entry -> isEligibleReward(gacha, entry)).toList();
+        // 그룹과 모든 양수 확률 등급이 준비된 뒤에만 차감한다.
+        Supplier<GachaPoolEntry> picker = eventPools != null
+                ? christmasDrawPolicy.prepare(eventPools.christmas(), eventPools.regular())::pick
+                : gachaDrawPolicy.prepare(pool)::pick;
         // 캐릭터가 나올 수 있는 머신은 방 레벨 10부터. 코인 차감 전에 막고, 방은 잠그지 않고 읽어 락 순서를 유지함.
         // 잔액 부족보다 먼저 판정해 해금 전 사용자가 "코인을 모으면 된다"로 오해하지 않게 함. 미리보기는 열어 둠.
         if (pool.stream().anyMatch(entry -> entry.getRewardType() == RewardType.CHARACTER)
@@ -180,8 +235,6 @@ public class GachaService {
         walletHistoryRecorder.record(wallet, -cost, WalletHistoryReason.GACHA_DRAW,
                 WalletHistory.SOURCE_GACHA, gachaId);
 
-        GachaDrawPolicy.DrawPool drawPool = gachaDrawPolicy.prepare(pool);
-
         Set<Long> ownedItemIds = userItemRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
                 .map(ui -> ui.getItem().getId())
                 .collect(Collectors.toCollection(HashSet::new));
@@ -195,7 +248,7 @@ public class GachaService {
         int coinRefund = 0;
         int diaRefund = 0;
         for (int i = 0; i < resultCount; i++) {
-            GachaPoolEntry picked = drawPool.pick();
+            GachaPoolEntry picked = picker.get();
             if (picked.getRewardType() == RewardType.CHARACTER) {
                 coinRefund += drawCharacter(user, picked, ownedCharacterIds, results);
             } else {
@@ -225,6 +278,64 @@ public class GachaService {
                 new WalletSummary(CurrencyType.DIAMOND, diaWallet == null ? 0 : diaWallet.getBalance())));
     }
 
+    private boolean isChristmas(Gacha gacha) {
+        return ChristmasEventPolicy.CODE.equals(gacha.getCode());
+    }
+
+    private boolean isChristmasTheme(Gacha gacha) {
+        return gacha.getTheme() != null
+                && EventItemEligibility.CHRISTMAS_THEME_CODE.equals(gacha.getTheme().getCode());
+    }
+
+    private boolean isAvailable(Gacha gacha, Instant now) {
+        // 카탈로그 import가 만든 옛 테마 머신도 이벤트의 별도 진입 경로가 될 수 없음.
+        if (!isChristmas(gacha) && isChristmasTheme(gacha)) {
+            return false;
+        }
+        return gacha.isAvailableAt(now) && (!isChristmas(gacha)
+                || (christmasEventPolicy.isOpen(now) && gacha.getTheme() != null
+                && gacha.getTheme().isActive()
+                && EventItemEligibility.CHRISTMAS_THEME_CODE.equals(gacha.getTheme().getCode())));
+    }
+
+    // 팝업/이벤트 메타도 실제 추첨과 동일한 후보 구성으로 준비 여부를 판정함.
+    @Transactional(readOnly = true)
+    public boolean isChristmasReady(Gacha gacha, Instant now) {
+        if (gacha == null || !isChristmas(gacha) || !isAvailable(gacha, now)) {
+            return false;
+        }
+        try {
+            EventPools pools = eventPools(gacha, now);
+            christmasDrawPolicy.prepare(pools.christmas(), pools.regular());
+            return true;
+        } catch (BusinessException invalidPool) {
+            return false;
+        }
+    }
+
+    private EventPools eventPools(Gacha gacha, Instant now) {
+        List<GachaPoolEntry> seasonal = poolRepository.findByGachaIdAndActiveIsTrue(gacha.getId()).stream()
+                .filter(e -> e.getRewardType() == RewardType.ITEM && e.getItem() != null)
+                .filter(e -> EventItemEligibility.isChristmas(e.getItem()))
+                .filter(e -> ChristmasGachaCatalog.ASSET_KEYS.contains(e.getItem().getAssetKey()))
+                .filter(e -> GachaCategory.fromItem(e.getItem()) != null)
+                .toList();
+        Set<Long> exclusiveRewards = new HashSet<>(poolRepository.findAttendanceRewardItemIds());
+        Map<Long, GachaPoolEntry> regular = new LinkedHashMap<>();
+        gachaRepository.findAllWithTheme().stream()
+                .filter(machine -> machine.getCategory() != null && isAvailable(machine, now))
+                .forEach(machine -> poolRepository.findByGachaIdAndActiveIsTrue(machine.getId()).stream()
+                        .filter(e -> isEligibleReward(machine, e))
+                        .filter(e -> e.getRewardType() == RewardType.ITEM)
+                        .filter(e -> !exclusiveRewards.contains(e.getItem().getId()))
+                        .forEach(e -> regular.putIfAbsent(e.getItem().getId(), e)));
+        Map<Long, GachaPoolEntry> uniqueSeasonal = new LinkedHashMap<>();
+        seasonal.forEach(e -> uniqueSeasonal.putIfAbsent(e.getItem().getId(), e));
+        return new EventPools(List.copyOf(uniqueSeasonal.values()), List.copyOf(regular.values()));
+    }
+
+    private record EventPools(List<GachaPoolEntry> christmas, List<GachaPoolEntry> regular) { }
+
     private boolean hasReward(GachaPoolEntry e) {
         return (e.getRewardType() == RewardType.ITEM && e.getItem() != null)
                 || (e.getRewardType() == RewardType.CHARACTER && e.getCharacter() != null);
@@ -232,6 +343,9 @@ public class GachaService {
 
     private boolean isEligibleReward(Gacha gacha, GachaPoolEntry entry) {
         if (!hasReward(entry)) {
+            return false;
+        }
+        if (entry.getRewardType() == RewardType.ITEM && EventItemEligibility.isChristmas(entry.getItem())) {
             return false;
         }
         if (entry.getRewardType() == RewardType.CHARACTER && entry.getCharacter().isRoomLevelReward()) {

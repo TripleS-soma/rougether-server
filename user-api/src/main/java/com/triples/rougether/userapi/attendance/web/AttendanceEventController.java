@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +26,18 @@ public class AttendanceEventController {
     @GetMapping
     public AttendanceEventStatusResponse getStatus(@CurrentUser AuthUser user) {
         return attendanceEventService.getStatus(user.id());
+    }
+
+    @Operation(summary = "지정 출석 이벤트 상태 조회")
+    @GetMapping("/{eventId}")
+    public AttendanceEventStatusResponse getStatus(@CurrentUser AuthUser user, @PathVariable Long eventId) {
+        return attendanceEventService.getStatus(user.id(), eventId);
+    }
+
+    @Operation(summary = "지정 출석 이벤트 오늘 출석 체크")
+    @PostMapping("/{eventId}/check-ins")
+    public AttendanceCheckInResponse checkIn(@CurrentUser AuthUser user, @PathVariable Long eventId) {
+        return attendanceEventService.checkIn(user.id(), eventId);
     }
 
     @Operation(summary = "오늘 출석 체크")

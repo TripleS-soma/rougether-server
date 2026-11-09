@@ -8,6 +8,7 @@ import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.domain.shop.entity.Item;
 import com.triples.rougether.domain.shop.entity.UserItem;
+import com.triples.rougether.domain.shop.policy.EventItemEligibility;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.shop.dto.PurchaseResponse;
@@ -46,9 +47,10 @@ public class ShopCommandService {
     public PurchaseResponse purchase(Long userId, Long itemId) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ShopErrorCode.ITEM_NOT_FOUND));
-        // 캐릭터 악세사리는 카탈로그 값과 무관하게 뽑기 전용이다.
-        // 그 외에도 비활성이거나 구매 재화/가격이 없는 아이템은 구매 불가.
+        // 크리스마스 에셋과 캐릭터 악세사리는 카탈로그 가격과 무관하게 뽑기 전용임.
+        // 그 외에도 비활성이거나 구매 재화/가격이 없는 아이템은 구매 불가함.
         if (!item.isActive() || PLACEMENT_CHARACTER.equals(item.getPlacementType())
+                || EventItemEligibility.isChristmas(item)
                 || item.getPurchaseCurrencyType() == null
                 || item.getPriceAmount() == null || item.getPriceAmount() <= 0) {
             throw new BusinessException(ShopErrorCode.ITEM_NOT_PURCHASABLE);

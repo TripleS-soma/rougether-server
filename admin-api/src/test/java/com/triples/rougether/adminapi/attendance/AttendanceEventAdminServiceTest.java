@@ -81,6 +81,17 @@ class AttendanceEventAdminServiceTest {
                         .isEqualTo("ATTENDANCE_GENERATION_TARGET_INVALID"));
     }
 
+    @Test
+    void 누적출석이벤트와_기간이겹쳐도_기존STREAK이벤트를_만들수있다() {
+        attendanceEventRepository.save(com.triples.rougether.domain.attendance.entity.AttendanceEvent
+                .createCumulativeCoins("christmas_2026", "크리스마스", LocalDate.of(2026,8,16),
+                        LocalDate.of(2026,10,15),30,30,5,60));
+        var response=attendanceEventAdminService.create(request(5));
+        assertThat(attendanceEventRepository.findById(response.id()).orElseThrow().getMode().name())
+                .isEqualTo("STREAK");
+        assertThat(attendanceEventRepository.findActiveOn(LocalDate.of(2026,8,16))).hasSize(1);
+    }
+
     private AttendanceEventCreateRequest request(int bonusDay) {
         return new AttendanceEventCreateRequest(
                 "ATTENDANCE_10D_2026", "10일 연속 출석",

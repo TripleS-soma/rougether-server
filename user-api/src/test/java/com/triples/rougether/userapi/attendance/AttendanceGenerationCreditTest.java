@@ -56,6 +56,10 @@ class AttendanceGenerationCreditTest {
     @BeforeEach
     void setUp() {
         doReturn(KST).when(kstClock).getZone();
+        // 가구 접수 검증에 필요한 용량 행은 migration seed 유무와 무관하게 fixture로 준비함.
+        if (jdbcTemplate.queryForObject("SELECT COUNT(*) FROM furniture_worker_capacity", Long.class) == 0) {
+            jdbcTemplate.update("INSERT INTO furniture_worker_capacity(id,max_in_flight,execution_enabled,execution_mode) VALUES(1,1,TRUE,'RESIDENT')");
+        }
 
         user = userRepository.save(User.signUp("attendance-race@rougether.dev"));
         userWalletRepository.saveAll(SignupWalletPolicy.issueAll(user));

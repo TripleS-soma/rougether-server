@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
-// GET /api/v1/gacha/{id}/rewards 응답. 확률·weight 없이 현재 활성 보상만 노출함.
+// GET /api/v1/gacha/{id}/rewards 응답. 이벤트는 그룹 확률을 포함한 최종 확률도 반환함.
 public record GachaRewardListResponse(
         @Schema(description = "현재 활성 풀에 등록된 보상 목록 (풀 엔트리 ID 오름차순)")
         List<GachaRewardResponse> items) {
@@ -39,6 +39,19 @@ public record GachaRewardListResponse(
             String surfaceSlotType,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "캐릭터 착용 슬롯 종류 (해당 ITEM 보상일 때)", example = "eyewear")
-            String characterSlotType) {
+            String characterSlotType,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "이벤트 최종 당첨 확률(0~100%). 그룹 50%와 등급, 동일 등급 후보 수를 반영")
+            Double probabilityPercent) {
+        public GachaRewardResponse(String rewardType, Long itemId, Long characterId, String name,
+                                   String assetKey, String rarity, boolean owned, String categoryCode,
+                                   String placementType, String surfaceSlotType, String characterSlotType) {
+            this(rewardType, itemId, characterId, name, assetKey, rarity, owned, categoryCode,
+                    placementType, surfaceSlotType, characterSlotType, null);
+        }
+        public GachaRewardResponse withProbabilityPercent(double probability) {
+            return new GachaRewardResponse(rewardType, itemId, characterId, name, assetKey, rarity, owned,
+                    categoryCode, placementType, surfaceSlotType, characterSlotType, probability);
+        }
     }
 }

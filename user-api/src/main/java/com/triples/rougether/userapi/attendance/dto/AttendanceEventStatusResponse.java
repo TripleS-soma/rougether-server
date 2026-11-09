@@ -17,7 +17,19 @@ public record AttendanceEventStatusResponse(
         List<LocalDate> checkInDates,
         @Schema(description = "1일차부터 목표일까지의 보상표")
         List<DailyReward> dailyRewards,
-        Reward reward) {
+        Reward reward,
+        String mode,
+        int progressDays,
+        boolean active,
+        boolean availableToday) {
+
+    public AttendanceEventStatusResponse(Long eventId, String code, String title, LocalDate startsOn,
+            LocalDate endsOn, int targetDays, int currentStreak, boolean checkedInToday,
+            boolean completed, List<LocalDate> checkInDates, List<DailyReward> dailyRewards, Reward reward) {
+        this(eventId, code, title, startsOn, endsOn, targetDays, currentStreak, checkedInToday,
+                completed, checkInDates, dailyRewards, reward, "STREAK", currentStreak, true,
+                !checkedInToday && !completed);
+    }
 
     public record DailyReward(
             int day,

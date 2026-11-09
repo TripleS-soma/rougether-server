@@ -44,6 +44,9 @@ public class AttendanceCheckIn {
     @Column(name = "coin_reward_amount", nullable = false)
     private int coinRewardAmount;
 
+    @Column(name = "progress_completed_at")
+    private Instant progressCompletedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reward_user_item_id")
     private UserItem rewardUserItem;
@@ -81,6 +84,10 @@ public class AttendanceCheckIn {
         this.rewardProcessedAt = processedAt;
     }
 
+    public void completeProgress(Instant completedAt) {
+        this.progressCompletedAt = completedAt;
+    }
+
     public void processGenerationCreditReward(Instant processedAt) {
         this.generationCreditAmount = 1;
         this.rewardNewlyGranted = true;
@@ -88,6 +95,6 @@ public class AttendanceCheckIn {
     }
 
     public boolean isCompleted() {
-        return rewardProcessedAt != null;
+        return rewardProcessedAt != null || progressCompletedAt != null;
     }
 }
