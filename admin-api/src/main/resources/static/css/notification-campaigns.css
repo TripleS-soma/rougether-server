@@ -1,0 +1,46 @@
+.app-header .brand, .app-header .header-right { flex-shrink: 0; }
+.app-header .app-nav { flex: 1; min-width: 0; overflow-x: auto; justify-content: flex-start; }
+.app-header .app-nav a { flex-shrink: 0; }
+.campaign-main { display: grid; gap: 24px; min-width: 0; }
+.campaign-main > section { min-width: 0; }
+.campaign-compose-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 32px; margin-top: 24px; }
+.campaign-form fieldset { border: 0; padding: 0; min-width: 0; }
+.campaign-legend { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.campaign-label { display: block; font-size: 14px; font-weight: 600; margin: 18px 0 8px; }
+.campaign-limit { float: right; color: var(--text-soft); font-weight: 400; }
+.campaign-form .slot-search { width: 100%; min-width: 0; box-sizing: border-box; }
+.campaign-form textarea { resize: vertical; line-height: 1.65; }
+.campaign-form .slot-select { width: 100%; }
+.campaign-help { margin: 10px 0; color: var(--text-soft); font-size: 13px; line-height: 1.65; }
+.campaign-checkbox { display: flex; gap: 9px; align-items: center; min-height: 44px; cursor: pointer; font-size: 14px; }
+.campaign-checkbox input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--primary); }
+.campaign-inbox-channel { margin: 0; font-size: 14px; }
+.campaign-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.campaign-preview { padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: 16px; align-self: start; }
+.campaign-preview h3 { font-size: 16px; margin: 0 0 18px; }
+.campaign-notice-preview { padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.campaign-preview-app { display: block; font-size: 12px; color: var(--text-soft); margin-bottom: 10px; }
+.campaign-notice-preview strong, .campaign-dialog-notice strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.campaign-notice-preview p, .campaign-dialog-notice p { font-size: 14px; line-height: 1.7; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.campaign-counts { margin-top: 20px; font-size: 13px; }
+.campaign-counts div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.campaign-counts dt { color: var(--text-soft); }
+.campaign-counts dd { margin: 0; font-weight: 600; }
+.campaign-message { margin: 16px 0; padding: 12px 16px; background: var(--primary-soft); border-radius: 10px; line-height: 1.6; }
+.campaign-history-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.campaign-history-head h2 { font-size: 22px; }
+.campaign-table-scroll { overflow-x: auto; }
+.campaign-table { min-width: 850px; }
+.campaign-table td { vertical-align: top; }
+.campaign-row-body { max-width: 300px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-soft); font-size: 12px; line-height: 1.5; margin-top: 6px; }
+.campaign-result-line { white-space: nowrap; font-size: 12px; line-height: 1.85; }
+.campaign-status { display: inline-block; border-radius: 6px; padding: 4px 8px; background: var(--primary-soft); color: var(--primary-strong); font-size: 12px; font-weight: 600; }
+.campaign-send-dialog { max-width: none; width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; padding: 0; border: 0; border-radius: 18px; background: var(--surface); color: var(--text); }
+.campaign-send-dialog::backdrop { background: rgba(23, 26, 53, .5); }
+.campaign-dialog-body { padding: 26px; }
+.campaign-dialog-body h2 { font-size: 21px; margin: 0 0 12px; }
+.campaign-dialog-notice { padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; margin: 18px 0; }
+.campaign-dialog-actions { justify-content: flex-end; }
+@media (max-width: 900px) { .campaign-compose-layout { grid-template-columns: 1fr; gap: 24px; } }
+@media (max-width: 980px) { .app-header .app-nav { flex-basis: 100%; } }
+@media (max-width: 560px) { .campaign-dialog-body { padding: 20px; } .campaign-actions button { flex: 1; } }

@@ -17,7 +17,7 @@ import java.util.OptionalInt;
 import org.springframework.stereotype.Component;
 
 // 봇의 "하루 성과" 행동(#310): 루틴 완료·단체 미션 기여. 쉬는 날(15%)에는 둘 다 건너뛴다.
-// 쓰기는 전부 기존 서비스 경유 — 완료 보상 10코인·일일 상한 50·스트릭, 미션 기여 하루 1회·달성률·성장 포인트가
+// 쓰기는 전부 기존 서비스 경유 — 완료 보상 10코인·일일 원금 상한 100·스트릭, 미션 기여 하루 1회·달성률·성장 포인트가
 // 사람과 동일하게 적용된다(결정 A). claim 은 봇이 하지 않는다.
 @Component
 public class BotDailyActions {

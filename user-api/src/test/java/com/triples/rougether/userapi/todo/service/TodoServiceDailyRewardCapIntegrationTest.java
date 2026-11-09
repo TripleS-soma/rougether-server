@@ -24,6 +24,7 @@ import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.global.config.JpaConfig;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import com.triples.rougether.userapi.todo.dto.TodoCompleteResponse;
 import com.triples.rougether.userapi.todo.dto.TodoCreateRequest;
 import java.time.Instant;
@@ -75,7 +76,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                dailyRewardService, recorder);
+                dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         todoService = new TodoService(todoRepository, categoryRepository, userRepository,
                 userWalletRepository, completionRewardService,
                 recorder,
@@ -86,109 +87,109 @@ class TodoServiceDailyRewardCapIntegrationTest {
     }
 
     @Test
-    void 투두_5건_완료로_50코인을_소진하면_6번째는_0_지급된다() {
-        // 10코인 × 5건 = 상한 50 소진
-        for (int i = 0; i < 5; i++) {
+    void 투두_10건_완료로_100코인을_소진하면_11번째는_0_지급된다() {
+        // 10코인 × 10건 = 상한 100 소진
+        for (int i = 0; i < 10; i++) {
             Long todoId = completeNewTodo("투두 " + i);
             assertThat(todoRepository.findById(todoId).orElseThrow().getRewardAmount())
                     .isEqualTo(10);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째 투두는 0 지급
-        Long sixthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
-        TodoCompleteResponse sixthResponse = todoService.complete(userId, sixthTodoId);
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        // 11번째 투두는 0 지급
+        Long eleventhTodoId = todoService.create(userId,
+                new TodoCreateRequest("투두 11", null, null, TODAY, null, null, null)).id();
+        TodoCompleteResponse eleventhResponse = todoService.complete(userId, eleventhTodoId);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 상한_소진_완료_취소_후_재완료하면_다시_지급된다() {
-        Long[] todoIds = new Long[6];
-        for (int i = 0; i < 5; i++) {
+        Long[] todoIds = new Long[11];
+        for (int i = 0; i < 10; i++) {
             todoIds[i] = completeNewTodo("투두 " + i);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째: 0 지급
-        todoIds[5] = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
-        TodoCompleteResponse sixthResponse = todoService.complete(userId, todoIds[5]);
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
+        // 11번째: 0 지급
+        todoIds[10] = todoService.create(userId,
+                new TodoCreateRequest("투두 11", null, null, TODAY, null, null, null)).id();
+        TodoCompleteResponse eleventhResponse = todoService.complete(userId, todoIds[10]);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
 
-        // 5번째 취소 → 한도 10 복구
-        todoService.cancelComplete(userId, todoIds[4]);
-        assertThat(walletBalance()).isEqualTo(40);
+        // 10번째 취소 → 한도 10 복구
+        todoService.cancelComplete(userId, todoIds[9]);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 새 투두 완료하면 다시 지급
         Long newTodoId = todoService.create(userId,
                 new TodoCreateRequest("투두 new", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse newResponse = todoService.complete(userId, newTodoId);
         assertThat(newResponse.rewardAmount()).isEqualTo(10);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 상한_소진_후_완료는_0_지급이므로_취소해도_지갑_불변() {
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 10; i++) {
             completeNewTodo("투두 " + i);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째: 0 지급
-        Long sixthTodoId = todoService.create(userId,
-                new TodoCreateRequest("투두 6", null, null, TODAY, null, null, null)).id();
-        TodoCompleteResponse sixthResponse = todoService.complete(userId, sixthTodoId);
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
+        // 11번째: 0 지급
+        Long eleventhTodoId = todoService.create(userId,
+                new TodoCreateRequest("투두 11", null, null, TODAY, null, null, null)).id();
+        TodoCompleteResponse eleventhResponse = todoService.complete(userId, eleventhTodoId);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
 
-        // 6번째 취소: reward_amount=0이므로 지갑 불변
-        todoService.cancelComplete(userId, sixthTodoId);
-        assertThat(walletBalance()).isEqualTo(50);
+        // 11번째 취소: reward_amount=0이므로 지갑 불변
+        todoService.cancelComplete(userId, eleventhTodoId);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 지급된_완료_투두를_삭제해도_지급_한도가_복구되지_않는다() {
-        Long[] todoIds = new Long[5];
-        for (int i = 0; i < 5; i++) {
+        Long[] todoIds = new Long[10];
+        for (int i = 0; i < 10; i++) {
             todoIds[i] = completeNewTodo("투두 " + i);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
         // 지급된 완료 투두 삭제 — soft delete만 되고 코인은 회수되지 않음
-        todoService.delete(userId, todoIds[4]);
-        assertThat(walletBalance()).isEqualTo(50);
+        todoService.delete(userId, todoIds[9]);
+        assertThat(walletBalance()).isEqualTo(100);
 
         // 새 투두 완료해도 한도가 복구되지 않아 0 지급
         Long newTodoId = todoService.create(userId,
                 new TodoCreateRequest("투두 new", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse newResponse = todoService.complete(userId, newTodoId);
         assertThat(newResponse.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 남은_한도가_정가보다_적으면_남은_만큼만_부분_지급된다() {
-        // 45코인 소진 상태 — 10×4건 + 정책 변경 전 5코인으로 기록된 이력 1건
-        for (int i = 0; i < 4; i++) {
+        // 95코인 소진 상태 — 10×9건 + 정책 변경 전 5코인으로 기록된 이력 1건
+        for (int i = 0; i < 9; i++) {
             completeNewTodo("투두 " + i);
         }
         persistLegacyCompletedTodoRewardedWith(5);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 잔여 5 < 정가 10 → 5만 지급
         Long partialTodoId = todoService.create(userId,
                 new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null, null, null)).id();
         TodoCompleteResponse partial = todoService.complete(userId, partialTodoId);
         assertThat(partial.rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
         List<WalletHistory> histories = walletHistoryRepository.findHistories(
                 userId, null, null, PageRequest.of(0, 100)).getContent();
-        assertThat(histories).hasSize(5);
+        assertThat(histories).hasSize(10);
         assertThat(histories).filteredOn(history -> partialTodoId.equals(history.getSourceId()))
                 .singleElement().satisfies(history -> {
                     assertThat(history.getAmount()).isEqualTo(5);
-                    assertThat(history.getBalanceAfter()).isEqualTo(45);
+                    assertThat(history.getBalanceAfter()).isEqualTo(95);
                     assertThat(history.getReason()).isEqualTo(WalletHistoryReason.TODO_COMPLETE);
                     assertThat(history.getCurrencyType()).isEqualTo(CurrencyType.COIN);
                     assertThat(history.getSourceType()).isEqualTo(WalletHistory.SOURCE_TODO);
@@ -199,7 +200,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
         Long nextTodoId = todoService.create(userId,
                 new TodoCreateRequest("다음 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, nextTodoId).rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
         assertThat(walletHistoryRepository.findHistories(
                 userId, null, null, PageRequest.of(0, 100)).getContent())
                 .containsExactlyElementsOf(histories)
@@ -208,7 +209,7 @@ class TodoServiceDailyRewardCapIntegrationTest {
 
     @Test
     void 부분_지급_건을_취소하면_지급액만큼만_환불되고_한도도_그만큼만_복구된다() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 9; i++) {
             completeNewTodo("투두 " + i);
         }
         persistLegacyCompletedTodoRewardedWith(5);
@@ -216,17 +217,17 @@ class TodoServiceDailyRewardCapIntegrationTest {
         Long partialTodoId = todoService.create(userId,
                 new TodoCreateRequest("부분 지급 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, partialTodoId).rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
 
         // 취소: 정가 10이 아니라 실지급 5만 회수
         todoService.cancelComplete(userId, partialTodoId);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 복구된 한도도 5뿐이므로 다음 완료 역시 5만 지급
         Long nextTodoId = todoService.create(userId,
                 new TodoCreateRequest("다음 투두", null, null, TODAY, null, null, null)).id();
         assertThat(todoService.complete(userId, nextTodoId).rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
     }
 
     @Test
@@ -236,11 +237,11 @@ class TodoServiceDailyRewardCapIntegrationTest {
         assertThat(todoService.complete(userId, pastTodoId).rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(0);
 
-        // 과거 마감 완료가 한도를 깎지 않았으므로 오늘 5건 모두 정가 지급
-        for (int i = 0; i < 5; i++) {
+        // 과거 마감 완료가 한도를 깎지 않았으므로 오늘 10건 모두 정가 지급
+        for (int i = 0; i < 10; i++) {
             completeNewTodo("투두 " + i);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     private Long completeNewTodo(String title) {

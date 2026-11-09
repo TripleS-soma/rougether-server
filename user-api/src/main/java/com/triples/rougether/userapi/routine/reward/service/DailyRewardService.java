@@ -4,7 +4,6 @@ import com.triples.rougether.domain.routine.entity.RoutineLogStatus;
 import com.triples.rougether.domain.routine.entity.TodoStatus;
 import com.triples.rougether.domain.routine.repository.RoutineLogRepository;
 import com.triples.rougether.domain.routine.repository.TodoRepository;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -15,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DailyRewardService {
 
-    private static final int DAILY_REWARD_COIN_CAP = 50;
+    private static final int DAILY_REWARD_COIN_CAP = 100;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RoutineLogRepository routineLogRepository;
@@ -29,7 +28,7 @@ public class DailyRewardService {
 
     public int remainingReward(Long userId, LocalDate today) {
         int routineReward = routineLogRepository
-                .sumRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
+                .sumBaseRewardAmountByRoutine_UserIdAndRoutineDateAndStatus(
                         userId, today, RoutineLogStatus.COMPLETED);
 
         int todoReward = sumTodayTodoReward(userId, today);
@@ -41,7 +40,7 @@ public class DailyRewardService {
         ZonedDateTime startOfDay = today.atStartOfDay(KST);
         ZonedDateTime endOfDay = today.plusDays(1).atStartOfDay(KST);
 
-        return todoRepository.sumRewardAmountByUserIdAndCompletedAtInKstDay(
+        return todoRepository.sumBaseRewardAmountByUserIdAndCompletedAtInKstDay(
                 userId, startOfDay.toInstant(), endOfDay.toInstant(), TodoStatus.COMPLETED);
     }
 }

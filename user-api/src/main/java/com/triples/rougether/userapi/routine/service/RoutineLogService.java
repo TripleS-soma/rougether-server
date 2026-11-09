@@ -70,7 +70,8 @@ public class RoutineLogService {
         roomGrowthService.lockUser(userId);
         UserWallet wallet = findWalletForUpdate(userId);
 
-        LocalDate today = LocalDate.now(KST);
+        var completionTime = completionRewardService.completionTime();
+        LocalDate today = completionTime.today();
         LocalDate routineDate = request.routineDate() != null ? request.routineDate() : today;
         Routine routine = findActionableRoutine(userId, routineId, routineDate, today);
         // 과거 완료는 허용, 미래만 거부. 단 코인·스트릭은 당일 완료에만 반응함
@@ -87,7 +88,7 @@ public class RoutineLogService {
 
         RoutineLog failedLog = findFailedLogInLineage(routine, routineDate);
         if (failedLog != null) {
-            failedLog.completeFromFailed(Instant.now(), REWARD_CURRENCY);
+            failedLog.completeFromFailed(completionTime.completedAt(), REWARD_CURRENCY);
             Streak currentStreak = streakRepository.findByUserId(userId).orElse(null);
             return RoutineLogResponse.from(failedLog, currentStreak,
                     contributeLinkedMission(userId, routine, isToday), today);
@@ -105,15 +106,15 @@ public class RoutineLogService {
 
         // 과거 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
         // 당일 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
-        int reward = completionRewardService.calculateAmount(userId, routineDate, today);
+        var reward = completionRewardService.calculateReward(userId, routineDate, today);
 
         RoutineLog log = routineLogRepository.save(RoutineLog.complete(
-                routine, routineDate, Instant.now(), REWARD_CURRENCY, reward));
+                routine, routineDate, completionTime.completedAt(), REWARD_CURRENCY, reward.totalAmount(), reward.baseAmount()));
 
-        if (reward > 0) {
-            completionRewardService.grantRoutineReward(wallet, reward, log.getId());
-            roomGrowthService.award(userId, reward);
-            log.recordGrowthReward(reward);
+        if (reward.totalAmount() > 0) {
+            completionRewardService.grantRoutineReward(wallet, reward.totalAmount(), log.getId());
+            roomGrowthService.award(userId, reward.baseAmount());
+            log.recordGrowthReward(reward.baseAmount());
         }
 
         Streak streak = isToday

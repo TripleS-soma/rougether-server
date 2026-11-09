@@ -30,6 +30,7 @@ import com.triples.rougether.userapi.routine.dto.RoutineLogCreateRequest;
 import com.triples.rougether.userapi.routine.dto.RoutineLogResponse;
 import com.triples.rougether.userapi.routine.reward.service.DailyRewardService;
 import com.triples.rougether.userapi.routine.reward.service.CompletionRewardService;
+import com.triples.rougether.userapi.routine.reward.service.ChristmasFurnitureBonusService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -85,7 +86,7 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
                 todoRepository);
         WalletHistoryRecorder recorder = new WalletHistoryRecorder(walletHistoryRepository);
         CompletionRewardService completionRewardService = new CompletionRewardService(
-                dailyRewardService, recorder);
+                dailyRewardService, recorder, org.mockito.Mockito.mock(ChristmasFurnitureBonusService.class), java.time.Clock.systemUTC());
         routineLogService = new RoutineLogService(routineRepository, routineLogRepository,
                 userWalletRepository, streakRepository, completionRewardService,
                 new TransactionTemplate(transactionManager),
@@ -98,95 +99,95 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
     }
 
     @Test
-    void 루틴_5건_완료로_50코인을_소진하면_6번째는_0_지급된다() {
-        // 10코인 × 5건 = 상한 50 소진
-        for (int i = 0; i < 5; i++) {
+    void 루틴_10건_완료로_100코인을_소진하면_11번째는_0_지급된다() {
+        // 10코인 × 10건 = 상한 100 소진
+        for (int i = 0; i < 10; i++) {
             Long routineId = persistRoutine(userId);
             RoutineLogResponse response = routineLogService.complete(userId, routineId,
                     new RoutineLogCreateRequest(null));
             assertThat(response.rewardAmount()).isEqualTo(10);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째 루틴은 0 지급
-        Long sixthRoutine = persistRoutine(userId);
-        RoutineLogResponse sixthResponse = routineLogService.complete(userId, sixthRoutine,
+        // 11번째 루틴은 0 지급
+        Long eleventhRoutine = persistRoutine(userId);
+        RoutineLogResponse eleventhResponse = routineLogService.complete(userId, eleventhRoutine,
                 new RoutineLogCreateRequest(null));
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 상한_소진_완료_취소_후_재완료하면_다시_지급된다() {
-        // 50코인 소진
-        Long[] routines = new Long[6];
-        for (int i = 0; i < 5; i++) {
+        // 100코인 소진
+        Long[] routines = new Long[11];
+        for (int i = 0; i < 10; i++) {
             routines[i] = persistRoutine(userId);
             routineLogService.complete(userId, routines[i], new RoutineLogCreateRequest(null));
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째: 0 지급
-        routines[5] = persistRoutine(userId);
-        RoutineLogResponse sixthResponse = routineLogService.complete(userId, routines[5],
+        // 11번째: 0 지급
+        routines[10] = persistRoutine(userId);
+        RoutineLogResponse eleventhResponse = routineLogService.complete(userId, routines[10],
                 new RoutineLogCreateRequest(null));
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
 
-        // 5번째 취소 → 한도 10 복구
-        routineLogService.cancel(userId, routines[4], TODAY);
-        assertThat(walletBalance()).isEqualTo(40);
+        // 10번째 취소 → 한도 10 복구
+        routineLogService.cancel(userId, routines[9], TODAY);
+        assertThat(walletBalance()).isEqualTo(90);
 
-        // 6번째를 다시 완료하려면 재완료 guard 때문에 안 됨. 대신 다른 루틴으로 테스트
-        Long seventhRoutine = persistRoutine(userId);
-        RoutineLogResponse seventhResponse = routineLogService.complete(userId, seventhRoutine,
+        // 11번째를 다시 완료하려면 재완료 guard 때문에 안 됨. 대신 다른 루틴으로 테스트
+        Long twelfthRoutine = persistRoutine(userId);
+        RoutineLogResponse twelfthResponse = routineLogService.complete(userId, twelfthRoutine,
                 new RoutineLogCreateRequest(null));
-        assertThat(seventhResponse.rewardAmount()).isEqualTo(10);
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(twelfthResponse.rewardAmount()).isEqualTo(10);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 상한_소진_후_완료는_0_지급이므로_취소해도_지갑_불변() {
-        // 50코인 소진
-        for (int i = 0; i < 5; i++) {
+        // 100코인 소진
+        for (int i = 0; i < 10; i++) {
             Long routineId = persistRoutine(userId);
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
 
-        // 6번째: 0 지급
-        Long sixthRoutine = persistRoutine(userId);
-        RoutineLogResponse sixthResponse = routineLogService.complete(userId, sixthRoutine,
+        // 11번째: 0 지급
+        Long eleventhRoutine = persistRoutine(userId);
+        RoutineLogResponse eleventhResponse = routineLogService.complete(userId, eleventhRoutine,
                 new RoutineLogCreateRequest(null));
-        assertThat(sixthResponse.rewardAmount()).isEqualTo(0);
+        assertThat(eleventhResponse.rewardAmount()).isEqualTo(0);
 
-        // 6번째 취소: reward_amount=0이므로 지갑 불변
-        routineLogService.cancel(userId, sixthRoutine, TODAY);
-        assertThat(walletBalance()).isEqualTo(50);
+        // 11번째 취소: reward_amount=0이므로 지갑 불변
+        routineLogService.cancel(userId, eleventhRoutine, TODAY);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     @Test
     void 남은_한도가_정가보다_적으면_남은_만큼만_부분_지급된다() {
-        // 45코인 소진 상태를 만듦 — 10×4건 + 정책 변경 전 5코인으로 기록된 이력 1건
-        for (int i = 0; i < 4; i++) {
+        // 95코인 소진 상태를 만듦 — 10×9건 + 정책 변경 전 5코인으로 기록된 이력 1건
+        for (int i = 0; i < 9; i++) {
             Long routineId = persistRoutine(userId);
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
         persistLegacyRoutineLogRewardedWith(5);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 잔여 5 < 정가 10 → 5만 지급
         Long partialRoutine = persistRoutine(userId);
         RoutineLogResponse partial = routineLogService.complete(userId, partialRoutine,
                 new RoutineLogCreateRequest(null));
         assertThat(partial.rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
         List<WalletHistory> histories = walletHistoryRepository.findHistories(
                 userId, null, null, PageRequest.of(0, 100)).getContent();
-        assertThat(histories).hasSize(5);
+        assertThat(histories).hasSize(10);
         assertThat(histories).filteredOn(history -> partial.id().equals(history.getSourceId()))
                 .singleElement().satisfies(history -> {
                     assertThat(history.getAmount()).isEqualTo(5);
-                    assertThat(history.getBalanceAfter()).isEqualTo(45);
+                    assertThat(history.getBalanceAfter()).isEqualTo(95);
                     assertThat(history.getReason()).isEqualTo(WalletHistoryReason.ROUTINE_COMPLETE);
                     assertThat(history.getCurrencyType()).isEqualTo(CurrencyType.COIN);
                     assertThat(history.getSourceType()).isEqualTo(WalletHistory.SOURCE_ROUTINE_LOG);
@@ -198,7 +199,7 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
         RoutineLogResponse next = routineLogService.complete(userId, nextRoutine,
                 new RoutineLogCreateRequest(null));
         assertThat(next.rewardAmount()).isEqualTo(0);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
         assertThat(walletHistoryRepository.findHistories(
                 userId, null, null, PageRequest.of(0, 100)).getContent())
                 .containsExactlyElementsOf(histories)
@@ -207,7 +208,7 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
 
     @Test
     void 부분_지급_건을_취소하면_지급액만큼만_환불되고_한도도_그만큼만_복구된다() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 9; i++) {
             Long routineId = persistRoutine(userId);
             routineLogService.complete(userId, routineId, new RoutineLogCreateRequest(null));
         }
@@ -216,18 +217,18 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
         Long partialRoutine = persistRoutine(userId);
         assertThat(routineLogService.complete(userId, partialRoutine,
                 new RoutineLogCreateRequest(null)).rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
 
         // 취소: 정가 10이 아니라 실지급 5만 회수
         routineLogService.cancel(userId, partialRoutine, TODAY);
-        assertThat(walletBalance()).isEqualTo(40);
+        assertThat(walletBalance()).isEqualTo(90);
 
         // 복구된 한도도 5뿐이므로 다음 완료 역시 5만 지급
         Long nextRoutine = persistRoutine(userId);
         RoutineLogResponse next = routineLogService.complete(userId, nextRoutine,
                 new RoutineLogCreateRequest(null));
         assertThat(next.rewardAmount()).isEqualTo(5);
-        assertThat(walletBalance()).isEqualTo(45);
+        assertThat(walletBalance()).isEqualTo(95);
     }
 
     @Test
@@ -238,13 +239,13 @@ class RoutineLogServiceDailyRewardCapIntegrationTest {
         assertThat(past.rewardAmount()).isEqualTo(0);
         assertThat(walletBalance()).isEqualTo(0);
 
-        // 과거 완료가 한도를 깎지 않았으므로 오늘 5건 모두 정가 지급
-        for (int i = 0; i < 5; i++) {
+        // 과거 완료가 한도를 깎지 않았으므로 오늘 10건 모두 정가 지급
+        for (int i = 0; i < 10; i++) {
             Long routineId = persistRoutine(userId);
             assertThat(routineLogService.complete(userId, routineId,
                     new RoutineLogCreateRequest(null)).rewardAmount()).isEqualTo(10);
         }
-        assertThat(walletBalance()).isEqualTo(50);
+        assertThat(walletBalance()).isEqualTo(100);
     }
 
     // 지급액이 10의 배수가 아닌 이력(정책 변경 전 5코인 투두 등)을 흉내내 부분 지급 경계를 만듦.

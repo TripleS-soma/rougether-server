@@ -137,7 +137,8 @@ public class TodoService {
             throw new BusinessException(TodoErrorCode.TODO_ALREADY_COMPLETED);
         }
 
-        LocalDate today = LocalDate.now(KST);
+        var completionTime = completionRewardService.completionTime();
+        LocalDate today = completionTime.today();
         LocalDate dueDate = todo.getDueDate();
         // 마감일이 미래인 투두는 완료 불가. dueDate null은 없는 전제이나 방어적으로 미래 아님으로 취급함
         if (dueDate != null && dueDate.isAfter(today)) {
@@ -145,15 +146,15 @@ public class TodoService {
         }
         // 과거 마감(또는 null) 완료는 reward_amount=0으로 기록해 취소 시 환불도 0이 되게 함.
         // 당일 마감 완료는 남은 일일 한도까지만 — 잔여가 정가보다 적으면 그만큼만 부분 지급함
-        int reward = completionRewardService.calculateAmount(userId, dueDate, today);
+        var reward = completionRewardService.calculateReward(userId, dueDate, today);
 
-        todo.complete(REWARD_CURRENCY, reward, Instant.now());
+        todo.complete(REWARD_CURRENCY, reward.totalAmount(), reward.baseAmount(), completionTime.completedAt());
 
-        if (reward > 0) {
-            completionRewardService.grantTodoReward(wallet, reward, todo.getId());
+        if (reward.totalAmount() > 0) {
+            completionRewardService.grantTodoReward(wallet, reward.totalAmount(), todo.getId());
             // 방 생성 보장의 중간 flush 전에 완료·성장 보상을 함께 기록함. 지급 실패 시 같은 트랜잭션에서 롤백됨.
-            todo.recordGrowthReward(reward);
-            roomGrowthService.award(userId, reward);
+            todo.recordGrowthReward(reward.baseAmount());
+            roomGrowthService.award(userId, reward.baseAmount());
         }
 
         return TodoCompleteResponse.from(todo);

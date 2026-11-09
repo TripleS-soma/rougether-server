@@ -108,6 +108,69 @@ class RoomGrowthBackfillIntegrationTest {
     }
 
     @Test
+    void 크리스마스_추가코인은_제외하고_루틴과_투두의_원금만_소급한다() throws Exception {
+        User user = user();
+        RoutineLog log = logs.save(RoutineLog.complete(routine(user), today, Instant.now(),
+                CurrencyType.COIN, 13, 10));
+        Todo todo = Todo.create(user, null, "보너스 포함 완료", null, today, null);
+        todo.complete(CurrencyType.COIN, 13, 10, Instant.now());
+        todo = todos.save(todo);
+
+        migrate();
+        migrate();
+
+        assertRoom(user, 20, 1);
+        assertThat(jdbc.queryForMap("SELECT reward_amount,base_reward_amount,growth_reward_amount FROM routine_logs WHERE id=?", log.getId()))
+                .containsEntry("reward_amount", 13).containsEntry("base_reward_amount", 10).containsEntry("growth_reward_amount", 10);
+        assertThat(jdbc.queryForMap("SELECT reward_amount,base_reward_amount,growth_reward_amount FROM todos WHERE id=?", todo.getId()))
+                .containsEntry("reward_amount", 13).containsEntry("base_reward_amount", 10).containsEntry("growth_reward_amount", 10);
+        assertThat(balance(user)).isEqualTo(7);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM wallet_histories WHERE user_id=?", Integer.class, user.getId())).isZero();
+    }
+
+    @Test
+    void 원금_성장이_이미_적립됐으면_남은_보너스_코인을_성장으로_추가하지_않는다() throws Exception {
+        User user = user();
+        RoutineLog log = logs.save(RoutineLog.complete(routine(user), today, Instant.now(),
+                CurrencyType.COIN, 13, 10));
+        Todo todo = Todo.create(user, null, "원금 성장 적립 완료", null, today, null);
+        todo.complete(CurrencyType.COIN, 13, 10, Instant.now());
+        todo = todos.save(todo);
+        jdbc.update("UPDATE routine_logs SET growth_reward_amount=10 WHERE id=?", log.getId());
+        jdbc.update("UPDATE todos SET growth_reward_amount=10 WHERE id=?", todo.getId());
+        jdbc.update("""
+                INSERT INTO personal_rooms (user_id,growth_level,growth_points,highest_growth_level,
+                                            layout_format,layout_revision,updated_at)
+                VALUES (?,1,20,1,'SLOT_V1',0,CURRENT_TIMESTAMP)
+                """, user.getId());
+
+        migrate();
+        migrate();
+
+        assertRoom(user, 20, 1);
+        assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM routine_logs WHERE id=?", Integer.class, log.getId())).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM todos WHERE id=?", Integer.class, todo.getId())).isEqualTo(10);
+    }
+
+    @Test
+    void 구버전이_원금_NULL로_저장한_루틴과_투두는_실지급액을_성장_원금으로_사용한다() throws Exception {
+        User user = user();
+        RoutineLog log = legacyRoutine(routine(user), 10);
+        Todo todo = legacyTodo(user, 10);
+        jdbc.update("UPDATE routine_logs SET base_reward_amount=NULL WHERE id=?", log.getId());
+        jdbc.update("UPDATE todos SET base_reward_amount=NULL WHERE id=?", todo.getId());
+
+        migrate();
+        migrate();
+
+        assertRoom(user, 20, 1);
+        assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM routine_logs WHERE id=?", Integer.class, log.getId())).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT growth_reward_amount FROM todos WHERE id=?", Integer.class, todo.getId())).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT base_reward_amount FROM routine_logs WHERE id=?", Integer.class, log.getId())).isNull();
+        assertThat(jdbc.queryForObject("SELECT base_reward_amount FROM todos WHERE id=?", Integer.class, todo.getId())).isNull();
+    }
+
+    @Test
     void 미완료_보상0_다른통화_봇_탈퇴사용자는_적립하지_않는다() throws Exception {
         User user = user();
         Routine routine = routine(user);

@@ -4,7 +4,10 @@ import com.triples.rougether.domain.member.entity.UserWallet;
 import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.shared.WalletHistoryReason;
 import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,12 +23,27 @@ public class CompletionRewardService {
 
     private final DailyRewardService dailyRewardService;
     private final WalletHistoryRecorder walletHistoryRecorder;
+    private final ChristmasFurnitureBonusService christmasFurnitureBonusService;
+    private final Clock clock;
 
-    // 사용자·코인 지갑 잠금 뒤, 이번 완료의 지급액이 합계에 포함되기 전에 계산함.
-    public int calculateAmount(Long userId, LocalDate targetDate, LocalDate today) {
-        return today.equals(targetDate)
-                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today))
-                : 0;
+    // 잠금 뒤 한 번 캡처한 시각에서 오늘과 completedAt을 함께 만들어 자정 경합을 피함.
+    public CompletionTime completionTime() {
+        Instant now = clock.instant();
+        return new CompletionTime(now, LocalDate.ofInstant(now, ZoneId.of("Asia/Seoul")));
+    }
+
+    // 사용자·코인 지갑 잠금 뒤, 이번 완료가 합계에 포함되기 전에 계산함.
+    public CompletionReward calculateReward(Long userId, LocalDate targetDate, LocalDate today) {
+        int baseAmount = today.equals(targetDate)
+                ? Math.min(REWARD_AMOUNT, dailyRewardService.remainingReward(userId, today)) : 0;
+        int bonus = christmasFurnitureBonusService.bonusCoins(userId, today, baseAmount);
+        return new CompletionReward(baseAmount, Math.addExact(baseAmount, bonus));
+    }
+
+    public record CompletionReward(int baseAmount, int totalAmount) {
+    }
+
+    public record CompletionTime(Instant completedAt, LocalDate today) {
     }
 
     // 호출자가 이미 잠근 코인 지갑과 저장한 완료 로그 ID를 사용함.

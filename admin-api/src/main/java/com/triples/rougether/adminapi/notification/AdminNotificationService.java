@@ -34,6 +34,15 @@ public class AdminNotificationService {
     private final ApplicationEventPublisher eventPublisher;
 
     public void send(Long userId, NotificationType type, String title, String body, Long refId) {
+        saveAndPublish(userId, type, title, body, refId, true);
+    }
+
+    public Long sendNotice(Long userId, String title, String body, boolean pushEnabled) {
+        return saveAndPublish(userId, NotificationType.ADMIN_NOTICE, title, body, null, pushEnabled);
+    }
+
+    private Long saveAndPublish(Long userId, NotificationType type, String title, String body, Long refId,
+                                boolean pushEnabled) {
         User user = userRepository.getReferenceById(userId);
         if (type == NotificationType.BUG_REPORT_REPLY && "en".equals(user.getLanguage())) {
             title = "You have a reply to your report";
@@ -41,8 +50,13 @@ public class AdminNotificationService {
         Notification notification = notificationRepository.save(
                 Notification.create(user, type, title, body, refId));
 
-        eventPublisher.publishEvent(new AdminNotificationCreatedEvent(
-                notification.getId(), userId, type, title, body));
+        if (pushEnabled) {
+            eventPublisher.publishEvent(new AdminNotificationCreatedEvent(
+                    notification.getId(), userId, type, title, body));
+        } else {
+            notification.markPushNotRequested();
+        }
+        return notification.getId();
     }
 
     // 커밋 이후에만 실행. 예외를 되던지면 이미 끝난 커밋 처리 경로를 타고 원래 요청까지 실패로
