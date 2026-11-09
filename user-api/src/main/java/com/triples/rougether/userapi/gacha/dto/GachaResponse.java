@@ -34,6 +34,10 @@ public record GachaResponse(
         boolean active) {
 
     public static GachaResponse of(Gacha gacha, String giftBoxAssetKey) {
+        return of(gacha, giftBoxAssetKey, gacha.isActive());
+    }
+
+    public static GachaResponse of(Gacha gacha, String giftBoxAssetKey, boolean effectiveActive) {
         return new GachaResponse(
                 gacha.getId(),
                 gacha.getCode(),
@@ -44,6 +48,6 @@ public record GachaResponse(
                 gacha.getCostCurrencyType(),
                 gacha.getCostAmount(),
                 gacha.getDrawCount(),
-                gacha.isActive());
+                effectiveActive);
     }
 }

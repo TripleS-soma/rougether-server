@@ -42,6 +42,7 @@ jobs:
         if: matrix.group == 'other-modules'
         run: |
           python3 -m unittest discover -s .github/scripts/tests -v
+          python3 -m unittest discover -s deploy/scripts/tests -v
           bash -n deploy/scripts/bootstrap-blue-green-router.sh
           bash deploy/scripts/test-bootstrap-blue-green-router.sh
           bash .github/scripts/test-deploy-ec2-with-rollback.sh

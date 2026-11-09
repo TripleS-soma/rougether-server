@@ -3,6 +3,8 @@ package com.triples.rougether.domain.attendance.entity;
 import com.triples.rougether.domain.shop.entity.Item;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -40,6 +42,16 @@ public class AttendanceEvent {
 
     @Column(name = "target_days", nullable = false)
     private int targetDays;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AttendanceMode mode = AttendanceMode.STREAK;
+
+    @Column(name = "milestone_every", nullable = false)
+    private int milestoneEvery;
+
+    @Column(name = "milestone_coin_amount", nullable = false)
+    private int milestoneCoinAmount;
 
     @Column(name = "daily_coin_amount", nullable = false)
     private int dailyCoinAmount;
@@ -94,7 +106,30 @@ public class AttendanceEvent {
         return event;
     }
 
+    public static AttendanceEvent createCumulativeCoins(String code, String title, LocalDate startsOn,
+            LocalDate endsOn, int targetDays, int dailyCoinAmount, int milestoneEvery,
+            int milestoneCoinAmount) {
+        if (targetDays < 2 || targetDays > 365 || dailyCoinAmount < 0 || milestoneEvery < 1
+                || milestoneEvery > targetDays || milestoneCoinAmount < 0
+                || endsOn.isBefore(startsOn.plusDays(targetDays - 1L))) {
+            throw new IllegalArgumentException("누적 출석 보상과 기간 설정이 올바르지 않습니다.");
+        }
+        AttendanceEvent event = create(code, title, startsOn, endsOn, targetDays,
+                dailyCoinAmount, targetDays, dailyCoinAmount, null);
+        event.mode = AttendanceMode.CUMULATIVE;
+        event.milestoneEvery = milestoneEvery;
+        event.milestoneCoinAmount = milestoneCoinAmount;
+        return event;
+    }
+
+    public boolean isActiveOn(LocalDate date) {
+        return active && !date.isBefore(startsOn) && !date.isAfter(endsOn);
+    }
+
     public int coinRewardFor(int streakDay) {
+        if (mode == AttendanceMode.CUMULATIVE && milestoneEvery > 0 && streakDay % milestoneEvery == 0) {
+            return milestoneCoinAmount;
+        }
         return streakDay == bonusDay ? bonusCoinAmount : dailyCoinAmount;
     }
 }

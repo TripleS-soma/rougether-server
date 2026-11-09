@@ -11,6 +11,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, Long> {
 
+    // 전용 출석 보상을 일반 이벤트 후보에 섞지 않음. limited는 획득 경로 식별자로 사용하지 않음.
+    @Query("select distinct e.rewardItem.id from AttendanceEvent e where e.rewardItem is not null")
+    List<Long> findAttendanceRewardItemIds();
+
     // 비활성 엔트리도 포함해 재적재가 운영자가 회수한 보상을 되살리지 않도록 확인함.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -26,7 +30,7 @@ public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, 
             select entry
             from GachaPoolEntry entry
             left join fetch entry.item item
-            left join item.theme theme
+            left join fetch item.theme theme
             left join fetch entry.character character
             where entry.gacha.id = :gachaId
               and entry.active = true
@@ -42,7 +46,7 @@ public interface GachaPoolEntryRepository extends JpaRepository<GachaPoolEntry, 
             select entry
             from GachaPoolEntry entry
             left join fetch entry.item item
-            left join item.theme theme
+            left join fetch item.theme theme
             left join fetch entry.character character
             where entry.gacha.id = :gachaId
               and entry.active = true

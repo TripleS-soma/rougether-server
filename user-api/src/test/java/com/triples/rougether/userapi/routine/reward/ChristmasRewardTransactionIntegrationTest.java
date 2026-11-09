@@ -97,7 +97,7 @@ class ChristmasRewardTransactionIntegrationTest {
         when(furniture.countSlotLayoutFurnitureKinds(anyLong(), anyString(), any())).thenReturn(3L);
         var recorder = new WalletHistoryRecorder(histories);
         var rewards = new CompletionRewardService(new DailyRewardService(logs, todos), recorder,
-                new ChristmasFurnitureBonusService(furniture, true), CLOCK);
+                new ChristmasFurnitureBonusService(furniture, true, true), CLOCK);
         growth = spy(new RoomGrowthService(rooms, users));
         routineService = new RoutineLogService(routines, logs, wallets, streaks, rewards,
                 transactions, mock(HouseMissionService.class), recorder, growth);

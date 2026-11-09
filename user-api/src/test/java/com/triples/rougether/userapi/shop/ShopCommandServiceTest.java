@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.triples.rougether.common.error.BusinessException;
@@ -16,6 +17,7 @@ import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
 import com.triples.rougether.domain.shared.CurrencyType;
 import com.triples.rougether.domain.shop.entity.Item;
+import com.triples.rougether.domain.shop.entity.Theme;
 import com.triples.rougether.domain.shop.entity.UserItem;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
@@ -26,6 +28,8 @@ import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -142,6 +146,22 @@ class ShopCommandServiceTest {
                         .isEqualTo(ShopErrorCode.ITEM_NOT_PURCHASABLE));
         verify(userWalletRepository, never()).findWithLockByUserIdAndCurrencyType(any(), any());
         verify(userItemRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"furniture,positioned", "wallpaper,surface_slot", "floor,surface_slot"})
+    void 크리스마스_에셋은_활성과_가격이_설정돼도_직접_구매할_수_없다(String category, String placementType) {
+        Theme theme = new Theme("snowy_christmas_202611", "크리스마스", null, true);
+        Item item = new Item(theme, category, placementType, null, null, "이벤트 에셋",
+                CurrencyType.DIAMOND, 400, "items/christmas/test.png", true, true);
+        when(itemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> shopCommandService.purchase(1L, 100L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(ShopErrorCode.ITEM_NOT_PURCHASABLE));
+
+        verifyNoInteractions(userItemRepository, userWalletRepository, userRepository, walletHistoryRecorder);
     }
 
     @Test

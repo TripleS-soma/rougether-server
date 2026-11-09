@@ -194,5 +194,7 @@ market:
 
 # 모든 API 인스턴스의 원금 분리 배포를 확인한 뒤 이벤트 오픈 시에만 켬.
 christmas:
+  event:
+    enabled: ${CHRISTMAS_EVENT_ENABLED:false}
   coin-bonus:
     enabled: ${CHRISTMAS_COIN_BONUS_ENABLED:false}

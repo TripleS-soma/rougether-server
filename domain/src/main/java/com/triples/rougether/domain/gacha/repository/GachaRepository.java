@@ -16,6 +16,8 @@ public interface GachaRepository extends JpaRepository<Gacha, Long> {
     @Query("select g from Gacha g")
     List<Gacha> findAllWithTheme();
 
+    Optional<Gacha> findByCode(String code);
+
     List<Gacha> findByThemeIdAndActiveIsTrue(Long themeId);
 
     // 미리 생성한 전역 카테고리 머신을 잠가 서로 다른 테마의 풀 등록도 직렬화함.

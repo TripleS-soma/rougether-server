@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.shop.service;
 
 import com.triples.rougether.domain.shop.entity.Item;
+import com.triples.rougether.domain.shop.policy.EventItemEligibility;
 import com.triples.rougether.domain.shop.repository.ItemRepository;
 import com.triples.rougether.domain.shop.repository.UserItemRepository;
 import com.triples.rougether.userapi.shop.dto.ItemListResponse;
@@ -36,6 +37,7 @@ public class ShopQueryService {
                 .collect(Collectors.toSet());
 
         List<ItemResponse> responses = items.stream()
+                .filter(item -> !EventItemEligibility.isChristmas(item))
                 .map(item -> ItemResponse.of(item, ownedItemIds.contains(item.getId())))
                 .toList();
 

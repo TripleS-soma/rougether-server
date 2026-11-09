@@ -10,14 +10,15 @@ import org.junit.jupiter.api.Test;
 
 class ChristmasFurnitureBonusServiceTest {
     private final RoomFurnitureBonusRepository rooms = mock(RoomFurnitureBonusRepository.class);
-    private final ChristmasFurnitureBonusService bonus = new ChristmasFurnitureBonusService(rooms, true);
+    private final ChristmasFurnitureBonusService bonus = new ChristmasFurnitureBonusService(rooms, true, true);
 
     @Test
     void 플래그가_꺼졌거나_원금이_없거나_기간밖이면_배치를_조회하지_않는다() {
-        assertThat(new ChristmasFurnitureBonusService(rooms, false).bonusCoins(1L, LocalDate.of(2026, 11, 9), 10)).isZero();
+        assertThat(new ChristmasFurnitureBonusService(rooms, false, true).bonusCoins(1L, LocalDate.of(2026, 11, 9), 10)).isZero();
         assertThat(bonus.bonusCoins(1L, LocalDate.of(2026, 11, 9), 0)).isZero();
         assertThat(bonus.bonusCoins(1L, LocalDate.of(2026, 11, 8), 10)).isZero();
         assertThat(bonus.bonusCoins(1L, LocalDate.of(2026, 12, 26), 10)).isZero();
+        assertThat(new ChristmasFurnitureBonusService(rooms, true, false).bonusCoins(1L, LocalDate.of(2026, 11, 9), 10)).isZero();
         verifyNoInteractions(rooms);
     }
 

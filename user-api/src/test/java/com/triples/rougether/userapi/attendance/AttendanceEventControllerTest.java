@@ -67,6 +67,17 @@ class AttendanceEventControllerTest {
                 .andExpect(jsonPath("$.rewardGrantedNow").value(false));
     }
 
+    @Test
+    void ID별_이벤트_조회와_체크인은_인증된계정으로_서비스를호출한다() throws Exception {
+        when(attendanceEventService.getStatus(1L, 42L)).thenReturn(statusResponse());
+        when(attendanceEventService.checkIn(1L, 42L))
+                .thenReturn(new AttendanceCheckInResponse(true, 30, 190, false, statusResponse()));
+        mockMvc.perform(get("/api/v1/events/attendance/42")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("STREAK"));
+        mockMvc.perform(post("/api/v1/events/attendance/42/check-ins")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.coinRewardAmount").value(30));
+    }
+
     private AttendanceEventStatusResponse statusResponse() {
         return new AttendanceEventStatusResponse(
                 7L, "ATTENDANCE_10D_2026", "10일 연속 출석",

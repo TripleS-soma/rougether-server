@@ -230,6 +230,10 @@ class GachaServiceTest {
         when(g.isAvailableAt(any(Instant.class))).thenReturn(false);
         when(gachaRepository.findById(10L)).thenReturn(Optional.of(g));
 
+        // RR 스냅샷이 잠금 이후 만들어지도록 머신 조회보다 사용자·지갑을 먼저 잠근다.
+        when(walletRepository.findWithLockByUserIdAndCurrencyType(1L, CurrencyType.COIN))
+                .thenReturn(Optional.of(mock(UserWallet.class)));
+
         assertThatThrownBy(() -> gachaService.draw(1L, 10L, new GachaDrawRequest(1)))
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode()).isEqualTo(GachaErrorCode.GACHA_INACTIVE));
     }

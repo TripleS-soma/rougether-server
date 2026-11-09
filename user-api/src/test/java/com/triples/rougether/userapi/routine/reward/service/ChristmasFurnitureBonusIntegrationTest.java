@@ -67,7 +67,7 @@ class ChristmasFurnitureBonusIntegrationTest {
     private void configure(boolean enabled, Instant time) {
         var recorder = new WalletHistoryRecorder(histories);
         rewards = new CompletionRewardService(new DailyRewardService(logs, todos), recorder,
-                new ChristmasFurnitureBonusService(furniture, enabled), Clock.fixed(time, ZoneOffset.UTC));
+                new ChristmasFurnitureBonusService(furniture, enabled, true), Clock.fixed(time, ZoneOffset.UTC));
         var growth = new RoomGrowthService(rooms, users);
         routineService = new RoutineLogService(routines, logs, wallets, streaks, rewards,
                 new TransactionTemplate(transactionManager), mock(HouseMissionService.class), recorder, growth);

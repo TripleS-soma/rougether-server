@@ -25,9 +25,10 @@ public class ChristmasFurnitureBonusService {
     private final boolean enabled;
 
     public ChristmasFurnitureBonusService(RoomFurnitureBonusRepository roomFurnitureBonusRepository,
-                                         @Value("${christmas.coin-bonus.enabled:false}") boolean enabled) {
+                                         @Value("${christmas.coin-bonus.enabled:false}") boolean enabled,
+                                         @Value("${christmas.event.enabled:false}") boolean eventEnabled) {
         this.roomFurnitureBonusRepository = roomFurnitureBonusRepository;
-        this.enabled = enabled;
+        this.enabled = enabled && eventEnabled;
     }
 
     // 가구 종류당 원금의 10%. 원금이 부분 지급이면 그 원금 기준으로 계산하고 마지막에 정수 버림함.
