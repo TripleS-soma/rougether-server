@@ -237,6 +237,35 @@ jobs:
           echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
           echo "public_ip=$public_ip" >> "$GITHUB_OUTPUT"
 
+      - name: Start public health observation
+        if: env.DEPLOY_MODE != 'hold'
+        id: health-monitor
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/deploy-health
+          user_domain="$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='rougether-dev user-api HTTPS entrypoint'].DomainName | [0]" --output text)"
+          admin_domain="$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='rougether-dev admin-api HTTPS entrypoint'].DomainName | [0]" --output text)"
+          targets=()
+          if [ -n "$user_domain" ] && [ "$user_domain" != None ]; then
+            targets+=(--target "user-api=https://$user_domain/api/v1/health")
+          fi
+          if [ -n "$admin_domain" ] && [ "$admin_domain" != None ]; then
+            targets+=(--target "admin-api=https://$admin_domain/admin/health")
+          fi
+          if [ "${#targets[@]}" -eq 0 ]; then
+            echo "::warning::No public API domains found for deployment observation"
+            exit 1
+          fi
+          nohup python3 .github/scripts/monitor_public_health.py "${targets[@]}" \
+            --output build/deploy-health/health.jsonl \
+            --summary build/deploy-health/summary.json \
+            --stop-file build/deploy-health/stop \
+            > build/deploy-health/monitor.log 2>&1 &
+          echo "pid=$!" >> "$GITHUB_OUTPUT"
+          echo "started=true" >> "$GITHUB_OUTPUT"
+
       - name: Deploy containers through SSM
         if: env.DEPLOY_MODE != 'hold'
         shell: bash
@@ -376,3 +405,37 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: bash .github/scripts/promote-ecr-dev-tags.sh user-api admin-api batch
+
+      - name: Finish public health observation
+        if: always() && env.DEPLOY_MODE != 'hold'
+        continue-on-error: true
+        shell: bash
+        env:
+          MONITOR_PID: ${{ steps.health-monitor.outputs.pid }}
+        run: |
+          bash .github/scripts/stop-public-health-monitor.sh "$MONITOR_PID" build/deploy-health/stop
+          python3 - <<'PY'
+          import json, os, pathlib
+          path = pathlib.Path('build/deploy-health/summary.json')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('\n### Public health observation\n\n')
+              if not path.exists():
+                  output.write('Observation summary unavailable. Inspect the deployment-health artifact and monitor log.\n')
+              else:
+                  data = json.loads(path.read_text())
+                  for name, counts in data['services'].items():
+                      output.write(f"- {name}: {counts['probes']} probes, {counts['healthy']} healthy, "
+                                   f"{counts['httpErrors']} HTTP errors, {counts['connectionFailures']} connection failures, "
+                                   f"{counts['otherFailures']} other failures.\n")
+                  output.write('\nDiagnostic observations; existing deployment health gates determine release success.\n')
+          PY
+
+      - name: Upload public health observation
+        if: always() && env.DEPLOY_MODE != 'hold'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/deploy-health/
+          retention-days: 7
+          if-no-files-found: warn
