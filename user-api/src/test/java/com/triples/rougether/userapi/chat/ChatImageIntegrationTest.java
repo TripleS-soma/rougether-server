@@ -721,11 +721,12 @@ class ChatImageIntegrationTest {
     }
 
     @Test
-    void 사진_메시지_푸시는_언어별_문구를_보내고_FCM_data는_그대로다() throws Exception {
+    void 사진_메시지_푸시는_언어별_문구와_집_묶음_키를_보낸다() throws Exception {
         Fixture f = fixture();
         jdbc.update("update users set nickname = ? where id = ?", "사진보낸이", f.owner());
         Long imageId = uploaded(f, f.owner());
-        Map<String, String> data = Map.of("type", "CHAT_MESSAGE", "roomId", f.room().toString(), "houseId", f.house().toString());
+        Map<String, String> data = Map.of("type", "CHAT_MESSAGE", "roomId", f.room().toString(),
+                "houseId", f.house().toString(), "groupKey", "chat-house-" + f.house());
 
         sendPhoto(f, f.owner(), imageId);
         verify(fcm, timeout(5_000)).pushWithoutRecord(eq(f.member()), eq("사진 테스트"), eq("사진보낸이: 사진을 보냈어요"), eq(data));

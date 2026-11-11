@@ -92,7 +92,7 @@ class ChatPushNotifierTest {
         commands.send(f.sender(), f.room(), new ChatSendRequest(UUID.randomUUID(), "오늘 루틴 다 했어?"));
 
         Map<String, String> data = Map.of("type", "CHAT_MESSAGE", "roomId", f.room().toString(),
-                "houseId", f.house().toString());
+                "houseId", f.house().toString(), "groupKey", "chat-house-" + f.house());
         verify(fcm, timeout(WAIT)).pushWithoutRecord(eq(f.member()), eq("우리 집"), eq("보내는이: 오늘 루틴 다 했어?"), eq(data));
         verify(fcm, timeout(WAIT)).pushWithoutRecord(eq(f.other()), eq("우리 집"), eq("보내는이: 오늘 루틴 다 했어?"), eq(data));
         verify(fcm, after(QUIET).never()).pushWithoutRecord(eq(f.sender()), anyString(), anyString(), anyMap());

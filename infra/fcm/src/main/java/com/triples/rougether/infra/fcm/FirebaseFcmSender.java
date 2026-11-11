@@ -1,6 +1,8 @@
 package com.triples.rougether.infra.fcm;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.ApnsConfig;
 import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.BatchResponse;
@@ -87,14 +89,23 @@ public class FirebaseFcmSender implements FcmSender {
         return buildMessage(tokens, title, body, Map.of());
     }
 
+    // data 의 groupKey 가 있으면 묶음 표시를 붙임 — Android tag(같은 값의 앞 알림을 대체), APNs thread-id(한 스택).
     static MulticastMessage buildMessage(List<String> tokens, String title, String body, Map<String, String> data) {
-        return MulticastMessage.builder()
+        String groupKey = data.get(GROUP_KEY);
+        boolean grouped = groupKey != null && !groupKey.isBlank();
+        Aps.Builder aps = Aps.builder().setSound("default");
+        MulticastMessage.Builder message = MulticastMessage.builder()
                 .addAllTokens(tokens)
                 .putAllData(data)
-                .setNotification(Notification.builder().setTitle(title).setBody(body).build())
-                .setApnsConfig(ApnsConfig.builder()
-                        .setAps(Aps.builder().setSound("default").build())
-                        .build())
+                .setNotification(Notification.builder().setTitle(title).setBody(body).build());
+        if (grouped) {
+            aps.setThreadId(groupKey);
+            message.setAndroidConfig(AndroidConfig.builder()
+                    .setNotification(AndroidNotification.builder().setTag(groupKey).build())
+                    .build());
+        }
+        return message
+                .setApnsConfig(ApnsConfig.builder().setAps(aps.build()).build())
                 .build();
     }
 

@@ -2,6 +2,7 @@ package com.triples.rougether.infra.fcm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.google.firebase.messaging.AndroidConfig;
 import com.google.firebase.messaging.ApnsConfig;
 import com.google.firebase.messaging.MulticastMessage;
 import java.lang.reflect.Field;
@@ -67,6 +68,31 @@ class FirebaseFcmSenderTest {
         assertThat(readField(message, MulticastMessage.class, "data")).isEqualTo(data);
         assertThat(readField(FirebaseFcmSender.buildMessage(tokens(1), "제목", "본문"),
                 MulticastMessage.class, "data")).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void groupKey가_있으면_Android_tag와_APNs_thread_id로_묶는다() throws Exception {
+        Map<String, String> data = Map.of("type", "CHAT_MESSAGE", "houseId", "20", "groupKey", "chat-house-20");
+        MulticastMessage message = FirebaseFcmSender.buildMessage(tokens(1), "우리 집", "이웃: 안녕", data);
+
+        AndroidConfig android = (AndroidConfig) readField(message, MulticastMessage.class, "androidConfig");
+        Object notification = readField(android, AndroidConfig.class, "notification");
+        assertThat(readField(notification, notification.getClass(), "tag")).isEqualTo("chat-house-20");
+
+        ApnsConfig apns = (ApnsConfig) readField(message, MulticastMessage.class, "apnsConfig");
+        Map<String, Object> aps = (Map<String, Object>) ((Map<String, Object>) readField(apns, ApnsConfig.class,
+                "payload")).get("aps");
+        assertThat(aps).containsEntry("thread-id", "chat-house-20").containsEntry("sound", "default");
+        assertThat(readField(message, MulticastMessage.class, "data")).isEqualTo(data);
+    }
+
+    @Test
+    void groupKey가_없으면_Android_설정을_붙이지_않는다() throws Exception {
+        MulticastMessage message = FirebaseFcmSender.buildMessage(tokens(1), "제목", "본문",
+                Map.of("type", "FEED_COMMENT", "postId", "7"));
+
+        assertThat(readField(message, MulticastMessage.class, "androidConfig")).isNull();
     }
 
     private static Object readField(Object target, Class<?> type, String name) throws Exception {
