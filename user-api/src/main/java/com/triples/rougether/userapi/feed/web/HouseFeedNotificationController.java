@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Feed", description = "자유게시판·인증게시판 공개 피드")
+@Tag(name = "Feed")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/houses/{houseId}/feed/notification")

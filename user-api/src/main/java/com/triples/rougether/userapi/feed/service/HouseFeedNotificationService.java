@@ -14,11 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 // 집 피드 새 글 푸시의 집별 설정(#530). 그 집의 ACTIVE 구성원만 조회·변경함.
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class HouseFeedNotificationService {
     private final FeedAccess access;
     private final HouseFeedNotificationSettingRepository settings;
 
-    @Transactional(readOnly = true)
     public HouseFeedNotificationResponse get(Long userId, Long houseId) {
         access.active(userId);
         access.requireHouseParticipant(houseId, userId);

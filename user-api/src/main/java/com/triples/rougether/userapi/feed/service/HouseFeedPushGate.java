@@ -1,6 +1,5 @@
 package com.triples.rougether.userapi.feed.service;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,13 +44,16 @@ public class HouseFeedPushGate {
         Instant known = deployedAt;
         if (known != null) return known;
         try {
-            List<Timestamp> found = jdbc.queryForList("SELECT installed_on FROM flyway_schema_history "
-                    + "WHERE description = ? AND success = TRUE ORDER BY installed_rank LIMIT 1", Timestamp.class, MIGRATION_DESCRIPTION);
-            if (found.isEmpty() || found.getFirst() == null) {
+            // installed_on 은 DB 가 채운 시각이라 그대로 읽으면 드라이버의 시간대 해석(serverTimezone)에 따라 몇 시간 어긋날 수 있음.
+            // 같은 세션 안에서 NOW() 와의 차이를 DB 가 계산하게 해 시간대와 무관한 경과 시간을 얻음.
+            List<Long> elapsedSeconds = jdbc.queryForList("SELECT TIMESTAMPDIFF(SECOND, installed_on, NOW()) "
+                    + "FROM flyway_schema_history WHERE description = ? AND success = TRUE ORDER BY installed_rank LIMIT 1",
+                    Long.class, MIGRATION_DESCRIPTION);
+            if (elapsedSeconds.isEmpty() || elapsedSeconds.getFirst() == null) {
                 log.warn("house feed push gate - migration '{}' not found in flyway history, push stays off", MIGRATION_DESCRIPTION);
                 return null;
             }
-            return deployedAt = found.getFirst().toInstant();
+            return deployedAt = clock.instant().minusSeconds(Math.max(0, elapsedSeconds.getFirst()));
         } catch (DataAccessException e) {
             log.warn("house feed push gate - cannot read flyway history, push stays off", e);
             return null;

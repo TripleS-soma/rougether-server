@@ -46,6 +46,7 @@ public class HouseFeedPushNotifier {
     private final FcmPushExecutor fcm;
     private final HouseFeedPushGate gate;
     private final TransactionTemplate readOnly;
+    private final TransactionTemplate joined;
 
     public HouseFeedPushNotifier(FeedPostRepository posts, HouseRepository houses, HouseMemberRepository members,
                                  HouseFeedNotificationSettingRepository houseSettings, UserBlockRepository blocks,
@@ -63,6 +64,9 @@ public class HouseFeedPushNotifier {
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.readOnly.setReadOnly(true);
+        // 호출자의 트랜잭션이 있으면 합류하고 없으면 읽기 트랜잭션을 엶
+        this.joined = new TransactionTemplate(transactionManager);
+        this.joined.setReadOnly(true);
     }
 
     // 채팅 푸시와 같은 이유로 알림 전용 executor 에서 비동기로 처리하고 예외는 로그만 남김.
@@ -78,8 +82,9 @@ public class HouseFeedPushNotifier {
         }
     }
 
+    // 이미 커밋된 글을 바로 알릴 때 씀. 수신자 계산은 트랜잭션 안에서(작성자·구성원 지연 로딩), 발송은 밖에서 함.
     public void notifyMembers(Long postId) {
-        deliver(plan(postId));
+        deliver(joined.execute(status -> plan(postId)));
     }
 
     record Delivery(Long userId, String title, String body, Map<String, String> data) {}

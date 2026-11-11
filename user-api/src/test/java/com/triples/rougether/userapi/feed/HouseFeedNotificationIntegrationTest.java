@@ -87,6 +87,9 @@ class HouseFeedNotificationIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager em;
     @Autowired ApplicationEvents events;
+    @Autowired com.triples.rougether.domain.feed.repository.FeedPostRepository posts;
+    @Autowired com.triples.rougether.domain.feed.repository.HouseFeedNotificationSettingRepository houseSettings;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     // 별도 트랜잭션으로 사용자 행을 잠그는 접속 기록은 미커밋 테스트 픽스처와 경합하므로 대체함.
     @MockitoBean com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder activity;
     @MockitoBean com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder loginGifts;
@@ -323,6 +326,35 @@ class HouseFeedNotificationIntegrationTest {
         notifier.notifyMembers(post);
 
         pushed(third);
+    }
+
+    // 유예 게이트의 실제 SQL 을 MySQL 에서 실행해, 시간대 해석과 무관한 값(UNIX_TIMESTAMP)으로 구한 경과 시간과 맞는지 봄.
+    @Test void 유예_게이트는_이력에서_읽은_경과_시간만큼만_닫혀_있다() {
+        long elapsed = jdbc.queryForObject("select UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(installed_on) "
+                + "from flyway_schema_history where description = 'add house feed notification settings'", Long.class);
+        assertThat(elapsed).isGreaterThanOrEqualTo(1);
+        var clock = java.time.Clock.systemUTC();
+
+        assertThat(new com.triples.rougether.userapi.feed.service.HouseFeedPushGate(jdbc, clock,
+                java.time.Duration.ofSeconds(elapsed + 3600)).isOpen()).isFalse();
+        assertThat(new com.triples.rougether.userapi.feed.service.HouseFeedPushGate(jdbc, clock,
+                java.time.Duration.ofSeconds(Math.max(1, elapsed - 60))).isOpen()).isTrue();
+    }
+
+    @Test void 유예_중에는_켜_둔_구성원에게도_새_글_푸시를_보내지_않는다() {
+        var closed = new com.triples.rougether.userapi.feed.service.HouseFeedPushGate(jdbc, java.time.Clock.systemUTC(),
+                java.time.Duration.ofDays(3650));
+        var waiting = new HouseFeedPushNotifier(posts, houses, members, houseSettings, blocks, globalSettings, push, closed,
+                transactions);
+        Long post = freePost(member, home.getId());
+        em.flush();
+        clearInvocations(push);
+
+        waiting.notifyMembers(post);
+        verify(push, never()).pushWithoutRecord(anyLong(), anyString(), anyString(), any());
+        // 같은 글을 유예가 끝난 게이트로 보내면 나감.
+        notifier.notifyMembers(post);
+        pushed(owner);
     }
 
     @Test void 새로_등록된_집_글에만_푸시_신호를_낸다() {
