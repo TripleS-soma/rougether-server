@@ -27,7 +27,7 @@ class RotationTest(unittest.TestCase):
             "Name": rotation.PARAMETER, "Type": "SecureString", "Value": "sk-test-only-value", "Overwrite": True}))
         self.assertEqual(calls[2].args[2], {"FunctionName": rotation.FUNCTION, "RevisionId": "original",
                                          "Environment": self.after["Environment"]})
-        self.assertEqual(calls[3].args[:2], ("lambda", "wait function-updated-v2"))
+        self.assertEqual(calls[3].args[:2], ("lambda", "wait function-updated"))
         self.assertNotIn("sk-test-only-value", json.dumps(result))
         self.assertNotIn("LLM_API_KEY_VERSION", self.variables)
 
@@ -79,7 +79,7 @@ class RotationTest(unittest.TestCase):
             raise subprocess.TimeoutExpired(command, 330)
         with patch.object(rotation.subprocess, "run", side_effect=execute):
             with self.assertRaises(subprocess.TimeoutExpired):
-                rotation.aws("lambda", "wait function-updated-v2", {"FunctionName": rotation.FUNCTION})
+                rotation.aws("lambda", "wait function-updated", {"FunctionName": rotation.FUNCTION})
         self.assertFalse(captured[0].exists())
 
     def test_error_reports_only_safe_aws_error_class(self):
