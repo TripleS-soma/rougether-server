@@ -5,6 +5,7 @@ import com.triples.rougether.domain.feed.entity.FeedBoardType;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
@@ -29,6 +30,12 @@ public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
     @Query("select p from FeedPost p join fetch p.author a where p.id = :id and p.deletedAt is null and a.deletedAt is null "
             + "and not exists (select b.id from UserBlock b where b.blockerUserId = :viewer and b.blockedUserId = a.id)")
     Optional<FeedPost> findVisible(@Param("id") Long id, @Param("viewer") Long viewer);
+
+    // 어드민 피드 관리 목록. 차단·탈퇴 필터 없이 최신순, 삭제된 글은 요청할 때만 포함함.
+    @Query(value = "select p from FeedPost p join fetch p.author a "
+            + "where (:includeDeleted = true or p.deletedAt is null) order by p.id desc",
+            countQuery = "select count(p) from FeedPost p where (:includeDeleted = true or p.deletedAt is null)")
+    Page<FeedPost> findAdminPage(@Param("includeDeleted") boolean includeDeleted, Pageable page);
 
     @Modifying
     @Query("update FeedPost p set p.content = '', p.routineId = null, p.routineDate = null, p.routineTitle = null, "
