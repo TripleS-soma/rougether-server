@@ -31,11 +31,12 @@ public record AdminContentReportResponse(
     // text: 게시물·댓글 본문 또는 가구 이름. postId: 댓글의 부모 글(게시물이면 자기 id).
     // feedImageIds: 게시물 사진(/admin/reports/feed-images/{imageId}로 조회). assetKey: 가구 공개 CDN key.
     // removed: 이미 삭제·숨김·거래 정지돼 더 볼 수 없는 상태.
+    // chatImageId: 채팅 사진(/admin/reports/chat-images/{imageId}로 조회).
     public record TargetPreview(String text, Long postId, List<Long> feedImageIds, String assetKey,
-                                boolean removed) {
+                                boolean removed, Long chatImageId) {
 
         public static TargetPreview missing() {
-            return new TargetPreview(null, null, List.of(), null, true);
+            return new TargetPreview(null, null, List.of(), null, true, null);
         }
     }
 }

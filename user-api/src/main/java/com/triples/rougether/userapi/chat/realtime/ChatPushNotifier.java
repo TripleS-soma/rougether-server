@@ -80,11 +80,14 @@ public class ChatPushNotifier {
 
     private void notifyRecipients(Long messageId) {
         ChatMessage message = messages.findById(messageId).orElseThrow();
+        // 비동기 대기 중 삭제되거나 발신자가 탈퇴한 메시지는 푸시로 재노출하지 않음.
+        if (message.isDeleted() || message.getSender().isDeleted()) return;
         ChatRoom room = rooms.findById(message.getRoomId()).orElseThrow();
         String houseName = houses.findById(room.getHouseId()).map(House::getName).orElse("");
         User sender = message.getSender();
-        NotificationContent content = NotificationMessages.chatMessage(houseName, sender.getNickname(),
-                message.getContent());
+        NotificationContent content = message.isImage()
+                ? NotificationMessages.chatPhoto(houseName, sender.getNickname())
+                : NotificationMessages.chatMessage(houseName, sender.getNickname(), message.getContent());
         Map<String, String> data = Map.of("type", NotificationType.CHAT_MESSAGE.name(),
                 "roomId", room.getId().toString(), "houseId", room.getHouseId().toString());
         Set<Long> muted = new HashSet<>(reads.findPushMutedUserIds(room.getId()));

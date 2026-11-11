@@ -34,6 +34,16 @@ public class ChatAccessPolicy {
         if (member.getUser().isDeleted() || member.getUser().isBot()) deny();
     }
 
+    // 사진 조회처럼 권한 없음을 404로 감춰야 하는 곳에서 씀.
+    public boolean canRead(ChatRoom room, Long userId) {
+        try {
+            requireReadable(room, userId);
+            return true;
+        } catch (BusinessException e) {
+            return false;
+        }
+    }
+
     // 메시지/읽음 서비스는 집을 알 필요 없이 방 유형별 쓰기 정책에 위임함.
     public User lockWriter(Long roomId, Long userId) {
         var target = rooms.findAccessTarget(roomId)

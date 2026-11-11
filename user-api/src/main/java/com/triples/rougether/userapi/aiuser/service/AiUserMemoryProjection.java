@@ -106,7 +106,7 @@ public class AiUserMemoryProjection {
                 Object observation=switch(type) {
                     case "FEED_POST" -> jdbc.queryForMap("SELECT author_id,content FROM feed_posts WHERE id=?",sourceId);
                     case "FEED_COMMENT" -> jdbc.queryForMap("SELECT author_id,post_id,content FROM feed_comments WHERE id=?",sourceId);
-                    case "CHAT" -> jdbc.queryForMap("SELECT sender_user_id,room_id,content FROM chat_messages WHERE id=?",sourceId);
+                    case "CHAT" -> jdbc.queryForMap("SELECT sender_user_id,room_id,content FROM chat_messages WHERE id=? AND deleted_at IS NULL",sourceId);
                     default -> Map.of("type",type);
                 };
                 String body=mapper.writeValueAsString(Map.of("aiUserId",user,"sourceType",type,
@@ -144,7 +144,7 @@ public class AiUserMemoryProjection {
         String query=switch(type) {
             case "FEED_POST" -> "SELECT author_id,content FROM feed_posts WHERE id=? AND deleted_at IS NULL";
             case "FEED_COMMENT" -> "SELECT author_id,post_id,content FROM feed_comments WHERE id=? AND deleted_at IS NULL";
-            case "CHAT" -> "SELECT sender_user_id,room_id,content FROM chat_messages WHERE id=?";
+            case "CHAT" -> "SELECT sender_user_id,room_id,content FROM chat_messages WHERE id=? AND deleted_at IS NULL";
             case "MEMBERSHIP" -> "SELECT user_id,house_id,status FROM house_members WHERE id=?";
             case "AI_JOB" -> "SELECT user_id,result_text,action_name,action_payload FROM ai_user_jobs WHERE id=? AND status='DONE'";
             default -> throw new IllegalArgumentException("Unsupported memory source");
