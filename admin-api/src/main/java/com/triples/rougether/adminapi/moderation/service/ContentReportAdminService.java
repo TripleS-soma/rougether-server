@@ -117,10 +117,6 @@ public class ContentReportAdminService {
         if (!report.isReceived()) {
             throw new ContentReportAdminException("REPORT_ALREADY_RESOLVED", "이미 처리된 신고입니다.", 409);
         }
-        // 사진 채팅 배포의 롤백 버전에서도 새 신고를 읽되 처리 완료로 잘못 표시하지 않음.
-        if (report.getTargetType() == ContentReportTargetType.CHAT_MESSAGE) {
-            throw new ContentReportAdminException("REPORT_REQUIRES_CHAT_RELEASE", "채팅 신고 처리는 사진 채팅 버전에서 가능합니다.", 409);
-        }
         Long adminId = adminUsers.findByUsername(adminUsername)
                 .orElseThrow(() -> new ContentReportAdminException(
                         "ADMIN_NOT_FOUND", "어드민 계정을 찾을 수 없습니다: " + adminUsername, 401))
