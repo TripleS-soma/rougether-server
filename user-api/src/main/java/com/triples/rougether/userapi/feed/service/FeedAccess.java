@@ -3,10 +3,15 @@ package com.triples.rougether.userapi.feed.service;
 import com.triples.rougether.common.error.AuthErrorCode;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.feed.entity.FeedComment;
+import com.triples.rougether.domain.feed.entity.FeedPost;
 import com.triples.rougether.domain.feed.repository.FeedCommentRepository;
+import com.triples.rougether.domain.house.entity.HouseMemberStatus;
+import com.triples.rougether.domain.house.repository.HouseMemberRepository;
+import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.moderation.repository.UserBlockRepository;
 import com.triples.rougether.userapi.feed.error.FeedErrorCode;
+import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import java.util.stream.Stream;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +23,8 @@ public class FeedAccess {
     private final UserRepository users;
     private final FeedCommentRepository comments;
     private final UserBlockRepository blocks;
+    private final HouseRepository houses;
+    private final HouseMemberRepository members;
 
     public User active(Long userId) {
         return requireActive(users.findById(userId).orElse(null));
@@ -47,6 +54,30 @@ public class FeedAccess {
         if (parent.getParentCommentId() != null
                 || blocks.existsByBlockerUserIdAndBlockedUserId(viewer, parent.getAuthor().getId()))
             throw new BusinessException(FeedErrorCode.FEED_COMMENT_NOT_FOUND);
+    }
+
+    // 집을 직접 지정한 요청(등록·목록)은 집 존재와 구성원 여부를 구분해 알림(#528).
+    public void requireHouseParticipant(Long houseId, Long userId) {
+        houses.findById(houseId).filter(house -> !house.isDeleted())
+                .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
+        if (!isHouseParticipant(houseId, userId)) throw new BusinessException(HouseErrorCode.HOUSE_NOT_MEMBER);
+    }
+    // 삭제되지 않은 집의 ACTIVE 구성원(탈퇴·봇·AI 계정 제외)만 집 피드에 참여함.
+    // 집·구성원 행은 잠그지 않음 — 집 참여 흐름(집 → 회원 잠금)과 순서가 뒤집혀 교착하는 것을 피함.
+    // 그래서 검사 직후 강퇴된 구성원의 글이 한 건 남을 수 있으나 본인 글일 뿐 비구성원 노출은 없음.
+    public boolean isHouseParticipant(Long houseId, Long userId) {
+        return members.existsFeedParticipant(houseId, userId, HouseMemberStatus.ACTIVE);
+    }
+    // 집 글과 그 댓글은 그 집의 현재 방장도 지울 수 있음(#529). 공개 글에는 방장 권한이 없음.
+    public boolean isModerator(FeedPost post, Long userId) {
+        return post.isHousePost() && members.existsFeedModerator(post.getHouseId(), userId, HouseMemberStatus.ACTIVE);
+    }
+    public boolean canSee(FeedPost post, Long userId) {
+        return !post.isHousePost() || isHouseParticipant(post.getHouseId(), userId);
+    }
+    // 글 ID로 접근하는 경로는 집 글의 존재 자체를 비구성원에게 숨김.
+    public void requireVisible(FeedPost post, Long userId) {
+        if (!canSee(post, userId)) throw new BusinessException(FeedErrorCode.FEED_POST_NOT_FOUND);
     }
 
     private User requireActive(User user) {

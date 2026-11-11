@@ -272,7 +272,8 @@ class RoutineMissionAutoContributeIntegrationTest {
         HouseMemberCommandService memberCommand = new HouseMemberCommandService(
                 houseRepository, houseMemberRepository, mock(NotificationService.class),
                 routineRepository, categoryRepository,
-                new BotResidencyService(userRepository, houseMemberRepository));
+                new BotResidencyService(userRepository, houseMemberRepository),
+                mock(com.triples.rougether.userapi.feed.service.HouseFeedContentEraser.class));
 
         // 소유자 단독 구성원 - 탈퇴와 함께 집이 정리(soft delete)되는 경우까지 커버
         memberCommand.leave(userId, house.getId());
@@ -303,7 +304,8 @@ class RoutineMissionAutoContributeIntegrationTest {
         HouseMemberCommandService memberCommand = new HouseMemberCommandService(
                 houseRepository, houseMemberRepository, mock(NotificationService.class),
                 routineRepository, categoryRepository,
-                new BotResidencyService(userRepository, houseMemberRepository));
+                new BotResidencyService(userRepository, houseMemberRepository),
+                mock(com.triples.rougether.userapi.feed.service.HouseFeedContentEraser.class));
 
         memberCommand.kick(userId, house.getId(), targetMembership.getId());
 

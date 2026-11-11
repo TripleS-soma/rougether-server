@@ -869,6 +869,31 @@ class AiUserRuntimeIntegrationTest {
         });
     }
 
+    // 집 피드(#528): 같은 집에 사는 AI 계정도 집 글을 관찰하거나 반응 작업을 받지 않음.
+    @Test void housePostsStayHiddenFromAiHousemates() {
+        User human=human();
+        long ai=ais.getFirst();
+        Long house=ownHouse(ai);
+        joins.join(human.getId(),house);
+        jdbc.update("DELETE FROM ai_user_jobs");
+        Long post=feed.create(human.getId(),new FeedCreateRequest(UUID.randomUUID(),"우리 집 사람들만 보는 글",List.of(),
+                FeedBoardType.FREE,null,null,house));
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"집 글에 단 댓글"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type IN ('FEED_POST','FEED_COMMENT')",
+                Integer.class)).isZero();
+        assertThat(socialCandidateIds(ai)).doesNotContain(post);
+        assertThatThrownBy(() -> feedQuery.get(ai,post)).isInstanceOfSatisfying(
+                com.triples.rougether.common.error.BusinessException.class,
+                e -> assertThat(e.getErrorCode().code()).isEqualTo("FEED_POST_NOT_FOUND"));
+        assertThatThrownBy(() -> feed.create(ai,new FeedCreateRequest(UUID.randomUUID(),"AI가 쓰려는 집 글",List.of(),
+                FeedBoardType.FREE,null,null,house))).isInstanceOfSatisfying(
+                com.triples.rougether.common.error.BusinessException.class,
+                e -> assertThat(e.getErrorCode().code()).isEqualTo("HOUSE_NOT_MEMBER"));
+        // 같은 사람이 올린 공개 글은 기존처럼 관찰 후보가 됨.
+        long open=quietPost(human,"모두에게 보이는 글");
+        assertThat(socialCandidateIds(ai)).contains(open).doesNotContain(post);
+    }
+
     private Long ownHouse(Long ai) {
         return jdbc.queryForObject("SELECT house_id FROM house_members WHERE user_id=? AND status='ACTIVE' ORDER BY id LIMIT 1",Long.class,ai);
     }

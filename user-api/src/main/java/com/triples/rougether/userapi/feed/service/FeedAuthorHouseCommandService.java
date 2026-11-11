@@ -29,7 +29,7 @@ public class FeedAuthorHouseCommandService {
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
         access.lockActive(viewer);
-        var post = posts.findVisible(postId, viewer)
+        var post = posts.findVisible(postId, viewer).filter(found -> !found.isHousePost())
                 .orElseThrow(() -> new BusinessException(FeedErrorCode.FEED_POST_NOT_FOUND));
         // 임의의 비공개 집 ID를 보내는 우회를 막고, 목록 조회 후 작성자가 나간 경우도 current read로 막음.
         members.findWithLockByHouseIdAndUserId(houseId, post.getAuthor().getId())

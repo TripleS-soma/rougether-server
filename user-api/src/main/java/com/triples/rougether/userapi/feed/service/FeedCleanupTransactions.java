@@ -28,6 +28,13 @@ public class FeedCleanupTransactions {
         storage.delete(image.getStorageKey());
         images.delete(image);
     }
+    // 집이 해체되면 그 집 글은 이미 아무도 열 수 없음(#528). 여기서는 남은 본문을 지워 삭제된 글로 만듦(#531).
+    // 이어지는 withdrawnContent 와 사진 정리가 삭제된 글의 댓글·좋아요·사진을 치움.
+    // READ_COMMITTED 로 조건에 맞지 않는 글의 잠금을 바로 풀어 글 등록·좋아요·댓글이 정리 작업을 기다리지 않게 함.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public int dissolvedHousePosts() {
+        return posts.eraseDissolvedHouses(clock.instant());
+    }
     @Transactional
     public void withdrawnContent() {
         posts.eraseWithdrawn(clock.instant());
