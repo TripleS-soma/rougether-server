@@ -1,8 +1,11 @@
 package com.triples.rougether.userapi.chat.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.chat.entity.ChatImage;
+import com.triples.rougether.domain.chat.entity.ChatMessage;
 import com.triples.rougether.domain.chat.entity.ChatReadState;
 import com.triples.rougether.domain.chat.entity.ChatRoom;
+import com.triples.rougether.domain.chat.repository.ChatImageRepository;
 import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.chat.repository.ChatReadStateRepository;
 import com.triples.rougether.domain.chat.repository.ChatRoomRepository;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatQueryService {
     private final ChatRoomRepository rooms;
     private final ChatMessageRepository messages;
+    private final ChatImageRepository images;
     private final ChatReadStateRepository reads;
     private final ChatAccessPolicy access;
 
@@ -58,7 +62,9 @@ public class ChatQueryService {
         boolean hasNext = found.size() > size;
         var page = hasNext ? found.subList(0, size) : found;
         var state = snapshot(room);
-        return new ChatMessageListResponse(page.stream().map(m -> ChatMessageResponse.of(m, state)).toList(),
+        var imagesByMessage = imagesOf(page);
+        return new ChatMessageListResponse(page.stream()
+                .map(m -> ChatMessageResponse.of(m, imagesByMessage.get(m.getId()), state)).toList(),
                 hasNext ? page.getLast().getSequence() : null, hasNext, state);
     }
 
@@ -76,6 +82,13 @@ public class ChatQueryService {
         var readers = participants.stream().map(p -> new ChatRoomResponse.Reader(p.userId(), p.membershipId(),
                 cursors.getOrDefault(p.userId(), 0L))).toList();
         return new ChatRoomResponse(room.getId(), room.getRoomType(), room.getHouseId(), room.getLastSequence(), readers);
+    }
+
+    // 사진 메시지가 있는 페이지만 한 번에 조회함. 메시지마다 조회하지 않음.
+    private Map<Long, ChatImage> imagesOf(List<ChatMessage> page) {
+        List<Long> ids = page.stream().filter(m -> m.isImage() && !m.isDeleted()).map(ChatMessage::getId).toList();
+        if (ids.isEmpty()) return Map.of();
+        return images.findWithOwnerByMessageIdIn(ids).stream().collect(Collectors.toMap(ChatImage::getMessageId, i -> i));
     }
 
     private ChatRoom requireRoom(Long roomId) {

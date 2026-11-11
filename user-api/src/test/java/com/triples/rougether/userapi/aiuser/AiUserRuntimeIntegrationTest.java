@@ -579,6 +579,45 @@ class AiUserRuntimeIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type='CHAT'",Integer.class)).isEqualTo(1);
     }
 
+    @Test void hiddenChatSourceIsRevokedFromMemoryExportAndRecall() throws Exception {
+        User human=human();
+        Long house=jdbc.queryForObject("SELECT house_id FROM house_members WHERE user_id=? AND status='ACTIVE' ORDER BY id LIMIT 1",Long.class,ais.getFirst());
+        joins.join(human.getId(),house);
+        Long room=chat.openHouse(human.getId(),house).roomId();
+        var message=chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"숨겨질 달빛서랍 이야기"));
+        var job=jobs.claim("chat-worker");
+        control.snapshot(job.id(),job.owner(),job.fencingToken());
+        control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.WAIT,mapper.createObjectNode(),"달빛서랍 회고");
+
+        jdbc.update("UPDATE chat_messages SET deleted_at=UTC_TIMESTAMP(6) WHERE id=?",message.messageId());
+
+        jobs.enqueue(job.userId(),"after-hidden-chat",10,"SCHEDULE",null);
+        var next=jobs.claim("after-hidden-chat");
+        assertThat(mapper.writeValueAsString(control.snapshot(next.id(),next.owner(),next.fencingToken()))).doesNotContain("달빛서랍");
+        assertThat(memoryProjection.pending(10)).noneSatisfy(export -> assertThat(export.get("jobId")).isEqualTo(job.id()));
+        assertThat(jdbc.queryForObject("SELECT memory_status FROM ai_user_jobs WHERE id=?",String.class,job.id())).isEqualTo("REVOKED");
+    }
+
+    @Test void hiddenChatContextDropsActionWithoutStoppingMemoryExport() throws Exception {
+        User human=human();
+        Long house=jdbc.queryForObject("SELECT house_id FROM house_members WHERE user_id=? AND status='ACTIVE' ORDER BY id LIMIT 1",Long.class,ais.getFirst());
+        joins.join(human.getId(),house);
+        Long room=chat.openHouse(human.getId(),house).roomId();
+        chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"남는 이야기"));
+        var job=jobs.claim("chat-worker");
+        control.snapshot(job.id(),job.owner(),job.fencingToken());
+        control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.WAIT,mapper.createObjectNode(),"맥락 회고");
+        var context=chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"숨겨질 달빛서랍 맥락"));
+        jdbc.update("UPDATE ai_user_jobs SET context_sources=? WHERE id=?","[{\"type\":\"CHAT\",\"id\":"+context.messageId()+"}]",job.id());
+
+        jdbc.update("UPDATE chat_messages SET deleted_at=UTC_TIMESTAMP(6) WHERE id=?",context.messageId());
+
+        assertThat(memoryProjection.pending(10)).anySatisfy(export -> {
+            assertThat(export.get("jobId")).isEqualTo(job.id());
+            assertThat(export.get("body").toString()).contains("남는 이야기","\"includeAction\":false").doesNotContain("달빛서랍");
+        });
+    }
+
     @Test void humanWriteRollbackAlsoRemovesQueuedEvent() {
         User human=human();
         Long post=feed.create(ais.getFirst(),new FeedCreateRequest(UUID.randomUUID(),"원자적 댓글",List.of(),FeedBoardType.FREE,null));

@@ -199,7 +199,7 @@ public class AiUserObserver {
                     + "WHERE c.id=? AND c.deleted_at IS NULL AND u.deleted_at IS NULL",sourceId);
         } else if (type.equals("CHAT")) {
             rows=jdbc.queryForList("SELECT m.sender_user_id AS author_id,m.content FROM chat_messages m JOIN users u ON u.id=m.sender_user_id "
-                    + "WHERE m.id=? AND u.deleted_at IS NULL",sourceId);
+                    + "WHERE m.id=? AND m.deleted_at IS NULL AND u.deleted_at IS NULL",sourceId);
         } else return null;
         if (rows.isEmpty()) return null;
         var row=rows.getFirst();
@@ -239,12 +239,14 @@ public class AiUserObserver {
             return context;
         }
         if (type.equals("CHAT")) {
-            var message=jdbc.queryForMap("SELECT room_id,sender_user_id,content FROM chat_messages WHERE id=?",sourceId);
+            var found=jdbc.queryForList("SELECT room_id,sender_user_id,content FROM chat_messages WHERE id=? AND deleted_at IS NULL",sourceId);
+            if (found.isEmpty()) unavailable();
+            var message=found.getFirst();
             requireUnblocked(user,((Number)message.get("sender_user_id")).longValue());
             long room=((Number)message.get("room_id")).longValue();
             chat.requireReadable(user,room);
             var recent=jdbc.queryForList("SELECT m.id,m.sender_user_id,m.content,m.message_sequence FROM chat_messages m "
-                    + "JOIN users u ON u.id=m.sender_user_id WHERE m.room_id=? AND u.deleted_at IS NULL AND NOT EXISTS "
+                    + "JOIN users u ON u.id=m.sender_user_id WHERE m.room_id=? AND m.deleted_at IS NULL AND u.deleted_at IS NULL AND NOT EXISTS "
                     + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
                     + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?)) ORDER BY m.message_sequence DESC LIMIT 12",room,user,user);
             return Map.of("type",type,"message",message,"room",chat.get(user,room),"recentMessages",recent);
@@ -312,7 +314,7 @@ public class AiUserObserver {
             } else if (type.equals("FEED_COMMENT")) {
                 readComment(user,id);
             } else if (type.equals("CHAT")) {
-                var message=jdbc.queryForMap("SELECT room_id,sender_user_id FROM chat_messages WHERE id=?",id);
+                var message=jdbc.queryForMap("SELECT room_id,sender_user_id FROM chat_messages WHERE id=? AND deleted_at IS NULL",id);
                 requireUnblocked(user,((Number)message.get("sender_user_id")).longValue());
                 chat.requireReadable(user,((Number)message.get("room_id")).longValue());
             } else if (type.equals("MEMBERSHIP")) {

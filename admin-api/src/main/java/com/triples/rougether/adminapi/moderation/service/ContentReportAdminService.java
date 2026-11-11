@@ -8,6 +8,10 @@ import com.triples.rougether.adminapi.moderation.dto.AdminContentReportResponse;
 import com.triples.rougether.adminapi.moderation.dto.AdminContentReportResponse.TargetPreview;
 import com.triples.rougether.adminapi.moderation.error.ContentReportAdminException;
 import com.triples.rougether.domain.admin.repository.AdminUserRepository;
+import com.triples.rougether.domain.chat.entity.ChatImage;
+import com.triples.rougether.domain.chat.entity.ChatMessage;
+import com.triples.rougether.domain.chat.repository.ChatImageRepository;
+import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.feed.entity.FeedComment;
 import com.triples.rougether.domain.feed.entity.FeedImage;
 import com.triples.rougether.domain.feed.entity.FeedPost;
@@ -42,7 +46,8 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 // 신고 운영자 대기열·처리(#399). HIDE 는 각 도메인의 기존 삭제·정지 경로를 그대로 탐:
 // 게시물 = 작성자 삭제와 같은 tombstone + 댓글·좋아요 제거(사진은 user-api 정리 작업이 비동기 파기),
-// 댓글 = 댓글 삭제, 거래소 종목 = SUSPENDED(새 주문 거절, 목록 제외). 같은 대상의 대기 신고를 함께 닫음.
+// 댓글 = 댓글 삭제, 거래소 종목 = SUSPENDED(새 주문 거절, 목록 제외), 채팅 메시지 = 소프트 삭제(사진은 정리 작업이 파기).
+// 같은 대상의 대기 신고를 함께 닫음.
 @Service
 @Transactional(readOnly = true)
 public class ContentReportAdminService {
@@ -56,6 +61,8 @@ public class ContentReportAdminService {
     private final FeedCommentRepository comments;
     private final FeedLikeRepository likes;
     private final FeedImageRepository images;
+    private final ChatMessageRepository chatMessages;
+    private final ChatImageRepository chatImages;
     private final MarketAssetRepository assets;
     private final ItemRepository items;
     private final UserRepository users;
@@ -65,7 +72,8 @@ public class ContentReportAdminService {
 
     public ContentReportAdminService(ContentReportRepository reports, FeedPostRepository posts,
                                      FeedCommentRepository comments, FeedLikeRepository likes,
-                                     FeedImageRepository images, MarketAssetRepository assets,
+                                     FeedImageRepository images, ChatMessageRepository chatMessages,
+                                     ChatImageRepository chatImages, MarketAssetRepository assets,
                                      ItemRepository items, UserRepository users, AdminUserRepository adminUsers,
                                      AssetStorageService storage, Clock clock) {
         this.reports = reports;
@@ -73,6 +81,8 @@ public class ContentReportAdminService {
         this.comments = comments;
         this.likes = likes;
         this.images = images;
+        this.chatMessages = chatMessages;
+        this.chatImages = chatImages;
         this.assets = assets;
         this.items = items;
         this.users = users;
@@ -134,6 +144,20 @@ public class ContentReportAdminService {
         }
     }
 
+    // 신고된 채팅 메시지의 사진만 열람 가능. 미전송 업로드·신고와 무관한 사진은 404.
+    public StoredAsset chatImage(Long imageId) {
+        ChatImage image = chatImages.findById(imageId)
+                .filter(found -> found.isReady() && found.getMessageId() != null)
+                .filter(found -> reports.existsByTargetTypeAndTargetId(ContentReportTargetType.CHAT_MESSAGE,
+                        found.getMessageId()))
+                .orElseThrow(ContentReportAdminService::imageNotFound);
+        try {
+            return storage.read(image.getStorageKey());
+        } catch (NoSuchKeyException e) {
+            throw imageNotFound();
+        }
+    }
+
     // 이미 삭제·정지된 대상이면 조치 없이 신고만 닫음(멱등).
     private void hide(ContentReportTargetType type, Long targetId, Instant now) {
         switch (type) {
@@ -147,6 +171,8 @@ public class ContentReportAdminService {
             });
             case FEED_COMMENT -> comments.findById(targetId).ifPresent(comment -> comment.delete(now));
             case MARKET_ASSET -> assets.findWithLockById(targetId).ifPresent(asset -> asset.suspend(now));
+            // 사진은 user-api 정리 작업이 deleted_at을 보고 파기함.
+            case CHAT_MESSAGE -> chatMessages.findById(targetId).ifPresent(message -> message.delete(now));
         }
     }
 
@@ -163,14 +189,14 @@ public class ContentReportAdminService {
             result.put(ContentReportTargetType.FEED_POST, posts.findAllById(postIds).stream()
                     .collect(Collectors.toMap(FeedPost::getId, post -> new TargetPreview(preview(post.getContent()),
                             post.getId(), imageIds.getOrDefault(post.getId(), List.of()), null,
-                            post.getDeletedAt() != null))));
+                            post.getDeletedAt() != null, null))));
         }
         List<Long> commentIds = ids.getOrDefault(ContentReportTargetType.FEED_COMMENT, List.of());
         if (!commentIds.isEmpty()) {
             result.put(ContentReportTargetType.FEED_COMMENT, comments.findAllById(commentIds).stream()
                     .collect(Collectors.toMap(FeedComment::getId, comment -> new TargetPreview(
                             preview(comment.getContent()), comment.getPost().getId(), List.of(), null,
-                            comment.getDeletedAt() != null))));
+                            comment.getDeletedAt() != null, null))));
         }
         List<Long> assetIds = ids.getOrDefault(ContentReportTargetType.MARKET_ASSET, List.of());
         if (!assetIds.isEmpty()) {
@@ -181,8 +207,16 @@ public class ContentReportAdminService {
                     .collect(Collectors.toMap(MarketAsset::getId, asset -> {
                         Item item = itemById.get(asset.getItemId());
                         return new TargetPreview(item == null ? null : item.getName(), null, List.of(),
-                                item == null ? null : item.getAssetKey(), asset.isSuspended());
+                                item == null ? null : item.getAssetKey(), asset.isSuspended(), null);
                     })));
+        }
+        List<Long> messageIds = ids.getOrDefault(ContentReportTargetType.CHAT_MESSAGE, List.of());
+        if (!messageIds.isEmpty()) {
+            Map<Long, Long> imageIdByMessage = chatImages.findWithOwnerByMessageIdIn(messageIds.stream().distinct().toList())
+                    .stream().collect(Collectors.toMap(ChatImage::getMessageId, ChatImage::getId));
+            result.put(ContentReportTargetType.CHAT_MESSAGE, chatMessages.findAllById(messageIds).stream()
+                    .collect(Collectors.toMap(ChatMessage::getId, message -> new TargetPreview(preview(message.getContent()),
+                            null, List.of(), null, message.isDeleted(), imageIdByMessage.get(message.getId())))));
         }
         return result;
     }
@@ -200,6 +234,6 @@ public class ContentReportAdminService {
     }
 
     private static ContentReportAdminException imageNotFound() {
-        return new ContentReportAdminException("REPORT_IMAGE_NOT_FOUND", "열람할 수 없는 피드 사진입니다.", 404);
+        return new ContentReportAdminException("REPORT_IMAGE_NOT_FOUND", "열람할 수 없는 사진입니다.", 404);
     }
 }

@@ -272,7 +272,8 @@ class ChatBodyPushTest {
         }
         void append(long sequence) {
             messages.add(new ChatMessageResponse(sequence, 3L, sequence, UUID.randomUUID().toString(), 1L,
-                    "회원", null, "본문 " + sequence, Instant.parse("2026-10-02T00:00:00Z"), 0));
+                    "회원", null, "본문 " + sequence, Instant.parse("2026-10-02T00:00:00Z"), 0,
+                    com.triples.rougether.domain.chat.entity.ChatMessageType.TEXT, null));
         }
         Socket socket(String id) throws Exception { return new Socket(id, mapper); }
         Socket connect(String id, boolean include) throws Exception {

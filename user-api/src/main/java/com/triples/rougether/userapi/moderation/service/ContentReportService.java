@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.moderation.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.feed.entity.FeedComment;
 import com.triples.rougether.domain.feed.entity.FeedPost;
 import com.triples.rougether.domain.feed.repository.FeedCommentRepository;
@@ -10,6 +11,8 @@ import com.triples.rougether.domain.market.repository.MarketAssetRepository;
 import com.triples.rougether.domain.moderation.entity.ContentReport;
 import com.triples.rougether.domain.moderation.entity.ContentReportTargetType;
 import com.triples.rougether.domain.moderation.repository.ContentReportRepository;
+import com.triples.rougether.userapi.chat.error.ChatErrorCode;
+import com.triples.rougether.userapi.chat.service.ChatAccessPolicy;
 import com.triples.rougether.userapi.feed.error.FeedErrorCode;
 import com.triples.rougether.userapi.feed.service.FeedAccess;
 import com.triples.rougether.userapi.market.error.MarketErrorCode;
@@ -19,6 +22,7 @@ import com.triples.rougether.userapi.moderation.error.ModerationErrorCode;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 콘텐츠 신고 접수(#399). 사용자·대상당 1건 — 재신고는 기존 신고를 돌려줌(자동 숨김 없음, 운영자 대기열로 감).
@@ -29,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ContentReportService {
 
     private final FeedAccess access;
+    private final ChatAccessPolicy chatAccess;
+    private final ChatMessageRepository chatMessages;
     private final FeedPostRepository posts;
     private final FeedCommentRepository comments;
     private final MarketAssetRepository assets;
@@ -57,6 +63,18 @@ public class ContentReportService {
         MarketAsset asset = assets.findById(assetId)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.ASSET_NOT_FOUND));
         return receive(userId, ContentReportTargetType.MARKET_ASSET, assetId, asset.getCreatorUserId(), request);
+    }
+
+    // 그 방의 현재 구성원만 신고할 수 있음. lockWriter가 신고자 회원 행을 잠금.
+    // lockWriter의 첫 조회가 잠금 없는 조회라 READ COMMITTED여야 잠금 뒤에 앞선 신고가 보임.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ContentReportResponse reportChatMessage(Long userId, Long roomId, Long messageId,
+                                                   ContentReportRequest request) {
+        chatAccess.lockWriter(roomId, userId);
+        var message = chatMessages.findById(messageId)
+                .filter(found -> found.getRoomId().equals(roomId) && !found.isDeleted())
+                .orElseThrow(() -> new BusinessException(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND));
+        return receive(userId, ContentReportTargetType.CHAT_MESSAGE, messageId, message.getSender().getId(), request);
     }
 
     // 신고자 회원 행을 잠근 뒤 호출됨 — 같은 신고자의 동시 재신고가 여기서 직렬화돼 unique 충돌로 새지 않음.

@@ -105,6 +105,12 @@ public final class NotificationMessages {
                 houseName, englishName(senderNickname) + ": " + preview);
     }
 
+    public static NotificationContent chatPhoto(String houseName, String senderNickname) {
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": 사진을 보냈어요",
+                houseName, englishName(senderNickname) + ": sent a photo");
+    }
+
     private static String englishName(String nickname) {
         return nickname == null || nickname.isBlank() ? "A neighbor" : nickname;
     }

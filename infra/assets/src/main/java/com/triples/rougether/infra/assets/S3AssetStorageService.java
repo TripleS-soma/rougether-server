@@ -65,7 +65,7 @@ public class S3AssetStorageService implements AssetStorageService {
         }
 
         if (!properties.s3().purgeVersionsOnDelete() && !key.startsWith("private/furniture-generation/")
-                && !key.startsWith("private/feed/")) {
+                && !key.startsWith("private/feed/") && !key.startsWith("private/chat/")) {
             deleteObject(key, null);
             return;
         }
