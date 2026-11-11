@@ -58,3 +58,13 @@ curl http://localhost:8080/api/v1/health
 미결정 사항은 spec repo에서 통합 관리합니다 → [rougether-spec](https://github.com/TripleS-soma/rougether-spec) repo의 `open-questions.md`.
 
 참고: 일부 항목은 이미 결정되어 spec ERD에 반영되었습니다 (초대코드 = `house.invite_code` 컬럼, 다중 집 가입 허용, `house_goals`는 마스터 `goals` 참조 등).
+
+## 운영 배포 안전 규칙 (2026-11-11)
+
+- 운영 서비스 변경은 `.github/workflows/docker-publish.yml` 정식 배포 경로만 사용한다. 기본 배포 모드는 `blue-green`이어야 한다.
+- 진행 중인 배포가 있으면 완료를 기다린다. SSM/SSH로 Nginx, systemd, 컨테이너, 환경 파일, 배포 상태를 직접 변경하거나 별도 복구 명령을 실행하지 않는다.
+- 수동 `aws ssm send-command`, `start-session`, SSH 및 SDK 우회 실행을 금지한다. 진단은 검토된 읽기 전용 스크립트로 수행하고, 읽기 전용 진단에 변경 명령을 섞지 않는다.
+- 배포 스크립트는 호스트의 `/run/rougether-deploy.lock` 커널 잠금을 변경 전에 획득한다. 잠금 파일 삭제, 다른 경로 지정, 함수 추출로 잠금 우회를 금지한다.
+- 배포 중 오류가 나면 해당 배포의 롤백과 종료를 먼저 확인한다. 새 수정은 테스트와 PR 검증 후 다음 정식 배포로 반영한다.
+- 배포 완료는 워크플로 성공과 실제 이미지 SHA, 사용자/어드민 health, 최근 1시간 오류 확인으로 판정한다.
+- Claude 명령 훅은 직접 원격 명령을 거부한다. 텍스트 훅은 root 권한이나 임의 프로그램을 완전히 격리하지 못하므로 우회하지 않는다. Codex는 이 지침과 호스트 잠금을 적용하며, Claude 훅이 Codex에서도 실행된다고 가정하지 않는다.
