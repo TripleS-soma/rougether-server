@@ -51,7 +51,8 @@ def rotate(key):
         "FunctionName": FUNCTION, "RevisionId": before["RevisionId"],
         "Environment": {"Variables": variables},
     })
-    aws("lambda", "wait function-updated-v2", {"FunctionName": FUNCTION})
+    # V1은 GetFunctionConfiguration만 사용한다. V2는 코드 조회 권한 GetFunction도 요구한다.
+    aws("lambda", "wait function-updated", {"FunctionName": FUNCTION})
     after = aws("lambda", "get-function-configuration", {"FunctionName": FUNCTION})
     if (after.get("LastUpdateStatus") != "Successful" or after.get("State") != "Active"
             or after.get("Environment", {}).get("Variables") != variables):

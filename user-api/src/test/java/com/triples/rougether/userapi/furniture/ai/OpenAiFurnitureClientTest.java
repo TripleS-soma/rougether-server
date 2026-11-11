@@ -31,7 +31,7 @@ class OpenAiFurnitureClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         var llm = new LlmProperties("https://openai.test/v1", "other-model", "test-only-key", Duration.ofSeconds(30),
                 null, 800, true, "low", 2, Duration.ofSeconds(1), "embedding", 1024);
-        var config = new FurnitureGenerationProperties(true, "gpt-6-astra", "gpt-image-2", Duration.ofSeconds(180),
+        var config = new FurnitureGenerationProperties(true, "gpt-6-astra", "gpt-image-2.5-flare", Duration.ofSeconds(180),
                 3, 6, Duration.ofHours(24), List.of("items/ref.png"));
         client = new OpenAiFurnitureClient(builder.build(), llm, config);
         byte[] sprite = FurnitureFixtures.png(true, false);
@@ -47,9 +47,10 @@ class OpenAiFurnitureClientTest {
                 .andExpect(header("Authorization", "Bearer test-only-key"))
                 .andExpect(jsonPath("$.model").value("gpt-6-astra"))
                 .andExpect(jsonPath("$.store").value(false))
+                .andExpect(jsonPath("$.reasoning").doesNotExist())
                 .andExpect(jsonPath("$.max_tool_calls").value(1))
                 .andExpect(jsonPath("$.tools[0].background").value("transparent"))
-                .andExpect(jsonPath("$.tools[0].model").value("gpt-image-2"))
+                .andExpect(jsonPath("$.tools[0].model").value("gpt-image-2.5-flare"))
                 .andExpect(jsonPath("$.tools[0].action").value("generate"))
                 .andExpect(jsonPath("$.input[0].content.length()").value(3))
                 .andExpect(request -> {
@@ -64,6 +65,7 @@ class OpenAiFurnitureClientTest {
     @Test void 부분수정은_기존_후보를_이미지_입력으로_포함() {
         server.expect(requestTo("https://openai.test/v1/responses"))
                 .andExpect(jsonPath("$.tools[0].action").value("edit"))
+                .andExpect(jsonPath("$.reasoning").doesNotExist())
                 .andExpect(jsonPath("$.input[0].content.length()").value(5))
                 .andExpect(request -> assertThat(((org.springframework.mock.http.client.MockClientHttpRequest) request)
                         .getBodyAsString()).doesNotContain(Base64.getEncoder().encodeToString(context.source())))
@@ -74,6 +76,7 @@ class OpenAiFurnitureClientTest {
     @Test void 특징추출은_원본만_보는_도구없는_구조화_요청() {
         server.expect(requestTo("https://openai.test/v1/responses"))
                 .andExpect(jsonPath("$.tools").doesNotExist())
+                .andExpect(jsonPath("$.reasoning.effort").value("low"))
                 .andExpect(jsonPath("$.text.format.strict").value(true))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.input[0].content[2].text")
@@ -100,6 +103,8 @@ class OpenAiFurnitureClientTest {
             server.expect(requestTo("https://openai.test/v1/responses"))
                     .andExpect(request -> {
                         var body = json.readTree(((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString());
+                        if (body.has("tools")) assertThat(body.has("reasoning")).isFalse();
+                        else assertThat(body.path("reasoning").path("effort").asString()).isEqualTo("low");
                         assertThat(body.path("instructions").asString())
                                 .contains("cakes", "multiple independent main subjects", "supporting plates/stands")
                                 .doesNotContain("Refuse inappropriate/non-furniture content", "ONE furniture object");
@@ -123,6 +128,7 @@ class OpenAiFurnitureClientTest {
     @Test void 검수는_이미지_생성_도구_없이_엄격한_구조화_응답으로_분리() {
         server.expect(requestTo("https://openai.test/v1/responses"))
                 .andExpect(jsonPath("$.tools").doesNotExist())
+                .andExpect(jsonPath("$.reasoning.effort").value("low"))
                 .andExpect(jsonPath("$.text.format.type").value("json_schema"))
                 .andExpect(jsonPath("$.text.format.strict").value(true))
                 .andExpect(jsonPath("$.input[0].content.length()").value(9))
