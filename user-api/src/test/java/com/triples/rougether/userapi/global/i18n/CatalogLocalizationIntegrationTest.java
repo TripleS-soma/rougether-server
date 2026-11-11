@@ -28,6 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class CatalogLocalizationIntegrationTest {
+    // 접속 선물의 독립 트랜잭션은 전용 테스트에서 검증하고, 이 도메인의 픽스처와 분리함.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder loginGiftRecorder;
+
     // 이 테스트의 새 회원은 외부 트랜잭션 미커밋 상태다. 독립 트랜잭션인 활동 집계는
     // FK 잠금을 기다리므로 응답 언어 검증과 무관한 관측 부수효과만 대역 처리한다.
     @org.springframework.test.context.bean.override.mockito.MockitoBean

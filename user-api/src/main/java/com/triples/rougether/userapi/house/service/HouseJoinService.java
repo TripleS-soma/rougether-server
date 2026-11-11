@@ -68,6 +68,17 @@ public class HouseJoinService {
         return joinImmediately(house, userId);
     }
 
+    // 게시물 경유 참여 전용. 공개 여부와 무관하며 기존 바로 입주 설정에 따라 즉시가입 또는 승인 대기로 분기함.
+    // 호출자는 집 행 락과 게시물 접근권, 작성자의 ACTIVE 멤버십을 검증함.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public HouseJoinResponse joinFromFeed(House house, Long userId) {
+        if (house.isOnboardingAutoJoinEnabled()) {
+            return joinImmediately(house, userId);
+        }
+        HouseJoinRequest request = createOrReopenPendingRequest(house, house.getId(), userId);
+        return HouseJoinResponse.pending(house.getId(), request.getId());
+    }
+
     private HouseJoinResponse joinImmediately(House house, Long userId) {
         HouseMember member = join(house, userId);
         // 락 조회 - 개인 초대코드 경로의 사전 스냅샷에 가려진 대기 신청도 함께 종결한다.

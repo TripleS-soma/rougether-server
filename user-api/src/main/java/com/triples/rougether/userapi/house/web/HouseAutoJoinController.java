@@ -23,14 +23,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class HouseAutoJoinController {
     private final HouseAutoJoinService service;
 
-    @Operation(summary = "온보딩 자동 입주 설정 조회", description = "집 소유자 전용입니다.")
+    @Operation(summary = "자동 입주 설정 조회", description = "집 소유자 전용입니다. 온보딩과 게시물 경유 참여에 함께 적용됩니다.")
     @GetMapping
     public HouseAutoJoinResponse get(@CurrentUser AuthUser user, @PathVariable Long houseId) {
         return service.get(user.id(), houseId);
     }
 
-    @Operation(summary = "온보딩 자동 입주 설정 변경", description = "집 소유자 전용입니다. enabled=true이면 공개 상태에서 "
-            + "온보딩 신규 사용자가 방장 승인 없이 입주할 수 있습니다. 비공개 집은 자동 입주 대상에서 제외됩니다.")
+    @Operation(summary = "자동 입주 설정 변경", description = "집 소유자 전용입니다. enabled=true이면 공개 집에 온보딩 신규 사용자가 "
+            + "방장 승인 없이 입주할 수 있습니다. 게시물 경유 참여에서는 공개·비공개 집 모두 이 설정이 켜져 있으면 즉시입주하고, "
+            + "꺼져 있으면 방장 승인 대기 신청을 생성합니다. 비공개 집은 온보딩 자동 입주 대상에서는 제외됩니다.")
     @PutMapping
     public HouseAutoJoinResponse update(@CurrentUser AuthUser user, @PathVariable Long houseId,
                                         @Valid @RequestBody HouseAutoJoinRequest request) {

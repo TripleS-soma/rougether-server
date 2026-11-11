@@ -45,6 +45,10 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 class FeedIntegrationTest {
+    // 접속 선물의 독립 트랜잭션은 전용 테스트에서 검증하고, 이 도메인의 픽스처와 분리함.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder loginGiftRecorder;
+
     @Autowired FeedCommandService commands;
     @Autowired FeedQueryService query;
     @Autowired FeedImageService images;

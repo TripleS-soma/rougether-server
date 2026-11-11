@@ -44,6 +44,18 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
 
     Optional<HouseMember> findByHouseIdAndUserId(Long houseId, Long userId);
 
+    // 게시물 작성자가 현재 속한 집을 공개 여부와 무관하게 조회함. 개인 정렬 순서와 초대코드는 응답에 노출하지 않음.
+    @Query("select hm from HouseMember hm join fetch hm.house h "
+            + "where hm.user.id = :userId and hm.status = :status "
+            + "and h.deletedAt is null "
+            + "order by h.createdAt desc, h.id desc")
+    List<HouseMember> findFeedAuthorHousesByUserIdAndStatus(@Param("userId") Long userId,
+                                                           @Param("status") HouseMemberStatus status);
+
+    @Query("select hm from HouseMember hm where hm.house.id in :houseIds and hm.user.id = :userId")
+    List<HouseMember> findByHouseIdInAndUserId(@Param("houseIds") Collection<Long> houseIds,
+                                             @Param("userId") Long userId);
+
     boolean existsByInviteCode(String inviteCode);
 
     // 구성원 개인 초대코드 미리보기 전용 - 초대자와 집을 함께 확정한다. house fetch join(N+1 회피).
