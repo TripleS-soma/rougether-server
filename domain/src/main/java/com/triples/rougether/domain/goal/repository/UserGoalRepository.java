@@ -11,6 +11,15 @@ public interface UserGoalRepository extends JpaRepository<UserGoal, Long> {
 
     boolean existsByUserId(Long userId);
 
+    // 기존 사용 기록이 있는 회원은 목표/대표 캐릭터 누락 때문에 온보딩으로 되돌리지 않음.
+    // soft delete 이력도 사용 이력이므로 포함하고, 자동 접속 보상/활동 집계는 근거로 쓰지 않음.
+    @Query(value = """
+            select case when exists (select 1 from routines where user_id = :userId)
+                or exists (select 1 from todos where user_id = :userId)
+                then 1 else 0 end
+            """, nativeQuery = true)
+    long findRoutineOrTodoHistoryFlag(@Param("userId") Long userId);
+
     List<UserGoal> findByUserId(Long userId);
 
     @Query("select ug from UserGoal ug join fetch ug.goal g where ug.user.id = :userId order by g.sortOrder asc")
