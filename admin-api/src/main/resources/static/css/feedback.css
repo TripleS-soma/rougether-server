@@ -1,0 +1,22 @@
+.feedback-page .slot-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin:24px 0; }
+.feedback-page .btn-secondary { border:1px solid var(--border); border-radius:10px; padding:10px 16px; background:var(--surface); color:var(--text-soft); font:inherit; font-size:14px; cursor:pointer; }
+.feedback-page .btn-secondary[aria-pressed="true"] { background:var(--primary-soft); border-color:var(--primary); color:var(--primary-strong); font-weight:600; }
+.feedback-page .btn-secondary:hover { border-color:var(--primary); color:var(--primary-strong); }
+.feedback-page button:disabled { opacity:.55; cursor:default; }
+.feedback-page #reload { margin-left:auto; }
+.feedback-page #publishForm { display:grid; gap:12px; padding:24px; margin-bottom:32px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); }
+.feedback-page #publishForm label { font-size:14px; font-weight:600; }
+.feedback-page .slot-input { width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 14px; font:inherit; line-height:1.6; color:var(--text); background:var(--surface); }
+.feedback-page .slot-input:focus { outline:2px solid var(--primary-soft); border-color:var(--primary); }
+.feedback-page textarea { resize:vertical; min-height:160px; }
+.feedback-page #publishForm p { color:var(--text-soft); font-size:13px; }
+.feedback-page #publish { width:auto; justify-self:start; padding:0 24px; }
+.feedback-page #success:not(:empty) { padding:12px 16px; margin-bottom:20px; color:var(--success); background:var(--success-soft); border-radius:10px; }
+.feedback-page #empty { padding:32px 0; color:var(--text-soft); }
+.feedback-page .feedback-entry { display:grid; gap:12px; padding:24px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+.feedback-page .feedback-entry h4 { font-size:17px; }
+.feedback-page .feedback-entry p { line-height:1.7; }
+.feedback-page .feedback-entry p:first-of-type { font-size:13px; color:var(--text-soft); }
+.feedback-page .feedback-entry button { justify-self:end; color:var(--danger); }
+.feedback-page #more { display:block; margin:24px auto 0; }
+@media (max-width:600px) { .feedback-page #publishForm { padding:16px; } }

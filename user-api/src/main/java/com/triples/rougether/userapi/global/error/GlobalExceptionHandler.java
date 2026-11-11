@@ -117,6 +117,15 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("RESOURCE_NOT_FOUND", "요청한 API를 찾을 수 없습니다."));
     }
 
+    // 읽기 전용 API에 쓰기를 시도해도 서버 장애로 집계하지 않음.
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+            org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .headers(exception.getHeaders())
+                .body(ErrorResponse.of("METHOD_NOT_ALLOWED", "지원하지 않는 요청 방식입니다."));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
         log.error("unexpected error: {}", endpoint(request), exception);

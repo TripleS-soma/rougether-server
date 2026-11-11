@@ -57,6 +57,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class MemberWithdrawalService {
 
     private final UserRepository userRepository;
+    private final com.triples.rougether.domain.feedback.repository.SuggestionRepository suggestionRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OauthAccountRepository oauthAccountRepository;
     private final HouseRepository houseRepository;
@@ -131,6 +132,7 @@ public class MemberWithdrawalService {
         notificationRepository.deleteAllByUserId(userId);
         notificationSettingRepository.deleteAllByUserId(userId);
         userGoalRepository.deleteAllByUserId(userId);
+        suggestionRepository.deleteAllByUserId(userId);
         // 탈퇴자의 플레이 기록과 전체 유저 랭킹 기록도 즉시 파기함.
         minigameRunRepository.deleteAllByUserId(userId);
         minigameBestScoreRepository.deleteAllByUserId(userId);

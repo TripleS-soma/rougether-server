@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rougether Admin · 건의·업데이트</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <link rel="stylesheet" th:href="@{/css/feedback.css}">
+</head>
+<body class="app-body feedback-page">
+    <header class="app-header">
+        <div class="brand brand-sm">
+            <span class="brand-mark">R</span>
+            <h1>Rougether <span class="badge">ADMIN</span></h1>
+        </div>
+        <nav class="app-nav">
+            <a th:href="@{/}">에셋 업로드</a>
+            <a th:href="@{/assets}">에셋 조회</a>
+            <a th:href="@{/asset-foundry}">Asset Foundry</a>
+            <a th:href="@{/catalog}">카탈로그</a>
+            <a th:href="@{/item-slots}">가구 관리</a>
+            <a th:href="@{/user-activities}">사용자 활동</a>
+            <a th:href="@{/users}">유저 관리</a>
+            <a th:href="@{/weekly-reports}">AI 회고</a>
+            <a th:href="@{/recommendations}">AI 추천</a>
+            <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/feedback}" class="active">건의·업데이트</a>
+            <a th:href="@{/bug-reports}">버그 제보</a>
+            <a th:href="@{/notification-campaigns}">알림 발송</a>
+            <a th:href="@{/content-reports}">신고</a>
+            <a th:href="@{/feed-posts}">피드</a>
+        </nav>
+        <div class="header-right">
+            <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit" class="btn-ghost">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="app-main app-main--wide">
+        <section class="upload-card">
+            <div class="upload-head"><h2>건의·업데이트</h2><p>건의는 작성자와 관리자만 볼 수 있습니다. 게시한 업데이트는 앱의 내 정보 → 업데이트에 표시됩니다.</p></div>
+            <div class="slot-toolbar">
+                <button id="suggestionsTab" class="btn-secondary" type="button">접수된 건의</button>
+                <button id="updatesTab" class="btn-secondary" type="button">업데이트 관리</button>
+                <button id="reload" class="btn-secondary" type="button">새로고침</button>
+            </div>
+            <div id="error" class="alert alert-error" role="alert" hidden></div>
+            <div id="success" role="status"></div>
+            <form id="publishForm" hidden>
+                <h3>업데이트 추가</h3>
+                <label for="title">제목</label>
+                <input id="title" class="slot-input" maxlength="100" required>
+                <label for="content">내용</label>
+                <textarea id="content" class="slot-input" maxlength="5000" rows="8" required></textarea>
+                <p>게시하면 앱에 바로 공개됩니다.</p>
+                <button id="publish" class="btn-primary" type="submit">업데이트 게시</button>
+            </form>
+            <h3 id="listTitle">접수된 건의</h3>
+            <p id="empty" hidden>등록된 글이 없습니다.</p>
+            <div id="entries"></div>
+            <button id="more" type="button" class="btn-secondary" hidden>더 보기</button>
+        </section>
+    </main>
+    <script th:src="@{/js/feedback.js}" defer></script>
+</body>
+</html>
