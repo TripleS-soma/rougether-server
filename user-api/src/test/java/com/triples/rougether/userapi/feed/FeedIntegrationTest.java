@@ -585,12 +585,40 @@ class FeedIntegrationTest {
         error(() -> query.get(viewer, id), "FEED_POST_NOT_FOUND");
     }
 
+    @Test void 사진없는_인증은_완료루틴만으로_등록하고_재시도와_게시판전환을_보존한다() throws Exception {
+        Long owner = user(), viewer = user();
+        Routine done = completedRoutine(owner, "산책", today());
+        var request = new FeedCreateRequest(UUID.randomUUID(), "", List.of(), FeedBoardType.VERIFICATION,
+                completion(done, today()));
+        var response = mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.images").isEmpty())
+                .andExpect(jsonPath("$.routine.title").value("산책")).andReturn().getResponse();
+        long id = mapper.readTree(response.getContentAsString()).path("postId").asLong();
+        assertThat(commands.create(owner, request)).isEqualTo(id);
+        assertThat(query.get(viewer, id).content()).isEmpty();
+        error(() -> commands.create(owner, new FeedCreateRequest(request.clientPostId(), "다른 내용", List.of(),
+                FeedBoardType.VERIFICATION, completion(done, today()))), "FEED_REQUEST_CONFLICT");
+        error(() -> commands.create(viewer, new FeedCreateRequest(UUID.randomUUID(), "", List.of(),
+                FeedBoardType.VERIFICATION, completion(done, today()))), "FEED_ROUTINE_COMPLETION_INVALID");
+        error(() -> commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "", List.of(),
+                FeedBoardType.VERIFICATION)), "FEED_ROUTINE_COMPLETION_REQUIRED");
+        error(() -> commands.update(owner, id, new FeedUpdateRequest(null, FeedBoardType.FREE, null)), "FEED_INPUT_INVALID");
+        commands.update(owner, id, new FeedUpdateRequest("산책 기록", FeedBoardType.FREE, null));
+        assertThat(query.get(viewer, id).routine()).isNull();
+        commands.update(owner, id, new FeedUpdateRequest("", FeedBoardType.VERIFICATION, completion(done, today())));
+        assertThat(query.get(viewer, id).routine().routineId()).isEqualTo(done.getId());
+        error(() -> commands.update(viewer, id, "타인 수정"), "FEED_FORBIDDEN");
+        commands.delete(owner, id);
+        error(() -> commands.create(owner, request), "FEED_REQUEST_CONFLICT");
+    }
+
     @Test void 게시판별_필수내용과_알수없는_종류를_HTTP에서_검증한다() throws Exception {
         Long owner = user();
         for (String fields : List.of(
                 "\"boardType\":\"FREE\",\"content\":\"  \",\"imageIds\":[]",
                 "\"boardType\":\"VERIFICATION\",\"content\":\"사진 없음\"",
-                "\"content\":\"종류 생략도 사진 필수\",\"imageIds\":[]",
+                "\"content\":\"종류 생략도 완료 루틴 필수\",\"imageIds\":[]",
                 "\"boardType\":\"UNKNOWN\",\"content\":\"잘못된 종류\"")) {
             mvc.perform(post("/api/v1/feed/posts").header("Authorization", auth(owner))
                             .contentType(MediaType.APPLICATION_JSON)
@@ -724,9 +752,6 @@ class FeedIntegrationTest {
         LocalDate today = today();
         Routine first = completedRoutine(owner, "산책", today), second = completedRoutine(owner, "명상", today);
         Long textOnly = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "글만", List.of(), FeedBoardType.FREE));
-        // 사진은 수정할 수 없으므로 사진 없는 글은 인증게시판으로 옮길 수 없음
-        error(() -> commands.update(owner, textOnly, new FeedUpdateRequest(null, FeedBoardType.VERIFICATION, completion(first, today))),
-                "FEED_INPUT_INVALID");
         error(() -> commands.update(owner, textOnly, new FeedUpdateRequest(null, null, completion(first, today))), "FEED_INPUT_INVALID");
         error(() -> commands.update(owner, textOnly, new FeedUpdateRequest(null, null, null)), "FEED_INPUT_INVALID");
         Long photoFree = commands.create(owner, new FeedCreateRequest(UUID.randomUUID(), "", List.of(images.upload(owner, photo()).imageId()), FeedBoardType.FREE));

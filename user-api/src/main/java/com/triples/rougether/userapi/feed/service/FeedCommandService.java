@@ -48,13 +48,12 @@ public class FeedCommandService {
                 : record != null ? FeedBoardType.FREE : FeedBoardType.VERIFICATION;
         List<Long> imageIds = request.imageIds() == null ? List.of() : request.imageIds();
         if (request.clientPostId() == null || imageIds.size() > 10
-                || (boardType == FeedBoardType.VERIFICATION && imageIds.isEmpty())
                 || imageIds.stream().anyMatch(id -> id == null || id <= 0)
                 || new HashSet<>(imageIds).size() != imageIds.size()) throw new BusinessException(FEED_INPUT_INVALID);
         FeedRoutineCompletionRequest completion = request.routineCompletion();
         if (boardType == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
         if (record != null && (boardType != FeedBoardType.FREE || completion != null)) throw new BusinessException(FEED_INPUT_INVALID);
-        String content = text(request.content(), 2000, !imageIds.isEmpty());
+        String content = text(request.content(), 2000, boardType == FeedBoardType.VERIFICATION || !imageIds.isEmpty());
         // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함. 루틴 연결은 있을 때만 hash에 덧붙임.
         String hashed = content + "\u0000" + imageIds;
         if (completion != null) hashed += "\u0000routine:" + completion.routineId() + ":" + completion.date();
@@ -105,8 +104,6 @@ public class FeedCommandService {
         if (post.hasMinigameRecord() && target == FeedBoardType.VERIFICATION) throw new BusinessException(FEED_INPUT_INVALID);
         boolean hasImages = images.existsByPostId(postId);
         boolean switching = target != post.getBoardType();
-        // 사진은 수정할 수 없으므로 사진 없는 글은 인증게시판으로 옮길 수 없음
-        if (switching && target == FeedBoardType.VERIFICATION && !hasImages) throw new BusinessException(FEED_INPUT_INVALID);
         boolean emptyAllowed = target == FeedBoardType.VERIFICATION || hasImages;
         String content = request.content() == null ? null : text(request.content(), 2000, emptyAllowed);
         // 본문을 생략한 채 사진 없는 자유글이 되면 비어 있지 않은 기존 본문이 필요함
