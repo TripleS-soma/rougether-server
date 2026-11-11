@@ -633,7 +633,7 @@ class HouseControllerTest {
                                                 new BigDecimal("0.68"), 3, new BigDecimal("1.1"), 15, false)),
                                         new RoomResponse.RoomCobwebResponse(
                                                 "items/common/decor/room-corner-cobweb.png",
-                                                Instant.parse("2026-08-10T03:30:00Z"), true))),
+                                                Instant.parse("2026-08-10T03:30:00Z"), true), java.math.BigDecimal.ONE)),
                         new HousePreviewDetailResponse.MemberRoomSummary(13L, null, null)), HouseDisplayMode.DIORAMA));
 
         mockMvc.perform(get("/api/v1/houses/1/preview"))

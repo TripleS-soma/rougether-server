@@ -18,7 +18,15 @@ public record RoomLayoutUpdateRequest(
         @NotNull @Valid List<@NotNull SurfaceSlotAssignment> surfaceSlots,
         @Schema(description = "자유배치 가구 전체 목록 (전체 교체 — 요청에 없는 기존 배치는 삭제됨). "
                 + "아이템 종류(placementType)와의 매칭은 슬롯 저장과 동일하게 서버가 강제하지 않고 클라이언트가 맞춰 배치")
-        @NotNull @Valid List<@NotNull PlacementItem> placements) {
+        @NotNull @Valid List<@NotNull PlacementItem> placements,
+        @Schema(description = "캐릭터 크기 배율(0.70~1.30). 발바닥 중앙을 기준으로 확대·축소. "
+                + "생략 또는 null이면 현재 값 유지, 새 방 기본값은 1.00", example = "1.10")
+        BigDecimal characterScale) {
+
+    public RoomLayoutUpdateRequest(Integer baseRevision, List<SurfaceSlotAssignment> surfaceSlots,
+                                   List<PlacementItem> placements) {
+        this(baseRevision, surfaceSlots, placements, null);
+    }
 
     public record SurfaceSlotAssignment(
             @Schema(description = "surface 슬롯 타입. 허용값 3종: wallpaper(벽지)/floor(바닥)/background(배경)",

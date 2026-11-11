@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class RoomLayoutIntegrationTest {
 
+    @Autowired private jakarta.persistence.EntityManager entityManager;
     @Autowired private RoomCommandService roomCommandService;
     @Autowired private RoomQueryService roomQueryService;
     @Autowired private PersonalRoomRepository personalRoomRepository;
@@ -69,6 +70,44 @@ class RoomLayoutIntegrationTest {
         chairOwned = userItemRepository.save(UserItem.create(me, chair));
         tableOwned = userItemRepository.save(UserItem.create(me, table));
         wallpaperOwned = userItemRepository.save(UserItem.create(me, wallpaper));
+    }
+
+    @Test
+    void characterScalePersistsAndLegacyRequestsPreserveIt() {
+        RoomResponse saved = roomCommandService.updateLayout(userId,
+                new RoomLayoutUpdateRequest(0, List.of(), List.of(), new BigDecimal("0.855")));
+        assertThat(saved.characterScale()).isEqualByComparingTo("0.86");
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(roomQueryService.getMyRoom(userId).characterScale()).isEqualByComparingTo("0.86");
+        RoomResponse legacy = roomCommandService.updateLayout(userId,
+                new RoomLayoutUpdateRequest(1, List.of(), List.of()));
+        assertThat(legacy.characterScale()).isEqualByComparingTo("0.86");
+        assertThat(legacy.layoutRevision()).isEqualTo(2);
+    }
+
+    @Test
+    void invalidScaleDoesNotChangeRoomOrRevision() {
+        roomCommandService.updateLayout(userId,
+                new RoomLayoutUpdateRequest(0, List.of(), List.of(), new BigDecimal("1.10")));
+        for (String value : List.of("0.69", "1.31", "-1", "0")) {
+            assertThatThrownBy(() -> roomCommandService.updateLayout(userId,
+                    new RoomLayoutUpdateRequest(1, List.of(), List.of(), new BigDecimal(value))))
+                    .isInstanceOf(BusinessException.class);
+        }
+        RoomResponse after = roomQueryService.getMyRoom(userId);
+        assertThat(after.characterScale()).isEqualByComparingTo("1.10");
+        assertThat(after.layoutRevision()).isEqualTo(1);
+    }
+
+    @Test
+    void staleScaleSaveCannotOverwriteNewerLayout() {
+        roomCommandService.updateLayout(userId,
+                new RoomLayoutUpdateRequest(0, List.of(), List.of(), new BigDecimal("1.30")));
+        assertThatThrownBy(() -> roomCommandService.updateLayout(userId,
+                new RoomLayoutUpdateRequest(0, List.of(), List.of(), new BigDecimal("0.70"))))
+                .isInstanceOf(BusinessException.class);
+        assertThat(roomQueryService.getMyRoom(userId).characterScale()).isEqualByComparingTo("1.30");
     }
 
     private PlacementItem placement(Long userItemId, String x, String y, int zIndex) {

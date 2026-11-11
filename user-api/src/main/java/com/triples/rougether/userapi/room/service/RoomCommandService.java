@@ -103,6 +103,11 @@ public class RoomCommandService {
 
         validateSurfaceSlots(request.surfaceSlots());
         validatePlacements(request.placements());
+        BigDecimal characterScale = request.characterScale();
+        if (characterScale != null && (characterScale.compareTo(new BigDecimal("0.70")) < 0
+                || characterScale.compareTo(new BigDecimal("1.30")) > 0)) {
+            throw new BusinessException(RoomErrorCode.INVALID_PLACEMENT);
+        }
 
         Map<Long, UserItem> ownedItems = ownedItemsOf(userId);
         // 소유 검증을 쓰기(surface upsert·delete)보다 앞에 둬 실패 시 불필요한 delete+rollback 을 피한다.
@@ -134,6 +139,9 @@ public class RoomCommandService {
         roomItemPlacementRepository.saveAll(placements);
 
         // 첫 자유배치 저장 시 그 방만 지연 전환. 기존 positioned 슬롯 row 는 구버전 표시 fallback 으로 남긴다.
+        if (characterScale != null) {
+            room.updateCharacterScale(characterScale);
+        }
         room.convertToFreeLayout();
         room.increaseLayoutRevision();
 
