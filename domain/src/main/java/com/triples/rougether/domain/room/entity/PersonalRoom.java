@@ -13,6 +13,8 @@ import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -57,6 +59,9 @@ public class PersonalRoom {
     // layout 저장 API 의 낙관적 잠금 값(baseRevision 비교). 저장 성공마다 1 증가.
     @Column(name = "layout_revision", nullable = false)
     private int layoutRevision;
+
+    @Column(name = "character_scale", precision = 3, scale = 2, nullable = false)
+    private BigDecimal characterScale = BigDecimal.ONE;
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
@@ -121,6 +126,10 @@ public class PersonalRoom {
         if (layoutFormat == RoomLayoutFormat.SLOT_V1) {
             this.layoutFormat = RoomLayoutFormat.FREE_V1;
         }
+    }
+
+    public void updateCharacterScale(BigDecimal scale) {
+        this.characterScale = scale.setScale(2, RoundingMode.HALF_UP);
     }
 
     public void increaseLayoutRevision() {

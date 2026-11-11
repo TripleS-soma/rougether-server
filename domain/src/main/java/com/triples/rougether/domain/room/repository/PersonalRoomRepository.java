@@ -15,8 +15,8 @@ public interface PersonalRoomRepository extends JpaRepository<PersonalRoom, Long
     // insert 전에 영속성 컨텍스트의 신규 회원을 flush 하되, 관리 중인 완료/지갑 엔티티는 detach 하지 않음.
     @Modifying(flushAutomatically = true)
     @Query(value = """
-            INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, updated_at)
-            VALUES (:userId, 0, 0, 'SLOT_V1', 0, CURRENT_TIMESTAMP)
+            INSERT INTO personal_rooms (user_id, growth_level, growth_points, layout_format, layout_revision, character_scale, updated_at)
+            VALUES (:userId, 0, 0, 'SLOT_V1', 0, 1.00, CURRENT_TIMESTAMP)
             ON DUPLICATE KEY UPDATE user_id = personal_rooms.user_id
             """, nativeQuery = true)
     void ensureExists(@Param("userId") Long userId);

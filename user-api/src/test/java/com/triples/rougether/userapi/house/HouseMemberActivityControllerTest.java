@@ -64,7 +64,7 @@ class HouseMemberActivityControllerTest {
         authAsUser7();
         when(houseMemberActivityService.getMemberRoom(7L, 1L, 12L)).thenReturn(new RoomResponse(
                 8L, "아침형 인간 도전 중", 3, 60L, 6, false, 10, RoomLayoutFormat.FREE_V1, 2, null,
-                List.of(), List.of(), new RoomResponse.RoomStreakResponse(1, 4), null, Instant.EPOCH));
+                List.of(), List.of(), new RoomResponse.RoomStreakResponse(1, 4), null, Instant.EPOCH, java.math.BigDecimal.ONE));
 
         mockMvc.perform(get("/api/v1/houses/1/members/12/room"))
                 .andExpect(status().isOk())
@@ -78,7 +78,7 @@ class HouseMemberActivityControllerTest {
         authAsUser7();
         when(houseMemberActivityService.getMemberRoom(7L, 1L, 12L)).thenReturn(new RoomResponse(
                 8L, null, 0, 0L, 20, false, 10, RoomLayoutFormat.SLOT_V1, 0, null,
-                List.of(), List.of(), new RoomResponse.RoomStreakResponse(0, 0), null, Instant.EPOCH));
+                List.of(), List.of(), new RoomResponse.RoomStreakResponse(0, 0), null, Instant.EPOCH, java.math.BigDecimal.ONE));
 
         mockMvc.perform(get("/api/v1/houses/1/members/12/room"))
                 .andExpect(status().isOk())

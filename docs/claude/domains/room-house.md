@@ -85,3 +85,12 @@
 - `house.display_mode`는 `DIORAMA`(리디자인 집, 기본값)와 `CLASSIC`(기존 집) 두 값입니다. V96이 기존 집도 `DIORAMA`로 초기화합니다. 개인 방 배치와 커버 키는 그대로 유지합니다.
 - 방장만 기존 `PUT /api/v1/houses/{houseId}`의 `displayMode`로 변경합니다. house 행 잠금과 ACTIVE OWNER 검사를 통과한 같은 트랜잭션에서 저장하며 생략 또는 null은 유지합니다. 잘못된 enum은 400입니다.
 - 상세, 내 집 목록, 탐색, 공개 미리보기, 초대코드 미리보기, 내 입주 신청 목록과 설정 저장 응답에 같은 값을 내려줍니다. 서버에 저장한 집 공통 설정이므로 구성원 개인 설정으로 덮어쓰지 않습니다.
+
+## 개인 방 캐릭터 크기 (2026-11-11)
+
+- `personal_rooms.character_scale`: `DECIMAL(3,2) NOT NULL DEFAULT 1.00` (V104).
+- `PUT /api/v1/rooms/me/layout`의 선택 필드 `characterScale`: 0.70~1.30, 소수 둘째 자리 HALF_UP. 범위 밖이면 `ROOM_INVALID_PLACEMENT`(400). 생략/null은 기존 값 유지.
+- 가구와 동일한 방 행 잠금, 트랜잭션, `baseRevision` 검증을 사용한다. 저장 실패나 revision 충돌 시 크기도 변경되지 않는다.
+- 내 방/방문 응답 및 공개 렌더 부분집합에 `characterScale`을 반환한다. 예전 앱은 추가 필드를 무시할 수 있다.
+- 앱은 꾸미기에서 캐릭터를 눌러 70~130% 슬라이더를 열고 기본 크기 복원, 실행 취소, 적용/취소를 지원한다. 가로 중앙 및 기존 발 기준점은 고정한다.
+- 선행 PR #521의 V102/V103을 먼저 병합·배포한 후 이 V104를 배포한다. 서버 migration/API 배포를 먼저 완료한 후 모바일 기능을 배포한다. 이 문서는 구현 계약이며 실제 배포 완료 기록이 아니다.

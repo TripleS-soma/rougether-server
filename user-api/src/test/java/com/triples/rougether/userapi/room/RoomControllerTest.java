@@ -78,7 +78,7 @@ class RoomControllerTest {
                 List.of(),
                 new RoomResponse.RoomStreakResponse(3, 7),
                 null,
-                Instant.EPOCH);
+                Instant.EPOCH, java.math.BigDecimal.ONE);
         when(roomQueryService.getMyRoom(1L)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/rooms/me"))
@@ -132,7 +132,7 @@ class RoomControllerTest {
                 List.of(),
                 new RoomResponse.RoomStreakResponse(0, 0),
                 null,
-                Instant.EPOCH);
+                Instant.EPOCH, java.math.BigDecimal.ONE);
         when(roomCommandService.updateSlots(eq(1L), any())).thenReturn(response);
 
         mockMvc.perform(put("/api/v1/rooms/me/slots")
@@ -172,7 +172,7 @@ class RoomControllerTest {
                         new BigDecimal("1.1"), 15, false, Instant.EPOCH)),
                 new RoomResponse.RoomStreakResponse(0, 0),
                 null,
-                Instant.EPOCH);
+                Instant.EPOCH, java.math.BigDecimal.ONE);
         when(roomCommandService.updateLayout(eq(1L), any())).thenReturn(response);
 
         mockMvc.perform(put("/api/v1/rooms/me/layout")

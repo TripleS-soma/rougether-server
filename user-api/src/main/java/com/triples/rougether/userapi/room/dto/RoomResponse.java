@@ -66,7 +66,9 @@ public record RoomResponse(
         @Schema(description = "활성 거미줄 오버레이. 아직 발생하지 않았거나 청소했으면 null")
         RoomCobwebResponse cobweb,
         @Schema(description = "방 최근 변경 시각")
-        Instant updatedAt) {
+        Instant updatedAt,
+        @Schema(description = "캐릭터 크기 배율(0.70~1.30), 기본값 1.00. 발바닥 중앙 기준", example = "1.00")
+        BigDecimal characterScale) {
 
     public static RoomResponse of(PersonalRoom room, String ownerBio, List<RoomSurfaceSlot> slots,
                                   List<RoomItemPlacement> placements, Streak streak,
@@ -97,7 +99,7 @@ public record RoomResponse(
                 placementResponses,
                 RoomStreakResponse.of(streak, referenceDate),
                 RoomCobwebResponse.of(cobweb),
-                room.getUpdatedAt());
+                room.getUpdatedAt(), room.getCharacterScale());
     }
 
     // 공백뿐인 소개는 소개 없음과 같게 null 로 내림. 저장값 자체는 건드리지 않음.
