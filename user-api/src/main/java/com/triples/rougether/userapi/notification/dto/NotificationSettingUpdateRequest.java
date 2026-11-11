@@ -12,7 +12,7 @@ public record NotificationSettingUpdateRequest(
         Boolean reminder,
         @Schema(description = "집 알림(입주·퇴거·응원·단체 미션 달성) 수신 여부. 바꾸지 않으려면 생략", example = "false")
         Boolean house,
-        @Schema(description = "피드 댓글 알림 수신 여부. 바꾸지 않으려면 생략", example = "true")
+        @Schema(description = "피드 알림(댓글·답글, 집 피드 새 글 푸시) 수신 여부. 바꾸지 않으려면 생략", example = "true")
         Boolean feed,
         @Schema(description = "거래소 알림(판매 체결·구매 대기 체결·구매 대기 등록) 수신 여부. 바꾸지 않으려면 생략", example = "true")
         Boolean market,

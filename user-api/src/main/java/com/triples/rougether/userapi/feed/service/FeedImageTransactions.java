@@ -45,7 +45,9 @@ public class FeedImageTransactions {
         if (image.getPost() == null) {
             if (!image.getOwner().getId().equals(viewer) || !image.getExpiresAt().isAfter(clock.instant()))
                 throw new BusinessException(FEED_IMAGE_NOT_FOUND);
-        } else if (image.getPost().getDeletedAt() != null) throw new BusinessException(FEED_IMAGE_NOT_FOUND);
+        } else if (image.getPost().getDeletedAt() != null || !access.canSee(image.getPost(), viewer))
+            // 집 글 사진은 그 집 구성원만 조회함(#528).
+            throw new BusinessException(FEED_IMAGE_NOT_FOUND);
         return image.getStorageKey();
     }
     public void cancel(Long userId, Long imageId) {

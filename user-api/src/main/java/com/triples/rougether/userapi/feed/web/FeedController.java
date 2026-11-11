@@ -23,21 +23,22 @@ public class FeedController {
     private final FeedCommandService commands;
     private final FeedImageService images;
 
-    @Operation(summary = "전체 또는 작성자별 최신 피드", description = "boardType=FREE 또는 VERIFICATION으로 게시판을 선택합니다. 생략하면 전체 피드이며 authorId로 작성자를 함께 지정할 수 있습니다.")
+    @Operation(summary = "전체·작성자별·집별 최신 피드", description = "boardType=FREE 또는 VERIFICATION으로 게시판을 선택합니다. 생략하면 전체 피드이며 authorId로 작성자를 함께 지정할 수 있습니다. houseId를 지정하면 그 집 구성원만 보는 집 글을 조회하고(구성원이 아니면 HOUSE_NOT_MEMBER, 없는 집이면 HOUSE_NOT_FOUND), 생략하면 공개 글만 조회합니다.")
     @GetMapping("/posts")
     public FeedPageResponse<FeedPostResponse> list(@CurrentUser AuthUser user,
             @RequestParam(required = false) @Positive Long authorId,
             @RequestParam(required = false) @Positive Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size,
-            @RequestParam(required = false) FeedBoardType boardType) {
-        return query.list(user.id(), authorId, cursor, size, boardType);
+            @RequestParam(required = false) FeedBoardType boardType,
+            @RequestParam(required = false) @Positive Long houseId) {
+        return query.list(user.id(), authorId, cursor, size, boardType, houseId);
     }
     @Operation(summary = "게시물 상세")
     @GetMapping("/posts/{postId}")
     public FeedPostResponse get(@CurrentUser AuthUser user, @PathVariable @Positive Long postId) {
         return query.get(user.id(), postId);
     }
-    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장과 routineCompletion(본인 루틴의 KST 오늘~6일 전 완료 기록)이 필요합니다. FREE에는 routineCompletion을 보낼 수 없습니다. minigameRecord(본인의 끝난 미니게임 판 runId)는 FREE 전용이며 점수·순위·최고 기록 여부·달성 시각은 서버가 게시 시점에 고정합니다. VERIFICATION이나 routineCompletion과 함께 보내면 FEED_INPUT_INVALID, 연결할 수 없는 판이면 FEED_MINIGAME_RECORD_INVALID입니다. boardType 생략은 VERIFICATION이며, minigameRecord가 있으면 FREE입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다.")
+    @Operation(summary = "게시물 등록", description = "FREE는 사진 없이 본문만 등록할 수 있고 VERIFICATION은 사진 1~10장과 routineCompletion(본인 루틴의 KST 오늘~6일 전 완료 기록)이 필요합니다. FREE에는 routineCompletion을 보낼 수 없습니다. minigameRecord(본인의 끝난 미니게임 판 runId)는 FREE 전용이며 점수·순위·최고 기록 여부·달성 시각은 서버가 게시 시점에 고정합니다. VERIFICATION이나 routineCompletion과 함께 보내면 FEED_INPUT_INVALID, 연결할 수 없는 판이면 FEED_MINIGAME_RECORD_INVALID입니다. boardType 생략은 VERIFICATION이며, minigameRecord가 있으면 FREE입니다. clientPostId는 재시도 시 동일 UUID를 유지합니다. houseId를 보내면 그 집 구성원만 보는 집 글로 등록합니다(구성원이 아니면 HOUSE_NOT_MEMBER, 없는 집이면 HOUSE_NOT_FOUND).")
     @PostMapping("/posts")
     @ResponseStatus(HttpStatus.CREATED)
     public FeedPostResponse create(@CurrentUser AuthUser user, @Valid @RequestBody FeedCreateRequest request) {

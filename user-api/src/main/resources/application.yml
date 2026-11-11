@@ -198,3 +198,10 @@ christmas:
     enabled: ${CHRISTMAS_EVENT_ENABLED:false}
   coin-bonus:
     enabled: ${CHRISTMAS_COIN_BONUS_ENABLED:false}
+
+# 집 피드 새 글 푸시(#530)의 배포 후 유예. 집 피드 화면이 없는 구버전 앱에 열 수 없는 푸시가 가지 않도록,
+# 설정 테이블 migration(add_house_feed_notification_settings)이 적용된 시각부터 이 시간 동안은 새 글 푸시를 보내지 않는다.
+# 글 등록·조회와 알림 설정 API 는 유예와 무관하게 동작한다. 0s 면 유예 없이 바로 보낸다.
+feed:
+  house-post-push:
+    grace: 24h

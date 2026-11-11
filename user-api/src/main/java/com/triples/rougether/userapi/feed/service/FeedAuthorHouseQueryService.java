@@ -28,7 +28,8 @@ public class FeedAuthorHouseQueryService {
 
     public FeedAuthorHouseListResponse list(Long viewer, Long postId) {
         access.active(viewer);
-        var post = posts.findVisible(postId, viewer)
+        // 집 글은 구성원끼리 보는 글이라 입주 신청 진입로를 제공하지 않음(#528).
+        var post = posts.findVisible(postId, viewer).filter(found -> !found.isHousePost())
                 .orElseThrow(() -> new BusinessException(FeedErrorCode.FEED_POST_NOT_FOUND));
         var authorHouses = members.findFeedAuthorHousesByUserIdAndStatus(
                 post.getAuthor().getId(), HouseMemberStatus.ACTIVE);

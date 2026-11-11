@@ -43,14 +43,14 @@ public class ContentReportService {
 
     public ContentReportResponse reportFeedPost(Long userId, Long postId, ContentReportRequest request) {
         access.lockActive(userId);
-        FeedPost post = existingPost(postId);
+        FeedPost post = existingPost(postId, userId);
         return receive(userId, ContentReportTargetType.FEED_POST, postId, post.getAuthor().getId(), request);
     }
 
     public ContentReportResponse reportFeedComment(Long userId, Long postId, Long commentId,
                                                    ContentReportRequest request) {
         access.lockActive(userId);
-        existingPost(postId);
+        existingPost(postId, userId);
         FeedComment comment = comments.findByIdAndPostId(commentId, postId)
                 .filter(found -> found.getDeletedAt() == null && !found.getAuthor().isDeleted())
                 .orElseThrow(() -> new BusinessException(FeedErrorCode.FEED_COMMENT_NOT_FOUND));
@@ -89,9 +89,11 @@ public class ContentReportService {
         return ContentReportResponse.of(report);
     }
 
-    private FeedPost existingPost(Long postId) {
+    // 집 글과 그 댓글은 그 집 구성원만 신고할 수 있고, 비구성원에게는 없는 글로 응답함(#528).
+    private FeedPost existingPost(Long postId, Long userId) {
         return posts.findById(postId)
-                .filter(post -> post.getDeletedAt() == null && !post.getAuthor().isDeleted())
+                .filter(post -> post.getDeletedAt() == null && !post.getAuthor().isDeleted()
+                        && access.canSee(post, userId))
                 .orElseThrow(() -> new BusinessException(FeedErrorCode.FEED_POST_NOT_FOUND));
     }
 

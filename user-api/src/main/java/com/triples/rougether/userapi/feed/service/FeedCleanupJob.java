@@ -20,6 +20,9 @@ public class FeedCleanupJob {
 
     @Scheduled(fixedDelayString = "${feed.cleanup.delay-ms:300000}", initialDelayString = "${feed.cleanup.delay-ms:300000}")
     public void run() {
+        // 이 단계가 실패해도 탈퇴 정리와 사진 정리는 이어서 돎. 다음 실행이 다시 시도함.
+        try { cleanup.dissolvedHousePosts(); }
+        catch (RuntimeException e) { log.warn("해체된 집의 피드 글 정리 실패", e); }
         cleanup.withdrawnContent();
         long after = 0;
         while (true) {
