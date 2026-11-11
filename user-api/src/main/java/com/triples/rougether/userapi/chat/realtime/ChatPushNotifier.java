@@ -10,6 +10,7 @@ import com.triples.rougether.domain.house.repository.HouseRepository;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.notification.entity.NotificationType;
+import com.triples.rougether.infra.fcm.FcmSender;
 import com.triples.rougether.userapi.chat.service.ChatAccessPolicy;
 import com.triples.rougether.userapi.chat.service.ChatMessageSent;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
@@ -30,6 +31,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 집 채팅 푸시(#435). 메시지 저장이 커밋된 뒤 채팅을 보고 있지 않은 구성원에게 메시지마다 FCM 푸시를 보냄.
+// 같은 집의 알림은 groupKey 로 한 묶음이 됨(#526).
 // 알림함(notification)에는 남기지 않음 — 기록은 채팅 화면이 맡음. 실패는 전송 응답에 영향을 주지 않음.
 @Component
 public class ChatPushNotifier {
@@ -85,8 +87,10 @@ public class ChatPushNotifier {
         User sender = message.getSender();
         NotificationContent content = NotificationMessages.chatMessage(houseName, sender.getNickname(),
                 message.getContent());
+        // groupKey: 같은 집 채팅 알림을 한 묶음으로 표시함 — 앱은 채팅을 열 때 이 묶음을 한 번에 지움
         Map<String, String> data = Map.of("type", NotificationType.CHAT_MESSAGE.name(),
-                "roomId", room.getId().toString(), "houseId", room.getHouseId().toString());
+                "roomId", room.getId().toString(), "houseId", room.getHouseId().toString(),
+                FcmSender.GROUP_KEY, "chat-house-" + room.getHouseId());
         Set<Long> muted = new HashSet<>(reads.findPushMutedUserIds(room.getId()));
         for (ChatAccessPolicy.Participant participant : access.participants(room)) {
             Long userId = participant.userId();
