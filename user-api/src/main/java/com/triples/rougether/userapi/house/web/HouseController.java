@@ -228,12 +228,16 @@ public class HouseController {
             description = "참여 중인 집에서 나갑니다. 해당 집의 활성(ACTIVE) 구성원만 호출할 수 있습니다. "
                     + "탈퇴하면 상태가 LEFT 로 바뀌고 집의 현재 구성원 수가 1 감소하며, 이후 같은 집에 다시 참여하면 기존 구성원 정보가 재활성화됩니다. "
                     + "소유자는 사람 구성원이 본인뿐이면(동거 봇만 남아 있어도) 바로 탈퇴할 수 있고, 다른 사람 활성 구성원이 있으면 소유권을 양도한 뒤 탈퇴할 수 있습니다. "
-                    + "마지막 사람이 나가면 남은 동거 봇도 함께 나가고 집이 정리되어 탐색·조회에서 제외됩니다.")
+                    + "마지막 사람이 나가면 남은 동거 봇도 함께 나가고 집이 정리되어 탐색·조회에서 제외됩니다. "
+                    + "deleteFeedContent=true 를 보내면 나가면서 이 집 피드에 남긴 내 글·댓글도 함께 지웁니다. "
+                    + "나간 뒤에는 본인도 집 글에 접근할 수 없어 직접 지울 수 없으며, 보내지 않으면 글은 남은 구성원에게 계속 보입니다.")
     @DeleteMapping("/{houseId}/members/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(@CurrentUser AuthUser user,
-                      @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId) {
-        houseMemberCommandService.leave(user.id(), houseId);
+                      @Parameter(description = "집 ID. GET /api/v1/houses 또는 GET /api/v1/me/houses 응답의 houseId 값") @PathVariable Long houseId,
+                      @Parameter(description = "true 면 이 집 피드에 남긴 내 글·댓글도 함께 지움. 기본 false")
+                      @RequestParam(defaultValue = "false") boolean deleteFeedContent) {
+        houseMemberCommandService.leave(user.id(), houseId, deleteFeedContent);
     }
 
     @Operation(summary = "구성원 강퇴",

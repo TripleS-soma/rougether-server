@@ -61,4 +61,13 @@ public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
             + "p.deletedAt = :now where p.deletedAt is null "
             + "and p.houseId in (select h.id from House h where h.deletedAt is not null)")
     int eraseDissolvedHouses(@Param("now") java.time.Instant now);
+
+    // 집을 나가며 "내 글도 지우기"를 고른 구성원의 그 집 글을 본인 삭제와 같은 tombstone 으로 만듦.
+    // 그 글의 댓글·좋아요·사진은 삭제된 글을 치우는 기존 정리 단계가 처리함.
+    @Modifying
+    @Query("update FeedPost p set p.content = '', p.routineId = null, p.routineDate = null, p.routineTitle = null, "
+            + "p.minigameGameCode = null, p.minigameScore = null, p.minigameRank = null, p.minigamePersonalBest = null, p.minigameAchievedAt = null, "
+            + "p.deletedAt = :now where p.deletedAt is null and p.houseId = :houseId and p.author.id = :authorId")
+    int eraseAuthoredInHouse(@Param("houseId") Long houseId, @Param("authorId") Long authorId,
+                             @Param("now") java.time.Instant now);
 }

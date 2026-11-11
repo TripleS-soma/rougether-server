@@ -85,6 +85,7 @@ class HouseFeedIntegrationTest {
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager em;
+    @Autowired com.triples.rougether.userapi.house.service.HouseMemberCommandService houseMembers;
     @Autowired java.time.Clock clock;
     // 별도 트랜잭션으로 사용자 행을 잠그는 접속 기록은 미커밋 테스트 픽스처와 경합하므로 대체함.
     @MockitoBean com.triples.rougether.userapi.activity.service.UserDailyActivityRecorder activity;
@@ -458,6 +459,82 @@ class HouseFeedIntegrationTest {
         em.flush();
         error(() -> images.readableKey(owner.getId(), photo), "FEED_IMAGE_NOT_FOUND");
         error(() -> reports.reportFeedPost(owner.getId(), post, report), "FEED_POST_NOT_FOUND");
+    }
+
+    // 나간 뒤에는 본인도 집 글을 지울 수 없으므로, 나가는 시점에 "내 글도 지우기"를 고를 수 있음.
+    @Test void 나가면서_내_글도_지우기를_고르면_그_집에_남긴_글과_댓글만_지운다() {
+        Long mine = housePost(member, "나가면서 지울 글");
+        Long ownerPost = housePost(owner, "방장이 쓴 글");
+        var myComment = commands.comment(member.getId(), ownerPost, comment("나가면서 지울 댓글"));
+        var reply = commands.comment(owner.getId(), ownerPost,
+                new FeedCommentRequest(UUID.randomUUID(), "방장이 단 답글", myComment.commentId()));
+        commands.comment(owner.getId(), mine, comment("내 글에 달린 남의 댓글"));
+        House other = house(member);
+        Long elsewhere = commands.create(member.getId(), free("다른 집에 쓴 글", other.getId()));
+        Long open = commands.create(member.getId(), free("공개 글", null));
+        var openComment = commands.comment(member.getId(), open, comment("공개 글 댓글"));
+        em.flush();
+        em.clear();
+
+        houseMembers.leave(member.getId(), home.getId(), true);
+        em.flush();
+        em.clear();
+
+        // 이 집에 쓴 글은 삭제된 글이 되고 남은 구성원 목록에서 빠짐.
+        assertThat(houseList(owner)).containsExactly(ownerPost);
+        error(() -> query.get(owner.getId(), mine), "FEED_POST_NOT_FOUND");
+        assertThat(jdbc.queryForObject("select count(*) from feed_posts where id=? and content='' and deleted_at is not null",
+                Long.class, mine)).isEqualTo(1);
+        // 남의 글에 단 댓글은 본문만 비우고 그 아래 남의 답글은 유지함.
+        var threads = query.comments(owner.getId(), ownerPost, null, 20, true).items();
+        assertThat(threads).hasSize(1);
+        assertThat(threads.getFirst().deleted()).isTrue();
+        assertThat(threads.getFirst().content()).isEmpty();
+        assertThat(query.replies(owner.getId(), ownerPost, myComment.commentId(), null, 20).items())
+                .extracting(c -> c.commentId()).containsExactly(reply.commentId());
+        // 다른 집 글과 공개 글·댓글은 그대로임.
+        assertThat(query.get(member.getId(), elsewhere).content()).isEqualTo("다른 집에 쓴 글");
+        assertThat(query.get(outsider.getId(), open).content()).isEqualTo("공개 글");
+        assertThat(query.comments(outsider.getId(), open, null, 20).items())
+                .extracting(c -> c.commentId()).containsExactly(openComment.commentId());
+        // 지운 글에 달려 있던 남의 댓글은 이어지는 정리 작업이 치움.
+        cleanup.withdrawnContent();
+        assertThat(jdbc.queryForObject("select count(*) from feed_comments where post_id=? and (content<>'' or deleted_at is null)",
+                Long.class, mine)).isZero();
+    }
+
+    @Test void 고르지_않고_나가면_글과_댓글은_그대로_남는다() {
+        Long mine = housePost(member, "남겨 둘 글");
+        Long ownerPost = housePost(owner, "방장이 쓴 글");
+        commands.comment(member.getId(), ownerPost, comment("남겨 둘 댓글"));
+        em.flush();
+        em.clear();
+
+        houseMembers.leave(member.getId(), home.getId());
+        em.flush();
+        em.clear();
+
+        assertThat(houseList(owner)).containsExactly(ownerPost, mine);
+        assertThat(query.get(owner.getId(), mine).content()).isEqualTo("남겨 둘 글");
+        assertThat(query.comments(owner.getId(), ownerPost, null, 20).items()).hasSize(1);
+        error(() -> query.get(member.getId(), mine), "FEED_POST_NOT_FOUND");
+    }
+
+    @Test void 나가기_API는_선택값을_받아_내_글을_지운다() throws Exception {
+        Long mine = housePost(member, "화면에서 나가며 지울 글");
+        em.flush();
+        em.clear();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/v1/houses/" + home.getId() + "/members/me").param("deleteFeedContent", "true")
+                        .header("Authorization", auth(member)))
+                .andExpect(status().isNoContent());
+        em.flush();
+        em.clear();
+
+        assertThat(houseList(owner)).isEmpty();
+        assertThat(jdbc.queryForObject("select count(*) from feed_posts where id=? and deleted_at is not null", Long.class, mine))
+                .isEqualTo(1);
     }
 
     @Test void 강퇴된_구성원도_글은_남기고_접근만_잃는다() {
