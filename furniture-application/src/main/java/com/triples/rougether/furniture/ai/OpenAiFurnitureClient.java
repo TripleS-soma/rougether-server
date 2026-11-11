@@ -137,6 +137,8 @@ public class OpenAiFurnitureClient implements FurnitureAiClient {
         if (context.subjectJson() == null) throw new FurnitureAiFailure("SUBJECT_FEATURES_UNAVAILABLE");
         if (!subject(context.subjectJson()).path("furniture").asBoolean()) throw new FurnitureAiFailure("PHOTO_REJECTED");
         Map<String, Object> request = base();
+        // 이미지 도구는 텍스트 추론의 low 설정을 지원하지 않으므로 공급자 기본값을 사용한다.
+        request.remove("reasoning");
         request.put("input", inputs(context, action == Action.EDIT, false));
         request.put("instructions", STYLE + """
 

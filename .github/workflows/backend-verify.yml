@@ -28,7 +28,7 @@ jobs:
             shard: '-PciShardIndex=1 -PciShardCount=2'
             jars: ''
           - group: other-modules
-            tasks: 'test compileJava :admin-api:bootJar :batch:bootJar -x :user-api:test'
+            tasks: 'test compileJava :admin-api:bootJar :batch:bootJar :furniture-lambda-ai:buildZip -x :user-api:test'
             shard: ''
             jars: 'admin-api batch'
     steps:
@@ -81,6 +81,9 @@ jobs:
             test "${#jars[@]}" -eq 1
             cp "${jars[0]}" "ci-jars/jars/$module/app.jar"
           done
+      - name: Collect tested furniture AI package and source identity
+        if: matrix.group == 'other-modules'
+        run: python3 .github/scripts/furniture_ai_release.py prepare
       - uses: actions/upload-artifact@v4
         if: matrix.jars != ''
         with:
