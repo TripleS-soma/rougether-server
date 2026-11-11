@@ -53,7 +53,6 @@ import com.triples.rougether.userapi.global.security.MemberRole;
 import com.triples.rougether.userapi.house.service.HouseMemberCommandService;
 import com.triples.rougether.userapi.logingift.service.LoginGiftAccessRecorder;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
-import jakarta.persistence.EntityManagerFactory;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -76,7 +75,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
-import org.hibernate.SessionFactory;
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,7 +94,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector="
+        + "com.triples.rougether.userapi.chat.ChatImageIntegrationTest$QueryCounter")
 @AutoConfigureMockMvc
 class ChatImageIntegrationTest {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -104,7 +104,6 @@ class ChatImageIntegrationTest {
     @MockitoSpyBean ChatQueryService query;
     @MockitoSpyBean AiUserEvents aiEvents;
     @MockitoBean FcmPushExecutor fcm;
-    @Autowired EntityManagerFactory entityManagerFactory;
     @Autowired ChatImageService images;
     @Autowired ChatCleanupTransactions cleanup;
     @Autowired ChatCleanupJob job;
@@ -213,16 +212,25 @@ class ChatImageIntegrationTest {
                 users.getReferenceById(userId), HouseMemberRole.MEMBER)));
     }
 
+    // 전역 Hibernate 통계에는 비동기 푸시의 SQL도 섞이므로 조회 스레드만 센다.
+    public static class QueryCounter implements StatementInspector {
+        private static final ThreadLocal<Long> COUNT = new ThreadLocal<>();
+
+        @Override
+        public String inspect(String sql) {
+            Long count = COUNT.get();
+            if (count != null) COUNT.set(count + 1);
+            return sql;
+        }
+    }
+
     long statementsDuring(Runnable action) {
-        var statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean wasEnabled = statistics.isStatisticsEnabled();
-        statistics.setStatisticsEnabled(true);
-        statistics.clear();
+        QueryCounter.COUNT.set(0L);
         try {
             action.run();
-            return statistics.getPrepareStatementCount();
+            return QueryCounter.COUNT.get();
         } finally {
-            statistics.setStatisticsEnabled(wasEnabled);
+            QueryCounter.COUNT.remove();
         }
     }
 
@@ -735,6 +743,22 @@ class ChatImageIntegrationTest {
 
         commands.send(f.owner(), f.room(), new ChatSendRequest(UUID.randomUUID(), "글"));
         verify(aiEvents).chat(any(), anyLong(), anyLong());
+    }
+
+    @Test
+    void 쿼리_수_측정은_다른_스레드의_조회를_제외한다() throws Exception {
+        Fixture f = fixture();
+        assertThat(statementsDuring(() -> users.findById(f.owner()))).isPositive();
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            long counted = statementsDuring(() -> {
+                try {
+                    executor.submit(() -> users.findById(f.owner())).get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    throw new AssertionError(e);
+                }
+            });
+            assertThat(counted).isZero();
+        }
     }
 
     @Test
