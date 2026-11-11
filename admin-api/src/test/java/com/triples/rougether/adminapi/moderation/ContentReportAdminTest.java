@@ -96,6 +96,30 @@ class ContentReportAdminTest {
 
     @Test
     @WithMockUser(username = "admin", roles = "ADMIN")
+    void 향후_채팅_신고_행이_있어도_목록은_열리고_처리는_명시적으로_거부한다() throws Exception {
+        // 후속 migration의 CHECK 확장을 적용해 롤백 버전의 실제 JPA 역직렬화를 검증함.
+        em.createNativeQuery("ALTER TABLE content_reports DROP CONSTRAINT ck_content_reports_target_type").executeUpdate();
+        Long id = null;
+        try {
+            ContentReport future = report(reporter, ContentReportTargetType.CHAT_MESSAGE, 99999L);
+            em.flush();
+            id = future.getId();
+            em.clear();
+            mockMvc.perform(get("/admin/reports").param("status", "RECEIVED"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].targetType").value("CHAT_MESSAGE"));
+            mockMvc.perform(post("/admin/reports/{id}/resolve", id).with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"action\":\"HIDE\"}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("REPORT_REQUIRES_CHAT_RELEASE"));
+        } finally {
+            if (id != null) em.createNativeQuery("DELETE FROM content_reports WHERE id = :id").setParameter("id", id).executeUpdate();
+            em.createNativeQuery("ALTER TABLE content_reports ADD CONSTRAINT ck_content_reports_target_type CHECK (target_type IN ('FEED_POST', 'FEED_COMMENT', 'MARKET_ASSET'))").executeUpdate();
+        }
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
     void 신고_페이지가_렌더링된다() throws Exception {
         mockMvc.perform(get("/content-reports"))
                 .andExpect(status().isOk())
