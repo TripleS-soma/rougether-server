@@ -785,6 +785,27 @@ resource "aws_iam_role_policy" "webex_alert_secret_sync" {
   })
 }
 
+# 키 교체는 docker-publish.yml의 명시적 실행으로만 수행한다. 가구 함수 외에는 변경할 수 없다.
+resource "aws_iam_role_policy" "llm_key_rotation" {
+  name = "${local.name}-llm-key-rotation-policy"
+  role = aws_iam_role.github_actions_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/rougether-dev/llm/api-key"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["lambda:GetFunctionConfiguration", "lambda:UpdateFunctionConfiguration"]
+        Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:rougether-dev-furniture-ai"
+      }
+    ]
+  })
+}
+
 resource "aws_instance" "app" {
   ami                         = local.instance_ami_id
   instance_type               = var.instance_type
