@@ -3,6 +3,8 @@ package com.triples.rougether.userapi.attendance.error;
 import com.triples.rougether.common.error.ErrorCode;
 
 public enum AttendanceErrorCode implements ErrorCode {
+    ATTENDANCE_CHARACTER_REWARD_NOT_AVAILABLE("ATTENDANCE_CHARACTER_REWARD_NOT_AVAILABLE", "수령할 수 있는 캐릭터 보상이 없습니다.", 409),
+    ATTENDANCE_CHARACTER_REWARD_LOCKED("ATTENDANCE_CHARACTER_REWARD_LOCKED", "캐릭터 보상 출석 일차를 달성하지 못했습니다.", 409),
     ATTENDANCE_EVENT_NOT_FOUND("ATTENDANCE_EVENT_NOT_FOUND", "진행 중인 출석 이벤트가 없습니다.", 404),
     ATTENDANCE_EVENT_NOT_ACTIVE("ATTENDANCE_EVENT_NOT_ACTIVE", "출석 이벤트 참여 기간이 아닙니다.", 409),
     ATTENDANCE_EVENT_CONFIGURATION_INVALID(

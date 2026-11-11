@@ -54,6 +54,9 @@ public class Character implements com.triples.rougether.domain.i18n.LocalizedNam
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @Column(name = "is_attendance_reward", nullable = false)
+    private boolean attendanceReward;
+
     @OneToMany(mappedBy = "character")
     @OrderBy("sortOrder ASC, id ASC")
     private List<CharacterPose> poses = new ArrayList<>();
@@ -70,6 +73,15 @@ public class Character implements com.triples.rougether.domain.i18n.LocalizedNam
     // 온보딩 무료 선택권 판정·뽑기 풀·봇 지급에서 계속 제외함. 카탈로그의 대소문자 차이도 우회로 허용하지 않음.
     public boolean isRoomLevelReward() {
         return MORU_CODE.equalsIgnoreCase(code);
+    }
+
+    public void reserveForAttendance() {
+        this.attendanceReward = true;
+    }
+
+    // 전용 보상 캐릭터는 온보딩 무료 선택, 뽑기, 봇 기본 지급에서 제외함.
+    public boolean isSpecialReward() {
+        return attendanceReward || isRoomLevelReward();
     }
 
     // admin 카탈로그 화면의 사용/미사용 토글.

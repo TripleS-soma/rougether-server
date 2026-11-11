@@ -42,7 +42,7 @@ public record RoomResponse(
         @Schema(description = "다음 방 레벨까지 남은 포인트. 레벨 L에서 다음 레벨에 필요한 구간 포인트는 20 + 2 × L",
                 example = "12")
         long pointsToNextLevel,
-        @Schema(description = "캐릭터 뽑기·교체 해금 여부(방 레벨 10 달성 기준). 현재 레벨과 최고 달성 레벨 중 큰 값이 "
+        @Schema(description = "캐릭터 뽑기 해금 여부(방 레벨 10 달성 기준). 현재 레벨과 최고 달성 레벨 중 큰 값이 "
                 + "characterUnlockLevel 이상이면 true — 완료 취소로 레벨이 내려가도 해금은 유지됨",
                 example = "false", requiredMode = Schema.RequiredMode.REQUIRED)
         boolean characterUnlocked,

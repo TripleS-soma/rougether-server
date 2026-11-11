@@ -1,6 +1,7 @@
 package com.triples.rougether.domain.attendance.entity;
 
 import com.triples.rougether.domain.shop.entity.Item;
+import com.triples.rougether.domain.character.entity.Character;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -69,6 +70,14 @@ public class AttendanceEvent {
     @Column(nullable = false)
     private int generationCreditAmount;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reward_character_id")
+    private Character rewardCharacter;
+
+    @Column(name = "character_reward_day", nullable = false)
+    private int characterRewardDay;
+
+
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
@@ -120,6 +129,15 @@ public class AttendanceEvent {
         event.milestoneEvery = milestoneEvery;
         event.milestoneCoinAmount = milestoneCoinAmount;
         return event;
+    }
+
+    public void configureCharacterReward(Character character, int day) {
+        if (mode != AttendanceMode.CUMULATIVE || character == null || !character.isAttendanceReward()
+                || day < 1 || day > targetDays) {
+            throw new IllegalArgumentException("누적 출석 캐릭터 보상 설정이 올바르지 않습니다.");
+        }
+        this.rewardCharacter = character;
+        this.characterRewardDay = day;
     }
 
     public boolean isActiveOn(LocalDate date) {

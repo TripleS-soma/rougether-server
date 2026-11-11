@@ -78,6 +78,15 @@ class AttendanceEventControllerTest {
                 .andExpect(jsonPath("$.coinRewardAmount").value(30));
     }
 
+    @Test
+    void 캐릭터_보상은_인증된_사용자와_지정_이벤트에만_수령한다() throws Exception {
+        when(attendanceEventService.claimCharacterReward(1L, 42L)).thenReturn(
+                new com.triples.rougether.userapi.attendance.dto.AttendanceCharacterRewardResponse(true, statusResponse()));
+        mockMvc.perform(post("/api/v1/events/attendance/42/character-reward"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.grantedNow").value(true));
+        org.mockito.Mockito.verify(attendanceEventService).claimCharacterReward(1L, 42L);
+    }
+
     private AttendanceEventStatusResponse statusResponse() {
         return new AttendanceEventStatusResponse(
                 7L, "ATTENDANCE_10D_2026", "10일 연속 출석",
