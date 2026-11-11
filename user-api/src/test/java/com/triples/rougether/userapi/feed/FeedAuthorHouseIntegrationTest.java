@@ -78,6 +78,17 @@ class FeedAuthorHouseIntegrationTest {
     String joinPath(House house) { return path() + "/" + house.getId() + "/join"; }
     String auth(User user) { return "Bearer " + tokens.issueAccessToken(user.getId(), MemberRole.NORMAL); }
 
+    @Test void 공개_API_문서에서_작성자_집과_기존_집_탐색의_스키마를_구분한다() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.FeedAuthorHouseListResponse.properties.items.items['$ref']")
+                        .value("#/components/schemas/FeedAuthorHouseSummary"))
+                .andExpect(jsonPath("$.components.schemas.FeedAuthorHouseSummary.properties.requiresApproval").exists())
+                .andExpect(jsonPath("$.components.schemas.FeedAuthorHouseSummary.properties.canJoin").exists())
+                .andExpect(jsonPath("$.components.schemas.HouseSummary.properties.goals").exists())
+                .andExpect(jsonPath("$.components.schemas.HouseSummary.properties.requiresApproval").doesNotExist());
+    }
+
     @Test void 비공개_집도_코드나_승인_없이_즉시입주하고_기존_신청은_종결한다() throws Exception {
         home.changeOnboardingAutoJoinEnabled(true);
         var pending = requests.save(HouseJoinRequest.create(home, viewer));
