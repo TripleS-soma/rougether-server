@@ -487,6 +487,8 @@ test_first_deploy_without_credentials_uses_stub() {
   write_units "user-image" "admin-image" "batch-image"
 
   assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$USER_RUNTIME_ENV" "missing credentials must remove runtime path"
+  assert_not_contains '^FIREBASE_CREDENTIALS_PATH=' "$ADMIN_RUNTIME_ENV" "missing credentials must omit admin runtime path"
+  assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-admin-api.service" "missing credentials must omit admin bind mount"
   assert_not_contains 'firebase-adminsdk.json' "$SYSTEMD_DIR/rougether-user-api.service" "missing credentials must omit bind mount"
   assert_contains '--network host' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api must preserve loopback identity for SSM and local health checks"
   assert_not_contains '-p 8081:8081' "$SYSTEMD_DIR/rougether-admin-api.service" "admin-api host networking must not keep a bridge port mapping"
@@ -510,6 +512,10 @@ test_new_credentials_are_restored_with_runtime_wiring() {
   write_units "new-user-image" "new-admin-image" "new-batch-image"
   assert_contains '"project_id":"new"' "$FIREBASE_CREDENTIALS_FILE" "new credentials must be installed before restart"
   assert_contains 'firebase-adminsdk.json:ro' "$SYSTEMD_DIR/rougether-batch.service" "valid credentials must mount into batch"
+  assert_contains 'firebase-adminsdk.json:ro' "$SYSTEMD_DIR/rougether-admin-api.service" "valid credentials must mount into admin"
+  assert_contains '^FIREBASE_CREDENTIALS_PATH=' "$ADMIN_RUNTIME_ENV" "valid credentials must wire admin runtime env"
+  write_blue_green_units
+  assert_contains 'firebase-adminsdk.json:ro' "$SYSTEMD_DIR/rougether-admin-api@.service" "blue-green admin must mount credentials"
   assert_contains '^FIREBASE_CREDENTIALS_PATH=' "$BATCH_RUNTIME_ENV" "valid credentials must wire batch runtime env"
 
   restore_firebase_credentials

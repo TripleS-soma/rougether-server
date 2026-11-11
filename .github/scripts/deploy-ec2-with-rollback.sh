@@ -188,16 +188,17 @@ refresh_firebase_credentials() {
   echo "Firebase credentials refreshed from SSM"
 }
 
-ensure_user_runtime_env() {
+ensure_firebase_runtime_env() {
+  local target_env="$1"
   local temporary_env
 
-  if [ ! -f "$USER_RUNTIME_ENV" ]; then
-    echo "missing user-api runtime env: $USER_RUNTIME_ENV" >&2
+  if [ ! -f "$target_env" ]; then
+    echo "missing Firebase runtime env: $target_env" >&2
     return 1
   fi
 
-  temporary_env="$(mktemp "$ENV_DIR/.user-api.env.XXXXXX")"
-  if ! awk '!/^FIREBASE_CREDENTIALS_PATH=/' "$USER_RUNTIME_ENV" > "$temporary_env"; then
+  temporary_env="$(mktemp "$ENV_DIR/.firebase-runtime.env.XXXXXX")"
+  if ! awk '!/^FIREBASE_CREDENTIALS_PATH=/' "$target_env" > "$temporary_env"; then
     rm -f "$temporary_env"
     return 1
   fi
@@ -207,7 +208,13 @@ ensure_user_runtime_env() {
   fi
 
   chmod 600 "$temporary_env" || return 1
-  mv -f "$temporary_env" "$USER_RUNTIME_ENV" || return 1
+  mv -f "$temporary_env" "$target_env" || return 1
+}
+
+# Both APIs deliver notifications. Reconcile both during deployment and rollback.
+ensure_user_runtime_env() {
+  ensure_firebase_runtime_env "$USER_RUNTIME_ENV" || return 1
+  ensure_firebase_runtime_env "$ADMIN_RUNTIME_ENV" || return 1
 }
 
 escape_multiline_env_value() {
@@ -1268,7 +1275,7 @@ RestartSec=10
 SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/admin-api-%i.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api-%i
-ExecStart=/usr/bin/docker run --rm --name rougether-admin-api-%i --network host $admin_memory_args --env-file /etc/rougether/admin-api.env --env SERVER_PORT=\${ROUGETHER_HOST_PORT} --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api-%i --network host $admin_memory_args $firebase_mount_option --env-file /etc/rougether/admin-api.env --env SERVER_PORT=\${ROUGETHER_HOST_PORT} --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_IMAGE}
 ExecStop=/usr/bin/docker stop --time 30 rougether-admin-api-%i
 TimeoutStopSec=45
 
@@ -1711,7 +1718,7 @@ RestartSec=10
 SuccessExitStatus=143
 EnvironmentFile=/etc/rougether/admin-api.deploy.env
 ExecStartPre=-/usr/bin/docker rm -f rougether-admin-api
-ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --network host $admin_memory_args --env-file /etc/rougether/admin-api.env --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_ADMIN_API_IMAGE}
+ExecStart=/usr/bin/docker run --rm --name rougether-admin-api --network host $admin_memory_args $firebase_mount_option --env-file /etc/rougether/admin-api.env --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \${ROUGETHER_ADMIN_API_IMAGE}
 ExecStop=/usr/bin/docker stop rougether-admin-api
 
 [Install]
