@@ -135,8 +135,10 @@ class ChristmasFoxRewardIntegrationTest {
         assertThat(result.status().progressDays()).isEqualTo(3);
         assertThat(result.characterGrantedNow()).isTrue();
     }
-    @Test void 이미3일을받았으면_캐릭터만소급수령하고_응답유실재시도는중복지급하지않는다() {
-        setActive(false);for(int i=0;i<3;i++){today(i);attendance.checkIn(user.getId(),event.getId());}
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {3, 30})
+    void 이미3일이상출석했으면_완주자도소급수령하고_재시도는중복지급하지않는다(int days) {
+        setActive(false);for(int i=0;i<days;i++){today(i);attendance.checkIn(user.getId(),event.getId());}
         setActive(true);int before=balance();
         assertThat(attendance.getStatus(user.getId(),event.getId()).characterReward().claimable()).isTrue();
         // 첫 응답을 잃었다고 가정하고 같은 명령을 다시 보냄.
@@ -144,8 +146,8 @@ class ChristmasFoxRewardIntegrationTest {
         assertThat(attendance.claimCharacterReward(user.getId(),event.getId()).grantedNow()).isFalse();
         assertThat(attendance.getStatus(user.getId(),event.getId()).characterReward().received()).isTrue();
         assertThat(balance()).isEqualTo(before);
-        assertThat(checkIns.countByEventIdAndUserId(event.getId(),user.getId())).isEqualTo(3);
-        assertThat(count("wallet_histories")).isEqualTo(3);
+        assertThat(checkIns.countByEventIdAndUserId(event.getId(),user.getId())).isEqualTo(days);
+        assertThat(count("wallet_histories")).isEqualTo(days);
         assertThat(owned.findByUserId(user.getId())).hasSize(1);
     }
     @Test void 누적3일차동시요청은_코인과출석과캐릭터가각각한번만생긴다() throws Exception {
