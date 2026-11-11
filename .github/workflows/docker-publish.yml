@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      rotate_llm_key:
+        description: '승인된 LLM_API_KEY_ROTATION secret으로 키를 교체하고 가구 Lambda를 갱신함'
+        type: boolean
+        default: false
       force_verification:
         description: '기존 PR 결과를 재사용하지 않고 전체 검증과 이미지를 다시 생성함'
         type: boolean
@@ -163,6 +167,16 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Rotate approved LLM key and refresh furniture Lambda
+        if: inputs.rotate_llm_key == true
+        shell: bash
+        env:
+          LLM_API_KEY_ROTATION: ${{ secrets.LLM_API_KEY_ROTATION }}
+        run: |
+          set -euo pipefail
+          test "$DEPLOY_MODE" = blue-green
+          python3 .github/scripts/rotate_llm_key.py
 
       - name: Sync Webex alert configuration to SSM
         if: env.DEPLOY_MODE != 'hold'
