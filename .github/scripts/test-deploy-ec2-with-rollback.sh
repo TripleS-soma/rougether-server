@@ -80,6 +80,9 @@ reset_scenario() {
   NGINX_CONFIG_DIR="$TEST_ROOT/$name/nginx"
   NGINX_CONFIG_FILE="$NGINX_CONFIG_DIR/rougether.conf"
   NGINX_BIN="/usr/bin/true"
+  DEPLOY_LOCK_DIR="$TEST_ROOT/$name/run/rougether-deploy.lock"
+  release_deploy_lock
+  deploy_lock_held=false
   rollback_user_image=""
   rollback_admin_image=""
   rollback_batch_image=""
@@ -1079,6 +1082,50 @@ test_nginx_reload_failure_restores_previous_config() {
   echo "ok - nginx reload failure restores the previous upstream"
 }
 
+test_concurrent_deploy_is_rejected_by_host_lock() {
+  reset_scenario "deploy-host-lock"
+  acquire_deploy_lock
+  # 별도 프로세스가 독립 FD로 잠금을 얻으려 하면 거부되는지 확인한다.
+  if bash -c 'source "$1"; DEPLOY_LOCK_DIR="$2"; acquire_deploy_lock' _ "$FUNCTIONS_FILE" "$DEPLOY_LOCK_DIR" 9>&- > "$ENV_DIR/lock.log" 2>&1; then
+    echo "not ok - concurrent deployment acquired lock" >&2
+    return 1
+  fi
+  assert_contains 'another deploy is running' "$ENV_DIR/lock.log" 'must refuse concurrent owner'
+  release_deploy_lock
+  bash -c 'source "$1"; DEPLOY_LOCK_DIR="$2"; acquire_deploy_lock' _ "$FUNCTIONS_FILE" "$DEPLOY_LOCK_DIR"
+  acquire_deploy_lock
+  release_deploy_lock
+  echo "ok - independent processes exclude each other and process exit releases lock"
+}
+
+test_previous_slot_stays_up_when_proxy_points_elsewhere() {
+  reset_scenario "proxy-repointed"
+  local calls="$ENV_DIR/calls.log"
+  active_user_color=blue
+  active_user_port=18080
+  active_user_image=registry/user:old
+  active_admin_port=18081
+
+  # 2026-11-11 사고 재현: 전환 뒤 다른 실행이 프록시를 옛 포트로 되돌려 놓은 상태.
+  ( start_candidate() { :; }
+    apply_proxy_ports() { ROUGETHER_PRIVATE_IP=10.0.0.1 render_nginx_config "$NGINX_CONFIG_FILE" 18080 18081; }
+    write_blue_green_state() { :; }
+    wait_health_stable() { :; }
+    stop_slot() { echo "stop $1 $2" >> "$calls"; }
+    deploy_api_blue_green user-api registry/user:new
+  ) > "$ENV_DIR/out.log" 2>&1 && {
+    echo "not ok - deploy must fail when the proxy does not route to the candidate" >&2
+    return 1
+  }
+  if [ -f "$calls" ] && grep -q '^stop user-api blue$' "$calls"; then
+    echo "not ok - previous slot must not stop while the proxy still routes to it" >&2
+    return 1
+  fi
+  assert_contains 'proxy does not route user-api to port 28080' "$ENV_DIR/out.log" \
+    "the refusal must say which route is wrong"
+  echo "ok - previous slot stays up when the proxy does not route to the candidate"
+}
+
 test_blue_green_rollback_restarts_previous_slot_before_switching_back() {
   reset_scenario "blue-green-service-rollback"
   local calls="$ENV_DIR/calls.log"
@@ -1919,6 +1966,7 @@ run_dispatch() {
     ROUGETHER_SYSTEMD_DIR="$DISPATCH_DIR/systemd" \
     ROUGETHER_WATCH_SCRIPT_PATH="$DISPATCH_DIR/libexec/container-watch.sh" \
     ROUGETHER_WATCH_STATE_DIR="$DISPATCH_DIR/watch" \
+    ROUGETHER_DEPLOY_LOCK_DIR="$DISPATCH_DIR/run/rougether-deploy.lock" \
     bash "$DISPATCH_DIR/deploy.sh" > "$DISPATCH_DIR/output.log" 2>&1
 }
 
@@ -2422,6 +2470,8 @@ test_candidate_health_precedes_initial_proxy_cutover
 test_candidate_health_failure_never_stops_active_service
 test_nginx_config_preserves_websocket_upgrade
 test_nginx_reload_failure_restores_previous_config
+test_concurrent_deploy_is_rejected_by_host_lock
+test_previous_slot_stays_up_when_proxy_points_elsewhere
 test_blue_green_rollback_restarts_previous_slot_before_switching_back
 test_blue_green_orchestration_is_sequential_and_restarts_batch_once
 test_interrupted_deploy_retry_preserves_stable_release_snapshot

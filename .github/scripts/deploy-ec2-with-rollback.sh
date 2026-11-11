@@ -38,6 +38,9 @@ FIREBASE_CREDENTIALS_FILE="$ENV_DIR/firebase-adminsdk.json"
 NGINX_CONFIG_DIR="${ROUGETHER_NGINX_CONFIG_DIR:-/etc/nginx/conf.d}"
 NGINX_CONFIG_FILE="$NGINX_CONFIG_DIR/rougether.conf"
 NGINX_BIN="${ROUGETHER_NGINX_BIN:-/usr/sbin/nginx}"
+# 호스트 단위 커널 잠금 파일. 프로세스 종료 시 커널이 잠금을 해제한다.
+DEPLOY_LOCK_DIR="${ROUGETHER_DEPLOY_LOCK_DIR:-/run/rougether-deploy.lock}"
+deploy_lock_held=false
 
 USER_MEMORY_LIMIT="${ROUGETHER_USER_MEMORY_LIMIT:-1280m}"
 USER_MEMORY_LIMIT_KB="${ROUGETHER_USER_MEMORY_LIMIT_KB:-}"
@@ -848,7 +851,43 @@ stable_health_url() {
   esac
 }
 
+# 커널 파일 잠금은 소유 프로세스 종료 시 해제된다. 잠금 파일을 삭제하면 안 된다.
+acquire_deploy_lock() {
+  [ "$deploy_lock_held" = true ] && return 0
+  command -v flock >/dev/null || { echo "flock required; refusing deployment" >&2; return 1; }
+  mkdir -p "$(dirname "$DEPLOY_LOCK_DIR")" || return 1
+  exec 9>"$DEPLOY_LOCK_DIR" || return 1
+  if ! flock -n 9; then
+    exec 9>&-
+    echo "another deploy is running on this host; refusing concurrent mutation" >&2
+    return 1
+  fi
+  deploy_lock_held=true
+}
+
+release_deploy_lock() {
+  [ "$deploy_lock_held" = true ] || return 0
+  flock -u 9
+  exec 9>&-
+  deploy_lock_held=false
+}
+
+# 프록시 설정 파일이 실제로 이 서비스를 해당 포트로 보내는지 확인한다.
+# 설정 파일이 없으면(프록시를 아직 쓰지 않는 경로) 판단하지 않는다.
+proxy_routes_to() {
+  local service="$1"
+  local port="$2"
+
+  [ -f "$NGINX_CONFIG_FILE" ] || return 0
+  case "$service" in
+    user-api) grep -q -E "^[[:space:]]*server 127\\.0\\.0\\.1:$port;" "$NGINX_CONFIG_FILE" ;;
+    admin-api) grep -q -E "^[[:space:]]*server [0-9.]+:$port;" "$NGINX_CONFIG_FILE" ;;
+    *) return 1 ;;
+  esac
+}
+
 load_blue_green_state() {
+  acquire_deploy_lock || return 1
   active_user_color=""
   active_user_port=""
   active_user_image=""
@@ -1579,6 +1618,12 @@ deploy_api_blue_green() {
     systemctl disable "rougether-$service" >/dev/null 2>&1 || true
   else
     sleep "$BLUE_GREEN_DRAIN_SECONDS"
+    # 옛 슬롯을 내리기 직전에 프록시가 정말 새 슬롯을 보는지 다시 확인한다.
+    # 그사이 설정이 바뀌어 옛 포트를 가리키면, 내리는 순간 모든 요청이 502 가 된다.
+    if ! proxy_routes_to "$service" "$candidate_port"; then
+      echo "proxy does not route $service to port $candidate_port; keeping the previous slot up" >&2
+      return 1
+    fi
     stop_slot "$service" "$previous_color"
   fi
 }
@@ -2845,8 +2890,9 @@ case "$DEPLOY_MODE" in
     ;;
   legacy|blue-green)
     # 메모리 설정이 잘못되면 호스트를 건드리기 전에 멈춘다(유닛 작성·롤백 모두 같은 값을 쓴다).
+    acquire_deploy_lock || exit 75
     validate_memory_settings || exit 2
-    trap end_deploy_watch_suppression EXIT
+    trap 'end_deploy_watch_suppression; release_deploy_lock' EXIT
     begin_deploy_watch_suppression || echo "cannot mark deployment for the container watch; alerts may fire during deploy" >&2
     install_container_watch || echo "container watch install failed; deployment continues without host alerts" >&2
     install_cloudwatch_agent || echo "CloudWatch agent install or configuration failed; deployment continues without host metrics" >&2
