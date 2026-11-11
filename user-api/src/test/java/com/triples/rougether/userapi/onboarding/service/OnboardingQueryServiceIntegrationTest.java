@@ -69,6 +69,29 @@ class OnboardingQueryServiceIntegrationTest {
     }
 
     @Test
+    void 루틴_생성_이력이_있으면_목표와_캐릭터가_없어도_완료() {
+        em.persist(com.triples.rougether.domain.routine.entity.Routine.create(user, null, "기존 루틴",
+                com.triples.rougether.domain.routine.entity.AuthType.CHECK, "DAILY", null, null, null, null));
+        em.flush();
+        assertThat(service.getOnboarding(user.getId()).completed()).isTrue();
+        assertThat(service.getSummary(user.getId()).completed()).isTrue();
+    }
+
+    @Test
+    void 삭제된_할일도_생성_이력이므로_완료이고_다른_회원에게는_적용하지_않음() {
+        var todo = com.triples.rougether.domain.routine.entity.Todo.create(user, null, "예전 할 일", null,
+                java.time.LocalDate.of(2026, 11, 1), null);
+        em.persist(todo);
+        ReflectionTestUtils.setField(todo, "deletedAt", Instant.now());
+        em.flush();
+        var fresh = userRepository.save(User.signUp());
+        assertThat(service.getOnboarding(user.getId()).completed()).isTrue();
+        assertThat(service.getSummary(user.getId()).completed()).isTrue();
+        assertThat(service.getOnboarding(fresh.getId()).completed()).isFalse();
+        assertThat(service.getSummary(fresh.getId()).completed()).isFalse();
+    }
+
+    @Test
     void 목표만_있으면_미완료() {
         Goal g = goalRepository.save(goal("g1", 0));
         userGoalRepository.save(UserGoal.of(user, g, true));
@@ -155,7 +178,7 @@ class OnboardingQueryServiceIntegrationTest {
             assertThat(service.getSummary(userId)).isEqualTo(new OnboardingSummary(
                     detail.completed(), detail.primaryGoalId(), detail.selectedCharacterId()));
             assertThat(statistics.getEntityLoadCount()).isZero();
-            assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+            assertThat(statistics.getPrepareStatementCount()).isEqualTo(hasGoal && hasCharacter ? 2 : 3);
         } finally {
             statistics.setStatisticsEnabled(wasEnabled);
         }

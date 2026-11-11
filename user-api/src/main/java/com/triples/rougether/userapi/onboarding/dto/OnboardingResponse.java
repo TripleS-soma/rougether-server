@@ -11,6 +11,6 @@ public record OnboardingResponse(
         Long primaryGoalId,
         @Schema(description = "선택된 대표 캐릭터 ID(없으면 null)", example = "1")
         Long selectedCharacterId,
-        @Schema(description = "온보딩 완료 여부(선택 목표 1개 이상 && 대표 캐릭터 존재)", example = "true")
+        @Schema(description = "온보딩 완료 여부(목표와 대표 캐릭터가 있거나 루틴/할 일 생성 이력이 있음)", example = "true")
         boolean completed) {
 }

@@ -47,7 +47,8 @@ public class OnboardingQueryService {
                 .findFirst().orElse(null);
         Long selectedCharacterId = userCharacterRepository.findSelectedCharacterId(userId).orElse(null);
         return new OnboardingSummary(
-                !selections.isEmpty() && selectedCharacterId != null, primaryGoalId, selectedCharacterId);
+                (!selections.isEmpty() && selectedCharacterId != null)
+                        || (userGoalRepository.findRoutineOrTodoHistoryFlag(userId) > 0), primaryGoalId, selectedCharacterId);
     }
 
     private OnboardingResponse compute(Long userId) {
@@ -63,7 +64,8 @@ public class OnboardingQueryService {
                 .findByUserIdAndSelectedTrueAndDeletedAtIsNull(userId)
                 .map(uc -> uc.getCharacter().getId())
                 .orElse(null);
-        boolean completed = !userGoals.isEmpty() && selectedCharacterId != null;
+        boolean completed = (!userGoals.isEmpty() && selectedCharacterId != null)
+                || (userGoalRepository.findRoutineOrTodoHistoryFlag(userId) > 0);
 
         return new OnboardingResponse(goals, primaryGoalId, selectedCharacterId, completed);
     }
