@@ -128,7 +128,7 @@ resource "aws_cloudwatch_metric_alarm" "preprocess_dead" {
   period              = 60
   evaluation_periods  = 1
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
+  alarm_actions       = local.alarm_actions
 }
 resource "aws_cloudwatch_metric_alarm" "preprocess_age" {
   count               = var.enable_preprocessing ? 1 : 0
@@ -142,7 +142,7 @@ resource "aws_cloudwatch_metric_alarm" "preprocess_age" {
   period              = 60
   evaluation_periods  = 1
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
+  alarm_actions       = local.alarm_actions
 }
 # 기존 bucket notification 전체를 이 모듈이 소유하지 않음. 원래 관리 위치에 아래 항목만 병합해야 함.
 output "preprocess_notification" {

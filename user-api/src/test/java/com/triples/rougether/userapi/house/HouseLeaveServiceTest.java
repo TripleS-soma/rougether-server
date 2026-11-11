@@ -44,7 +44,8 @@ class HouseLeaveServiceTest {
         // 봇 거주 규칙(#309)은 실제 서비스를 mock 리포지토리 위에 올려 "사람 0명 → 해체" 판정을 그대로 태운다.
         houseMemberCommandService = new HouseMemberCommandService(
                 houseRepository, houseMemberRepository, notificationService, routineRepository, categoryRepository,
-                new BotResidencyService(userRepository, houseMemberRepository));
+                new BotResidencyService(userRepository, houseMemberRepository),
+                mock(com.triples.rougether.userapi.feed.service.HouseFeedContentEraser.class));
     }
 
     private House aliveHouse() {

@@ -105,6 +105,31 @@ public final class NotificationMessages {
                 houseName, englishName(senderNickname) + ": " + preview);
     }
 
+    public static NotificationContent chatPhoto(String houseName, String senderNickname) {
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": 사진을 보냈어요",
+                houseName, englishName(senderNickname) + ": sent a photo");
+    }
+
+    // 집 피드 새 글 푸시(#530). 제목은 집 이름이고 본문에 글 내용은 싣지 않음.
+    public static NotificationContent houseFeedPost(String houseName, String authorNickname) {
+        return new NotificationContent(NotificationType.HOUSE_FEED_POST,
+                houseName, displayName(authorNickname) + "님이 새 글을 올렸어요",
+                houseName, englishName(authorNickname) + " shared a new post");
+    }
+
+    // 루틴 연결 없이 등록된 인증글은 루틴 제목 없이 알림.
+    public static NotificationContent houseFeedVerification(String houseName, String authorNickname, String routineTitle) {
+        if (routineTitle == null || routineTitle.isBlank()) {
+            return new NotificationContent(NotificationType.HOUSE_FEED_POST,
+                    houseName, displayName(authorNickname) + "님이 인증글을 올렸어요",
+                    houseName, englishName(authorNickname) + " shared a check-in");
+        }
+        return new NotificationContent(NotificationType.HOUSE_FEED_POST,
+                houseName, displayName(authorNickname) + "님이 '" + routineTitle + "' 인증글을 올렸어요",
+                houseName, englishName(authorNickname) + " shared a check-in for '" + routineTitle + "'");
+    }
+
     private static String englishName(String nickname) {
         return nickname == null || nickname.isBlank() ? "A neighbor" : nickname;
     }

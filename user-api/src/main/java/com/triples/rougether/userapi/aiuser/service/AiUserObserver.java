@@ -104,7 +104,7 @@ public class AiUserObserver {
         state.put("houseMembers",memberSnapshots);
         // source가 없는 주기 작업도 최근 글을 관찰함. 사람이 AI를 차단한 관계는 읽지 않음.
         List<Long> posts=jdbc.queryForList("SELECT f.id FROM feed_posts f JOIN users a ON a.id=f.author_id "
-                + "WHERE f.deleted_at IS NULL AND a.deleted_at IS NULL AND a.is_bot=FALSE AND NOT EXISTS "
+                + "WHERE f.deleted_at IS NULL AND f.house_id IS NULL AND a.deleted_at IS NULL AND a.is_bot=FALSE AND NOT EXISTS "
                 + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=a.id) "
                 + "OR (b.blocker_user_id=a.id AND b.blocked_user_id=?)) ORDER BY f.id DESC LIMIT 3",Long.class,user,user);
         state.put("feed",posts.stream().map(id -> feed.get(user,id)).toList());
@@ -196,10 +196,11 @@ public class AiUserObserver {
         List<Map<String,Object>> rows;
         if (type.equals("FEED_COMMENT")) {
             rows=jdbc.queryForList("SELECT c.author_id,c.content FROM feed_comments c JOIN users u ON u.id=c.author_id "
+                    + "JOIN feed_posts f ON f.id=c.post_id AND f.house_id IS NULL "
                     + "WHERE c.id=? AND c.deleted_at IS NULL AND u.deleted_at IS NULL",sourceId);
         } else if (type.equals("CHAT")) {
             rows=jdbc.queryForList("SELECT m.sender_user_id AS author_id,m.content FROM chat_messages m JOIN users u ON u.id=m.sender_user_id "
-                    + "WHERE m.id=? AND u.deleted_at IS NULL",sourceId);
+                    + "WHERE m.id=? AND m.deleted_at IS NULL AND u.deleted_at IS NULL",sourceId);
         } else return null;
         if (rows.isEmpty()) return null;
         var row=rows.getFirst();
@@ -213,7 +214,7 @@ public class AiUserObserver {
         if (type.equals("SCHEDULE") || type.equals("SOCIAL_BROWSE")) return Map.of("type",type);
         if (sourceId==null) unavailable();
         if (type.equals("FEED_POST")) {
-            requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,sourceId));
+            requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL AND house_id IS NULL",Long.class,sourceId));
             return Map.of("type",type,"post",feed.get(user,sourceId));
         }
         if (type.equals("FEED_COMMENT")) {
@@ -239,12 +240,14 @@ public class AiUserObserver {
             return context;
         }
         if (type.equals("CHAT")) {
-            var message=jdbc.queryForMap("SELECT room_id,sender_user_id,content FROM chat_messages WHERE id=?",sourceId);
+            var found=jdbc.queryForList("SELECT room_id,sender_user_id,content FROM chat_messages WHERE id=? AND deleted_at IS NULL",sourceId);
+            if (found.isEmpty()) unavailable();
+            var message=found.getFirst();
             requireUnblocked(user,((Number)message.get("sender_user_id")).longValue());
             long room=((Number)message.get("room_id")).longValue();
             chat.requireReadable(user,room);
             var recent=jdbc.queryForList("SELECT m.id,m.sender_user_id,m.content,m.message_sequence FROM chat_messages m "
-                    + "JOIN users u ON u.id=m.sender_user_id WHERE m.room_id=? AND u.deleted_at IS NULL AND NOT EXISTS "
+                    + "JOIN users u ON u.id=m.sender_user_id WHERE m.room_id=? AND m.deleted_at IS NULL AND u.deleted_at IS NULL AND NOT EXISTS "
                     + "(SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
                     + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?)) ORDER BY m.message_sequence DESC LIMIT 12",room,user,user);
             return Map.of("type",type,"message",message,"room",chat.get(user,room),"recentMessages",recent);
@@ -308,11 +311,11 @@ public class AiUserObserver {
             if (type.equals("SCHEDULE") || type.equals("SOCIAL_BROWSE")) return true;
             if (id==null) return false;
             if (type.equals("FEED_POST")) {
-                requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,id));
+                requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL AND house_id IS NULL",Long.class,id));
             } else if (type.equals("FEED_COMMENT")) {
                 readComment(user,id);
             } else if (type.equals("CHAT")) {
-                var message=jdbc.queryForMap("SELECT room_id,sender_user_id FROM chat_messages WHERE id=?",id);
+                var message=jdbc.queryForMap("SELECT room_id,sender_user_id FROM chat_messages WHERE id=? AND deleted_at IS NULL",id);
                 requireUnblocked(user,((Number)message.get("sender_user_id")).longValue());
                 chat.requireReadable(user,((Number)message.get("room_id")).longValue());
             } else if (type.equals("MEMBERSHIP")) {
@@ -356,7 +359,7 @@ public class AiUserObserver {
                 + "FROM feed_comments WHERE id=? AND deleted_at IS NULL",commentId);
         requireUnblocked(user,((Number)comment.get("author_id")).longValue());
         long post=((Number)comment.get("post_id")).longValue();
-        requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL",Long.class,post));
+        requireUnblocked(user,jdbc.queryForObject("SELECT author_id FROM feed_posts WHERE id=? AND deleted_at IS NULL AND house_id IS NULL",Long.class,post));
         if (comment.get("parent_comment_id")!=null) {
             // 원댓글이 삭제·탈퇴해도 타인의 답글은 살아 있음. 원댓글 작성자와의 차단만 검사함.
             long author=jdbc.queryForObject("SELECT author_id FROM feed_comments WHERE id=? AND post_id=? AND parent_comment_id IS NULL",

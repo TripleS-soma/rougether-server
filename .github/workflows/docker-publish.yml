@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      deploy_furniture_ai:
+        description: '현재 실행에서 전체 검증한 가구 AI Lambda 코드를 배포함'
+        type: boolean
+        default: false
       rotate_llm_key:
         description: '승인된 LLM_API_KEY_ROTATION secret으로 키를 교체하고 가구 Lambda를 갱신함'
         type: boolean
@@ -21,6 +25,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 env:
@@ -39,7 +44,7 @@ env:
   APPLE_KEY_ID_PARAMETER: /rougether-dev/apple/key-id
   APPLE_PRIVATE_KEY_PARAMETER: /rougether-dev/apple/private-key
   APPLE_REFRESH_TOKEN_ENC_KEY_PARAMETER: /rougether-dev/apple/refresh-token-enc-key
-  DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'hold' }}
+  DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'blue-green' }}
 
 jobs:
   resolve:
@@ -61,7 +66,7 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
-          FORCE_VERIFICATION: ${{ inputs.force_verification }}
+          FORCE_VERIFICATION: ${{ inputs.force_verification || inputs.deploy_furniture_ai }}
         run: python3 .github/scripts/backend_artifacts.py resolve
 
   fresh:
@@ -161,6 +166,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Download current-run tested furniture AI package
+        if: inputs.deploy_furniture_ai == true
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jars-other-modules-${{ github.run_attempt }}
+          path: bundle
+
+      - name: Validate furniture AI package before AWS changes
+        if: inputs.deploy_furniture_ai == true
+        run: python3 .github/scripts/furniture_ai_release.py validate
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -279,6 +295,14 @@ jobs:
             > build/deploy-health/monitor.log 2>&1 &
           echo "pid=$!" >> "$GITHUB_OUTPUT"
           echo "started=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy verified furniture AI Lambda
+        if: inputs.deploy_furniture_ai == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DEPLOY_MODE" = blue-green
+          python3 .github/scripts/furniture_ai_release.py deploy
 
       - name: Deploy containers through SSM
         if: env.DEPLOY_MODE != 'hold'

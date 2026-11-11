@@ -28,9 +28,11 @@
             <a th:href="@{/weekly-reports}">AI 회고</a>
             <a th:href="@{/recommendations}">AI 추천</a>
             <a th:href="@{/banned-words}">금칙어</a>
+            <a th:href="@{/feedback}">건의·업데이트</a>
             <a th:href="@{/bug-reports}">버그 제보</a>
             <a th:href="@{/notification-campaigns}">알림 발송</a>
             <a th:href="@{/content-reports}" class="active">신고</a>
+            <a th:href="@{/feed-posts}">피드</a>
         </nav>
         <div class="header-right">
             <span class="user-chip"><span th:text="${username}">admin</span> 님</span>
@@ -82,7 +84,7 @@
     <script th:inline="javascript">
         const csrfToken = document.querySelector('meta[name="_csrf"]').content;
         const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
-        const TYPES = { FEED_POST: '게시물', FEED_COMMENT: '댓글', MARKET_ASSET: '거래소 가구' };
+        const TYPES = { FEED_POST: '게시물', FEED_COMMENT: '댓글', MARKET_ASSET: '거래소 가구', CHAT_MESSAGE: '채팅 메시지' };
         const REASONS = { SPAM: '스팸', ABUSE: '욕설·괴롭힘', SEXUAL: '선정성', VIOLENCE: '폭력·위협',
             PERSONAL_INFO: '개인정보', COPYRIGHT: '저작권', OTHER: '기타' };
         const STATUSES = { RECEIVED: '검토 대기', ACTIONED: '숨김 처리', DISMISSED: '종료' };
@@ -140,8 +142,9 @@
             text.className = 'slot-name';
             text.textContent = target.removed ? '(삭제·정지됨) ' + (target.text || '') : (target.text || '-');
             previewCell.appendChild(text);
-            (target.feedImageIds || []).forEach((imageId) => {
-                const url = '/admin/reports/feed-images/' + imageId;
+            const photoUrls = (target.feedImageIds || []).map((imageId) => '/admin/reports/feed-images/' + imageId);
+            if (target.chatImageId) photoUrls.push('/admin/reports/chat-images/' + target.chatImageId);
+            photoUrls.forEach((url) => {
                 const link = document.createElement('a');
                 link.href = url;
                 link.target = '_blank';
@@ -149,7 +152,7 @@
                 const img = document.createElement('img');
                 img.className = 'slot-thumb';
                 img.loading = 'lazy';
-                img.alt = '피드 사진';
+                img.alt = '신고된 사진';
                 img.src = url;
                 link.appendChild(img);
                 previewCell.appendChild(link);

@@ -3,17 +3,34 @@ package com.triples.rougether.userapi.feed;
 import static org.assertj.core.api.Assertions.*;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.userapi.feed.error.FeedErrorCode;
 import com.triples.rougether.userapi.feed.service.FeedImageProcessor;
+import com.triples.rougether.userapi.global.image.PrivatePhotoNormalizer;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.concurrent.Semaphore;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class FeedImageProcessorTest {
     private final FeedImageProcessor processor = new FeedImageProcessor();
+
+    @Test void 사진_처리_차례를_얻지_못하면_저장소_일시_장애로_응답한다() throws Exception {
+        var decoding = (Semaphore) ReflectionTestUtils.getField(PrivatePhotoNormalizer.class, "DECODING");
+        int permits = decoding.availablePermits();
+        decoding.acquire(permits);
+        try {
+            var file = new MockMultipartFile("file", encoded(32, 32, "png"));
+            assertThatThrownBy(() -> processor.process(file)).isInstanceOfSatisfying(BusinessException.class,
+                    e -> assertThat(e.getErrorCode()).isEqualTo(FeedErrorCode.FEED_STORAGE_UNAVAILABLE));
+        } finally {
+            decoding.release(permits);
+        }
+    }
 
     @Test void 실제_이미지형식과_용량_치수를_검증한다() throws Exception {
         invalid(new byte[0]);

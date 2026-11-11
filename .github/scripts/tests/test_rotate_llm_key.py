@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import unittest
@@ -26,7 +27,7 @@ class RotationTest(unittest.TestCase):
             "Name": rotation.PARAMETER, "Type": "SecureString", "Value": "sk-test-only-value", "Overwrite": True}))
         self.assertEqual(calls[2].args[2], {"FunctionName": rotation.FUNCTION, "RevisionId": "original",
                                          "Environment": self.after["Environment"]})
-        self.assertEqual(calls[3].args[:2], ("lambda", "wait function-updated-v2"))
+        self.assertEqual(calls[3].args[:2], ("lambda", "wait function-updated"))
         self.assertNotIn("sk-test-only-value", json.dumps(result))
         self.assertNotIn("LLM_API_KEY_VERSION", self.variables)
 
@@ -52,14 +53,41 @@ class RotationTest(unittest.TestCase):
         with patch.object(rotation, "aws", side_effect=[self.before, {"Version": 2}, {}, {}, self.before]):
             with self.assertRaises(rotation.RotationError): rotation.rotate("sk-test-only-value")
 
-    def test_aws_error_does_not_expose_secret_and_uses_stdin(self):
+    def test_cli_reads_private_json_file_and_error_never_exposes_secret(self):
         response = subprocess.CompletedProcess([], 1, "", "request contained sk-test-only-value")
-        with patch.object(rotation.subprocess, "run", return_value=response) as run:
+        captured = []
+        def execute(command, **kwargs):
+            target = Path(command[command.index("--cli-input-json") + 1].removeprefix("file://"))
+            captured.append(target)
+            self.assertEqual(os.stat(target).st_mode & 0o777, 0o600)
+            self.assertEqual(json.loads(target.read_text()), {"Value": "sk-test-only-value"})
+            self.assertNotIn("sk-test-only-value", " ".join(command))
+            return response
+        with patch.object(rotation.subprocess, "run", side_effect=execute):
             with self.assertRaisesRegex(rotation.RotationError, "ssm:put-parameter failed") as error:
                 rotation.aws("ssm", "put-parameter", {"Value": "sk-test-only-value"})
         self.assertNotIn("sk-test-only-value", str(error.exception))
-        self.assertNotIn("sk-test-only-value", " ".join(run.call_args.args[0]))
-        self.assertEqual(json.loads(run.call_args.kwargs["input"])["Value"], "sk-test-only-value")
+        self.assertFalse(captured[0].exists())
+
+    def test_timeout_removes_request_file_and_waiter_has_sufficient_budget(self):
+        captured = []
+        def execute(command, **kwargs):
+            target = Path(command[command.index("--cli-input-json") + 1].removeprefix("file://"))
+            captured.append(target)
+            self.assertTrue(target.exists())
+            self.assertEqual(kwargs["timeout"], 330)
+            raise subprocess.TimeoutExpired(command, 330)
+        with patch.object(rotation.subprocess, "run", side_effect=execute):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                rotation.aws("lambda", "wait function-updated", {"FunctionName": rotation.FUNCTION})
+        self.assertFalse(captured[0].exists())
+
+    def test_error_reports_only_safe_aws_error_class(self):
+        response = subprocess.CompletedProcess([], 1, "", "An error occurred (AccessDeniedException) secret sk-test-only-value")
+        with patch.object(rotation.subprocess, "run", return_value=response):
+            with self.assertRaisesRegex(rotation.RotationError, r"failed \(AccessDeniedException\)") as error:
+                rotation.aws("lambda", "get-function-configuration", {"FunctionName": rotation.FUNCTION})
+        self.assertNotIn("sk-test-only-value", str(error.exception))
 
 
 if __name__ == "__main__": unittest.main()

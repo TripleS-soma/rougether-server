@@ -39,6 +39,17 @@ public class ContentReportController {
         return reports.reportFeedPost(user.id(), postId, request);
     }
 
+    @Operation(summary = "채팅 메시지 신고",
+            description = "그 방의 현재 구성원만 신고할 수 있습니다. 비구성원은 CHAT_FORBIDDEN(403), 없거나 삭제된 메시지는 "
+                    + "CHAT_MESSAGE_NOT_FOUND(404)." + COMMON)
+    @PostMapping("/chat/rooms/{roomId}/messages/{messageId}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ContentReportResponse reportChatMessage(@CurrentUser AuthUser user, @PathVariable @Positive Long roomId,
+                                                   @PathVariable @Positive Long messageId,
+                                                   @Valid @RequestBody ContentReportRequest request) {
+        return reports.reportChatMessage(user.id(), roomId, messageId, request);
+    }
+
     @Operation(summary = "피드 댓글 신고",
             description = "부모 글이 없으면 FEED_POST_NOT_FOUND, 댓글이 없거나 삭제됐으면 FEED_COMMENT_NOT_FOUND(404)." + COMMON)
     @PostMapping("/feed/posts/{postId}/comments/{commentId}/reports")

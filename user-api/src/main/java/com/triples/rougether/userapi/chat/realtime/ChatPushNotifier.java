@@ -82,12 +82,15 @@ public class ChatPushNotifier {
 
     private void notifyRecipients(Long messageId) {
         ChatMessage message = messages.findById(messageId).orElseThrow();
+        // 비동기 대기 중 삭제되거나 발신자가 탈퇴한 메시지는 푸시로 재노출하지 않음.
+        if (message.isDeleted() || message.getSender().isDeleted()) return;
         ChatRoom room = rooms.findById(message.getRoomId()).orElseThrow();
         String houseName = houses.findById(room.getHouseId()).map(House::getName).orElse("");
         User sender = message.getSender();
-        NotificationContent content = NotificationMessages.chatMessage(houseName, sender.getNickname(),
-                message.getContent());
-        // groupKey: 같은 집 채팅 알림을 한 묶음으로 표시함 — 앱은 채팅을 열 때 이 묶음을 한 번에 지움
+        NotificationContent content = message.isImage()
+                ? NotificationMessages.chatPhoto(houseName, sender.getNickname())
+                : NotificationMessages.chatMessage(houseName, sender.getNickname(), message.getContent());
+        // 같은 집의 사진·글 알림을 함께 묶고 앱에서 집 채팅을 열면 한 번에 지운다.
         Map<String, String> data = Map.of("type", NotificationType.CHAT_MESSAGE.name(),
                 "roomId", room.getId().toString(), "houseId", room.getHouseId().toString(),
                 FcmSender.GROUP_KEY, "chat-house-" + room.getHouseId());

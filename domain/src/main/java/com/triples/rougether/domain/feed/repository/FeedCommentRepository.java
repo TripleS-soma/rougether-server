@@ -56,4 +56,10 @@ public interface FeedCommentRepository extends JpaRepository<FeedComment, Long> 
     @Modifying @Query("update FeedComment c set c.content = '', c.deletedAt = :now "
             + "where c.deletedAt is null and (c.author.deletedAt is not null or c.post.deletedAt is not null)")
     void eraseWithdrawn(@Param("now") java.time.Instant now);
+    // 집을 나가며 "내 글도 지우기"를 고른 구성원이 그 집 글들에 남긴 댓글·답글의 본문을 비움. 다른 사람의 답글은 유지함.
+    @Modifying @Query("update FeedComment c set c.content = '', c.deletedAt = :now "
+            + "where c.deletedAt is null and c.author.id = :authorId "
+            + "and c.post.id in (select p.id from FeedPost p where p.houseId = :houseId)")
+    int eraseAuthoredInHouse(@Param("houseId") Long houseId, @Param("authorId") Long authorId,
+                             @Param("now") java.time.Instant now);
 }

@@ -2,8 +2,10 @@
 """승인된 배포에서만 LLM 키를 교체하고 가구 Lambda가 새 버전을 읽게 한다."""
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
 
 PARAMETER = "/rougether-dev/llm/api-key"
 FUNCTION = "rougether-dev-furniture-ai"
@@ -14,13 +16,20 @@ class RotationError(Exception):
 
 
 def aws(service, action, payload):
-    result = subprocess.run(
-        ["aws", service, *action.split(), "--cli-input-json", "file:///dev/stdin", "--output", "json", "--no-cli-pager"],
-        input=json.dumps(payload), text=True, capture_output=True, timeout=90,
-    )
+    # CLI의 /dev/stdin 파일 처리에 의존하지 않는다. 0600 임시 파일은 실패/시간 초과에도 삭제된다.
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json") as request:
+        json.dump(payload, request)
+        request.flush()
+        result = subprocess.run(
+            ["aws", service, *action.split(), "--cli-input-json", "file://" + request.name,
+             "--output", "json", "--no-cli-pager"],
+            text=True, capture_output=True, timeout=330 if action.startswith("wait ") else 90,
+        )
     if result.returncode:
         # SDK/CLI 오류 본문에는 요청 값이 포함될 수 있으므로 노출하지 않는다.
-        raise RotationError(service + ":" + action + " failed")
+        match = re.search(r"An error occurred \(([A-Za-z0-9_]+)\)", result.stderr)
+        reason = match[1] if match else "exit=" + str(result.returncode)
+        raise RotationError(service + ":" + action + " failed (" + reason + ")")
     return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
@@ -42,7 +51,8 @@ def rotate(key):
         "FunctionName": FUNCTION, "RevisionId": before["RevisionId"],
         "Environment": {"Variables": variables},
     })
-    aws("lambda", "wait function-updated-v2", {"FunctionName": FUNCTION})
+    # V1은 GetFunctionConfiguration만 사용한다. V2는 코드 조회 권한 GetFunction도 요구한다.
+    aws("lambda", "wait function-updated", {"FunctionName": FUNCTION})
     after = aws("lambda", "get-function-configuration", {"FunctionName": FUNCTION})
     if (after.get("LastUpdateStatus") != "Successful" or after.get("State") != "Active"
             or after.get("Environment", {}).get("Variables") != variables):

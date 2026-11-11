@@ -806,6 +806,42 @@ resource "aws_iam_role_policy" "llm_key_rotation" {
   })
 }
 
+resource "aws_iam_role_policy" "furniture_ai_release" {
+  name = "${local.name}-furniture-ai-release-policy"
+  role = aws_iam_role.github_actions_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["lambda:GetFunction", "lambda:GetFunctionConfiguration", "lambda:UpdateFunctionCode"]
+        Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:rougether-dev-furniture-ai"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"]
+        Resource = "arn:aws:s3:::rougether-furniture-deploy-${data.aws_caller_identity.current.account_id}/furniture-lambda/ai-*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:PutMetricFilter"]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/rougether-dev-furniture-ai:*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["cloudwatch:DescribeAlarms"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["cloudwatch:PutMetricAlarm"]
+        Resource = [for suffix in ["ai_errors", "ai_throttles", "control_errors", "control_throttles", "dead-letter", "queue-age", "job-failures"] :
+        "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:rougether-dev-furniture-${suffix}"]
+      }
+    ]
+  })
+}
+
 resource "aws_instance" "app" {
   ami                         = local.instance_ami_id
   instance_type               = var.instance_type

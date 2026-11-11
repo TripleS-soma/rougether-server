@@ -10,6 +10,7 @@ import com.triples.rougether.domain.routine.repository.CategoryRepository;
 import com.triples.rougether.domain.routine.repository.RoutineRepository;
 import com.triples.rougether.userapi.house.dto.TransferOwnershipResponse;
 import com.triples.rougether.userapi.bot.BotResidencyService;
+import com.triples.rougether.userapi.feed.service.HouseFeedContentEraser;
 import com.triples.rougether.userapi.house.error.HouseErrorCode;
 import com.triples.rougether.userapi.notification.message.NotificationMessages;
 import com.triples.rougether.userapi.notification.service.NotificationService;
@@ -29,6 +30,7 @@ public class HouseMemberCommandService {
     private final RoutineRepository routineRepository;
     private final CategoryRepository categoryRepository;
     private final BotResidencyService botResidencyService;
+    private final HouseFeedContentEraser houseFeedContentEraser;
 
     @Transactional
     public TransferOwnershipResponse transferOwnership(Long userId, Long houseId, Long targetMembershipId) {
@@ -64,6 +66,13 @@ public class HouseMemberCommandService {
     // 참여(count 증가)와 대칭으로 house 행 락 아래에서 count 를 감소시킨다.
     @Transactional
     public void leave(Long userId, Long houseId) {
+        leave(userId, houseId, false);
+    }
+
+    // deleteFeedContent=true 면 나가면서 이 집 피드에 남긴 내 글·댓글도 지운다. 나간 뒤에는 본인도 집 글에
+    // 접근할 수 없어 직접 지울 수 없으므로 나가는 시점에 고른다. false 면 글은 남은 구성원에게 계속 보인다.
+    @Transactional
+    public void leave(Long userId, Long houseId, boolean deleteFeedContent) {
         House house = houseRepository.findWithLockById(houseId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new BusinessException(HouseErrorCode.HOUSE_NOT_FOUND));
@@ -90,6 +99,9 @@ public class HouseMemberCommandService {
         botResidencyService.dissolveIfNoHumans(house);
         notifyMemberLeft(recipients, me);
         clearMemberLinks(userId, houseId);
+        if (deleteFeedContent) {
+            houseFeedContentEraser.eraseAuthored(houseId, userId);
+        }
     }
 
     // 떠난 집과의 루틴·카테고리 연동 해제 - 연동 표시는 구성원에게만 의미가 있으므로 서버가 원천에서 끊는다.

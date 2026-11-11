@@ -67,6 +67,17 @@ public class ContentReportAdminController {
                 .body(image.content());
     }
 
+    // 신고된 메시지의 비공개 채팅 사진 열람. 캐시하지 않음.
+    @GetMapping("/chat-images/{imageId}")
+    public ResponseEntity<byte[]> chatImage(@PathVariable Long imageId) {
+        StoredAsset image = service.chatImage(imageId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore().mustRevalidate())
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(image.content());
+    }
+
     // enum 바인딩 실패·null 은 공통 에러 형식을 우회하므로 문자열로 받아 직접 파싱함
     private static <E extends Enum<E>> E parse(Class<E> type, String raw, String code, String message) {
         if (raw == null) {

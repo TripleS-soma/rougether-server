@@ -44,6 +44,21 @@ public interface HouseMemberRepository extends JpaRepository<HouseMember, Long> 
 
     Optional<HouseMember> findByHouseIdAndUserId(Long houseId, Long userId);
 
+    // 집 피드 접근 판정(#528): 삭제되지 않은 집의 ACTIVE 구성원이면서 탈퇴·봇·AI 계정이 아닌지 한 번에 확인함.
+    @Query("select count(hm) > 0 from HouseMember hm join hm.house h join hm.user u "
+            + "where h.id = :houseId and u.id = :userId and hm.status = :status and h.deletedAt is null "
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
+    boolean existsFeedParticipant(@Param("houseId") Long houseId, @Param("userId") Long userId,
+                                  @Param("status") HouseMemberStatus status);
+
+    // 집 피드 방장 권한(#529): 위 참여 조건에 더해 지금 그 집의 방장인지 확인함. 승계되면 새 방장만 해당함.
+    @Query("select count(hm) > 0 from HouseMember hm join hm.house h join hm.user u "
+            + "where h.id = :houseId and u.id = :userId and hm.status = :status "
+            + "and hm.role = com.triples.rougether.domain.house.entity.HouseMemberRole.OWNER and h.deletedAt is null "
+            + "and u.deletedAt is null and u.bot = false and u.ai = false")
+    boolean existsFeedModerator(@Param("houseId") Long houseId, @Param("userId") Long userId,
+                                @Param("status") HouseMemberStatus status);
+
     // 게시물 작성자가 현재 속한 집을 공개 여부와 무관하게 조회함. 개인 정렬 순서와 초대코드는 응답에 노출하지 않음.
     @Query("select hm from HouseMember hm join fetch hm.house h "
             + "where hm.user.id = :userId and hm.status = :status "

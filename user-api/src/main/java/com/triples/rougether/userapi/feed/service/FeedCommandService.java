@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class FeedCommandService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FeedCommandService.class);
     private com.triples.rougether.userapi.aiuser.service.AiUserEvents aiEvents;
     @org.springframework.beans.factory.annotation.Autowired
     void configureAiEvents(com.triples.rougether.userapi.aiuser.service.AiUserEvents events) { aiEvents = events; }
@@ -39,30 +40,40 @@ public class FeedCommandService {
     private final FeedRoutineLinks routineLinks;
     private final FeedMinigameRecords minigameRecords;
     private final Clock clock;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public Long create(Long userId, FeedCreateRequest request) {
         User user = access.lockActive(userId);
         FeedMinigameRecordRequest record = request.minigameRecord();
+        Long houseId = request.houseId();
+        if (houseId != null) {
+            if (houseId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
+            // 나간 구성원의 재시도가 집 글 ID를 돌려받지 않도록 재시도 판정보다 먼저 검사함.
+            access.requireHouseParticipant(houseId, userId);
+        }
         // 게임 기록은 자유글 전용이라 게시판 생략 + 기록 연결은 FREE로 봄. 그 외 생략은 기존대로 VERIFICATION
         FeedBoardType boardType = request.boardType() != null ? request.boardType()
                 : record != null ? FeedBoardType.FREE : FeedBoardType.VERIFICATION;
         List<Long> imageIds = request.imageIds() == null ? List.of() : request.imageIds();
         if (request.clientPostId() == null || imageIds.size() > 10
-                || (boardType == FeedBoardType.VERIFICATION && imageIds.isEmpty())
                 || imageIds.stream().anyMatch(id -> id == null || id <= 0)
                 || new HashSet<>(imageIds).size() != imageIds.size()) throw new BusinessException(FEED_INPUT_INVALID);
         FeedRoutineCompletionRequest completion = request.routineCompletion();
         if (boardType == FeedBoardType.FREE && completion != null) throw new BusinessException(FEED_INPUT_INVALID);
         if (record != null && (boardType != FeedBoardType.FREE || completion != null)) throw new BusinessException(FEED_INPUT_INVALID);
-        String content = text(request.content(), 2000, !imageIds.isEmpty());
+        String content = text(request.content(), 2000, boardType == FeedBoardType.VERIFICATION || !imageIds.isEmpty());
         // 기존 게시물의 재시도 hash를 유지하고 게시판 종류는 별도로 비교함. 루틴 연결은 있을 때만 hash에 덧붙임.
         String hashed = content + "\u0000" + imageIds;
         if (completion != null) hashed += "\u0000routine:" + completion.routineId() + ":" + completion.date();
         if (record != null) hashed += "\u0000minigame:" + record.runId();
+        // 공개 글의 기존 hash를 유지하도록 집 글일 때만 덧붙임. 같은 UUID를 다른 집으로 보내면 충돌로 판정됨.
+        if (houseId != null) hashed += "\u0000house:" + houseId;
         String requestHash = hash(hashed);
         FeedPost previous = posts.findByAuthorIdAndClientPostId(userId, request.clientPostId().toString()).orElse(null);
         if (previous != null) {
-            if (previous.getBoardType() != boardType || !previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null)
+            // 집 범위는 hash 구성과 별개로 직접 비교해 공개 글과 집 글이 같은 요청으로 판정되지 않게 함.
+            if (previous.getBoardType() != boardType || !previous.getRequestHash().equals(requestHash) || previous.getDeletedAt() != null
+                    || !Objects.equals(previous.getHouseId(), houseId))
                 throw new BusinessException(FEED_REQUEST_CONFLICT);
             return previous.getId();
         }
@@ -79,13 +90,16 @@ public class FeedCommandService {
                     || !image.getExpiresAt().isAfter(clock.instant())) throw new BusinessException(FEED_IMAGE_UNAVAILABLE);
             selected.put(id, image);
         }
-        FeedPost post = FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType);
+        FeedPost post = FeedPost.create(user, request.clientPostId().toString(), requestHash, content, boardType, houseId);
         if (link != null) post.linkRoutine(link.routineId(), link.date(), link.title());
         if (snapshot != null) post.attachMinigameRecord(snapshot.runId(), snapshot.gameCode(), snapshot.score(),
                 snapshot.rank(), snapshot.personalBest(), snapshot.achievedAt());
         post = posts.save(post);
         for (int i = 0; i < imageIds.size(); i++) selected.get(imageIds.get(i)).attach(post, i);
-        if (aiEvents != null) aiEvents.post(user, post.getId());
+        // 집 글은 AI 계정이 읽지 않으므로 반응 작업도 예약하지 않음.
+        if (aiEvents != null && !post.isHousePost()) aiEvents.post(user, post.getId());
+        // 새로 등록된 집 글만 커밋 뒤 구성원에게 푸시함. 재시도는 위에서 기존 글을 돌려주고 끝남(#530).
+        if (post.isHousePost()) events.publishEvent(new HouseFeedPostCreated(post.getId()));
         return post.getId();
     }
     public void update(Long userId, Long postId, String content) {
@@ -94,7 +108,7 @@ public class FeedCommandService {
     // 생략한 필드는 유지함. { content }만 보내는 구버전 요청은 기존 본문 수정과 같게 동작함.
     public void update(Long userId, Long postId, FeedUpdateRequest request) {
         access.lockActive(userId);
-        FeedPost post = lockVisible(postId);
+        FeedPost post = lockVisible(postId, userId);
         requireOwner(post.getAuthor().getId(), userId);
         FeedRoutineCompletionRequest completion = request.routineCompletion();
         if (request.content() == null && request.boardType() == null && completion == null)
@@ -105,8 +119,6 @@ public class FeedCommandService {
         if (post.hasMinigameRecord() && target == FeedBoardType.VERIFICATION) throw new BusinessException(FEED_INPUT_INVALID);
         boolean hasImages = images.existsByPostId(postId);
         boolean switching = target != post.getBoardType();
-        // 사진은 수정할 수 없으므로 사진 없는 글은 인증게시판으로 옮길 수 없음
-        if (switching && target == FeedBoardType.VERIFICATION && !hasImages) throw new BusinessException(FEED_INPUT_INVALID);
         boolean emptyAllowed = target == FeedBoardType.VERIFICATION || hasImages;
         String content = request.content() == null ? null : text(request.content(), 2000, emptyAllowed);
         // 본문을 생략한 채 사진 없는 자유글이 되면 비어 있지 않은 기존 본문이 필요함
@@ -122,7 +134,11 @@ public class FeedCommandService {
     public void delete(Long userId, Long postId) {
         access.lockActive(userId);
         FeedPost post = posts.findForUpdate(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
-        requireOwner(post.getAuthor().getId(), userId);
+        access.requireVisible(post, userId);
+        requireDeletable(post, post.getAuthor().getId(), userId);
+        // 방장이 남의 글을 지운 경우만 추적용으로 남김. 본문·닉네임은 남기지 않음.
+        if (!post.getAuthor().getId().equals(userId) && post.getDeletedAt() == null)
+            log.info("house feed moderated delete - postId={}, houseId={}, actorId={}", postId, post.getHouseId(), userId);
         post.delete(clock.instant());
         // 게시물 tombstone과 원래 요청 hash는 재시도의 재생성을 막기 위해 유지함.
         comments.deleteForPost(postId);
@@ -130,7 +146,7 @@ public class FeedCommandService {
     }
     public void like(Long userId, Long postId, boolean liked) {
         User user = access.lockActive(userId);
-        FeedPost post = lockVisible(postId);
+        FeedPost post = lockVisible(postId, userId);
         requireNotBlocked(userId, post.getAuthor().getId());
         Optional<FeedLike> previous = likes.findByPostIdAndUserId(postId, userId);
         if (liked && previous.isEmpty()) likes.save(new FeedLike(post, user));
@@ -142,7 +158,7 @@ public class FeedCommandService {
         if (targetId != null && targetId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
         Long replyAuthorId = targetId == null ? null : comments.findAuthorId(postId, targetId).orElse(null);
         User user = access.lockCommentParticipants(userId, authorId, replyAuthorId);
-        FeedPost post = lockVisible(postId);
+        FeedPost post = lockVisible(postId, userId);
         requireNotBlocked(userId, authorId);
         if (request.clientCommentId() == null) throw new BusinessException(FEED_INPUT_INVALID);
         String content = text(request.content(), 500, false);
@@ -162,17 +178,20 @@ public class FeedCommandService {
         if (parentId != null && !parentId.equals(targetId)) access.requireThreadVisible(userId, postId, parentId);
         FeedComment comment = comments.save(FeedComment.create(post, user, request.clientCommentId().toString(),
                 requestHash, content, parentId, targetId));
-        if (aiEvents != null) aiEvents.comment(user, postId, comment.getId());
+        if (aiEvents != null && !post.isHousePost()) aiEvents.comment(user, postId, comment.getId());
         // 게시물 작성자와 실제 답글 대상에게 알림을 저장하되 수신자가 같으면 답글 알림 하나만 보냄.
         Map<Long, NotificationContent> recipients = new LinkedHashMap<>();
         recipients.put(authorId, NotificationMessages.feedComment());
         if (target != null) recipients.put(target.getAuthor().getId(), NotificationMessages.feedReply());
         recipients.forEach((recipient, message) -> {
-            if (!recipient.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(recipient, userId))
+            // 집을 나간 작성자·답글 대상은 글을 열 수 없으므로 알리지 않음.
+            if (!recipient.equals(userId) && !blocks.existsByBlockerUserIdAndBlockedUserId(recipient, userId)
+                    && access.canSee(post, recipient))
                 notifications.send(recipient, message, postId);
         });
         return FeedCommentResponse.of(comment, userId);
     }
+    // 본인 댓글의 응답이라 방장 여부와 무관하게 지울 수 있음.
     private FeedCommentResponse commentResponse(FeedComment comment, Long viewer) {
         long replyCount = comment.getParentCommentId() == null
                 ? comments.countForParents(viewer, List.of(comment.getId())).stream().mapToLong(FeedReplyCount::getTotal).sum() : 0;
@@ -188,20 +207,28 @@ public class FeedCommandService {
     }
     public void deleteComment(Long userId, Long postId, Long commentId) {
         access.lockActive(userId);
-        lockVisible(postId);
+        FeedPost post = lockVisible(postId, userId);
         FeedComment comment = comments.findByIdAndPostId(commentId, postId)
                 .orElseThrow(() -> new BusinessException(FEED_COMMENT_NOT_FOUND));
-        requireOwner(comment.getAuthor().getId(), userId);
+        requireDeletable(post, comment.getAuthor().getId(), userId);
+        if (!comment.getAuthor().getId().equals(userId) && comment.getDeletedAt() == null)
+            log.info("house feed moderated delete - postId={}, commentId={}, houseId={}, actorId={}",
+                    postId, commentId, post.getHouseId(), userId);
         comment.delete(clock.instant());
     }
-    private FeedPost lockVisible(Long postId) {
+    private FeedPost lockVisible(Long postId, Long userId) {
         FeedPost post = posts.findForUpdate(postId).orElseThrow(() -> new BusinessException(FEED_POST_NOT_FOUND));
         if (post.getDeletedAt() != null || post.getAuthor().isDeleted()) throw new BusinessException(FEED_POST_NOT_FOUND);
+        access.requireVisible(post, userId);
         return post;
     }
     // 차단한 작성자의 글은 조회와 같게 404로 막음(#399).
     private void requireNotBlocked(Long viewer, Long authorId) {
         if (blocks.existsByBlockerUserIdAndBlockedUserId(viewer, authorId)) throw new BusinessException(FEED_POST_NOT_FOUND);
+    }
+    // 삭제는 작성자 본인과 집 글의 방장이 할 수 있음. 수정은 requireOwner 로 본인만 함.
+    private void requireDeletable(FeedPost post, Long author, Long user) {
+        if (!author.equals(user) && !access.isModerator(post, user)) throw new BusinessException(FEED_FORBIDDEN);
     }
     private void requireOwner(Long author, Long user) {
         if (!author.equals(user)) throw new BusinessException(FEED_FORBIDDEN);

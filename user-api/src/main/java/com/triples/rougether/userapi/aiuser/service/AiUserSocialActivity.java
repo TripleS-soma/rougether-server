@@ -34,7 +34,7 @@ public class AiUserSocialActivity {
         var state=new LinkedHashMap<String,Object>();
         var candidates=new ArrayList<Map<String,Object>>();
         List<Long> posts=jdbc.queryForList("SELECT f.id FROM feed_posts f JOIN users a ON a.id=f.author_id "
-                + "WHERE f.deleted_at IS NULL AND a.deleted_at IS NULL AND a.is_bot=FALSE AND a.id<>? AND f.created_at>=? "
+                + "WHERE f.deleted_at IS NULL AND f.house_id IS NULL AND a.deleted_at IS NULL AND a.is_bot=FALSE AND a.id<>? AND f.created_at>=? "
                 + "AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=a.id) "
                 + "OR (b.blocker_user_id=a.id AND b.blocked_user_id=?)) ORDER BY a.is_ai ASC,f.id DESC LIMIT 12",
                 Long.class,user,AiUserJobs.timestamp(now.minus(Duration.ofDays(7))),user,user);

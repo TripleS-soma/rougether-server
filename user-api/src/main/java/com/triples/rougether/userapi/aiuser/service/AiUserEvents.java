@@ -45,7 +45,7 @@ public class AiUserEvents {
         } else {
             targets = jdbc.queryForList("SELECT DISTINCT u.id FROM users u JOIN ai_user_profiles p ON p.user_id=u.id "
                     + "WHERE p.enabled=TRUE AND u.is_ai=TRUE AND u.deleted_at IS NULL AND (EXISTS "
-                    + "(SELECT 1 FROM feed_posts f WHERE f.id=? AND f.author_id=u.id AND f.deleted_at IS NULL) OR EXISTS "
+                    + "(SELECT 1 FROM feed_posts f WHERE f.id=? AND f.author_id=u.id AND f.deleted_at IS NULL AND f.house_id IS NULL) OR EXISTS "
                     + "(SELECT 1 FROM feed_comments c WHERE c.post_id=? AND c.author_id=u.id AND c.deleted_at IS NULL)) "
                     + "AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_user_id=? AND b.blocked_user_id=u.id) "
                     + "OR (b.blocker_user_id=u.id AND b.blocked_user_id=?)) ORDER BY u.id", Long.class,

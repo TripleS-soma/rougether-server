@@ -5,6 +5,7 @@ terraform {
   }
 }
 provider "aws" { region = var.region }
+data "aws_caller_identity" "current" {}
 variable "region" { default = "ap-northeast-2" }
 variable "name" { default = "rougether-dev-furniture" }
 variable "asset_bucket" { type = string }
@@ -50,6 +51,9 @@ variable "control_concurrency" {
 }
 
 locals {
+  # 운영 환경에서 알림 대상을 생략해도 기존 운영 Webex 경로로 연결한다. 격리 벤치는 기본 무알림이다.
+  alarm_actions = var.alarm_topic_arn != null ? [var.alarm_topic_arn] : (
+  var.name == "rougether-dev-furniture" ? ["arn:aws:sns:${var.region}:${data.aws_caller_identity.current.account_id}:rougether-dev-ops-alarms"] : [])
   assume_lambda = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "lambda.amazonaws.com" } }] })
   ai_zip        = "${path.module}/../../furniture-lambda-ai/build/distributions/furniture-lambda-ai.zip"
   control_zip   = "${path.module}/../../furniture-lambda-control/build/distributions/furniture-lambda-control.zip"
@@ -213,7 +217,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq" {
   period              = 60
   evaluation_periods  = 1
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
+  alarm_actions       = local.alarm_actions
 }
 resource "aws_cloudwatch_metric_alarm" "age" {
   alarm_name          = "${var.name}-queue-age"
@@ -226,7 +230,7 @@ resource "aws_cloudwatch_metric_alarm" "age" {
   period              = 60
   evaluation_periods  = 1
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
+  alarm_actions       = local.alarm_actions
 }
 resource "aws_cloudwatch_metric_alarm" "function_failure" {
   for_each = {
@@ -245,8 +249,36 @@ resource "aws_cloudwatch_metric_alarm" "function_failure" {
   period              = 60
   evaluation_periods  = 1
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
+  alarm_actions       = local.alarm_actions
 }
 output "queue_url" { value = aws_sqs_queue.jobs.url }
 output "ai_function" { value = aws_lambda_function.ai.function_name }
 output "control_function" { value = aws_lambda_function.control.function_name }
+
+resource "aws_cloudwatch_log_metric_filter" "job_failures" {
+  count          = length(local.alarm_actions) > 0 ? 1 : 0
+  name           = "${var.name}-job-failures"
+  log_group_name = aws_cloudwatch_log_group.ai.name
+  pattern        = "\"FURNITURE_JOB_FAILED\""
+  metric_transformation {
+    name          = "${var.name}-job-failures"
+    namespace     = "Rougether/Furniture"
+    value         = "1"
+    default_value = 0
+    unit          = "Count"
+  }
+}
+resource "aws_cloudwatch_metric_alarm" "job_failures" {
+  count               = length(local.alarm_actions) > 0 ? 1 : 0
+  alarm_name          = "${var.name}-job-failures"
+  alarm_description   = "가구 AI 비동기 단계 실패. Lambda Errors가 0이어도 감지함."
+  namespace           = "Rougether/Furniture"
+  metric_name         = "${var.name}-job-failures"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}

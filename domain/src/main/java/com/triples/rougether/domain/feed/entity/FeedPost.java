@@ -23,6 +23,8 @@ public class FeedPost extends BaseEntity {
     @Column(name = "board_type", nullable = false, length = 20) private FeedBoardType boardType;
     @Column(nullable = false, length = 2000) private String content;
     @Column(name = "deleted_at") private Instant deletedAt;
+    // 집 피드 글이 속한 집. null 이면 공개 글이며 등록 뒤에는 바꾸지 않음
+    @Column(name = "house_id", updatable = false) private Long houseId;
     // 인증글이 연결한 루틴 완료 기록. 제목은 연결 시점 스냅샷이라 루틴 이름 변경·삭제와 무관하게 유지함
     @Column(name = "routine_id") private Long routineId;
     @Column(name = "routine_date") private LocalDate routineDate;
@@ -39,10 +41,16 @@ public class FeedPost extends BaseEntity {
         return create(author, clientPostId, hash, content, FeedBoardType.VERIFICATION);
     }
     public static FeedPost create(User author, String clientPostId, String hash, String content, FeedBoardType boardType) {
+        return create(author, clientPostId, hash, content, boardType, null);
+    }
+    public static FeedPost create(User author, String clientPostId, String hash, String content, FeedBoardType boardType,
+                                  Long houseId) {
         FeedPost post = new FeedPost();
         post.author = author; post.clientPostId = clientPostId; post.requestHash = hash; post.content = content; post.boardType = boardType;
+        post.houseId = houseId;
         return post;
     }
+    public boolean isHousePost() { return houseId != null; }
     public void updateContent(String content) { this.content = content; }
     public void changeBoard(FeedBoardType boardType) { this.boardType = boardType; }
     public void linkRoutine(Long routineId, LocalDate routineDate, String routineTitle) {

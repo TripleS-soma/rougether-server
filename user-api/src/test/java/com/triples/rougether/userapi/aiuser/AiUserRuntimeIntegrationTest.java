@@ -579,6 +579,45 @@ class AiUserRuntimeIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type='CHAT'",Integer.class)).isEqualTo(1);
     }
 
+    @Test void hiddenChatSourceIsRevokedFromMemoryExportAndRecall() throws Exception {
+        User human=human();
+        Long house=jdbc.queryForObject("SELECT house_id FROM house_members WHERE user_id=? AND status='ACTIVE' ORDER BY id LIMIT 1",Long.class,ais.getFirst());
+        joins.join(human.getId(),house);
+        Long room=chat.openHouse(human.getId(),house).roomId();
+        var message=chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"숨겨질 달빛서랍 이야기"));
+        var job=jobs.claim("chat-worker");
+        control.snapshot(job.id(),job.owner(),job.fencingToken());
+        control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.WAIT,mapper.createObjectNode(),"달빛서랍 회고");
+
+        jdbc.update("UPDATE chat_messages SET deleted_at=UTC_TIMESTAMP(6) WHERE id=?",message.messageId());
+
+        jobs.enqueue(job.userId(),"after-hidden-chat",10,"SCHEDULE",null);
+        var next=jobs.claim("after-hidden-chat");
+        assertThat(mapper.writeValueAsString(control.snapshot(next.id(),next.owner(),next.fencingToken()))).doesNotContain("달빛서랍");
+        assertThat(memoryProjection.pending(10)).noneSatisfy(export -> assertThat(export.get("jobId")).isEqualTo(job.id()));
+        assertThat(jdbc.queryForObject("SELECT memory_status FROM ai_user_jobs WHERE id=?",String.class,job.id())).isEqualTo("REVOKED");
+    }
+
+    @Test void hiddenChatContextDropsActionWithoutStoppingMemoryExport() throws Exception {
+        User human=human();
+        Long house=jdbc.queryForObject("SELECT house_id FROM house_members WHERE user_id=? AND status='ACTIVE' ORDER BY id LIMIT 1",Long.class,ais.getFirst());
+        joins.join(human.getId(),house);
+        Long room=chat.openHouse(human.getId(),house).roomId();
+        chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"남는 이야기"));
+        var job=jobs.claim("chat-worker");
+        control.snapshot(job.id(),job.owner(),job.fencingToken());
+        control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.WAIT,mapper.createObjectNode(),"맥락 회고");
+        var context=chat.send(human.getId(),room,new com.triples.rougether.userapi.chat.dto.ChatSendRequest(UUID.randomUUID(),"숨겨질 달빛서랍 맥락"));
+        jdbc.update("UPDATE ai_user_jobs SET context_sources=? WHERE id=?","[{\"type\":\"CHAT\",\"id\":"+context.messageId()+"}]",job.id());
+
+        jdbc.update("UPDATE chat_messages SET deleted_at=UTC_TIMESTAMP(6) WHERE id=?",context.messageId());
+
+        assertThat(memoryProjection.pending(10)).anySatisfy(export -> {
+            assertThat(export.get("jobId")).isEqualTo(job.id());
+            assertThat(export.get("body").toString()).contains("남는 이야기","\"includeAction\":false").doesNotContain("달빛서랍");
+        });
+    }
+
     @Test void humanWriteRollbackAlsoRemovesQueuedEvent() {
         User human=human();
         Long post=feed.create(ais.getFirst(),new FeedCreateRequest(UUID.randomUUID(),"원자적 댓글",List.of(),FeedBoardType.FREE,null));
@@ -828,6 +867,31 @@ class AiUserRuntimeIntegrationTest {
                             .isEqualTo(com.triples.rougether.userapi.character.error.CharacterAccessoryErrorCode.ACCESSORY_NOT_OWNED));
             status.setRollbackOnly();
         });
+    }
+
+    // 집 피드(#528): 같은 집에 사는 AI 계정도 집 글을 관찰하거나 반응 작업을 받지 않음.
+    @Test void housePostsStayHiddenFromAiHousemates() {
+        User human=human();
+        long ai=ais.getFirst();
+        Long house=ownHouse(ai);
+        joins.join(human.getId(),house);
+        jdbc.update("DELETE FROM ai_user_jobs");
+        Long post=feed.create(human.getId(),new FeedCreateRequest(UUID.randomUUID(),"우리 집 사람들만 보는 글",List.of(),
+                FeedBoardType.FREE,null,null,house));
+        feed.comment(human.getId(),post,new FeedCommentRequest(UUID.randomUUID(),"집 글에 단 댓글"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ai_user_jobs WHERE source_type IN ('FEED_POST','FEED_COMMENT')",
+                Integer.class)).isZero();
+        assertThat(socialCandidateIds(ai)).doesNotContain(post);
+        assertThatThrownBy(() -> feedQuery.get(ai,post)).isInstanceOfSatisfying(
+                com.triples.rougether.common.error.BusinessException.class,
+                e -> assertThat(e.getErrorCode().code()).isEqualTo("FEED_POST_NOT_FOUND"));
+        assertThatThrownBy(() -> feed.create(ai,new FeedCreateRequest(UUID.randomUUID(),"AI가 쓰려는 집 글",List.of(),
+                FeedBoardType.FREE,null,null,house))).isInstanceOfSatisfying(
+                com.triples.rougether.common.error.BusinessException.class,
+                e -> assertThat(e.getErrorCode().code()).isEqualTo("HOUSE_NOT_MEMBER"));
+        // 같은 사람이 올린 공개 글은 기존처럼 관찰 후보가 됨.
+        long open=quietPost(human,"모두에게 보이는 글");
+        assertThat(socialCandidateIds(ai)).contains(open).doesNotContain(post);
     }
 
     private Long ownHouse(Long ai) {

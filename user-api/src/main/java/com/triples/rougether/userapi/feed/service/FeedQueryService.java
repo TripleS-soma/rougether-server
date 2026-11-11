@@ -26,10 +26,16 @@ public class FeedQueryService {
         return list(viewer, authorId, cursor, size, null);
     }
     public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size, FeedBoardType boardType) {
+        return list(viewer, authorId, cursor, size, boardType, null);
+    }
+    // houseId 생략은 공개 글만, 지정은 그 집 글만 조회함. 집 글은 공개 목록에 섞이지 않음(#528).
+    public FeedPageResponse<FeedPostResponse> list(Long viewer, Long authorId, Long cursor, int size,
+                                                   FeedBoardType boardType, Long houseId) {
         access.active(viewer);
         validatePage(cursor, size);
-        if (authorId != null && authorId <= 0) throw new BusinessException(FEED_INPUT_INVALID);
-        List<FeedPost> found = posts.findPage(viewer, authorId, cursor, boardType, PageRequest.of(0, size + 1));
+        if ((authorId != null && authorId <= 0) || (houseId != null && houseId <= 0)) throw new BusinessException(FEED_INPUT_INVALID);
+        if (houseId != null) access.requireHouseParticipant(houseId, viewer);
+        List<FeedPost> found = posts.findPage(viewer, authorId, cursor, boardType, houseId, PageRequest.of(0, size + 1));
         boolean more = found.size() > size;
         List<FeedPost> page = more ? found.subList(0, size) : found;
         return new FeedPageResponse<>(render(viewer, page), more ? page.getLast().getId() : null, more);
@@ -45,28 +51,29 @@ public class FeedQueryService {
                                                          boolean topLevelOnly) {
         access.active(viewer);
         validatePage(cursor, size);
-        visible(postId, viewer);
+        FeedPost post = visible(postId, viewer);
         List<FeedComment> found = topLevelOnly
                 ? comments.findThreads(viewer, postId, cursor, PageRequest.of(0, size + 1))
                 : comments.findPage(viewer, postId, cursor, PageRequest.of(0, size + 1));
-        return commentPage(viewer, found, size);
+        return commentPage(viewer, found, size, access.isModerator(post, viewer));
     }
     public FeedPageResponse<FeedCommentResponse> replies(Long viewer, Long postId, Long parentId, Long cursor, int size) {
         access.active(viewer);
         validatePage(cursor, size);
-        visible(postId, viewer);
+        FeedPost post = visible(postId, viewer);
         access.requireThreadVisible(viewer, postId, parentId);
         return commentPage(viewer, comments.findReplies(viewer, postId, parentId, cursor,
-                PageRequest.of(0, size + 1)), size);
+                PageRequest.of(0, size + 1)), size, access.isModerator(post, viewer));
     }
-    private FeedPageResponse<FeedCommentResponse> commentPage(Long viewer, List<FeedComment> found, int size) {
+    private FeedPageResponse<FeedCommentResponse> commentPage(Long viewer, List<FeedComment> found, int size,
+                                                              boolean moderator) {
         boolean more = found.size() > size;
         List<FeedComment> page = more ? found.subList(0, size) : found;
         List<Long> parentIds = page.stream().filter(c -> c.getParentCommentId() == null).map(FeedComment::getId).toList();
         Map<Long, Long> replyCounts = parentIds.isEmpty() ? Map.of() : comments.countForParents(viewer, parentIds).stream()
                 .collect(Collectors.toMap(FeedReplyCount::getParentCommentId, FeedReplyCount::getTotal));
         return new FeedPageResponse<>(page.stream()
-                .map(c -> FeedCommentResponse.of(c, viewer, replyCounts.getOrDefault(c.getId(), 0L))).toList(),
+                .map(c -> FeedCommentResponse.of(c, viewer, replyCounts.getOrDefault(c.getId(), 0L), moderator)).toList(),
                 more ? page.getLast().getId() : null, more);
     }
     // 차단한 작성자의 글은 삭제된 글처럼 404(#399).
@@ -87,10 +94,14 @@ public class FeedQueryService {
         Map<Long, Long> likeCounts = counts(likes.countForPosts(ids));
         Map<Long, Long> commentCounts = counts(comments.countForPosts(viewer, ids));
         Set<Long> liked = new HashSet<>(likes.findLikedPostIds(viewer, ids));
+        // 방장 여부는 글마다 묻지 않고 페이지에 나온 집마다 한 번만 확인함(#529).
+        Map<Long, Boolean> moderated = new HashMap<>();
+        for (FeedPost p : page) if (p.isHousePost()) moderated.computeIfAbsent(p.getHouseId(), id -> access.isModerator(p, viewer));
         return page.stream().map(p -> new FeedPostResponse(p.getId(), FeedAuthorResponse.of(p.getAuthor()),
                 p.getContent(), byPost.getOrDefault(p.getId(), List.of()), likeCounts.getOrDefault(p.getId(), 0L),
                 commentCounts.getOrDefault(p.getId(), 0L), liked.contains(p.getId()), p.getAuthor().getId().equals(viewer),
-                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType(), routine(p), minigameRecord(p))).toList();
+                p.getCreatedAt(), p.getUpdatedAt(), p.getBoardType(), routine(p), minigameRecord(p), p.getHouseId(),
+                p.getAuthor().getId().equals(viewer) || moderated.getOrDefault(p.getHouseId(), false))).toList();
     }
     private static FeedRoutineResponse routine(FeedPost post) {
         return post.hasRoutine() ? new FeedRoutineResponse(post.getRoutineId(), post.getRoutineTitle(), post.getRoutineDate()) : null;

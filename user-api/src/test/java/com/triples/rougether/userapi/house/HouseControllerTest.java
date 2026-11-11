@@ -519,7 +519,7 @@ class HouseControllerTest {
     void 소유자의_양도_전_탈퇴는_409와_에러코드를_내려준다() throws Exception {
         authAsUser7();
         org.mockito.Mockito.doThrow(new BusinessException(HouseErrorCode.HOUSE_OWNER_MUST_TRANSFER))
-                .when(houseMemberCommandService).leave(7L, 1L);
+                .when(houseMemberCommandService).leave(7L, 1L, false);
 
         mockMvc.perform(delete("/api/v1/houses/1/members/me"))
                 .andExpect(status().isConflict())
