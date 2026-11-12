@@ -25,11 +25,13 @@ import com.triples.rougether.userapi.onboarding.error.OnboardingHouseErrorCode;
 import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+// 같은 회원의 선택은 사용자 행으로 직렬화하고, 선택 이력이 없는 다른 회원의 삽입은 허용한다.
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(isolation = Isolation.READ_COMMITTED)
 public class OnboardingHouseTransactionService {
     private final HouseRepository houseRepository;
     private final HouseMemberRepository houseMemberRepository;
