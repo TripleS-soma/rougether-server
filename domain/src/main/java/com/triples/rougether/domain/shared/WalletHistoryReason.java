@@ -18,5 +18,6 @@ public enum WalletHistoryReason {
     FURNITURE_GENERATION,     // AI 가구 생성 코인 차감
     FURNITURE_GENERATION_REFUND, // AI 가구 생성 실패 코인 반환
     MARKET_ORDER_ESCROW,     // 거래소 매수 주문 코인 맡김 차감
-    MARKET_PURCHASE         // 고정가 가구 즉시 구매 차감
+    MARKET_PURCHASE,        // 고정가 가구 즉시 구매 차감
+    ADMIN_GRANT             // 어드민 재화 지급 적립
 }

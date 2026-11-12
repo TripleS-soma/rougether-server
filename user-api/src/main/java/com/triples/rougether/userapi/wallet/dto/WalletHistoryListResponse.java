@@ -26,7 +26,7 @@ public record WalletHistoryListResponse(
             @Schema(description = "증감액. 적립은 양수, 사용은 음수", example = "10")
             int amount,
             @Schema(description = "증감 사유. 허용값: ROUTINE_COMPLETE(루틴 완료 적립), TODO_COMPLETE(투두 완료 적립), "
-                    + "SIGNUP_BONUS(가입 보너스 적립), GACHA_DUPLICATE_CONVERT(뽑기 중복 전환 적립), "
+                    + "SIGNUP_BONUS(가입 보너스 적립), ADMIN_GRANT(어드민 지급 적립), GACHA_DUPLICATE_CONVERT(뽑기 중복 전환 적립), "
                     + "INVITE_REWARD(친구 초대 보상 적립), COBWEB_CLEAN(거미줄 청소 보상 적립), ATTENDANCE_REWARD(연속 출석 보상 적립), LOGIN_GIFT(기념일 접속 선물 적립), "
                     + "MARKET_ESCROW_REFUND(거래소 맡긴 코인 환불 적립), MARKET_SALE(거래소 판매 대금 적립), MARKET_ROYALTY(거래소 로열티 적립), "
                     + "GACHA_DRAW(뽑기 실행 사용), SHOP_PURCHASE(상점 구매 사용), MARKET_ORDER_ESCROW(거래소 매수 주문 코인 맡김)",
