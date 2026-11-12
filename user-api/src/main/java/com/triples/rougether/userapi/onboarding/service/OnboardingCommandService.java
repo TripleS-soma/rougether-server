@@ -97,9 +97,9 @@ public class OnboardingCommandService {
                 target.select();
                 userCharacterRepository.save(target);
             }
-        } else if (character.isRoomLevelReward()
+        } else if (character.isSpecialReward()
                 || userCharacterRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
-                        .anyMatch(uc -> !uc.getCharacter().isRoomLevelReward())) {
+                        .anyMatch(uc -> !uc.getCharacter().isSpecialReward())) {
             throw new BusinessException(MemberErrorCode.CHARACTER_NOT_OWNED);
         } else {
             // 레벨 보상을 먼저 얻었더라도 기본 캐릭터 무료 선택권은 유지함.

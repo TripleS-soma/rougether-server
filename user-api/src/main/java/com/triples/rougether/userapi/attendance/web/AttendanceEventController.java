@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.attendance.web;
 
 import com.triples.rougether.userapi.attendance.dto.AttendanceCheckInResponse;
+import com.triples.rougether.userapi.attendance.dto.AttendanceCharacterRewardResponse;
 import com.triples.rougether.userapi.attendance.dto.AttendanceEventStatusResponse;
 import com.triples.rougether.userapi.attendance.service.AttendanceEventService;
 import com.triples.rougether.userapi.global.security.AuthUser;
@@ -38,6 +39,13 @@ public class AttendanceEventController {
     @PostMapping("/{eventId}/check-ins")
     public AttendanceCheckInResponse checkIn(@CurrentUser AuthUser user, @PathVariable Long eventId) {
         return attendanceEventService.checkIn(user.id(), eventId);
+    }
+
+    @Operation(summary = "달성한 출석 캐릭터 보상 수령", description = "기존 출석과 코인을 변경하지 않고 달성한 캐릭터를 한 번 지급합니다.")
+    @PostMapping("/{eventId}/character-reward")
+    public AttendanceCharacterRewardResponse claimCharacterReward(@CurrentUser AuthUser user,
+                                                                   @PathVariable Long eventId) {
+        return attendanceEventService.claimCharacterReward(user.id(), eventId);
     }
 
     @Operation(summary = "오늘 출석 체크")
