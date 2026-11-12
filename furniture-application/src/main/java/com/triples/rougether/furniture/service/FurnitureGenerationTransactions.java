@@ -58,6 +58,25 @@ public class FurnitureGenerationTransactions {
                                     long bytes, String contentType, Instant expiresAt) { }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 5)
+    public UploadReservation reserveMultipart(Long userId, String requestId, String digest, String sha256,
+                                               long bytes, String contentType, String hint) {
+        UUID.fromString(requestId);
+        if (digest == null || !digest.matches("[a-f0-9]{64}") || sha256 == null || !sha256.matches("[a-f0-9]{64}")
+                || bytes < 1 || bytes > 10 * 1024 * 1024 || !("image/jpeg".equals(contentType) || "image/png".equals(contentType))
+                || hint == null || hint.length() > 120) throw new BusinessException(FURNITURE_PHOTO_INVALID);
+        var reservation = reserve(userId, requestId, digest, hint);
+        var job = ownedForUpdate(userId, reservation.job().id());
+        if (reservation.created()) {
+            job.directUpload(FurniturePreprocessProtocol.sourceKey(job.getId()), sha256, bytes, contentType,
+                    clock.instant().plus(Duration.ofMinutes(30)));
+        }
+        if (job.getUploadExpiresAt() != null && job.getStatus() == Status.UPLOADING
+                && !job.getUploadExpiresAt().isAfter(clock.instant())) fail(job, "UPLOAD_INTERRUPTED", clock.instant());
+        return new UploadReservation(FurnitureGenerationResponse.from(job), job.getRawSourceKey(), sha256,
+                bytes, contentType, job.getUploadExpiresAt());
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 5)
     public UploadReservation reserveDirect(Long userId, String requestId, String sha256, long bytes, String contentType, String hint) {
         UUID.fromString(requestId);
         if (sha256 == null || !sha256.matches("[a-f0-9]{64}") || bytes < 1 || bytes > 10 * 1024 * 1024
