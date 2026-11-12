@@ -15,6 +15,9 @@ import com.triples.rougether.domain.member.entity.OauthAccount;
 import com.triples.rougether.domain.member.entity.OauthProvider;
 import com.triples.rougether.domain.member.entity.RefreshTokenRevokeReason;
 import com.triples.rougether.domain.member.entity.User;
+import com.triples.rougether.domain.member.entity.WithdrawalFeedback;
+import com.triples.rougether.domain.member.entity.WithdrawalReason;
+import com.triples.rougether.domain.member.repository.WithdrawalFeedbackRepository;
 import com.triples.rougether.domain.goal.repository.UserGoalRepository;
 import com.triples.rougether.domain.member.repository.OauthAccountRepository;
 import com.triples.rougether.domain.member.repository.RefreshTokenRepository;
@@ -38,6 +41,8 @@ import com.triples.rougether.userapi.auth.service.AppleRefreshTokenCipher;
 import com.triples.rougether.infra.assets.AssetStorageService;
 import com.triples.rougether.userapi.member.error.MemberErrorCode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +60,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Service
 @RequiredArgsConstructor
 public class MemberWithdrawalService {
+    private final WithdrawalFeedbackRepository withdrawalFeedbackRepository;
 
     private final UserRepository userRepository;
     private final com.triples.rougether.domain.feedback.repository.SuggestionRepository suggestionRepository;
@@ -89,6 +95,11 @@ public class MemberWithdrawalService {
     // 외부 트랜잭션에 참여시켜 호출하면 호출자 엔티티의 이후 dirty 변경이 유실될 수 있음.
     @Transactional
     public void withdraw(Long userId) {
+        withdraw(userId, null);
+    }
+
+    @Transactional
+    public void withdraw(Long userId, WithdrawalReason reason) {
         // 이미 탈퇴한 회원의 재요청은 404 — 인증이 살아있는 30분 내 중복 호출 케이스.
         User user = userRepository.findByIdForUpdate(userId)
                 .filter(found -> !found.isDeleted())
@@ -144,6 +155,11 @@ public class MemberWithdrawalService {
         // 위 bulk soft delete 이후 PC에 남은 stale 루틴/투두/카테고리를 여기서 함께 비움.
         userDeviceTokenRepository.deleteAllByUserId(userId);
 
+        // 탈퇴와 함께 커밋함. 정리 배치가 실패하거나 재시도돼도 사유를 중복 기록하지 않음.
+        if (!user.isBot() && !user.isAi()) {
+            withdrawalFeedbackRepository.save(WithdrawalFeedback.record(
+                    reason, LocalDate.ofInstant(now, ZoneId.of("Asia/Seoul"))));
+        }
         eventPublisher.publishEvent(new MemberWithdrawnEvent(userId, revocations, profileImageKey));
     }
 

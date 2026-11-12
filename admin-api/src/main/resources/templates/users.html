@@ -176,6 +176,19 @@
                     뒤인 경우입니다. 공동집 참여(가입자 대비)와 탈퇴(가입자+탈퇴자 대비)는 순서와 무관한 부가 지표입니다.</span>
             </div>
 
+            <div class="observation-result-head">
+                <strong>탈퇴 사유</strong>
+                <span class="slot-count" id="withdrawalFeedbackPeriod">최근 30일 수집분</span>
+            </div>
+            <div class="observation-grid" id="withdrawalFeedback" aria-label="선택형 탈퇴 사유 집계">
+                <p class="observation-empty">탈퇴 사유 조회 중…</p>
+            </div>
+            <div class="observation-note">
+                <strong>수집 기준</strong>
+                <span>수집 시작 이후의 탈퇴만 포함합니다. 사유는 선택사항이며 계정 식별자 없이 사유와 집계일만 보관합니다.
+                    선택하지 않은 탈퇴는 미선택으로 표시합니다. 과거 누적 탈퇴 수와는 기준이 다릅니다.</span>
+            </div>
+
             <div class="observation-filters">
                 <label class="observation-filter observation-filter--search">
                     <span>사용자 검색</span>
@@ -285,7 +298,37 @@
 
         // 퍼널은 목록 표시를 막지 않도록 따로 부름.
         loadFunnel();
+        loadWithdrawalFeedback();
         Promise.all([loadSummary(), loadRetentionMetrics(), loadCharacters()]).then(load);
+
+        async function loadWithdrawalFeedback() {
+            const target = document.getElementById('withdrawalFeedback');
+            try {
+                const response = await fetch('/admin/users/withdrawal-feedback');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                const labels = { INCONVENIENT: '사용이 불편해요', MISSING_FEATURE: '원하는 기능이 없어요', OTHER: '기타' };
+                const items = [...data.items.map(item => ({ label: labels[item.reason], count: item.count })),
+                    { label: '미선택', count: data.skippedWithdrawals }];
+                target.replaceChildren(...items.map(item => {
+                    const card = document.createElement('article');
+                    card.className = 'observation-metric';
+                    const label = document.createElement('span');
+                    label.textContent = item.label;
+                    const count = document.createElement('strong');
+                    count.textContent = item.count.toLocaleString();
+                    card.append(label, count);
+                    return card;
+                }));
+                document.getElementById('withdrawalFeedbackPeriod').textContent =
+                    data.fromDate + ' ~ ' + data.toDate + ' · 수집 ' + data.recordedWithdrawals.toLocaleString() + '건';
+            } catch (error) {
+                const empty = document.createElement('p');
+                empty.className = 'observation-empty';
+                empty.textContent = '탈퇴 사유를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.';
+                target.replaceChildren(empty);
+            }
+        }
 
         async function loadSummary() {
             try {
@@ -753,6 +796,7 @@
             loadSummary();
             loadRetentionMetrics();
             loadFunnel();
+            loadWithdrawalFeedback();
             load();
         });
         document.getElementById('prev').addEventListener('click', () => {

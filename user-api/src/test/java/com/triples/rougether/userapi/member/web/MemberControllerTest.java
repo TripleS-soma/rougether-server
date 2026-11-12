@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.member.entity.WithdrawalReason;
 import com.triples.rougether.userapi.auth.service.TokenService;
 import com.triples.rougether.userapi.global.security.AuthUser;
 import com.triples.rougether.userapi.global.security.CurrentUserArgumentResolver;
@@ -132,6 +133,28 @@ class MemberControllerTest {
         mockMvc.perform(delete("/api/v1/me"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    void 선택한_탈퇴_사유는_인증된_회원과_함께_전달된다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me").contentType("application/json")
+                        .content("{\"reason\":\"INCONVENIENT\"}"))
+                .andExpect(status().isNoContent());
+        verify(memberWithdrawalService).withdraw(1L, WithdrawalReason.INCONVENIENT);
+    }
+
+    @Test
+    void 빈_본문은_선택하지_않은_탈퇴로_처리한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me").contentType("application/json").content("{}"))
+                .andExpect(status().isNoContent());
+        verify(memberWithdrawalService).withdraw(1L);
+    }
+
+    @Test
+    void 정의하지_않은_탈퇴_사유는_400이다() throws Exception {
+        mockMvc.perform(delete("/api/v1/me").contentType("application/json")
+                        .content("{\"reason\":\"TEST_ACCOUNT\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
