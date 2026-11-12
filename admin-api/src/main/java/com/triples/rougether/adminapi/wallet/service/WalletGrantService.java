@@ -4,8 +4,11 @@ import com.triples.rougether.adminapi.wallet.dto.WalletGrantRequest;
 import com.triples.rougether.adminapi.wallet.dto.WalletGrantResponse;
 import com.triples.rougether.domain.member.entity.User;
 import com.triples.rougether.domain.member.entity.UserWallet;
+import com.triples.rougether.domain.member.entity.WalletHistory;
 import com.triples.rougether.domain.member.repository.UserRepository;
 import com.triples.rougether.domain.member.repository.UserWalletRepository;
+import com.triples.rougether.domain.member.repository.WalletHistoryRepository;
+import com.triples.rougether.domain.shared.WalletHistoryReason;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,10 +19,13 @@ public class WalletGrantService {
 
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
+    private final WalletHistoryRepository walletHistoryRepository;
 
-    public WalletGrantService(UserRepository userRepository, UserWalletRepository userWalletRepository) {
+    public WalletGrantService(UserRepository userRepository, UserWalletRepository userWalletRepository,
+                              WalletHistoryRepository walletHistoryRepository) {
         this.userRepository = userRepository;
         this.userWalletRepository = userWalletRepository;
+        this.walletHistoryRepository = walletHistoryRepository;
     }
 
     @Transactional
@@ -35,6 +41,10 @@ public class WalletGrantService {
             wallet = userWalletRepository.save(UserWallet.create(user, request.currencyType()));
         }
         wallet.add(request.amount());
+        // 잔액 적립과 원장을 같은 트랜잭션으로 저장함. 원장 저장 실패 시 지갑 발급과 적립도 롤백됨.
+        walletHistoryRepository.save(WalletHistory.record(
+                user, request.currencyType(), request.amount(), WalletHistoryReason.ADMIN_GRANT,
+                wallet.getBalance(), null, null));
         return new WalletGrantResponse(
                 userId, request.currencyType(), request.amount(), wallet.getBalance(), created);
     }
