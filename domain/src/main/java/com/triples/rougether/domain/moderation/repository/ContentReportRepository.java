@@ -19,6 +19,10 @@ public interface ContentReportRepository extends JpaRepository<ContentReport, Lo
 
     boolean existsByTargetTypeAndTargetId(ContentReportTargetType targetType, Long targetId);
 
+    // 자동 신고 중복 방지(#478): 같은 대상에 처리 대기 신고(사용자·자동)가 있으면 새로 만들지 않음.
+    boolean existsByTargetTypeAndTargetIdAndStatus(ContentReportTargetType targetType, Long targetId,
+                                                   ContentReportStatus status);
+
     // 운영자 대기열: 상태별 최신순(idx_content_reports_status)
     Page<ContentReport> findByStatusOrderByIdDesc(ContentReportStatus status, Pageable page);
 
