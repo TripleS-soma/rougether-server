@@ -97,18 +97,43 @@ public final class NotificationMessages {
 
     // 집 채팅 새 메시지(#435). 알림함에 저장하지 않는 푸시 전용. 제목 = 집 이름, 본문 = 닉네임 + 앞 100자.
     public static NotificationContent chatMessage(String houseName, String senderNickname, String content) {
-        // 글자(코드포인트) 단위로 자름 — UTF-16 단위로 자르면 경계의 이모지가 반쪽으로 남음
-        String preview = content.codePointCount(0, content.length()) > CHAT_PREVIEW_LENGTH
-                ? content.substring(0, content.offsetByCodePoints(0, CHAT_PREVIEW_LENGTH)) + "…" : content;
+        String preview = chatPreview(content);
         return new NotificationContent(NotificationType.CHAT_MESSAGE,
                 houseName, displayName(senderNickname) + ": " + preview,
                 houseName, englishName(senderNickname) + ": " + preview);
+    }
+
+    private static String chatPreview(String content) {
+        // 글자(코드포인트) 단위로 자름 — UTF-16 단위로 자르면 경계의 이모지가 반쪽으로 남음
+        return content.codePointCount(0, content.length()) > CHAT_PREVIEW_LENGTH
+                ? content.substring(0, content.offsetByCodePoints(0, CHAT_PREVIEW_LENGTH)) + "…" : content;
     }
 
     public static NotificationContent chatPhoto(String houseName, String senderNickname) {
         return new NotificationContent(NotificationType.CHAT_MESSAGE,
                 houseName, displayName(senderNickname) + ": 사진을 보냈어요",
                 houseName, englishName(senderNickname) + ": sent a photo");
+    }
+
+    // 사진 여러 장을 설명 글 없이 보낸 메시지.
+    public static NotificationContent chatPhotos(String houseName, String senderNickname, long count) {
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": 사진 " + count + "장을 보냈어요",
+                houseName, englishName(senderNickname) + ": sent " + count + " photos");
+    }
+
+    // 설명 글이 붙은 사진 메시지. 장수와 무관하게 설명 글 앞 100자를 보여 줌.
+    public static NotificationContent chatPhotoCaption(String houseName, String senderNickname, String caption) {
+        String preview = chatPreview(caption);
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": [사진] " + preview,
+                houseName, englishName(senderNickname) + ": [Photo] " + preview);
+    }
+
+    public static NotificationContent chatEmoticon(String houseName, String senderNickname) {
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": 이모티콘을 보냈어요",
+                houseName, englishName(senderNickname) + ": sent an emoticon");
     }
 
     // 집 피드 새 글 푸시(#530). 제목은 집 이름이고 본문에 글 내용은 싣지 않음.

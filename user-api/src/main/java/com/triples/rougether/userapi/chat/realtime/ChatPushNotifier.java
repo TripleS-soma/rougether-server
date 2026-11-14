@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.chat.realtime;
 
 import com.triples.rougether.domain.chat.entity.ChatMessage;
 import com.triples.rougether.domain.chat.entity.ChatRoom;
+import com.triples.rougether.domain.chat.repository.ChatImageRepository;
 import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.chat.repository.ChatReadStateRepository;
 import com.triples.rougether.domain.chat.repository.ChatRoomRepository;
@@ -39,6 +40,7 @@ public class ChatPushNotifier {
     private static final Logger log = LoggerFactory.getLogger(ChatPushNotifier.class);
 
     private final ChatMessageRepository messages;
+    private final ChatImageRepository images;
     private final ChatRoomRepository rooms;
     private final ChatReadStateRepository reads;
     private final HouseRepository houses;
@@ -49,11 +51,13 @@ public class ChatPushNotifier {
     private final FcmPushExecutor fcm;
     private final TransactionTemplate readOnly;
 
-    public ChatPushNotifier(ChatMessageRepository messages, ChatRoomRepository rooms, ChatReadStateRepository reads,
+    public ChatPushNotifier(ChatMessageRepository messages, ChatImageRepository images, ChatRoomRepository rooms,
+                            ChatReadStateRepository reads,
                             HouseRepository houses, UserRepository users, ChatAccessPolicy access,
                             ChatSocketHandler sockets, NotificationSettingService settings, FcmPushExecutor fcm,
                             PlatformTransactionManager transactionManager) {
         this.messages = messages;
+        this.images = images;
         this.rooms = rooms;
         this.reads = reads;
         this.houses = houses;
@@ -80,6 +84,18 @@ public class ChatPushNotifier {
         }
     }
 
+    // 사진은 설명 글이 있으면 "[사진] 설명 글", 없으면 장수에 맞는 문구를 씀. 이모티콘은 key 대신 안내 문구를 씀.
+    private NotificationContent content(ChatMessage message, String houseName, String nickname) {
+        if (message.isEmoticon()) return NotificationMessages.chatEmoticon(houseName, nickname);
+        if (!message.isImage()) return NotificationMessages.chatMessage(houseName, nickname, message.getContent());
+        if (message.getCaption() != null) {
+            return NotificationMessages.chatPhotoCaption(houseName, nickname, message.getCaption());
+        }
+        long count = images.countByMessageId(message.getId());
+        return count > 1 ? NotificationMessages.chatPhotos(houseName, nickname, count)
+                : NotificationMessages.chatPhoto(houseName, nickname);
+    }
+
     private void notifyRecipients(Long messageId) {
         ChatMessage message = messages.findById(messageId).orElseThrow();
         // 비동기 대기 중 삭제되거나 발신자가 탈퇴한 메시지는 푸시로 재노출하지 않음.
@@ -87,9 +103,7 @@ public class ChatPushNotifier {
         ChatRoom room = rooms.findById(message.getRoomId()).orElseThrow();
         String houseName = houses.findById(room.getHouseId()).map(House::getName).orElse("");
         User sender = message.getSender();
-        NotificationContent content = message.isImage()
-                ? NotificationMessages.chatPhoto(houseName, sender.getNickname())
-                : NotificationMessages.chatMessage(houseName, sender.getNickname(), message.getContent());
+        NotificationContent content = content(message, houseName, sender.getNickname());
         // 같은 집의 사진·글 알림을 함께 묶고 앱에서 집 채팅을 열면 한 번에 지운다.
         Map<String, String> data = Map.of("type", NotificationType.CHAT_MESSAGE.name(),
                 "roomId", room.getId().toString(), "houseId", room.getHouseId().toString(),

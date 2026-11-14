@@ -6,7 +6,7 @@ API 계약은 rougether-spec의 `domains/chat/api.md`, 데이터 모델은 `doma
 
 ## 구조
 
-- domain: ChatRoom / ChatMessage / ChatReadState 및 Repository, V77 migration.
+- domain: ChatRoom / ChatMessage / ChatReadState / ChatImage / ChatMessageReaction 및 Repository, V77·V102~V104·V108 migration.
 - user-api/chat: HTTP command/query, 집 멤버십 접근 정책, WebSocket 수신, Redis 변경 전파.
 - 쓰기는 HTTP JWT 인증과 DB 트랜잭션을 사용합니다. `SUBSCRIBE.includeMessages=true`인 연결에는 커밋된 메시지 본문을 `MESSAGE_CREATED`로 직접 전달합니다. 옵션을 생략한 기존 연결은 `ROOM_UPDATED`와 HTTP 조회를 유지합니다. 최초 기록·재접속 복구는 두 모드 모두 HTTP 순서 커서를 사용합니다.
 - 메시지 순서·읽음 상태는 MySQL이 정본입니다. 같은 UUID 재시도는 같은 메시지를 반환하고 읽음 위치는 감소하지 않습니다.
@@ -45,6 +45,36 @@ Redis는 구독 시작 시 연결 가능해야 합니다. 실행 중 발행/구�
 5. ROOM_UPDATED는 읽음/구성원 갱신과 누락 감지에 사용합니다. 실제 화면에 표시된 위치만 기존 read API로 보냅니다. 재접속에는 백오프와 jitter를 적용합니다.
 
 모바일 구현은 이 백엔드 변경에 포함하지 않습니다. 서버 배포만으로 구버전 앱의 수신 흐름이 바뀌지는 않습니다. Redis 채널과 DB 스키마가 같으므로 서버 간 알림 계약은 유지됩니다.
+
+## 사진 여러 장·설명 글·이모티콘·공감 (V108)
+
+구버전 앱이 읽는 필드의 의미와 non-null 보장은 그대로 두고 새 필드를 뒤에 덧붙였습니다.
+
+- 전송은 글만(`content`), 사진(`imageIds` 1~10장, `content`를 함께 넣으면 설명 글), 이모티콘만(`emoticonKey`) 셋 중 하나입니다. 구버전 앱의 단일 `imageId`는 `imageIds=[imageId]`와 같게 처리하고 둘을 함께 보내면 400입니다. 비어 있는 `imageIds`는 보내지 않은 것으로 봅니다.
+- `chat_messages.content`는 계속 NOT NULL인 구버전 앱 표시용 문구입니다. 사진은 설명 글이 있으면 그 글, 없으면 `사진을 보냈어요` 또는 `사진 N장을 보냈어요`, 이모티콘은 `이모티콘을 보냈어요`를 저장합니다. 설명 글 원문은 `caption`, 이모티콘은 `emoticon_key`에 따로 둡니다. 서버는 이모티콘 카탈로그를 두지 않고 key 형식만 검사합니다.
+- 사진은 `chat_images.sort_order`(요청 순서, 0부터)로 메시지에 붙습니다. 전송은 사진 행을 id 오름차순으로 잠근 뒤 한꺼번에 판정하고, 한 장이라도 쓸 수 없으면 메시지와 연결이 함께 롤백됩니다. 응답의 `image`는 첫 장(구버전 앱용)이고 `images`가 전체입니다.
+- 금칙어 검사는 글과 설명 글에 적용합니다. AI 사용자 이벤트는 글 메시지에만 보내고, 설명 글이 있는 사진이나 이모티콘에는 보내지 않습니다. AI 컨텍스트의 최근 메시지 조회는 유형을 가리지 않고 `content`를 읽으므로 사진·이모티콘은 표시용 문구(또는 설명 글)로 보입니다.
+- 공감은 `chat_message_reactions`에 (message_id, user_id) 유일로 저장합니다. 유형을 바꾸면 같은 행을 고치고 누른 시각을 갱신합니다. 쓰기는 `lockWriter`(user → house → membership)만 잡습니다. 같은 사람의 동시 요청은 회원 행 잠금으로 직렬화되고, 방 행은 잠그지 않아 메시지 순번과 읽음 상태에 영향을 주지 않습니다. 탈퇴한 회원의 공감은 행을 지우지 않고 조회에서 제외합니다(사진과 같은 방식).
+- 기록 조회는 페이지당 사진 한 번, 공감 한 번만 조회합니다.
+
+### 공감 실시간 전달
+
+- `SUBSCRIBE`에 `includeReactions=true`를 보낸 연결에만 `MESSAGE_REACTIONS` 프레임을 보냅니다. READY는 켠 옵션만 `true`로 되돌려 주고, 옵션을 보내지 않은 연결의 READY/ROOM_UPDATED 형식은 그대로입니다.
+- 커밋 후 신호에는 방 ID와 메시지 ID만 싣고, 소켓 송신 작업이 프레임을 쓰기 직전에 DB에서 현재 공감을 읽습니다. 신호가 겹치거나 순서가 바뀌어도 한 연결의 마지막 프레임이 최신 값입니다. 프레임 쓰기 전 권한·JWT 재검사, 연결당 직렬 송신, 대기열 초과 시 1013 종료는 본문 전달과 같습니다. 한 연결이 보내지 못한 공감 변경이 메시지 256개를 넘으면 1013으로 종료합니다.
+- 본문을 직접 받는 연결(`includeMessages=true`)이 아직 받지 못한 메시지의 공감 프레임은 건너뜁니다. 뒤따르는 `MESSAGE_CREATED.message.reactions`가 그 시점의 공감을 싣습니다.
+- 다른 노드에는 Redis 채널 `rougether:chat:reactions-changed:v1`로 `방 ID:메시지 ID`를 보냅니다. 기존 `rougether:chat:room-changed:v1`의 형식(방 ID만)은 바꾸지 않았습니다. Redis를 켠 노드는 자기 발행분도 다시 받으므로 같은 내용의 프레임이 한 번 더 나갈 수 있습니다(전체 상태라 무해).
+- Pub/Sub 유실은 다시 보내지 않습니다. 5초 보정에 공감을 넣지 않았으므로 클라이언트는 재접속·기록 조회의 `reactions`로 맞춥니다.
+
+### 사진 자르기
+
+업로드에 `cropX`·`cropY`·`cropWidth`·`cropHeight`(회전 보정 후 이미지 기준 0~1 비율)를 받습니다. 처리 순서는 디코딩 → 회전 보정 → 자르기 → 긴 변 1,600px 축소 → JPEG입니다. 잘린 영역을 원본 좌표로 되돌려 그 영역만 디코딩하므로 큰 사진을 잘라도 잘린 부분의 해상도가 유지되고, 읽는 픽셀 수는 자르지 않을 때의 상한을 넘지 않습니다. 자르기 값을 생략한 경로(피드 업로드 포함)는 동작이 바뀌지 않습니다.
+
+### 배포 순서와 롤백 주의 (V108)
+
+- V108의 새 컬럼은 NULL 허용이거나 DEFAULT가 있어 전환 중 구버전 코드의 INSERT·SELECT가 그대로 동작합니다. `chat_images`의 FK를 내렸다가 다시 거는 동안과 `chat_messages`의 CHECK 교체 동안 테이블이 잠깐 재구성됩니다.
+- 구버전 서버 코드는 새 형식의 행을 읽지 못합니다. 메시지 하나에 사진이 두 장 이상이면 기록 조회와 관리자 신고 목록이 500이 되고, `message_type=EMOTICON` 행은 enum 변환에 실패합니다. 새 형식은 새 앱만 보내므로 user-api·admin-api가 모두 새 버전으로 전환된 것을 확인한 뒤에 이 기능을 쓰는 앱을 배포합니다.
+- 여러 장 사진이나 이모티콘 메시지가 저장된 뒤에는 이 버전 이전의 서버로 단순 롤백하지 않습니다. 롤백이 필요하면 새 형식을 읽을 수 있는 호환 패치로 진행합니다.
+- 모바일은 `includeReactions`를 보낸 뒤 READY의 같은 플래그로 서버 지원을 확인합니다. 플래그가 없으면 공감은 기록 조회로만 갱신합니다.
 
 ## 배포 연결 조건
 

@@ -21,6 +21,8 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 @ConditionalOnProperty(name = "chat.redis.enabled", havingValue = "true")
 public class ChatRedisConfig {
     static final String CHANNEL = "rougether:chat:room-changed:v1";
+    // 공감 변경 전용. 내용은 "방 ID:메시지 ID"이고 구버전 노드는 이 채널을 구독하지 않음.
+    static final String REACTION_CHANNEL = "rougether:chat:reactions-changed:v1";
 
     @Bean
     LettuceConnectionFactory chatConnectionFactory(
@@ -54,6 +56,12 @@ public class ChatRedisConfig {
                 sockets.changed(Long.parseLong(new String(message.getBody(), StandardCharsets.UTF_8)));
             } catch (NumberFormatException ignored) { }
         }, new ChannelTopic(CHANNEL));
+        listener.addMessageListener((message, pattern) -> {
+            try {
+                String[] ids = new String(message.getBody(), StandardCharsets.UTF_8).split(":", -1);
+                if (ids.length == 2) sockets.reactionsChanged(Long.parseLong(ids[0]), Long.parseLong(ids[1]));
+            } catch (NumberFormatException ignored) { }
+        }, new ChannelTopic(REACTION_CHANNEL));
         return listener;
     }
 }

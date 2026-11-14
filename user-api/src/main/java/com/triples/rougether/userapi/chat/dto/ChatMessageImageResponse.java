@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.chat.dto;
 
 import com.triples.rougether.domain.chat.entity.ChatImage;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 
 // 메시지에 붙은 사진 정보. 바이트는 GET /chat/images/{imageId}로 읽음. 탈퇴한 사람의 사진은 내보내지 않음.
 public record ChatMessageImageResponse(
@@ -14,5 +15,12 @@ public record ChatMessageImageResponse(
     public static ChatMessageImageResponse of(ChatImage image) {
         if (image == null || image.getOwner().isDeleted()) return null;
         return new ChatMessageImageResponse(image.getId(), image.getWidth(), image.getHeight());
+    }
+
+    // images는 보낸 순서로 받음.
+    public static List<ChatMessageImageResponse> listOf(List<ChatImage> images) {
+        if (images == null) return List.of();
+        return images.stream().filter(image -> !image.getOwner().isDeleted())
+                .map(image -> new ChatMessageImageResponse(image.getId(), image.getWidth(), image.getHeight())).toList();
     }
 }

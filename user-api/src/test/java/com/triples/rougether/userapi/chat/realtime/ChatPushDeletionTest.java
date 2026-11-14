@@ -35,7 +35,8 @@ class ChatPushDeletionTest {
         when(message.getSender()).thenReturn(sender);
         when(sender.isDeleted()).thenReturn(deletedSender);
         when(messages.findById(17L)).thenReturn(Optional.of(message));
-        var notifier = new ChatPushNotifier(messages, rooms, mock(ChatReadStateRepository.class),
+        var notifier = new ChatPushNotifier(messages, mock(ChatImageRepository.class), rooms,
+                mock(ChatReadStateRepository.class),
                 mock(HouseRepository.class), mock(UserRepository.class), mock(ChatAccessPolicy.class),
                 mock(ChatSocketHandler.class), mock(NotificationSettingService.class), fcm, manager);
         notifier.onMessageSent(new ChatMessageSent(17L));

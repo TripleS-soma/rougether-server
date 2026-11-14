@@ -114,10 +114,14 @@ class ContentReportAdminTest {
     }
 
     private ChatImage attachedPhoto(ChatMessage message) {
+        return attachedPhoto(message, 0);
+    }
+
+    private ChatImage attachedPhoto(ChatMessage message, int sortOrder) {
         ChatImage image = ChatImage.reserve(message.getRoomId(), owner,
                 "private/chat/" + UUID.randomUUID() + ".jpg", 48, 32, NOW, NOW.plusSeconds(3600));
         image.complete();
-        image.attach(message.getId());
+        image.attach(message.getId(), sortOrder);
         return chatImages.save(image);
     }
 
@@ -291,6 +295,37 @@ class ContentReportAdminTest {
                 .andExpect(jsonPath("$.items[0].target.text").value("사진을 보냈어요"))
                 .andExpect(jsonPath("$.items[0].target.chatImageId").value(image.getId()))
                 .andExpect(jsonPath("$.items[0].target.removed").value(false));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void 대기열은_여러_장_사진_메시지의_사진_ID를_보낸_순서대로_모두_싣는다() throws Exception {
+        ChatMessage message = chatMessage("사진 3장을 보냈어요");
+        // 저장 순서(id)와 보낸 순서(sort_order)를 다르게 둠.
+        ChatImage third = attachedPhoto(message, 2);
+        ChatImage first = attachedPhoto(message, 0);
+        ChatImage second = attachedPhoto(message, 1);
+        ChatMessage text = chatMessage("글만 있는 채팅");
+        report(reporter, ContentReportTargetType.CHAT_MESSAGE, text.getId());
+        report(reporter, ContentReportTargetType.CHAT_MESSAGE, message.getId());
+        org.mockito.Mockito.when(s3Client.getObjectAsBytes(org.mockito.ArgumentMatchers.any(GetObjectRequest.class)))
+                .thenReturn(ResponseBytes.fromByteArray(GetObjectResponse.builder().contentType("image/jpeg").build(),
+                        new byte[] {1}));
+
+        mockMvc.perform(get("/admin/reports").param("status", "RECEIVED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].targetId").value(message.getId()))
+                .andExpect(jsonPath("$.items[0].target.chatImageId").value(first.getId()))
+                .andExpect(jsonPath("$.items[0].target.chatImageIds.length()").value(3))
+                .andExpect(jsonPath("$.items[0].target.chatImageIds[0]").value(first.getId()))
+                .andExpect(jsonPath("$.items[0].target.chatImageIds[1]").value(second.getId()))
+                .andExpect(jsonPath("$.items[0].target.chatImageIds[2]").value(third.getId()))
+                .andExpect(jsonPath("$.items[1].target.chatImageId").doesNotExist())
+                .andExpect(jsonPath("$.items[1].target.chatImageIds.length()").value(0));
+        // 신고된 메시지의 사진은 장마다 열람할 수 있음.
+        for (ChatImage image : java.util.List.of(first, second, third)) {
+            mockMvc.perform(get("/admin/reports/chat-images/{id}", image.getId())).andExpect(status().isOk());
+        }
     }
 
     @Test

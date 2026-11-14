@@ -3,6 +3,7 @@ package com.triples.rougether.domain.chat.repository;
 import com.triples.rougether.domain.chat.entity.ChatImage;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -16,10 +17,12 @@ public interface ChatImageRepository extends JpaRepository<ChatImage, Long> {
     @Query("select i from ChatImage i where i.id = :id")
     Optional<ChatImage> findForUpdate(@Param("id") Long id);
 
-    Optional<ChatImage> findByMessageId(Long messageId);
+    // 메시지 하나에 사진이 여러 장일 수 있음. 메시지별로 보낸 순서대로 돌려줌.
+    @Query("select i from ChatImage i join fetch i.owner where i.messageId in :messageIds "
+            + "order by i.messageId, i.sortOrder, i.id")
+    List<ChatImage> findWithOwnerByMessageIdIn(@Param("messageIds") Collection<Long> messageIds);
 
-    @Query("select i from ChatImage i join fetch i.owner where i.messageId in :messageIds")
-    List<ChatImage> findWithOwnerByMessageIdIn(@Param("messageIds") List<Long> messageIds);
+    long countByMessageId(Long messageId);
 
     long countByOwnerIdAndMessageIdIsNullAndExpiresAtAfter(Long ownerId, Instant now);
 
