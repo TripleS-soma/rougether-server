@@ -36,6 +36,7 @@ import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -152,6 +153,15 @@ abstract class ChatRichTestSupport {
         var out = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", out);
         return new MockMultipartFile("file", "photo.png", "image/png", out.toByteArray());
+    }
+
+    // 저장 직후 응답과 DB에서 다시 읽은 응답을 비교함. DB는 시각을 마이크로초까지만 저장하는데
+    // Linux JVM의 Instant는 나노초까지라, 시각은 마이크로초로 맞춰 놓고 나머지 필드를 전부 비교함.
+    static void assertSameMessage(ChatMessageResponse actual, ChatMessageResponse expected) {
+        assertThat(actual).usingRecursiveComparison()
+                .withEqualsForType((a, b) -> a.truncatedTo(ChronoUnit.MICROS).equals(b.truncatedTo(ChronoUnit.MICROS)),
+                        Instant.class)
+                .isEqualTo(expected);
     }
 
     Long uploaded(Fixture f, Long user) throws Exception {

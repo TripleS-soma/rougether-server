@@ -65,7 +65,7 @@ class ChatRichMessageIntegrationTest extends ChatRichTestSupport {
         assertThat(messageCount(f)).isEqualTo(1);
 
         var history = query.messages(f.member(), f.room(), null, null, 50).items().getFirst();
-        assertThat(history).isEqualTo(sent);
+        assertSameMessage(history, sent);
         var socket = mapper.readTree(mapper.writeValueAsString(new ChatSocketHandler.MessageCreated("MESSAGE_CREATED", history)));
         assertThat(socket.at("/message/images/0/imageId").asLong()).isEqualTo(order.get(0));
         assertThat(socket.at("/message/images/2/imageId").asLong()).isEqualTo(order.get(2));
@@ -246,7 +246,7 @@ class ChatRichMessageIntegrationTest extends ChatRichTestSupport {
         var sent = commands.send(f.owner(), f.room(), photos(photoId, "설명", List.of(a, b)));
         var retried = commands.send(f.owner(), f.room(), photos(photoId, "설명", List.of(a, b)));
 
-        assertThat(retried).isEqualTo(sent);
+        assertSameMessage(retried, sent);
         assertThat(messageCount(f)).isEqualTo(1);
         for (ChatSendRequest different : List.of(
                 photos(photoId, "설명", List.of(b, a)),              // 사진 순서

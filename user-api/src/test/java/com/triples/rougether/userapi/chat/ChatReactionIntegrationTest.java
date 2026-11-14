@@ -324,7 +324,9 @@ class ChatReactionIntegrationTest extends ChatRichTestSupport {
         final CompletableFuture<Integer> closed = new CompletableFuture<>();
         final StringBuilder partial = new StringBuilder();
         WebSocket socket;
+        @Override
         public void onOpen(WebSocket webSocket) { webSocket.request(1); }
+        @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence text, boolean last) {
             partial.append(text);
             if (last) {
@@ -335,6 +337,7 @@ class ChatReactionIntegrationTest extends ChatRichTestSupport {
             webSocket.request(1);
             return null;
         }
+        @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int code, String reason) { closed.complete(code); return null; }
         JsonNode await(Predicate<JsonNode> predicate) throws Exception {
             long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
@@ -347,6 +350,7 @@ class ChatReactionIntegrationTest extends ChatRichTestSupport {
             }
             throw new AssertionError("기대한 채팅 소켓 이벤트가 오지 않음: " + received);
         }
+        @Override
         public void close() { if (socket != null) socket.abort(); }
     }
 }
