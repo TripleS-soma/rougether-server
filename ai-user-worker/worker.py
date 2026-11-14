@@ -14,7 +14,10 @@ from urllib.parse import urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ai-service"))
-from rougether_ai.ai_user_policy import ACTION_HELP, SYSTEM, code_plan, parse_plan, planning_actions
+from rougether_ai.ai_user_policy import (
+    ACTION_HELP, CODE_PROMPT_VERSION, DECISION_FORMAT_HEADER, SYSTEM, VERSIONED_DECISION_FORMAT, code_plan, parse_plan,
+    planning_actions, split_prompt_version,
+)
 
 log = logging.getLogger("ai-user-worker")
 
@@ -83,8 +86,10 @@ class Worker:
                               {"Authorization": "Bearer " + self.settings.control_token}, timeout=30)
 
     def ai(self, path, body):
-        return self.http.post(self.settings.ai_service_url + "/internal/v1/ai-users" + path, body,
-                              {"Authorization": "Bearer " + self.settings.ai_service_token},
+        headers = {"Authorization": "Bearer " + self.settings.ai_service_token}
+        if path == "/decide":
+            headers = {**headers, DECISION_FORMAT_HEADER: VERSIONED_DECISION_FORMAT}
+        return self.http.post(self.settings.ai_service_url + "/internal/v1/ai-users" + path, body, headers,
                               timeout=190 if path=="/episodes" else 60 if path=="/decide" else 30)
 
     def tick(self):
@@ -99,6 +104,7 @@ class Worker:
                 raise ValueError("Account mismatch")
             state["actions"] = planning_actions(state)
             plan = code_plan(state)
+            prompt_version = CODE_PROMPT_VERSION
             if plan is None:
                 self.sanitize_memories(job["userId"])
                 source = state.get("source", {})
@@ -115,9 +121,11 @@ class Worker:
                         self.ai("/forget", {"aiUserId": job["userId"], "episodes": sorted(rejected)[:32]})
                     except Exception:
                         log.warning("memory_purge_deferred")
-                plan = self.ai("/decide", {"aiUserId": job["userId"], "state": state, "facts": facts})
-                # 모델 결과가 제어 API에 도착하기 전에 허용 action과 actor override를 다시 확인함.
-                plan = parse_plan({"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(plan)}]}, state["actions"])
+                decided = self.ai("/decide", {"aiUserId": job["userId"], "state": state, "facts": facts})
+                # 버전은 행동 계약 밖의 관측 값이므로 분리한 뒤, 모델 결과가 제어 API에 도착하기 전에
+                # 허용 action과 actor override를 다시 확인함.
+                bare, prompt_version = split_prompt_version(decided)
+                plan = parse_plan({"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(bare)}]}, state["actions"])
             body = {**lease, **plan}
             for attempt in range(3):
                 try:
@@ -129,8 +137,9 @@ class Worker:
                     if attempt == 2:
                         raise
                     time.sleep(attempt + 1)
-            log.info("job=%s source=%s action=%s wait_reason=%s completed", job["id"], job.get("sourceType", "unknown"),
-                     outcome.get("action", plan["action"]), outcome.get("waitReason", plan["payload"].get("reason", "")))
+            log.info("job=%s source=%s action=%s wait_reason=%s prompt_version=%s completed", job["id"],
+                     job.get("sourceType", "unknown"), outcome.get("action", plan["action"]),
+                     outcome.get("waitReason", plan["payload"].get("reason", "")), prompt_version or "")
         except Exception as error:
             log.warning("job=%s failure_type=%s http_status=%s", job["id"], type(error).__name__,
                         error.code if isinstance(error, HTTPError) else "")

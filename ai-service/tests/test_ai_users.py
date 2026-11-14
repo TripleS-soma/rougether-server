@@ -8,6 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from rougether_ai.ai_user_models import DecisionRequest
+from rougether_ai.ai_user_policy import (
+    DECISION_FORMAT_HEADER, MEMORY_GUARD, PROMPT_VERSION, VERSIONED_DECISION_FORMAT,
+)
 from rougether_ai.ai_user_service import AiUserService, ClaudeGateway
 from rougether_ai.ai_user_settings import AiUserSettings
 from rougether_ai.app import create_app
@@ -17,6 +20,7 @@ TOKEN = "test-ai-service-token-at-least-32-chars"
 CONFIG = Settings(service_token=TOKEN, provider_api_key="unused-existing-provider-key", ai_users_enabled=True)
 MEMORY_CONFIG = AiUserSettings("bolt://localhost:7687", "test-only", "test-anthropic-key")
 AUTH = {"Authorization": "Bearer " + TOKEN}
+VERSIONED = {**AUTH, DECISION_FORMAT_HEADER: VERSIONED_DECISION_FORMAT}
 SOURCE = {"type": "FEED_COMMENT", "id": 101, "fingerprint": "a" * 64}
 FACT = {"text": "user:42의 독서 기록 이름은 달빛서랍", "sources": [SOURCE], "episodes": ["00000000-0000-0000-0000-000000000001"]}
 
@@ -86,13 +90,15 @@ def test_decision_uses_human_model_and_source_checked_facts():
         return httpx.Response(200, json={"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps({
             "action": "FEED_COMMENT", "payload": {"postId": 10, "content": "달빛서랍 기록은 어때요?"}, "memory": "독서 기록을 물어봄"})}]})
     with TestClient(create_app(CONFIG, ai_users=active(handler))) as client:
-        response = client.post("/internal/v1/ai-users/decide", headers=AUTH, json={"aiUserId": 1,
+        response = client.post("/internal/v1/ai-users/decide", headers=VERSIONED, json={"aiUserId": 1,
             "state": {"aiUserId": 1, "actions": ["FEED_COMMENT"], "source": {"type": "FEED_COMMENT"}}, "facts": [FACT]})
         assert response.status_code == 200
         assert response.json()["payload"]["postId"] == 10
+        assert response.json()["promptVersion"] == PROMPT_VERSION
     assert len(calls) == 1
     assert calls[0]["model"] == "claude-sonnet-5-5"
     assert calls[0]["thinking"] == {"type": "between_tools"}
+    assert calls[0]["system"].endswith(MEMORY_GUARD)
     assert json.loads(calls[0]["messages"][0]["content"])["state"]["longTermMemories"] == [{"text":FACT["text"]}]
 
 
@@ -108,6 +114,28 @@ def test_deterministic_action_requires_no_model():
             "state": {"aiUserId": 1, "actions": ["WAIT"], "source": {"type": "SCHEDULE"},
                       "localTime": "03:00", "personaKey": "steady-walk"}})
         assert result.json() == {"action": "WAIT", "payload": {"reason": "OUTSIDE_ACTIVE_HOURS"}, "memory": ""}
+
+
+@pytest.mark.parametrize("headers,expected", [(AUTH, None), (VERSIONED, "code"),
+    ({**AUTH, DECISION_FORMAT_HEADER: "other"}, None)])
+def test_prompt_version_is_returned_only_when_worker_opts_in(headers, expected):
+    # 구형 워커의 parse_plan은 action/payload/memory 밖의 키를 거부하므로 헤더 없는 응답은 세 키만 유지해야 함.
+    with TestClient(create_app(CONFIG, ai_users=active())) as client:
+        result = client.post("/internal/v1/ai-users/decide", headers=headers, json={"aiUserId": 1,
+            "state": {"aiUserId": 1, "actions": ["WAIT"], "source": {"type": "SCHEDULE"},
+                      "localTime": "03:00", "personaKey": "steady-walk"}}).json()
+    assert result.get("promptVersion") == expected
+    assert set(result) == ({"action", "payload", "memory"} | ({"promptVersion"} if expected else set()))
+
+
+def test_model_decision_without_opt_in_keeps_legacy_three_keys():
+    def handler(request):
+        return httpx.Response(200, json={"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps({
+            "action": "WAIT", "payload": {"reason": "NO_ACTION_DUE"}, "memory": ""})}]})
+    with TestClient(create_app(CONFIG, ai_users=active(handler))) as client:
+        result = client.post("/internal/v1/ai-users/decide", headers=AUTH,
+            json={"aiUserId": 1, "state": {"aiUserId": 1, "actions": ["WAIT"]}}).json()
+    assert set(result) == {"action", "payload", "memory"}
 
 
 def test_provider_error_does_not_retry_or_leak_response():
