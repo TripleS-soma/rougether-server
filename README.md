@@ -637,7 +637,7 @@ git diff --check
 | 개발 환경 배포 | GitHub Actions → ECR → SSM → EC2 컨테이너 | API 헬스, 트래픽 전환, 실패 시 이전 버전 복구 |
 | 성능 테스트 환경 | AWS 내부 k6 → ALB → ECS Fargate 사용자 API → RDS MySQL | API 1·2·4대에서 요청 분배, 지연, DB CPU, 커넥션 대기 |
 
-`main` 배포 워크플로는 소스 트리가 일치하는 PR 검증 산출물을 재사용하고, 일치하는 산출물이 없으면 전체 검증을 다시 실행한다. `ROUGETHER_DEPLOY_MODE`의 기본값은 `hold`다. `blue-green` 모드에서는 사용자·관리자 API를 비활성 슬롯에 기동하고 헬스를 확인한 뒤 라우터를 전환한다. 배치는 단일 서비스를 재시작하고 헬스를 검사한다. 전환 실패 시 스크립트가 이전 이미지와 라우팅 복구를 시도한다. [배포 워크플로](.github/workflows/docker-publish.yml) · [전환 및 복구 스크립트](.github/scripts/deploy-ec2-with-rollback.sh)
+`main` 배포 워크플로는 소스 트리가 일치하는 PR 검증 산출물을 재사용하고, 일치하는 산출물이 없으면 전체 검증을 다시 실행한다. `ROUGETHER_DEPLOY_MODE`의 기본값은 `blue-green`이다. 사용자·관리자 API를 비활성 슬롯에 기동하고 헬스를 확인한 뒤 라우터를 전환한다. 배치는 단일 서비스를 재시작하고 헬스를 검사한다. 전환 실패 시 스크립트가 이전 이미지와 라우팅 복구를 시도한다. [배포 워크플로](.github/workflows/docker-publish.yml) · [전환 및 복구 스크립트](.github/scripts/deploy-ec2-with-rollback.sh)
 
 개발 EC2는 CloudWatch에 호스트와 서비스별 컨테이너 메모리 사용량을 수집하고 경보를 Webex로 전달하도록 구성했다. 성능 테스트에서는 Grafana로 JVM 힙, GC 정지, 커넥션 풀 대기를 HTTP 지연과 같은 시간축에서 확인했다. 배치 단독 중단 때 놓치는 알림은 QA 보드에서 별도로 추적한다. [개발 환경 모니터링](https://github.com/TripleS-soma/rougether-server/blob/main/deploy/terraform/monitoring/README.md) · [성능 실험과 QA 보드](docs/performance/mentor-review.md)
 
@@ -655,7 +655,7 @@ flowchart LR
 ```
 
 1. `main`에 병합되면 GitHub Actions가 소스 트리가 동일한 PR 산출물을 찾는다. 일치하면 JAR로 만들어 둔 이미지를 검증해 재사용한다. 없으면 전체 테스트와 이미지 생성을 다시 수행한다.
-2. 소스와 체크섬을 확인한 이미지를 ECR에 올린다. 개발 환경의 배포 모드가 `blue-green`이면 SSM으로 EC2에 명령을 전달한다. `hold`는 앱 전환을 보류하는 기본 모드다.
+2. 소스와 체크섬을 확인한 이미지를 ECR에 올린다. 기본 `blue-green` 모드에서는 정식 워크플로가 SSM으로 EC2에 배포를 수행한다. `hold`를 명시하면 앱 전환을 보류한다.
 3. 사용자 API와 관리자 API 각각에 대해 비활성 슬롯을 띄워 헬스를 확인하고 nginx의 대상 포트를 전환한다. 안정 포트 헬스를 다시 검사한 뒤 배치를 재시작한다. 배치는 한 인스턴스로 예약 작업을 수행한다.
 4. 전환 과정에 오류가 발생하면 스크립트가 이전 슬롯, 이미지, 배치 상태를 복구하고 헬스를 재검사한다. 복구가 실패한 경우 SSM 작업 출력과 systemd 서비스 로그에서 실패 단계를 확인한다. 이후 워크플로는 외부 헬스 경로도 검사한다. [배포 워크플로](.github/workflows/docker-publish.yml) · [전환과 롤백 구현](.github/scripts/deploy-ec2-with-rollback.sh) · [롤백 테스트](.github/scripts/test-deploy-ec2-with-rollback.sh)
 
@@ -674,6 +674,23 @@ flowchart LR
 | 배치만 꺼지면? | 격리 환경에서 배치만 강제 종료해도 내 정보·오늘 조회(200)와 투두 완료(201)는 성공했다. 대신 집 미션 만료가 밀렸고, 재기동 후 지난 미션만 한 번 만료됐다. |
 
 [측정 조건, Grafana 화면, QA 이슈 모음](docs/performance/mentor-review.md) · [p95가 300ms를 넘은 2초의 DB와 풀 분석](docs/performance/connection-spike.md) · [GitHub QA 보드](https://github.com/orgs/TripleS-soma/projects/3/views/1)
+
+### 관리자 통계의 메모리 할당을 줄인 방법
+
+리텐션 통계는 완료 기록을 건별로 가져와 Java에서 날짜를 중복 제거하던 처리를 DB의 사용자별 KST 완료일 집계로 옮겼다. 활동 캐시는 조회용 projection proxy 대신 필요한 불변 값만 보관하고, 다른 날짜를 조회할 때도 만료된 항목을 정리한다. 통계의 분자와 분모, 조회 시간 경계, 봇과 탈퇴 사용자 제외 조건은 유지했다.
+
+2026-11-14 로컬 MySQL 8.4.11과 Java 25에서 사용자 500명, 완료 기록 149,708건의 동일 합성 데이터를 사용했다. 최대 힙은 두 버전 모두 384MiB로 고정하고 전후 각 3회 교차 실행한 중앙값을 비교했다.
+
+| 항목 | 변경 전 | 변경 후 |
+|---|---:|---:|
+| 리텐션 요청당 누적 Java 할당량 | 804.39MiB | 144.01MiB (82.1% 감소) |
+| 활동 캐시 hit 요청당 누적 할당량 | 7.01MiB | 3.91MiB (44.2% 감소) |
+| 캐시 1개의 8일 보관 힙 추정치 | 13.99MiB | 1.42MiB (89.8% 감소) |
+| 전체 로컬 JVM의 최대 RSS | 1,008.5MiB | 1,025.7MiB (1.7% 증가) |
+
+누적 할당량은 요청 중 생성한 객체의 총량이며 동시에 살아 있는 객체 크기와 구분한다. 캐시 힙은 같은 캐시 8개를 유지하고 해제한 뒤 GC 후 전체 힙 차이를 8로 나눈 추정치다. 최대 RSS에는 초기화와 이 합성 부하도 포함되며, 운영 컨테이너 메모리 감소는 별도 측정해야 한다. 캐시 적재 단계의 할당량은 값 복사로 증가했고, 응답 생성까지 포함한 cache miss 요청의 할당량은 약 4% 감소했다.
+
+통계 응답 12개를 6개 실행에서 전체 대조해 동일함을 확인했다. 전체 Gradle 테스트와 별도 MySQL 통합 테스트 15개도 통과했다. [변경 내용과 검증 범위](docs/operations/admin-memory-optimization-20261114.md) · [재현 절차](qa/admin-memory/README.md) · [6개 실행의 원본 측정값](qa/admin-memory/results/20261114.json)
 
 ### 1,000 RPS: 네 서버로 요청이 나뉘었나?
 

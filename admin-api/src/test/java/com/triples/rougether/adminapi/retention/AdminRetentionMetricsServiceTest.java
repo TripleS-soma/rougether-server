@@ -14,7 +14,7 @@ import com.triples.rougether.adminapi.retention.service.DayEndFinalizationReader
 import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.ActiveUserMetricRow;
-import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.CompletionEventMetricRow;
+import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.CompletionDayMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.DailyActivityMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.RoutineOutcomeMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.StreakMetricRow;
@@ -73,7 +73,7 @@ class AdminRetentionMetricsServiceTest {
                         activity(1L, user1Signup.plusDays(30)),
                         activity(2L, user2Signup.plusDays(1)),
                         activity(3L, user3Signup.plusDays(1))));
-        when(metricRepository.findCompletionEvents(
+        when(metricRepository.findCompletionDays(
                 TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
                 .thenReturn(List.of(
                         completion(1L, TODAY.minusDays(6)),
@@ -178,7 +178,7 @@ class AdminRetentionMetricsServiceTest {
                 .thenReturn(List.of(
                         activity(10L, LocalDate.of(2030, 8, 2)),
                         activity(11L, LocalDate.of(2030, 8, 3))));
-        when(metricRepository.findCompletionEvents(
+        when(metricRepository.findCompletionDays(
                 TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW)).thenReturn(List.of());
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(1)))
                 .thenReturn(List.of());
@@ -199,7 +199,7 @@ class AdminRetentionMetricsServiceTest {
                 activeUser(20L, TODAY), activeUser(21L, TODAY)));
         when(metricRepository.findActivitiesBetween(
                 TODAY, TODAY, TODAY.atStartOfDay(KST).toInstant())).thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(
+        when(metricRepository.findCompletionDays(
                 TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
                 .thenReturn(List.of(
                         completion(20L, TODAY.minusDays(3)),
@@ -217,17 +217,17 @@ class AdminRetentionMetricsServiceTest {
     }
 
     @Test
-    void completedAt의_UTC_145959와_150000을_서로_다른_KST_완료일로_센다() {
+    void 서로_다른_KST_완료일_3개면_북극성_대상이다() {
         when(metricRepository.findActiveUsers()).thenReturn(List.of(activeUser(30L, TODAY.minusDays(10))));
         when(metricRepository.findActivitiesBetween(
                 TODAY.minusDays(34).plusDays(1), TODAY,
                 TODAY.minusDays(34).atStartOfDay(KST).toInstant())).thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(
+        when(metricRepository.findCompletionDays(
                 TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
                 .thenReturn(List.of(
-                        new CompletionRow(30L, Instant.parse("2030-08-16T14:59:59Z")),
-                        new CompletionRow(30L, Instant.parse("2030-08-16T15:00:00Z")),
-                        new CompletionRow(30L, Instant.parse("2030-08-18T03:00:00Z"))));
+                        completion(30L, LocalDate.of(2030, 8, 16)),
+                        completion(30L, LocalDate.of(2030, 8, 17)),
+                        completion(30L, LocalDate.of(2030, 8, 18))));
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(1)))
                 .thenReturn(List.of());
         when(metricRepository.findStreaksForActiveUsers()).thenReturn(List.of());
@@ -245,7 +245,7 @@ class AdminRetentionMetricsServiceTest {
         when(metricRepository.findActiveUsers()).thenReturn(List.of());
         when(metricRepository.findActivitiesBetween(
                 TODAY, TODAY, TODAY.atStartOfDay(KST).toInstant())).thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
+        when(metricRepository.findCompletionDays(TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
                 .thenReturn(List.of());
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(1)))
                 .thenReturn(List.of());
@@ -271,7 +271,7 @@ class AdminRetentionMetricsServiceTest {
         when(metricRepository.findActivitiesBetween(
                 cohortFrom.plusDays(1), TODAY, cohortFrom.atStartOfDay(KST).toInstant()))
                 .thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
+        when(metricRepository.findCompletionDays(TODAY.minusDays(29).atStartOfDay(KST).toInstant(), NOW))
                 .thenReturn(List.of());
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(1)))
                 .thenReturn(List.of());
@@ -315,7 +315,7 @@ class AdminRetentionMetricsServiceTest {
                 .thenReturn(Optional.of(TODAY.minusDays(3)));
         when(metricRepository.findActiveUsers()).thenReturn(List.of(activeUser(1L, TODAY.minusDays(40))));
         when(metricRepository.findActivitiesBetween(any(), any(), any())).thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(any(), any())).thenReturn(List.of());
+        when(metricRepository.findCompletionDays(any(), any())).thenReturn(List.of());
         when(metricRepository.findStreaksForActiveUsers()).thenReturn(List.of());
         when(metricRepository.findSharedUserIds(HouseMemberStatus.ACTIVE)).thenReturn(List.of());
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(3)))
@@ -336,7 +336,7 @@ class AdminRetentionMetricsServiceTest {
                 .thenReturn(Optional.of(TODAY.minusDays(45)));
         when(metricRepository.findActiveUsers()).thenReturn(List.of(activeUser(1L, TODAY.minusDays(40))));
         when(metricRepository.findActivitiesBetween(any(), any(), any())).thenReturn(List.of());
-        when(metricRepository.findCompletionEvents(any(), any())).thenReturn(List.of());
+        when(metricRepository.findCompletionDays(any(), any())).thenReturn(List.of());
         when(metricRepository.findStreaksForActiveUsers()).thenReturn(List.of());
         when(metricRepository.findSharedUserIds(HouseMemberStatus.ACTIVE)).thenReturn(List.of());
         when(metricRepository.findRoutineOutcomesBetween(TODAY.minusDays(30), TODAY.minusDays(31)))
@@ -350,8 +350,8 @@ class AdminRetentionMetricsServiceTest {
         assertThat(overall.completionRate().percentage()).isEqualTo(0.0);
     }
 
-    private static CompletionEventMetricRow completion(long userId, LocalDate completedDate) {
-        return new CompletionRow(userId, completedDate.atTime(12, 0).atZone(KST).toInstant());
+    private static CompletionDayMetricRow completion(long userId, LocalDate completedDate) {
+        return new CompletionRow(userId, completedDate);
     }
 
     private static RoutineOutcomeMetricRow outcome(long userId, long completedCount, long totalCount) {
@@ -372,9 +372,9 @@ class AdminRetentionMetricsServiceTest {
         @Override public LocalDate getActivityDate() { return activityDate; }
     }
 
-    private record CompletionRow(Long userId, Instant completedAt) implements CompletionEventMetricRow {
+    private record CompletionRow(Long userId, LocalDate completedDate) implements CompletionDayMetricRow {
         @Override public Long getUserId() { return userId; }
-        @Override public Instant getCompletedAt() { return completedAt; }
+        @Override public LocalDate getCompletedDate() { return completedDate; }
     }
 
     private record OutcomeRow(Long userId, long completedCount, long totalCount)

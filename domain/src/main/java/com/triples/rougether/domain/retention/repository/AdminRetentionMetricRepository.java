@@ -25,17 +25,18 @@ public interface AdminRetentionMetricRepository extends Repository<User, Long> {
                                                        @Param("toDate") LocalDate toDate,
                                                        @Param("cohortCreatedAfter") Instant cohortCreatedAfter);
 
-    @Query("select l.routine.user.id as userId, l.completedAt as completedAt from RoutineLog l "
+    @Query("select distinct l.routine.user.id as userId, "
+            + "cast(timestampadd(hour, 9, l.completedAt) as LocalDate) as completedDate from RoutineLog l "
             + "join l.routine.user u where l.status = :status "
             + "and l.completedAt >= :fromInclusive and l.completedAt < :toExclusive "
             + "and u.deletedAt is null and u.bot = false and u.ai = false")
-    List<CompletionEventMetricRow> findCompletionEvents(
+    List<CompletionDayMetricRow> findCompletionDays(
             @Param("fromInclusive") Instant fromInclusive,
             @Param("toExclusive") Instant toExclusive,
             @Param("status") RoutineLogStatus status);
 
-    default List<CompletionEventMetricRow> findCompletionEvents(Instant fromInclusive, Instant toExclusive) {
-        return findCompletionEvents(fromInclusive, toExclusive, RoutineLogStatus.COMPLETED);
+    default List<CompletionDayMetricRow> findCompletionDays(Instant fromInclusive, Instant toExclusive) {
+        return findCompletionDays(fromInclusive, toExclusive, RoutineLogStatus.COMPLETED);
     }
 
     @Query("select l.routine.user.id as userId, "
@@ -80,10 +81,10 @@ public interface AdminRetentionMetricRepository extends Repository<User, Long> {
         LocalDate getActivityDate();
     }
 
-    interface CompletionEventMetricRow {
+    interface CompletionDayMetricRow {
         Long getUserId();
 
-        Instant getCompletedAt();
+        LocalDate getCompletedDate();
     }
 
     interface RoutineOutcomeMetricRow {

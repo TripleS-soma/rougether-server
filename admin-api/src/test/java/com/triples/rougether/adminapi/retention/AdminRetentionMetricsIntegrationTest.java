@@ -61,6 +61,9 @@ class AdminRetentionMetricsIntegrationTest {
     }
 
     @Autowired
+    com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository metrics;
+
+    @Autowired
     MockMvc mockMvc;
 
     @Autowired
@@ -238,6 +241,28 @@ class AdminRetentionMetricsIntegrationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("리텐션·핵심 행동 KPI")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/admin/retention/metrics")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("가입일별 exact-day Retention")));
+    }
+
+    @Test
+    void 완료일은_KST자정과_반개구간을_지키며_같은날_여러완료는_하나로_읽는다() {
+        User human = user("memory-boundary@test.invalid", TODAY.minusDays(30));
+        Routine routine = routine(human, "완료일 경계");
+        Instant from = Instant.parse("2030-08-16T15:00:00Z");
+        Instant to = Instant.parse("2030-08-18T15:00:00Z");
+        Instant[] times = {from.minusNanos(1000), from, from.plusSeconds(3600),
+                from.plusSeconds(86399).plusNanos(999999000), from.plusSeconds(86400), to};
+        for (int i = 0; i < times.length; i++) {
+            routineLogRepository.save(RoutineLog.complete(routine, TODAY.minusDays(20 + i),
+                    times[i], CurrencyType.COIN, 10));
+        }
+        User excludedBot = bot("memory-bot", TODAY.minusDays(30));
+        routineLogRepository.save(RoutineLog.complete(routine(excludedBot, "제외"), TODAY,
+                from.plusSeconds(100), CurrencyType.COIN, 10));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(metrics.findCompletionDays(from, to))
+                .extracting(row -> row.getUserId() + ":" + row.getCompletedDate())
+                .containsExactlyInAnyOrder(human.getId() + ":2030-08-17", human.getId() + ":2030-08-18");
     }
 
     private User user(String email, LocalDate signupDate) {
