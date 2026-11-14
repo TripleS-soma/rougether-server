@@ -126,6 +126,15 @@ public class ChatController {
                 .header("X-Content-Type-Options", "nosniff").body(images.read(user.id(), imageId));
     }
 
+    @Operation(summary = "채팅 사진 캐시 열람 권한 확인",
+            description = "사진 바이트 없이 현재 권한과 만료 시각을 확인합니다. 캐시를 표시하기 전에 호출합니다.")
+    @GetMapping("/chat/images/{imageId}/metadata")
+    public ResponseEntity<ChatImageResponse> imageMetadata(@AuthenticationPrincipal AuthUser user,
+                                                           @PathVariable Long imageId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore().cachePrivate())
+                .body(images.metadata(user.id(), imageId));
+    }
+
     @Operation(summary = "보내지 않은 채팅 사진 취소", description = "본인이 올렸지만 아직 메시지로 보내지 않은 사진만 취소할 수 있습니다.")
     @DeleteMapping("/chat/images/{imageId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

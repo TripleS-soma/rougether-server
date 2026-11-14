@@ -58,7 +58,7 @@ class ChatRichMessageIntegrationTest extends ChatRichTestSupport {
         assertThat(sent.emoticonKey()).isNull();
         assertThat(sent.reactions()).isEmpty();
         assertThat(sent.images()).extracting(ChatMessageImageResponse::imageId).containsExactlyElementsOf(order);
-        assertThat(sent.image()).isEqualTo(new ChatMessageImageResponse(order.getFirst(), 48, 32));
+        assertThat(sent.image()).isEqualTo(new ChatMessageImageResponse(order.getFirst(), 48, 32, sent.image().expiresAt()));
         assertThat(attachedIds(sent.messageId())).containsExactlyElementsOf(order);
         assertThat(jdbc.queryForList("select sort_order from chat_images where message_id = ? order by sort_order",
                 Integer.class, sent.messageId())).containsExactly(0, 1, 2);

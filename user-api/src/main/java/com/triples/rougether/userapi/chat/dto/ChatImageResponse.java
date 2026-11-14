@@ -2,6 +2,7 @@ package com.triples.rougether.userapi.chat.dto;
 
 import com.triples.rougether.domain.chat.entity.ChatImage;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 
 // 저장 key는 내보내지 않음. 실제 바이트는 인증된 채팅 사진 API로만 읽음.
 public record ChatImageResponse(
@@ -12,8 +13,14 @@ public record ChatImageResponse(
         @Schema(description = "변환 후 세로 크기(px)", example = "1200")
         int height,
         @Schema(description = "저장된 사진 형식. 항상 image/jpeg", example = "image/jpeg")
-        String contentType) {
+        String contentType,
+        @Schema(description = "열람 만료 시각(UTC). 미전송은 업로드 후 24시간, 전송 후에는 전송 시각부터 30일")
+        Instant expiresAt) {
     public static ChatImageResponse of(ChatImage image) {
-        return new ChatImageResponse(image.getId(), image.getWidth(), image.getHeight(), "image/jpeg");
+        return of(image, image.getExpiresAt());
+    }
+
+    public static ChatImageResponse of(ChatImage image, Instant expiresAt) {
+        return new ChatImageResponse(image.getId(), image.getWidth(), image.getHeight(), "image/jpeg", expiresAt);
     }
 }

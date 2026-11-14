@@ -149,7 +149,7 @@ public class ChatCommandService {
         List<ChatImage> attached = new ArrayList<>();
         for (int order = 0; order < draft.imageIds().size(); order++) {
             ChatImage image = locked.get(draft.imageIds().get(order));
-            image.attach(message.getId(), order);
+            image.attach(message.getId(), order, now);
             attached.add(image);
         }
         return published(message, attached, room);
