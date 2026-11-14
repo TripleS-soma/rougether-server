@@ -136,6 +136,13 @@ public final class NotificationMessages {
                 houseName, englishName(senderNickname) + ": sent an emoticon");
     }
 
+    public static NotificationContent chatEmoticonCaption(String houseName, String senderNickname, String caption) {
+        String preview = chatPreview(caption);
+        return new NotificationContent(NotificationType.CHAT_MESSAGE,
+                houseName, displayName(senderNickname) + ": [이모티콘] " + preview,
+                houseName, englishName(senderNickname) + ": [Emoticon] " + preview);
+    }
+
     // 집 피드 새 글 푸시(#530). 제목은 집 이름이고 본문에 글 내용은 싣지 않음.
     public static NotificationContent houseFeedPost(String houseName, String authorNickname) {
         return new NotificationContent(NotificationType.HOUSE_FEED_POST,

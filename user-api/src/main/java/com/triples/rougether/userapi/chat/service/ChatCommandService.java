@@ -72,15 +72,14 @@ public class ChatCommandService {
         return switch (draft.type()) {
             case TEXT -> sendText(sender, room, key, draft.content());
             case IMAGE -> sendImages(sender, room, key, draft);
-            case EMOTICON -> published(messages.save(
-                    ChatMessage.sendEmoticon(room, sender, key, draft.emoticonKey(), clock.instant())), List.of(), room);
+            case EMOTICON -> sendEmoticon(sender, room, key, draft);
         };
     }
 
-    // 검증을 마친 전송 내용. content는 TEXT의 본문 또는 IMAGE의 설명 글(없으면 null)임.
+    // 검증을 마친 전송 내용. content는 본문 또는 사진·이모티콘과 함께 보낸 글(없으면 null)임.
     private record Draft(ChatMessageType type, String content, List<Long> imageIds, String emoticonKey) {}
 
-    // 글만, 사진(+설명 글), 이모티콘만 중 하나만 허용함. imageId는 imageIds=[imageId]와 같게 다룸.
+    // 글만, 사진(+글), 이모티콘(+글) 중 하나만 허용함. imageId는 imageIds=[imageId]와 같게 다룸.
     private static Draft draft(ChatSendRequest request) {
         if (request == null || request.clientMessageId() == null) invalid();
         boolean listed = request.imageIds() != null && !request.imageIds().isEmpty();
@@ -90,8 +89,8 @@ public class ChatCommandService {
         String content = request.content();
         if (content != null && (content.isBlank() || content.length() > MAX_CONTENT_LENGTH)) invalid();
         if (request.emoticonKey() != null) {
-            if (content != null || !imageIds.isEmpty() || !EMOTICON_KEY.matcher(request.emoticonKey()).matches()) invalid();
-            return new Draft(ChatMessageType.EMOTICON, null, List.of(), request.emoticonKey());
+            if (!imageIds.isEmpty() || !EMOTICON_KEY.matcher(request.emoticonKey()).matches()) invalid();
+            return new Draft(ChatMessageType.EMOTICON, content, List.of(), request.emoticonKey());
         }
         if (!imageIds.isEmpty()) {
             if (imageIds.size() > MAX_IMAGES || imageIds.stream().anyMatch(Objects::isNull)
@@ -115,7 +114,8 @@ public class ChatCommandService {
         if (previous.getMessageType() != draft.type()) return false;
         return switch (draft.type()) {
             case TEXT -> previous.getContent().equals(draft.content());
-            case EMOTICON -> draft.emoticonKey().equals(previous.getEmoticonKey());
+            case EMOTICON -> draft.emoticonKey().equals(previous.getEmoticonKey())
+                    && Objects.equals(previous.getCaption(), draft.content());
             // 운영자가 삭제해 사진 행이 정리되는 메시지는 사진을 비교할 수 없으므로 글만 비교함.
             case IMAGE -> Objects.equals(previous.getCaption(), draft.content())
                     && (previous.isDeleted() || attached.isEmpty()
@@ -128,6 +128,12 @@ public class ChatCommandService {
         ChatMessage message = messages.save(ChatMessage.send(room, sender, key, content, clock.instant()));
         if (aiEvents != null) aiEvents.chat(sender, room.getId(), message.getId());
         return published(message, List.of(), room);
+    }
+
+    private ChatMessageResponse sendEmoticon(User sender, ChatRoom room, String key, Draft draft) {
+        if (draft.content() != null) requireAllowed(draft.content());
+        return published(messages.save(ChatMessage.sendEmoticon(room, sender, key,
+                draft.emoticonKey(), draft.content(), clock.instant())), List.of(), room);
     }
 
     // 사진 행을 잠근 채 메시지를 저장하고 연결함. 한 장이라도 쓸 수 없으면 전체가 실패하고 메시지와 연결이 함께 롤백됨.
