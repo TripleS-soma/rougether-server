@@ -35,8 +35,8 @@ import com.triples.rougether.userapi.member.service.MemberWithdrawalService;
 import com.triples.rougether.userapi.notification.fcm.FcmPushExecutor;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -156,10 +156,11 @@ abstract class ChatRichTestSupport {
     }
 
     // 저장 직후 응답과 DB에서 다시 읽은 응답을 비교함. DB는 시각을 마이크로초까지만 저장하는데
-    // Linux JVM의 Instant는 나노초까지라, 시각은 마이크로초로 맞춰 놓고 나머지 필드를 전부 비교함.
+    // Linux JVM의 Instant는 나노초까지이고 MySQL은 그 아래를 버리지 않고 반올림함. 그래서 시각은
+    // 1마이크로초 안의 차이를 같다고 보고, 나머지 필드는 전부 그대로 비교함.
     static void assertSameMessage(ChatMessageResponse actual, ChatMessageResponse expected) {
         assertThat(actual).usingRecursiveComparison()
-                .withEqualsForType((a, b) -> a.truncatedTo(ChronoUnit.MICROS).equals(b.truncatedTo(ChronoUnit.MICROS)),
+                .withEqualsForType((a, b) -> Duration.between(a, b).abs().compareTo(Duration.ofNanos(1_000)) <= 0,
                         Instant.class)
                 .isEqualTo(expected);
     }
