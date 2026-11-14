@@ -84,9 +84,11 @@ public class ChatPushNotifier {
         }
     }
 
-    // 사진은 설명 글이 있으면 "[사진] 설명 글", 없으면 장수에 맞는 문구를 씀. 이모티콘은 key 대신 안내 문구를 씀.
+    // 사진·이모티콘은 함께 보낸 글이 있으면 유형과 글을 보여 주고, 없으면 안내 문구를 씀.
     private NotificationContent content(ChatMessage message, String houseName, String nickname) {
-        if (message.isEmoticon()) return NotificationMessages.chatEmoticon(houseName, nickname);
+        if (message.isEmoticon()) return message.getCaption() != null
+                ? NotificationMessages.chatEmoticonCaption(houseName, nickname, message.getCaption())
+                : NotificationMessages.chatEmoticon(houseName, nickname);
         if (!message.isImage()) return NotificationMessages.chatMessage(houseName, nickname, message.getContent());
         if (message.getCaption() != null) {
             return NotificationMessages.chatPhotoCaption(houseName, nickname, message.getCaption());

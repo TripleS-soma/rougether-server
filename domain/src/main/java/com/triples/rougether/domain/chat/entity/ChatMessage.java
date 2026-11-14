@@ -43,7 +43,7 @@ public class ChatMessage {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    // 사진 메시지의 설명 글 원문. 설명 글이 없으면 null임.
+    // 사진 또는 이모티콘과 함께 보낸 글 원문. 글이 없으면 null임.
     @Column(length = 2000)
     private String caption;
     // 이모티콘 메시지의 key. 그림은 앱 번들에 있고 서버는 key만 보관함.
@@ -70,9 +70,16 @@ public class ChatMessage {
 
     public static ChatMessage sendEmoticon(ChatRoom room, User sender, String clientMessageId, String emoticonKey,
                                            Instant now) {
-        ChatMessage message = send(room, sender, clientMessageId, EMOTICON_FALLBACK_CONTENT, now);
+        return sendEmoticon(room, sender, clientMessageId, emoticonKey, null, now);
+    }
+
+    public static ChatMessage sendEmoticon(ChatRoom room, User sender, String clientMessageId, String emoticonKey,
+                                           String caption, Instant now) {
+        ChatMessage message = send(room, sender, clientMessageId,
+                caption != null ? caption : EMOTICON_FALLBACK_CONTENT, now);
         message.messageType = ChatMessageType.EMOTICON;
         message.emoticonKey = emoticonKey;
+        message.caption = caption;
         return message;
     }
 

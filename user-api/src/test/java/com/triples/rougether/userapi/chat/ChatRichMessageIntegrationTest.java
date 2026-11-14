@@ -198,7 +198,7 @@ class ChatRichMessageIntegrationTest extends ChatRichTestSupport {
                 ",\"imageIds\":[" + a + "," + a + "]",                             // 중복
                 ",\"imageIds\":[" + a + ",null]",
                 ",\"imageIds\":[" + a + "],\"content\":\" \"",                     // 설명 글이 공백만
-                ",\"emoticonKey\":\"ruti_hello\",\"content\":\"글\"",              // 이모티콘 + 글
+                ",\"emoticonKey\":\"ruti_hello\",\"content\":\" \"",               // 공백만인 글
                 ",\"emoticonKey\":\"ruti_hello\",\"imageIds\":[" + a + "]",        // 이모티콘 + 사진
                 ",\"emoticonKey\":\"ruti_hello\",\"imageId\":" + a,
                 ",\"emoticonKey\":\"\"",
@@ -232,6 +232,52 @@ class ChatRichMessageIntegrationTest extends ChatRichTestSupport {
         assertThat(items.getLast().messageType()).isEqualTo(ChatMessageType.EMOTICON);
         assertThat(items.getLast().emoticonKey()).isEqualTo("ruti_hello-2");
         verify(aiEvents, never()).chat(any(), anyLong(), anyLong());
+    }
+
+    @Test
+    void 이모티콘과_글을_하나로_저장하고_조회하며_동일한_재시도만_허용한다() throws Exception {
+        Fixture f = fixture();
+        UUID id = UUID.randomUUID();
+        ChatSendRequest request = new ChatSendRequest(id, "같이 힘내요!", null, null, "ruyang_cheer");
+        var sent = commands.send(f.owner(), f.room(), request);
+        assertThat(sent.caption()).isEqualTo("같이 힘내요!");
+        assertThat(sent.content()).isEqualTo("같이 힘내요!");
+        assertThat(sent.emoticonKey()).isEqualTo("ruyang_cheer");
+        verify(fcm, org.mockito.Mockito.timeout(5000)).pushWithoutRecord(
+                org.mockito.ArgumentMatchers.eq(f.member()), org.mockito.ArgumentMatchers.eq("확장 테스트"),
+                org.mockito.ArgumentMatchers.eq("보낸이: [이모티콘] 같이 힘내요!"), org.mockito.ArgumentMatchers.anyMap());
+        assertSameMessage(commands.send(f.owner(), f.room(), request), sent);
+        assertThat(messageCount(f)).isEqualTo(1);
+        assertSameMessage(query.messages(f.member(), f.room(), null, null, 50).items().getFirst(), sent);
+        error(() -> commands.send(f.owner(), f.room(), new ChatSendRequest(id, "다른 글", null, null, "ruyang_cheer")),
+                "CHAT_MESSAGE_CONFLICT");
+        error(() -> commands.send(f.owner(), f.room(), emoticon(id, "ruyang_cheer")), "CHAT_MESSAGE_CONFLICT");
+        error(() -> commands.send(f.owner(), f.room(), new ChatSendRequest(id, "같이 힘내요!", null, null, "ruyang_hi")),
+                "CHAT_MESSAGE_CONFLICT");
+        verify(aiEvents, never()).chat(any(), anyLong(), anyLong());
+        deleteMessage(sent.messageId());
+        var deleted = commands.send(f.owner(), f.room(), request);
+        assertThat(deleted.content()).isEqualTo("삭제된 메시지예요");
+        assertThat(deleted.caption()).isNull();
+        assertThat(deleted.emoticonKey()).isNull();
+    }
+
+    @Test
+    void 이모티콘과_함께_보내는_글도_길이와_금칙어를_검사한다() throws Exception {
+        Fixture f = fixture();
+        org.mockito.Mockito.doReturn(true).when(bannedWords).containsBannedWord("차단문장");
+        error(() -> commands.send(f.owner(), f.room(), new ChatSendRequest(UUID.randomUUID(), "차단문장", null, null, "ruyang_hi")),
+                "CHAT_CONTENT_BANNED");
+        error(() -> commands.send(f.owner(), f.room(), new ChatSendRequest(UUID.randomUUID(), "가".repeat(2001), null, null, "ruyang_hi")),
+                "CHAT_INPUT_INVALID");
+        assertThat(messageCount(f)).isZero();
+        var limit = commands.send(f.owner(), f.room(), new ChatSendRequest(UUID.randomUUID(), "가".repeat(2000), null, null, "ruyang_hi"));
+        assertThat(limit.caption()).hasSize(2000);
+        postMessage(f, f.owner(), json(",\"emoticonKey\":\"ruyang_hi\",\"content\":\"안녕!\""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caption").value("안녕!"))
+                .andExpect(jsonPath("$.content").value("안녕!"))
+                .andExpect(jsonPath("$.messageType").value("EMOTICON"));
     }
 
     @Test

@@ -27,7 +27,7 @@ public record ChatMessageResponse(
                 nullable = true)
         String senderProfileImageKey,
         @Schema(description = "구버전 앱 표시용 본문(항상 값이 있음). TEXT는 본문, IMAGE는 설명 글이 있으면 그 글이고 없으면 "
-                + "\"사진을 보냈어요\"(여러 장은 \"사진 N장을 보냈어요\"), EMOTICON은 \"이모티콘을 보냈어요\", "
+                + "\"사진을 보냈어요\"(여러 장은 \"사진 N장을 보냈어요\"), EMOTICON은 함께 보낸 글 또는 \"이모티콘을 보냈어요\", "
                 + "운영자가 삭제한 메시지는 \"삭제된 메시지예요\"", example = "오늘 루틴 다 했어?")
         String content,
         @Schema(description = "보낸 시각(UTC)")
@@ -42,7 +42,7 @@ public record ChatMessageResponse(
         @Schema(description = "사진 목록(보낸 순서, 최대 10장). 글·이모티콘 메시지와 운영자가 삭제한 메시지는 빈 배열이고 "
                 + "탈퇴한 회원의 사진은 빠짐")
         List<ChatMessageImageResponse> images,
-        @Schema(description = "사진에 붙인 설명 글. 설명 글이 없거나 사진 메시지가 아니거나 운영자가 삭제한 메시지면 null",
+        @Schema(description = "사진·이모티콘과 함께 보낸 글. 글이 없거나 TEXT 또는 운영자가 삭제한 메시지면 null",
                 example = "오늘 아침 산책", nullable = true)
         String caption,
         @Schema(description = "이모티콘 key. 앱에 들어 있는 그림과 맞춰 표시하고 모르는 key는 content로 대신 표시함. "

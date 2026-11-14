@@ -69,7 +69,7 @@ public class ChatController {
 
     @Operation(summary = "채팅 메시지 전송",
             description = "그 방의 현재 구성원만 보낼 수 있습니다. 한 번에 한 가지만 보냅니다: 글(content만), "
-                    + "사진(imageIds 1~10장, content를 함께 넣으면 사진 설명 글), 이모티콘(emoticonKey만). "
+                    + "사진(imageIds 1~10장, content를 함께 넣으면 사진 설명 글), 이모티콘(emoticonKey와 선택적 content). "
                     + "imageIds는 채팅 사진 업로드(POST /api/v1/chat/rooms/{roomId}/images) 응답의 값을 쓰고 적힌 순서대로 붙으며 "
                     + "사진 하나는 메시지 하나에만 쓸 수 있습니다. 사진은 모두 쓸 수 있을 때만 전송되고 글과 설명 글에는 금칙어 검사를 적용합니다. "
                     + "같은 clientMessageId로 같은 내용을 다시 보내면 처음 메시지를 그대로 돌려줍니다.")
