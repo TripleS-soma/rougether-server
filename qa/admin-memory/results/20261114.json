@@ -1,0 +1,191 @@
+{
+  "baselineRef": "4e9b24f1cb3cafd354c7a59db27c8ba6ece686f1",
+  "patchSha256": "78e6d2888c1331fcdafb0b4808e49d7fa5073ca31054645816f4264583bcd442",
+  "platform": "macOS-27.3-arm64-arm-64bit",
+  "responseCases": 12,
+  "javaVersion": [
+    "openjdk version \"25.0.3\" 2026-04-21 LTS",
+    "OpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)",
+    "OpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode, sharing)"
+  ],
+  "jvmOptions": [
+    "-Xmx384m",
+    "-Duser.timezone=UTC",
+    "-XX:+UseSerialGC",
+    "-XX:ReservedCodeCacheSize=128m",
+    "-XX:MaxMetaspaceSize=256m",
+    "-XX:MaxDirectMemorySize=64m"
+  ],
+  "scope": "Local macOS JVM service/JPA workload against isolated MySQL; not production RSS.",
+  "responsesEqual": true,
+  "runs": {
+    "before": [
+      {
+        "activityColdAllocatedBytesPerRequest": 12759984,
+        "activityHitAllocatedBytesPerRequest": 7340208,
+        "cacheAfterExpiryBytes": 14669256,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 8,
+        "cacheFillAllocatedBytes": 32109174,
+        "cacheRetainedBytes": 14672104,
+        "completionRows": 145205,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 843462792,
+        "retentionMeanMs": 1089.54445,
+        "maximumProcessRssBytes": 1039187968,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      },
+      {
+        "activityColdAllocatedBytesPerRequest": 12830384,
+        "activityHitAllocatedBytesPerRequest": 7347968,
+        "cacheAfterExpiryBytes": 14668881,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 8,
+        "cacheFillAllocatedBytes": 32361186,
+        "cacheRetainedBytes": 14671268,
+        "completionRows": 145205,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 843462091,
+        "retentionMeanMs": 1055.6338082,
+        "maximumProcessRssBytes": 1092780032,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      },
+      {
+        "activityColdAllocatedBytesPerRequest": 12836604,
+        "activityHitAllocatedBytesPerRequest": 7349662,
+        "cacheAfterExpiryBytes": 14668872,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 8,
+        "cacheFillAllocatedBytes": 32361373,
+        "cacheRetainedBytes": 14671453,
+        "completionRows": 145205,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 843462073,
+        "retentionMeanMs": 1101.7332416,
+        "maximumProcessRssBytes": 1057488896,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      }
+    ],
+    "after": [
+      {
+        "activityColdAllocatedBytesPerRequest": 12558564,
+        "activityHitAllocatedBytesPerRequest": 4341328,
+        "cacheAfterExpiryBytes": null,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 1,
+        "cacheFillAllocatedBytes": 65198612,
+        "cacheRetainedBytes": 1636697,
+        "completionRows": 14524,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 151004124,
+        "retentionMeanMs": 260.1594416,
+        "maximumProcessRssBytes": 1043169280,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      },
+      {
+        "activityColdAllocatedBytesPerRequest": 12289529,
+        "activityHitAllocatedBytesPerRequest": 4101808,
+        "cacheAfterExpiryBytes": null,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 1,
+        "cacheFillAllocatedBytes": 64947438,
+        "cacheRetainedBytes": 1484573,
+        "completionRows": 14524,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 151004120,
+        "retentionMeanMs": 263.7664416,
+        "maximumProcessRssBytes": 1075560448,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      },
+      {
+        "activityColdAllocatedBytesPerRequest": 12313225,
+        "activityHitAllocatedBytesPerRequest": 4101808,
+        "cacheAfterExpiryBytes": null,
+        "cacheCopies": 8,
+        "cacheEntriesAfterExpiry": 1,
+        "cacheFillAllocatedBytes": 65136411,
+        "cacheRetainedBytes": 1490632,
+        "completionRows": 14524,
+        "datasetLogs": 149708,
+        "datasetUsers": 500,
+        "retentionAllocatedBytesPerRequest": 151771620,
+        "retentionMeanMs": 258.8411416,
+        "maximumProcessRssBytes": 1092730880,
+        "responseSha256": "1b48a9969233e026c5b1b344bede4b36731ced5e8cfab657331625e2bb2bb5a8"
+      }
+    ]
+  },
+  "median": {
+    "before": {
+      "activityColdAllocatedBytesPerRequest": 12830384,
+      "activityHitAllocatedBytesPerRequest": 7347968,
+      "cacheAfterExpiryBytes": 14668881,
+      "cacheCopies": 8,
+      "cacheEntriesAfterExpiry": 8,
+      "cacheFillAllocatedBytes": 32361186,
+      "cacheRetainedBytes": 14671453,
+      "completionRows": 145205,
+      "datasetLogs": 149708,
+      "datasetUsers": 500,
+      "retentionAllocatedBytesPerRequest": 843462091,
+      "retentionMeanMs": 1089.54445,
+      "maximumProcessRssBytes": 1057488896
+    },
+    "after": {
+      "activityColdAllocatedBytesPerRequest": 12313225,
+      "activityHitAllocatedBytesPerRequest": 4101808,
+      "cacheAfterExpiryBytes": null,
+      "cacheCopies": 8,
+      "cacheEntriesAfterExpiry": 1,
+      "cacheFillAllocatedBytes": 65136411,
+      "cacheRetainedBytes": 1490632,
+      "completionRows": 14524,
+      "datasetLogs": 149708,
+      "datasetUsers": 500,
+      "retentionAllocatedBytesPerRequest": 151004124,
+      "retentionMeanMs": 260.1594416,
+      "maximumProcessRssBytes": 1075560448
+    }
+  },
+  "validSamples": {
+    "before": {
+      "activityColdAllocatedBytesPerRequest": 3,
+      "activityHitAllocatedBytesPerRequest": 3,
+      "cacheAfterExpiryBytes": 3,
+      "cacheCopies": 3,
+      "cacheEntriesAfterExpiry": 3,
+      "cacheFillAllocatedBytes": 3,
+      "cacheRetainedBytes": 3,
+      "completionRows": 3,
+      "datasetLogs": 3,
+      "datasetUsers": 3,
+      "retentionAllocatedBytesPerRequest": 3,
+      "retentionMeanMs": 3,
+      "maximumProcessRssBytes": 3
+    },
+    "after": {
+      "activityColdAllocatedBytesPerRequest": 3,
+      "activityHitAllocatedBytesPerRequest": 3,
+      "cacheAfterExpiryBytes": 0,
+      "cacheCopies": 3,
+      "cacheEntriesAfterExpiry": 3,
+      "cacheFillAllocatedBytes": 3,
+      "cacheRetainedBytes": 3,
+      "completionRows": 3,
+      "datasetLogs": 3,
+      "datasetUsers": 3,
+      "retentionAllocatedBytesPerRequest": 3,
+      "retentionMeanMs": 3,
+      "maximumProcessRssBytes": 3
+    }
+  },
+  "benchmarkSourcesSha256": {
+    "qa/admin-memory/AdminMemoryBenchmark.java": "67c3df946bf3e18e5dd7050845d6262d9e7fb152ee38b33163e95c70004afb97",
+    "qa/admin-memory/run.py": "acf1204070e6d7546b2d633472b97cc47374f2df1c8d2ab64166eca62d40c5d3"
+  }
+}

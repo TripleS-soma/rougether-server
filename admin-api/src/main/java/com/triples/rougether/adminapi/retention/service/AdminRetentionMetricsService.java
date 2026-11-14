@@ -16,7 +16,7 @@ import com.triples.rougether.domain.house.entity.HouseMemberStatus;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository;
 import com.triples.rougether.domain.routine.entity.Streak;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.ActiveUserMetricRow;
-import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.CompletionEventMetricRow;
+import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.CompletionDayMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.DailyActivityMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.RoutineOutcomeMetricRow;
 import com.triples.rougether.domain.retention.repository.AdminRetentionMetricRepository.StreakMetricRow;
@@ -95,7 +95,7 @@ public class AdminRetentionMetricsService {
         LocalDate restartFrom = today.minusDays(RESTART_OBSERVATION_DAYS - 1L);
         DatePeriod restartPeriod = DatePeriod.inclusive(restartFrom, today);
         Map<Long, Set<LocalDate>> completionDatesByUser = groupCompletionDates(
-                metricRepository.findCompletionEvents(restartFrom.atStartOfDay(KST).toInstant(), now),
+                metricRepository.findCompletionDays(restartFrom.atStartOfDay(KST).toInstant(), now),
                 activeUserIds, restartFrom, today);
 
         LocalDate northStarFrom = today.minusDays(NORTH_STAR_DAYS - 1L);
@@ -227,16 +227,16 @@ public class AdminRetentionMetricsService {
     }
 
     private static Map<Long, Set<LocalDate>> groupCompletionDates(
-            List<CompletionEventMetricRow> rows,
+            List<CompletionDayMetricRow> rows,
             Set<Long> activeUserIds,
             LocalDate fromDate,
             LocalDate toDate) {
         Map<Long, Set<LocalDate>> result = new HashMap<>();
-        for (CompletionEventMetricRow row : rows) {
-            if (!activeUserIds.contains(row.getUserId()) || row.getCompletedAt() == null) {
+        for (CompletionDayMetricRow row : rows) {
+            if (!activeUserIds.contains(row.getUserId()) || row.getCompletedDate() == null) {
                 continue;
             }
-            LocalDate completedDate = LocalDate.ofInstant(row.getCompletedAt(), KST);
+            LocalDate completedDate = row.getCompletedDate();
             if (completedDate.isBefore(fromDate) || completedDate.isAfter(toDate)) {
                 continue;
             }

@@ -50,6 +50,39 @@ class AdminUserActivityReaderTest {
     }
 
     @Test
+    void 다른날짜를_읽을때도_만료된_스냅샷은_제거한다() {
+        when(repository.findDailyRecords(any(), anyLong(), anyLong())).thenReturn(List.of());
+        reader.read(date);
+        reader.read(date.minusDays(1));
+        nanos.set(Duration.ofSeconds(15).toNanos());
+        reader.read(date.minusDays(2));
+        var cache = (java.util.Map<?, ?>) org.springframework.test.util.ReflectionTestUtils.getField(reader, "cache");
+        assertThat(cache).hasSize(1);
+        assertThat(cache.containsKey(date.minusDays(2))).isTrue();
+    }
+
+    @Test
+    void 캐시는_조회프록시가_아닌_불변값을_보관하고_정밀도와_null을_유지한다() {
+        var values = new java.util.HashMap<String, Object>();
+        values.put("userId", 7L);
+        values.put("nickname", "원래 이름");
+        values.put("feature", "ACCESS");
+        values.put("recordCount", 3L);
+        values.put("firstRecordedEpoch", new java.math.BigDecimal("1913443200.123456"));
+        var source = new org.springframework.data.projection.SpelAwareProxyProjectionFactory()
+                .createProjection(AdminUserActivityRepository.FeatureRecord.class, values);
+        when(repository.findDailyRecords(any(), anyLong(), anyLong())).thenReturn(List.of(source));
+        var record = reader.read(date).records().getFirst();
+        values.put("nickname", "변경된 원본");
+        assertThat(record.getNickname()).isEqualTo("원래 이름");
+        assertThat(record.getFirstRecordedEpoch()).isEqualTo(new java.math.BigDecimal("1913443200.123456"));
+        assertThat(record.getLastRecordedEpoch()).isNull();
+        assertThat(record.getRecordCount()).isEqualTo(3L);
+        assertThat(java.lang.reflect.Proxy.isProxyClass(record.getClass())).isFalse();
+        assertThat(reader.read(date).records()).containsExactly(record);
+    }
+
+    @Test
     void 집계가진행중이면_다른날짜요청을_짧은대기후거절한다() throws Exception {
         var started = new CountDownLatch(1);
         var release = new CountDownLatch(1);

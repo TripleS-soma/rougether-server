@@ -3,6 +3,7 @@ package com.triples.rougether.adminapi.activity.service;
 import com.triples.rougether.domain.activity.repository.AdminUserActivityRepository;
 import com.triples.rougether.domain.activity.repository.AdminUserActivityRepository.FeatureRecord;
 import com.triples.rougether.adminapi.activity.error.AdminActivityBusyException;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -61,18 +62,39 @@ public class AdminUserActivityReader {
     }
 
     private Snapshot readLocked(LocalDate date) {
+        long now = ticker.getAsLong();
+        // 다른 날짜를 조회하더라도 만료된 스냅샷은 함께 해제한다. 유휴 중에도 최대 8일로 제한한다.
+        cache.values().removeIf(value -> now - value.storedAtNanos() >= ttlNanos);
         CachedSnapshot cached = cache.get(date);
         if (cached != null && ticker.getAsLong() - cached.storedAtNanos() < ttlNanos) {
             return cached.snapshot();
         }
         List<FeatureRecord> records = repository.findDailyRecords(date,
                 date.atStartOfDay(KST).toEpochSecond(), date.plusDays(1).atStartOfDay(KST).toEpochSecond());
-        Snapshot snapshot = new Snapshot(clock.instant(), List.copyOf(records));
+        // Spring projection proxy와 JDBC Tuple을 캐시에 유지하지 않고 필요한 불변 값만 복사한다.
+        List<FeatureRecord> detached = records.stream().map(AdminUserActivityReader::detach).toList();
+        Snapshot snapshot = new Snapshot(clock.instant(), detached);
         if (ttlNanos > 0) {
             cache.put(date, new CachedSnapshot(ticker.getAsLong(), snapshot));
             if (cache.size() > MAX_CACHED_DAYS) cache.pollFirstEntry();
         }
         return snapshot;
+    }
+
+    private static FeatureRecord detach(FeatureRecord row) {
+        return new CachedFeatureRecord(row.getUserId(), row.getNickname(), row.getFeature(),
+                row.getRecordCount(), row.getFirstRecordedEpoch(), row.getLastRecordedEpoch());
+    }
+
+    private record CachedFeatureRecord(Long userId, String nickname, String feature, long recordCount,
+                                       BigDecimal firstRecordedEpoch, BigDecimal lastRecordedEpoch)
+            implements FeatureRecord {
+        @Override public Long getUserId() { return userId; }
+        @Override public String getNickname() { return nickname; }
+        @Override public String getFeature() { return feature; }
+        @Override public long getRecordCount() { return recordCount; }
+        @Override public BigDecimal getFirstRecordedEpoch() { return firstRecordedEpoch; }
+        @Override public BigDecimal getLastRecordedEpoch() { return lastRecordedEpoch; }
     }
 
     public record Snapshot(Instant generatedAt, List<FeatureRecord> records) {}

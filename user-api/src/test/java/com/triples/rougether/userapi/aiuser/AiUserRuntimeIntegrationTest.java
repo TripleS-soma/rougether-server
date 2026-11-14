@@ -708,9 +708,9 @@ class AiUserRuntimeIntegrationTest {
         assertThat(control.execute(job.id(),job.owner(),job.fencingToken(),AiUserActionExecutor.Action.ROUTINE_COMPLETE,payload,null)).isEqualTo(result);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM routine_logs WHERE routine_id=?",Integer.class,routine)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT balance FROM user_wallets WHERE user_id=? AND currency_type='COIN'",Long.class,ai)).isEqualTo(balance+10);
-        assertThat(retention.findCompletionEvents(Instant.now().minusSeconds(60),Instant.now().plusSeconds(60),
+        assertThat(retention.findCompletionDays(Instant.now().minusSeconds(60),Instant.now().plusSeconds(60),
                 com.triples.rougether.domain.routine.entity.RoutineLogStatus.COMPLETED))
-                .extracting(AdminRetentionMetricRepository.CompletionEventMetricRow::getUserId).doesNotContain(ai);
+                .extracting(AdminRetentionMetricRepository.CompletionDayMetricRow::getUserId).doesNotContain(ai);
     }
 
     @Test void periodicLimitLeavesRoomForHumanJobs() {
