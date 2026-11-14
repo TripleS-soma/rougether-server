@@ -613,12 +613,13 @@ class ChatImageIntegrationTest {
     }
 
     @Test
-    void HTTP로_사진을_보내고_내용과_사진은_정확히_하나만_허용한다() throws Exception {
+    void HTTP로_사진을_보내고_내용도_사진도_없거나_공백만_있으면_거부한다() throws Exception {
         Fixture f = fixture();
         Long imageId = uploaded(f, f.owner());
         String path = "/api/v1/chat/rooms/" + f.room() + "/messages";
+        // 사진과 글을 함께 보내는 것은 이제 허용함(설명 글). 설명 글이 공백만이면 거부함.
         for (String body : List.of(
-                mapper.writeValueAsString(new ChatSendRequest(UUID.randomUUID(), "글", imageId)),
+                mapper.writeValueAsString(new ChatSendRequest(UUID.randomUUID(), " ", imageId)),
                 "{\"clientMessageId\":\"" + UUID.randomUUID() + "\"}",
                 mapper.writeValueAsString(new ChatSendRequest(UUID.randomUUID(), " ")))) {
             mvc.perform(post(path).header("Authorization", auth(f.owner()))

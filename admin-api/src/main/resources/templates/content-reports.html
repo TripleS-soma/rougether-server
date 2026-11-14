@@ -143,7 +143,10 @@
             text.textContent = target.removed ? '(삭제·정지됨) ' + (target.text || '') : (target.text || '-');
             previewCell.appendChild(text);
             const photoUrls = (target.feedImageIds || []).map((imageId) => '/admin/reports/feed-images/' + imageId);
-            if (target.chatImageId) photoUrls.push('/admin/reports/chat-images/' + target.chatImageId);
+            // 채팅 메시지는 사진이 여러 장일 수 있음. chatImageIds가 없는 응답이면 첫 장(chatImageId)만 보여줌.
+            const chatImageIds = target.chatImageIds && target.chatImageIds.length
+                ? target.chatImageIds : (target.chatImageId ? [target.chatImageId] : []);
+            chatImageIds.forEach((imageId) => photoUrls.push('/admin/reports/chat-images/' + imageId));
             photoUrls.forEach((url) => {
                 const link = document.createElement('a');
                 link.href = url;

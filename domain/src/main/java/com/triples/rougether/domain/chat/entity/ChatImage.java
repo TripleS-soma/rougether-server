@@ -30,6 +30,9 @@ public class ChatImage {
     private User owner;
     @Column(name = "message_id")
     private Long messageId;
+    // 메시지 안에서의 순서(0부터). 전송 요청에 적힌 순서를 그대로 저장함.
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
     @Column(name = "storage_key", nullable = false)
     private String storageKey;
     @Column(nullable = false)
@@ -60,7 +63,12 @@ public class ChatImage {
 
     public void expire(Instant now) { expiresAt = now; }
 
-    public void attach(Long messageId) { this.messageId = messageId; }
+    public void attach(Long messageId) { attach(messageId, 0); }
+
+    public void attach(Long messageId, int sortOrder) {
+        this.messageId = messageId;
+        this.sortOrder = sortOrder;
+    }
 
     public boolean isAttachableBy(Long userId, Long roomId, Instant now) {
         return owner.getId().equals(userId) && this.roomId.equals(roomId) && ready && messageId == null

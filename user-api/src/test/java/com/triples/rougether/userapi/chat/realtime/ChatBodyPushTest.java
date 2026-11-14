@@ -244,6 +244,7 @@ class ChatBodyPushTest {
         final AtomicBoolean forbidden = new AtomicBoolean();
         final AtomicBoolean expired = new AtomicBoolean();
         final List<ChatMessageResponse> messages = new CopyOnWriteArrayList<>();
+        final ConcurrentHashMap<Long, ChatReactionsResponse> reactions = new ConcurrentHashMap<>();
         final ChatSocketHandler handler = new ChatSocketHandler(query, token, mapper, clock);
 
         Fixture() {
@@ -254,6 +255,8 @@ class ChatBodyPushTest {
             });
             when(query.get(1L, 3L)).thenAnswer(i -> { authorize(); return state(); });
             doAnswer(i -> { authorize(); return null; }).when(query).requireReadable(1L, 3L);
+            when(query.liveReactions(eq(3L), anyLong()))
+                    .thenAnswer(i -> java.util.Optional.ofNullable(reactions.get(i.<Long>getArgument(1))));
             when(query.messages(eq(1L), eq(3L), isNull(), anyLong(), eq(50))).thenAnswer(i -> {
                 authorize();
                 long after = i.getArgument(3);
@@ -273,7 +276,12 @@ class ChatBodyPushTest {
         void append(long sequence) {
             messages.add(new ChatMessageResponse(sequence, 3L, sequence, UUID.randomUUID().toString(), 1L,
                     "회원", null, "본문 " + sequence, Instant.parse("2026-10-02T00:00:00Z"), 0,
-                    com.triples.rougether.domain.chat.entity.ChatMessageType.TEXT, null));
+                    com.triples.rougether.domain.chat.entity.ChatMessageType.TEXT, null, List.of(), null, null,
+                    List.of()));
+        }
+        // 공감 프레임은 쓰기 직전에 이 값을 읽음. 없는 메시지는 삭제된 것으로 봄.
+        void react(long messageId, List<ChatReactionResponse> current) {
+            reactions.put(messageId, new ChatReactionsResponse(messageId, messageId, current));
         }
         Socket socket(String id) throws Exception { return new Socket(id, mapper); }
         Socket connect(String id, boolean include) throws Exception {
@@ -282,9 +290,18 @@ class ChatBodyPushTest {
             return socket;
         }
         void subscribe(Socket socket, boolean include) throws Exception {
+            subscribe(socket, include, false);
+        }
+        Socket connect(String id, boolean includeMessages, boolean includeReactions) throws Exception {
+            var socket = socket(id);
+            subscribe(socket, includeMessages, includeReactions);
+            return socket;
+        }
+        void subscribe(Socket socket, boolean includeMessages, boolean includeReactions) throws Exception {
             handler.afterConnectionEstablished(socket.raw);
             handler.handleTextMessage(socket.raw, new TextMessage("{\"type\":\"SUBSCRIBE\",\"roomId\":3,\"accessToken\":\"token\""
-                    + (include ? ",\"includeMessages\":true" : "") + "}"));
+                    + (includeMessages ? ",\"includeMessages\":true" : "")
+                    + (includeReactions ? ",\"includeReactions\":true" : "") + "}"));
         }
         void awaitOutboundIdle() throws InterruptedException {
             var executor = (ThreadPoolExecutor) ReflectionTestUtils.getField(handler, "outbound");

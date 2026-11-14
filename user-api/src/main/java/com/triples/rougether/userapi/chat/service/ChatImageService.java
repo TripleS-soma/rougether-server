@@ -5,6 +5,7 @@ import static com.triples.rougether.userapi.chat.error.ChatErrorCode.CHAT_IMAGE_
 import static com.triples.rougether.userapi.chat.error.ChatErrorCode.CHAT_STORAGE_UNAVAILABLE;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.userapi.chat.dto.ChatImageCropRequest;
 import com.triples.rougether.userapi.chat.dto.ChatImageResponse;
 import com.triples.rougether.userapi.global.image.PrivatePhotoNormalizer;
 import com.triples.rougether.userapi.global.image.PrivatePhotoNormalizer.InvalidPhotoException;
@@ -24,8 +25,13 @@ public class ChatImageService {
     private final ChatImageStorage storage;
 
     public ChatImageResponse upload(Long userId, Long roomId, MultipartFile file) {
+        return upload(userId, roomId, file, ChatImageCropRequest.NONE);
+    }
+
+    // crop이 있으면 회전 보정 뒤 그 영역만 잘라 저장함. 응답의 크기는 자른 뒤 변환한 값임.
+    public ChatImageResponse upload(Long userId, Long roomId, MultipartFile file, ChatImageCropRequest crop) {
         transactions.checkUploadable(userId, roomId);
-        Photo photo = normalize(file);
+        Photo photo = normalize(file, crop);
         // S3 전송 전에 key를 DB에 커밋함. 전송 도중 프로세스가 죽어도 만료 정리 대상이 남음.
         var reservation = transactions.reserve(userId, roomId, photo.width(), photo.height());
         try {
@@ -63,9 +69,9 @@ public class ChatImageService {
         }
     }
 
-    private static Photo normalize(MultipartFile file) {
+    private static Photo normalize(MultipartFile file, ChatImageCropRequest crop) {
         try {
-            return PrivatePhotoNormalizer.normalize(file);
+            return PrivatePhotoNormalizer.normalize(file, crop.toCrop());
         } catch (InvalidPhotoException e) {
             throw new BusinessException(CHAT_IMAGE_INVALID);
         } catch (PhotoBusyException e) {

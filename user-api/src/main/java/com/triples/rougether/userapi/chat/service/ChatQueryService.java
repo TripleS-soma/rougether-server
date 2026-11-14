@@ -3,19 +3,24 @@ package com.triples.rougether.userapi.chat.service;
 import com.triples.rougether.common.error.BusinessException;
 import com.triples.rougether.domain.chat.entity.ChatImage;
 import com.triples.rougether.domain.chat.entity.ChatMessage;
+import com.triples.rougether.domain.chat.entity.ChatMessageReaction;
 import com.triples.rougether.domain.chat.entity.ChatReadState;
 import com.triples.rougether.domain.chat.entity.ChatRoom;
 import com.triples.rougether.domain.chat.repository.ChatImageRepository;
+import com.triples.rougether.domain.chat.repository.ChatMessageReactionRepository;
 import com.triples.rougether.domain.chat.repository.ChatMessageRepository;
 import com.triples.rougether.domain.chat.repository.ChatReadStateRepository;
 import com.triples.rougether.domain.chat.repository.ChatRoomRepository;
 import com.triples.rougether.userapi.chat.dto.ChatMessageListResponse;
 import com.triples.rougether.userapi.chat.dto.ChatNotificationResponse;
 import com.triples.rougether.userapi.chat.dto.ChatMessageResponse;
+import com.triples.rougether.userapi.chat.dto.ChatReactionResponse;
+import com.triples.rougether.userapi.chat.dto.ChatReactionsResponse;
 import com.triples.rougether.userapi.chat.dto.ChatRoomResponse;
 import com.triples.rougether.userapi.chat.error.ChatErrorCode;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +34,7 @@ public class ChatQueryService {
     private final ChatRoomRepository rooms;
     private final ChatMessageRepository messages;
     private final ChatImageRepository images;
+    private final ChatMessageReactionRepository reactions;
     private final ChatReadStateRepository reads;
     private final ChatAccessPolicy access;
 
@@ -63,9 +69,24 @@ public class ChatQueryService {
         var page = hasNext ? found.subList(0, size) : found;
         var state = snapshot(room);
         var imagesByMessage = imagesOf(page);
+        var reactionsByMessage = reactionsOf(page);
         return new ChatMessageListResponse(page.stream()
-                .map(m -> ChatMessageResponse.of(m, imagesByMessage.get(m.getId()), state)).toList(),
+                .map(m -> ChatMessageResponse.of(m, imagesByMessage.get(m.getId()),
+                        reactionsByMessage.get(m.getId()), state)).toList(),
                 hasNext ? page.getLast().getSequence() : null, hasNext, state);
+    }
+
+    // 한 메시지의 현재 공감. 호출한 쪽이 권한과 메시지 상태를 이미 확인한 경우에 씀.
+    public ChatReactionsResponse reactionsOf(ChatMessage message) {
+        return new ChatReactionsResponse(message.getId(), message.getSequence(),
+                ChatReactionResponse.of(reactions.findVisibleByMessageIdIn(List.of(message.getId()))));
+    }
+
+    // 내부 브로드캐스트 전용. 소켓이 프레임을 쓰기 직전에 최신 값을 읽음. 없거나 삭제된 메시지는 비어 있음.
+    public Optional<ChatReactionsResponse> liveReactions(Long roomId, Long messageId) {
+        return messages.findById(messageId)
+                .filter(message -> message.getRoomId().equals(roomId) && !message.isDeleted())
+                .map(this::reactionsOf);
     }
 
     // 내부 브로드캐스트 전용. HTTP 컨트롤러는 반드시 get/messages로 인가함.
@@ -84,11 +105,19 @@ public class ChatQueryService {
         return new ChatRoomResponse(room.getId(), room.getRoomType(), room.getHouseId(), room.getLastSequence(), readers);
     }
 
-    // 사진 메시지가 있는 페이지만 한 번에 조회함. 메시지마다 조회하지 않음.
-    private Map<Long, ChatImage> imagesOf(List<ChatMessage> page) {
+    // 사진 메시지가 있는 페이지만 한 번에 조회함. 메시지마다 조회하지 않음. 메시지별 목록은 보낸 순서임.
+    private Map<Long, List<ChatImage>> imagesOf(List<ChatMessage> page) {
         List<Long> ids = page.stream().filter(m -> m.isImage() && !m.isDeleted()).map(ChatMessage::getId).toList();
         if (ids.isEmpty()) return Map.of();
-        return images.findWithOwnerByMessageIdIn(ids).stream().collect(Collectors.toMap(ChatImage::getMessageId, i -> i));
+        return images.findWithOwnerByMessageIdIn(ids).stream().collect(Collectors.groupingBy(ChatImage::getMessageId));
+    }
+
+    // 공감도 페이지 단위로 한 번만 조회함. 메시지별 목록은 누른 순서임.
+    private Map<Long, List<ChatMessageReaction>> reactionsOf(List<ChatMessage> page) {
+        List<Long> ids = page.stream().filter(m -> !m.isDeleted()).map(ChatMessage::getId).toList();
+        if (ids.isEmpty()) return Map.of();
+        return reactions.findVisibleByMessageIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ChatMessageReaction::getMessageId));
     }
 
     private ChatRoom requireRoom(Long roomId) {

@@ -144,7 +144,7 @@ public class ContentReportAdminService {
         }
     }
 
-    // 신고된 채팅 메시지의 사진만 열람 가능. 미전송 업로드·신고와 무관한 사진은 404.
+    // 신고된 채팅 메시지의 사진만 열람 가능(여러 장이면 그 메시지의 사진 전부). 미전송 업로드·신고와 무관한 사진은 404.
     public StoredAsset chatImage(Long imageId) {
         ChatImage image = chatImages.findById(imageId)
                 .filter(found -> found.isReady() && found.getMessageId() != null)
@@ -189,14 +189,14 @@ public class ContentReportAdminService {
             result.put(ContentReportTargetType.FEED_POST, posts.findAllById(postIds).stream()
                     .collect(Collectors.toMap(FeedPost::getId, post -> new TargetPreview(preview(post.getContent()),
                             post.getId(), imageIds.getOrDefault(post.getId(), List.of()), null,
-                            post.getDeletedAt() != null, null))));
+                            post.getDeletedAt() != null, null, List.of()))));
         }
         List<Long> commentIds = ids.getOrDefault(ContentReportTargetType.FEED_COMMENT, List.of());
         if (!commentIds.isEmpty()) {
             result.put(ContentReportTargetType.FEED_COMMENT, comments.findAllById(commentIds).stream()
                     .collect(Collectors.toMap(FeedComment::getId, comment -> new TargetPreview(
                             preview(comment.getContent()), comment.getPost().getId(), List.of(), null,
-                            comment.getDeletedAt() != null, null))));
+                            comment.getDeletedAt() != null, null, List.of()))));
         }
         List<Long> assetIds = ids.getOrDefault(ContentReportTargetType.MARKET_ASSET, List.of());
         if (!assetIds.isEmpty()) {
@@ -207,16 +207,22 @@ public class ContentReportAdminService {
                     .collect(Collectors.toMap(MarketAsset::getId, asset -> {
                         Item item = itemById.get(asset.getItemId());
                         return new TargetPreview(item == null ? null : item.getName(), null, List.of(),
-                                item == null ? null : item.getAssetKey(), asset.isSuspended(), null);
+                                item == null ? null : item.getAssetKey(), asset.isSuspended(), null, List.of());
                     })));
         }
         List<Long> messageIds = ids.getOrDefault(ContentReportTargetType.CHAT_MESSAGE, List.of());
         if (!messageIds.isEmpty()) {
-            Map<Long, Long> imageIdByMessage = chatImages.findWithOwnerByMessageIdIn(messageIds.stream().distinct().toList())
-                    .stream().collect(Collectors.toMap(ChatImage::getMessageId, ChatImage::getId));
+            // 메시지 하나에 사진이 여러 장일 수 있음. 보낸 순서대로 모으고 첫 장은 기존 필드(chatImageId)에도 실음.
+            Map<Long, List<Long>> imageIdsByMessage = new HashMap<>();
+            for (ChatImage image : chatImages.findWithOwnerByMessageIdIn(messageIds.stream().distinct().toList())) {
+                imageIdsByMessage.computeIfAbsent(image.getMessageId(), key -> new ArrayList<>()).add(image.getId());
+            }
             result.put(ContentReportTargetType.CHAT_MESSAGE, chatMessages.findAllById(messageIds).stream()
-                    .collect(Collectors.toMap(ChatMessage::getId, message -> new TargetPreview(preview(message.getContent()),
-                            null, List.of(), null, message.isDeleted(), imageIdByMessage.get(message.getId())))));
+                    .collect(Collectors.toMap(ChatMessage::getId, message -> {
+                        List<Long> imageIds = imageIdsByMessage.getOrDefault(message.getId(), List.of());
+                        return new TargetPreview(preview(message.getContent()), null, List.of(), null,
+                                message.isDeleted(), imageIds.isEmpty() ? null : imageIds.getFirst(), imageIds);
+                    })));
         }
         return result;
     }
