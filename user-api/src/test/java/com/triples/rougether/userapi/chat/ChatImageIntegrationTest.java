@@ -58,6 +58,9 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -101,6 +104,7 @@ class ChatImageIntegrationTest {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Autowired ChatCommandService commands;
+    @MockitoSpyBean Clock clock;
     @MockitoSpyBean ChatQueryService query;
     @MockitoSpyBean AiUserEvents aiEvents;
     @MockitoBean FcmPushExecutor fcm;
@@ -570,6 +574,26 @@ class ChatImageIntegrationTest {
     }
 
     @Test
+    void 나노초_정밀도_시계여도_최초전송과_재시도와_DB조회에서_만료시각이_같다() throws Exception {
+        Fixture f = fixture();
+        Long imageId = uploaded(f, f.owner());
+        Instant precise = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusNanos(123456789);
+        org.mockito.Mockito.doReturn(precise).when(clock).instant();
+        UUID requestId = UUID.randomUUID();
+        var request = new ChatSendRequest(requestId, null, imageId);
+        var sent = commands.send(f.owner(), f.room(), request);
+        Instant persisted = precise.truncatedTo(ChronoUnit.MICROS);
+        assertThat(sent.createdAt()).isEqualTo(persisted);
+        assertThat(sent.image().expiresAt()).isEqualTo(persisted.plus(Duration.ofDays(30)));
+        assertThat(imageRows.findById(imageId).orElseThrow().getExpiresAt()).isEqualTo(sent.image().expiresAt());
+        assertThat(commands.send(f.owner(), f.room(), request).image()).isEqualTo(sent.image());
+        assertThat(query.messages(f.member(), f.room(), null, null, 50).items().getFirst().image()).isEqualTo(sent.image());
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata").header("Authorization", auth(f.member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expiresAt").value(sent.image().expiresAt().toString()));
+    }
+
+    @Test
     void 전송_시점부터_30일_후_열람을_막고_파일만_정리하며_메타데이터와_재전송은_유지한다() throws Exception {
         Fixture f = fixture();
         Long imageId = uploaded(f, f.owner());
@@ -583,7 +607,7 @@ class ChatImageIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.expiresAt").exists());
         verify(storage, never()).read(anyString());
 
-        jdbc.update("update chat_messages set created_at = ? where id = ?", Timestamp.from(Instant.EPOCH), sent.messageId());
+        jdbc.update("update chat_messages set created_at = ? where id = ?", Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")), sent.messageId());
         error(() -> images.read(f.owner(), imageId), "CHAT_IMAGE_NOT_FOUND");
         mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
                         .header("Authorization", auth(f.member())))
@@ -607,7 +631,7 @@ class ChatImageIntegrationTest {
         Long imageId = uploaded(f, f.owner());
         var sent = sendPhoto(f, f.owner(), imageId);
         // 구버전 attach는 업로드+24시간 값을 수정하지 않음. 그 값이 지나도 보낸 사진은 유효함.
-        jdbc.update("update chat_images set expires_at = ? where id = ?", Timestamp.from(Instant.EPOCH), imageId);
+        jdbc.update("update chat_images set expires_at = ? where id = ?", Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")), imageId);
         mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
                         .header("Authorization", auth(f.member())))
                 .andExpect(status().isOk())
