@@ -413,7 +413,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "mysql" {
   identifier             = "${local.name}-mysql"
   engine                 = "mysql"
-  engine_version         = "8.0"
+  engine_version         = "8.4"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
   storage_type           = "gp2"
