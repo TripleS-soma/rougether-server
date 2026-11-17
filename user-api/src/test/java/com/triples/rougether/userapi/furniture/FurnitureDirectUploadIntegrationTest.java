@@ -23,7 +23,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest(properties = {"billing.require-credits=true", "billing.worker-enabled=false"})
+@SpringBootTest(properties = {"billing.require-credits=true", "billing.worker-enabled=false",
+        "furniture.generation.enabled=true", "furniture.upload.multipart-lambda-enabled=true"})
 class FurnitureDirectUploadIntegrationTest {
     @Autowired FurnitureGenerationTransactions tx;
     @Autowired com.triples.rougether.furniture.lambda.FurnitureLambdaControl control;
@@ -32,6 +33,9 @@ class FurnitureDirectUploadIntegrationTest {
     @Autowired FurnitureCreditAccountRepository accounts;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean Clock kstClock;
+    @MockitoBean software.amazon.awssdk.services.s3.S3Client s3;
+    @MockitoBean com.triples.rougether.furniture.service.FurnitureImages images;
+    @Autowired com.triples.rougether.userapi.furniture.service.FurnitureGenerationService service;
     volatile Instant now;
     Long user;
     @BeforeEach void setup() {
@@ -55,6 +59,93 @@ class FurnitureDirectUploadIntegrationTest {
     long entries(String job, String reason) {
         return jdbc.queryForObject("select count(*) from furniture_credit_entries where reference_id=? and reason=?", Long.class, job, reason);
     }
+
+    org.springframework.mock.web.MockMultipartFile rawPhoto() {
+        return new org.springframework.mock.web.MockMultipartFile("photo", "photo.jpg", "image/jpeg",
+                new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10, 1, 2});
+    }
+
+    @Test void 구버전_앱의_사진도_디코딩없이_스트림으로_올리고_전처리_완료후에만_AI를_등록함() throws Exception {
+        when(s3.putObject(any(software.amazon.awssdk.services.s3.model.PutObjectRequest.class),
+                any(software.amazon.awssdk.core.sync.RequestBody.class))).thenAnswer(i -> {
+            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            software.amazon.awssdk.services.s3.model.PutObjectRequest put = i.getArgument(0);
+            assertThat(put.ifNoneMatch()).isEqualTo("*");
+            assertThat(put.contentType()).isEqualTo("image/png");
+            assertThat(put.checksumSHA256()).isNotBlank();
+            software.amazon.awssdk.core.sync.RequestBody body = i.getArgument(1);
+            try (var first = body.contentStreamProvider().newStream(); var retry = body.contentStreamProvider().newStream()) {
+                first.read();
+                assertThat(retry.readAllBytes()).isEqualTo(rawPhoto().getBytes());
+            }
+            return software.amazon.awssdk.services.s3.model.PutObjectResponse.builder().versionId("source-v1").build();
+        });
+        UUID request = UUID.randomUUID();
+        var first = service.submit(user, request, "한글 힌트", rawPhoto());
+        assertThat(first.status()).isEqualTo(FurnitureGenerationJob.Status.UPLOADING);
+        assertThat(jobs.findById(first.id()).orElseThrow().getExecutionId()).isNull();
+        var duplicate = service.submit(user, request, "한글 힌트", rawPhoto());
+        assertThat(duplicate.id()).isEqualTo(first.id());
+        assertThat(entries(first.id(), "RESERVE")).isEqualTo(1);
+        verifyNoInteractions(images);
+        var start = start(first.id());
+        tx.preprocess(start); tx.preprocess(complete(start)); tx.preprocess(complete(start));
+        assertThat(jobs.findById(first.id()).orElseThrow().getStatus()).isEqualTo(FurnitureGenerationJob.Status.QUEUED);
+        assertThat(jdbc.queryForObject("select count(*) from furniture_lambda_execution where job_id=?", Long.class, first.id())).isEqualTo(1);
+    }
+
+    @Test void PUT_응답유실은_즉시환불하지_않고_같은요청의_412를_수용한뒤_미완료시_한번_환불함() {
+        when(s3.putObject(any(software.amazon.awssdk.services.s3.model.PutObjectRequest.class),
+                any(software.amazon.awssdk.core.sync.RequestBody.class)))
+                .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.create("response lost"))
+                .thenThrow(software.amazon.awssdk.services.s3.model.S3Exception.builder().statusCode(412).build());
+        UUID request = UUID.randomUUID();
+        assertThatThrownBy(() -> service.submit(user, request, "", rawPhoto())).isInstanceOf(BusinessException.class);
+        var stored = jobs.findByUserIdAndRequestId(user, request.toString()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(FurnitureGenerationJob.Status.UPLOADING);
+        assertThat(entries(stored.getId(), "RELEASE")).isZero();
+        assertThat(service.submit(user, request, "", rawPhoto()).id()).isEqualTo(stored.getId());
+        assertThat(entries(stored.getId(), "RESERVE")).isEqualTo(1);
+        now = now.plusSeconds(1801);
+        tx.maintain(stored.getId()); tx.maintain(stored.getId());
+        assertThat(entries(stored.getId(), "RELEASE")).isEqualTo(1);
+        verifyNoInteractions(images);
+    }
+
+    @Test void 전환전에_예약한_동일_multipart는_새방식으로_덮어쓰거나_재예약하지_않음() throws Exception {
+        var hash = java.security.MessageDigest.getInstance("SHA-256");
+        hash.update(rawPhoto().getBytes()); hash.update((byte) 0);
+        String digest = HexFormat.of().formatHex(hash.digest("hint".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        UUID request = UUID.randomUUID();
+        var old = tx.reserve(user, request.toString(), digest, "hint");
+        assertThat(service.submit(user, request, "hint", rawPhoto()).id()).isEqualTo(old.job().id());
+        assertThat(jobs.findById(old.job().id()).orElseThrow().getRawSourceKey()).isNull();
+        assertThat(entries(old.job().id(), "RESERVE")).isEqualTo(1);
+        verifyNoInteractions(s3, images);
+        assertThatThrownBy(() -> service.submit(user, request, "changed", rawPhoto())).isInstanceOf(BusinessException.class);
+    }
+    @Test void 구버전_앱의_동시_재전송도_생성권을_한번만_예약함() throws Exception {
+        when(s3.putObject(any(software.amazon.awssdk.services.s3.model.PutObjectRequest.class),
+                any(software.amazon.awssdk.core.sync.RequestBody.class)))
+                .thenReturn(software.amazon.awssdk.services.s3.model.PutObjectResponse.builder().versionId("source-v1").build());
+        UUID request = UUID.randomUUID();
+        try (var pool = Executors.newFixedThreadPool(4)) {
+            var tasks = new ArrayList<Future<String>>();
+            for (int i = 0; i < 4; i++) tasks.add(pool.submit(() -> service.submit(user, request, "", rawPhoto()).id()));
+            var ids = new HashSet<String>();
+            for (var task : tasks) ids.add(task.get(15, TimeUnit.SECONDS));
+            assertThat(ids).hasSize(1);
+            assertThat(entries(ids.iterator().next(), "RESERVE")).isEqualTo(1);
+        }
+        verifyNoInteractions(images);
+    }
+
+    @Test void 중계_메타데이터가_유효하지_않으면_예약하지_않음() {
+        assertThatThrownBy(() -> tx.reserveMultipart(user, UUID.randomUUID().toString(), "a".repeat(64),
+                "b".repeat(64), 10, null, "")).isInstanceOf(BusinessException.class);
+        assertThat(accounts.findById(user).orElseThrow().getReserved()).isZero();
+    }
+
     @Test void 같은_예약은_한번만_차감하고_내용이_바뀌면_거절함() {
         String request = UUID.randomUUID().toString();
         var first = reserve(request); var duplicate = reserve(request);
