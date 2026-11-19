@@ -37,8 +37,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 같은 집 멤버의 방·루틴·완료 내역 열람. owner 전용이 아니라 ACTIVE 구성원 누구나(본인 포함).
-// 루틴·완료 내역은 카테고리 공개 범위(visibility)가 HOUSE/PUBLIC 인 것만 노출한다.
-// FRIENDS(친한친구)는 집과 별개 개념이라 제외, 미분류(category null) 루틴은 비공개 취급 — spec 확정 전 보수적 기본값.
+// 루틴·완료 내역은 카테고리 공개 범위(visibility)가 HOUSE/PUBLIC 인 것과 미분류(category null)를 노출한다.
+// FRIENDS(친한친구)는 집과 별개 개념이라 제외. 미분류는 집 멤버에게 공개한다(사용자 건의로 확정 —
+// 앱이 미분류를 전체 공개로 표시해 왔고, 온보딩 첫 루틴이 미분류라 비공개면 친구 방이 비어 보였다).
 @Service
 public class HouseMemberActivityService {
 
@@ -177,7 +178,10 @@ public class HouseMemberActivityService {
     // findEffectiveOnDay 는 공개 범위를 거르지 않으므로 서비스에서 동일 기준으로 필터
     private boolean isHouseVisible(Routine routine) {
         Category category = routine.getCategory();
-        return category != null && category.getDeletedAt() == null
+        if (category == null) {
+            return true;
+        }
+        return category.getDeletedAt() == null
                 && HOUSE_VISIBLE_SCOPES.contains(category.getVisibility());
     }
 
