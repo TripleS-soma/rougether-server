@@ -104,16 +104,15 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
                                                 @Param("toDate") LocalDate toDate,
                                                 @Param("completedStatus") TodoStatus completedStatus);
 
-    // 타인(집 멤버) 열람용: 그날 마감 투두 중 카테고리 공개 범위가 허용된 것만.
-    // 미분류(category null) 투두는 inner join 으로 자연 제외됨(비공개 취급)
+    // 타인(집 멤버) 열람용: 그날 마감 투두 중 카테고리 공개 범위가 허용된 것과 미분류(category null) 투두.
+    // 미분류는 집 멤버에게 공개한다. 삭제된 카테고리의 투두는 제외한다.
     @Query("""
             select t from Todo t
-            join fetch t.category c
+            left join fetch t.category c
             where t.user.id = :userId
               and t.deletedAt is null
               and t.dueDate = :dueDate
-              and c.deletedAt is null
-              and c.visibility in :visibilities
+              and (c is null or (c.deletedAt is null and c.visibility in :visibilities))
             order by t.id asc
             """)
     List<Todo> findVisibleDueOn(@Param("userId") Long userId,

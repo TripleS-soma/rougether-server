@@ -169,13 +169,13 @@ public interface RoutineRepository extends JpaRepository<Routine, Long> {
                                            @Param("routineDate") LocalDate routineDate,
                                            Pageable pageable);
 
-    // 타인(집 멤버) 열람용: 카테고리 공개 범위가 허용된 루틴만.
-    // 미분류(category null) 루틴은 공개 범위를 정할 수 없어 inner join 으로 자연 제외됨(비공개 취급)
+    // 타인(집 멤버) 열람용: 카테고리 공개 범위가 허용된 루틴과 미분류(category null) 루틴.
+    // 미분류는 집 멤버에게 공개한다. 삭제된 카테고리의 루틴은 제외한다.
     @Query("select r from Routine r "
-            + "join fetch r.category c "
+            + "left join fetch r.category c "
             + "where r.user.id = :userId and r.status = :status "
-            + "and r.deletedAt is null and c.deletedAt is null "
-            + "and c.visibility in :visibilities "
+            + "and r.deletedAt is null "
+            + "and (c is null or (c.deletedAt is null and c.visibility in :visibilities)) "
             + "order by r.scheduledTime asc, r.originRoutineId asc")
     List<Routine> findVisibleByUserIdAndStatus(@Param("userId") Long userId,
                                                @Param("status") RoutineStatus status,

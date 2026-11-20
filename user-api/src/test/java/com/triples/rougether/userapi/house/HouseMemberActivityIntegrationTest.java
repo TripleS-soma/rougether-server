@@ -261,7 +261,7 @@ class HouseMemberActivityIntegrationTest {
     // --- 루틴 공개 범위 ---
 
     @Test
-    void 루틴은_HOUSE_또는_PUBLIC_카테고리만_보인다() {
+    void 루틴은_HOUSE_또는_PUBLIC_카테고리와_미분류만_보인다() {
         Fixture f = fixture();
         routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴");
         routineIn(f.target(), PrivacyScope.FRIENDS, "친한친구 루틴");
@@ -273,7 +273,28 @@ class HouseMemberActivityIntegrationTest {
                 f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);
 
         assertThat(response.routines()).extracting("title")
-                .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴");
+                .containsExactlyInAnyOrder("집 공개 루틴", "전체 공개 루틴", "미분류 루틴");
+        // 미분류 루틴은 카테고리 없이 내려간다(참조 카테고리 목록에도 없음)
+        assertThat(response.routines()).filteredOn("title", "미분류 루틴")
+                .extracting("categoryId").containsExactly((Object) null);
+    }
+
+    @Test
+    void 삭제된_카테고리의_루틴은_미분류와_달리_보이지_않는다() {
+        Fixture f = fixture();
+        Routine routine = routineIn(f.target(), PrivacyScope.HOUSE, "삭제된 카테고리 루틴");
+        routine.getCategory().softDelete(Instant.now());
+        categoryRepository.saveAndFlush(routine.getCategory());
+        completeOn(routine, LocalDate.now(KST));
+
+        HouseMemberDayResponse day = activityService.getMemberDay(
+                f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null);
+        HouseMemberRoutineCompletionListResponse completions = activityService
+                .getMemberRoutineCompletions(
+                        f.viewer().getId(), f.house().getId(), f.targetMembershipId(), null, null);
+
+        assertThat(day.routines()).isEmpty();
+        assertThat(completions.items()).isEmpty();
     }
 
     @Test
@@ -398,7 +419,8 @@ class HouseMemberActivityIntegrationTest {
         assertThat(response.todos()).extracting("title", "status")
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple("완료한 투두", TodoStatus.COMPLETED),
-                        org.assertj.core.groups.Tuple.tuple("남은 투두", TodoStatus.PENDING));
+                        org.assertj.core.groups.Tuple.tuple("남은 투두", TodoStatus.PENDING),
+                        org.assertj.core.groups.Tuple.tuple("미분류 투두", TodoStatus.PENDING));
     }
 
     // --- 완료 내역 ---
@@ -409,6 +431,8 @@ class HouseMemberActivityIntegrationTest {
         LocalDate today = LocalDate.now(KST);
         Routine visible = routineIn(f.target(), PrivacyScope.HOUSE, "집 공개 루틴");
         Routine hidden = routineIn(f.target(), PrivacyScope.PRIVATE, "비공개 루틴");
+        Routine uncategorized = saveRoutine(f.target(), null, "미분류 루틴");
+        completeOn(uncategorized, today.minusDays(1)); // 미분류는 집 멤버에게 공개
         completeOn(visible, today);
         completeOn(visible, today.minusDays(3));
         completeOn(visible, today.minusDays(20)); // 기본 14일 창 밖
@@ -419,10 +443,11 @@ class HouseMemberActivityIntegrationTest {
 
         assertThat(response.to()).isEqualTo(today);
         assertThat(response.from()).isEqualTo(today.minusDays(13));
-        assertThat(response.items()).extracting("routineDate")
-                .containsExactly(today, today.minusDays(3)); // 최신 날짜 먼저
-        assertThat(response.items()).allSatisfy(item ->
-                assertThat(item.title()).isEqualTo("집 공개 루틴"));
+        assertThat(response.items()).extracting("routineDate", "title")
+                .containsExactly( // 최신 날짜 먼저
+                        org.assertj.core.groups.Tuple.tuple(today, "집 공개 루틴"),
+                        org.assertj.core.groups.Tuple.tuple(today.minusDays(1), "미분류 루틴"),
+                        org.assertj.core.groups.Tuple.tuple(today.minusDays(3), "집 공개 루틴"));
     }
 
     @Test
