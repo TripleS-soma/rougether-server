@@ -6,10 +6,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from rougether_ai.ai_user_policy import (
-    ACTION_HELP, SOCIAL_VOICES, casualize_social_text, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
+    ACTION_HELP, PROMPT_VERSION, SOCIAL_VOICES, casualize_social_text, code_plan, decision_system, parse_plan, planning_actions, social_post_brief,
 )
 from rougether_ai.app import create_app
-from test_ai_users import AUTH, CONFIG, active
+from test_ai_users import AUTH, CONFIG, VERSIONED, active
 
 
 def social_state():
@@ -154,6 +154,9 @@ def test_mixed_feed_cannot_publish_photo_guess_or_store_its_memory():
         result=client.post("/internal/v1/ai-users/decide",headers=AUTH,json={"aiUserId":1,"state":state})
         assert result.status_code==200
         assert result.json()=={"action":"WAIT","payload":{"reason":"NO_RELEVANT_POST"},"memory":""}
+        # 모델을 호출한 뒤 코드가 WAIT로 바꾼 경우라도 호출 비용은 모델 프롬프트 버전에 귀속됨.
+        result=client.post("/internal/v1/ai-users/decide",headers=VERSIONED,json={"aiUserId":1,"state":state})
+        assert result.json()=={"action":"WAIT","payload":{"reason":"NO_RELEVANT_POST"},"memory":"","promptVersion":PROMPT_VERSION}
 
 
 def test_human_text_question_on_photo_post_can_still_be_answered():
