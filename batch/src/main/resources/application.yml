@@ -19,7 +19,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 10 # 기존 9개 트리거 + 고양이 복귀 알림. 긴 작업이 reminder 발화를 막지 않게 확보함.
+        size: 13 # @Scheduled 13개(자동 유해 판정 #478 포함)와 같게 둠. 외부 호출이 긴 작업이 reminder 발화를 막지 않게 확보함.
 
 server:
   port: 8082
@@ -71,6 +71,16 @@ ai:
     timeout: ${AI_SERVICE_TIMEOUT:95s}
     allow-insecure-http: ${AI_SERVICE_ALLOW_INSECURE_HTTP:false}
     ca-certificate-base64: ${AI_SERVICE_CA_CERTIFICATE_BASE64:}
+
+# 피드 글·댓글 자동 유해 판정(#478, TypeSafe Jev). 키가 비면 판정하지 않음. 유해 확률이 기준 이상이면 자동 신고.
+rougether:
+  moderation:
+    screening:
+      api-key: ${TYPESAFE_API_KEY:}
+      model: ${CONTENT_SCREENING_MODEL:jev-1.14.0}
+      flag-threshold: ${CONTENT_SCREENING_FLAG_THRESHOLD:0.6}
+      batch-size: ${CONTENT_SCREENING_BATCH_SIZE:50}
+      window-days: ${CONTENT_SCREENING_WINDOW_DAYS:7}
 
 ---
 spring:

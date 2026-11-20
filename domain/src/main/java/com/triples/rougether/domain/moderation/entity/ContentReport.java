@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 // 콘텐츠 신고(#399). 사용자·대상당 1건(unique)이라 재신고는 기존 row 를 돌려줌.
+// 자동 신고(source=AUTO, #478)는 신고자가 NULL 이라 이 unique 밖이며, 중복은 판정 행 잠금과 대기 신고 확인으로 막음.
 // 대상은 논리 참조(FK 없음). targetOwnerUserId 는 신고 시점 작성자·제작자 스냅샷.
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -27,8 +28,13 @@ public class ContentReport {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "reporter_user_id", nullable = false, updatable = false)
+    // 자동 신고(source=AUTO)는 신고자가 없어 null. DB CHECK 가 출처별 null 여부를 강제함.
+    @Column(name = "reporter_user_id", updatable = false)
     private Long reporterUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, updatable = false, length = 10)
+    private ContentReportSource source;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "target_type", nullable = false, updatable = false, length = 20)
@@ -63,7 +69,21 @@ public class ContentReport {
     public static ContentReport receive(Long reporterUserId, ContentReportTargetType targetType, Long targetId,
                                         Long targetOwnerUserId, ContentReportReason reason, String detail,
                                         Instant now) {
+        return create(ContentReportSource.USER, reporterUserId, targetType, targetId, targetOwnerUserId, reason,
+                detail, now);
+    }
+
+    // 자동 유해 판정이 만드는 시스템 신고(#478). 운영자 대기열에서 사용자 신고와 같은 HIDE/DISMISS 로 처리됨.
+    public static ContentReport auto(ContentReportTargetType targetType, Long targetId, Long targetOwnerUserId,
+                                     ContentReportReason reason, String detail, Instant now) {
+        return create(ContentReportSource.AUTO, null, targetType, targetId, targetOwnerUserId, reason, detail, now);
+    }
+
+    private static ContentReport create(ContentReportSource source, Long reporterUserId,
+                                        ContentReportTargetType targetType, Long targetId, Long targetOwnerUserId,
+                                        ContentReportReason reason, String detail, Instant now) {
         ContentReport report = new ContentReport();
+        report.source = source;
         report.reporterUserId = reporterUserId;
         report.targetType = targetType;
         report.targetId = targetId;
