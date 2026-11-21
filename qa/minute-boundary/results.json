@@ -1,0 +1,96 @@
+{
+  "baseline": {
+    "diagnostics_sha256": "578d3afb7ed27715dbe134a1701630be13c807ef4c9b380cb4b040600a836518",
+    "summary_sha256": "c5904826fb6c8f18b725d1ec6b9321b94397f4a6f0c2f86719bbe94c53ebdc58",
+    "windows": [
+      {
+        "utc": "2026-11-03T13:01:00+00:00",
+        "max_endpoint_second_p95_ms": 248.2,
+        "max_endpoint_second_p99_ms": 296.75
+      },
+      {
+        "utc": "2026-11-03T13:02:00+00:00",
+        "max_endpoint_second_p95_ms": 165.15,
+        "max_endpoint_second_p99_ms": 183.41
+      }
+    ]
+  },
+  "candidate": {
+    "diagnostics_sha256": "d218dcd02b0e2d9c938b3fa38378a08c9aad68b336aa47f9e0d8d277b67dbec5",
+    "summary_sha256": "566ffda35622c1f4a9fa42c44d2bab693bcee3143433fc3b9cde40bee083708a",
+    "windows": [
+      {
+        "utc": "2026-11-03T13:18:00+00:00",
+        "max_endpoint_second_p95_ms": 182.1,
+        "max_endpoint_second_p99_ms": 212.81
+      },
+      {
+        "utc": "2026-11-03T13:19:00+00:00",
+        "max_endpoint_second_p95_ms": 258.75,
+        "max_endpoint_second_p99_ms": 320.52
+      },
+      {
+        "utc": "2026-11-03T13:20:00+00:00",
+        "max_endpoint_second_p95_ms": 98.15,
+        "max_endpoint_second_p99_ms": 147.1
+      }
+    ]
+  },
+  "pool20_m6g_1000": {
+    "diagnostics_sha256": "f16e30ed4791dcf3ee39505fe185fbde8e35f519ff23a9d4d970535f2b761b3b",
+    "summary_sha256": "5651f2210bc5570c0354700ce26f8e4691169a54bb5bbe1c823f25ac18b6da14",
+    "windows": [
+      {
+        "utc": "2026-11-05T13:54:00+00:00",
+        "max_endpoint_second_p95_ms": 151.0,
+        "max_endpoint_second_p99_ms": 195.06
+      },
+      {
+        "utc": "2026-11-05T13:55:00+00:00",
+        "max_endpoint_second_p95_ms": 162.1,
+        "max_endpoint_second_p99_ms": 218.0
+      },
+      {
+        "utc": "2026-11-05T13:56:00+00:00",
+        "max_endpoint_second_p95_ms": 170.0,
+        "max_endpoint_second_p99_ms": 228.14
+      },
+      {
+        "utc": "2026-11-05T13:57:00+00:00",
+        "max_endpoint_second_p95_ms": 173.05,
+        "max_endpoint_second_p99_ms": 198.09
+      },
+      {
+        "utc": "2026-11-05T13:58:00+00:00",
+        "max_endpoint_second_p95_ms": 191.1,
+        "max_endpoint_second_p99_ms": 235.11
+      }
+    ]
+  },
+  "me_m6g_1500": {
+    "diagnostics_sha256": "a6e62d85035c00f6c7c469db6d91dfda1cb95529e4a43208a8c40fa96d8ff568",
+    "summary_sha256": "0520b3389042555f3f755bf38afc1a5310bea92a1288b826bb858daaccc04211",
+    "windows": [
+      {
+        "utc": "2026-11-07T05:32:00+00:00",
+        "max_endpoint_second_p95_ms": 186.1,
+        "max_endpoint_second_p99_ms": 252.03
+      },
+      {
+        "utc": "2026-11-07T05:33:00+00:00",
+        "max_endpoint_second_p95_ms": 191.0,
+        "max_endpoint_second_p99_ms": 249.0
+      },
+      {
+        "utc": "2026-11-07T05:34:00+00:00",
+        "max_endpoint_second_p95_ms": 231.1,
+        "max_endpoint_second_p99_ms": 275.6
+      },
+      {
+        "utc": "2026-11-07T05:35:00+00:00",
+        "max_endpoint_second_p95_ms": 212.5,
+        "max_endpoint_second_p99_ms": 269.35
+      }
+    ]
+  }
+}
