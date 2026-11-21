@@ -1,6 +1,7 @@
 package com.triples.rougether.userapi.chat.service;
 
 import com.triples.rougether.domain.chat.repository.ChatImageRepository;
+import com.triples.rougether.domain.chat.entity.ChatImage;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,7 @@ public class ChatCleanupJob {
         long after = 0;
         while (true) {
             var now = clock.instant();
-            var page = images.findCleanupCandidates(after, now, ChatImageTransactions.startOfKstDay(now),
+            var page = images.findCleanupCandidates(after, now, ChatImageTransactions.startOfKstDay(now), now.minus(ChatImage.SENT_RETENTION),
                     PageRequest.of(0, PAGE_SIZE));
             if (page.isEmpty()) return;
             for (Long id : page) {

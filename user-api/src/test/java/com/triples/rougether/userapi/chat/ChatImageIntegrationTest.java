@@ -58,6 +58,9 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -101,6 +104,7 @@ class ChatImageIntegrationTest {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Autowired ChatCommandService commands;
+    @MockitoSpyBean Clock clock;
     @MockitoSpyBean ChatQueryService query;
     @MockitoSpyBean AiUserEvents aiEvents;
     @MockitoBean FcmPushExecutor fcm;
@@ -554,7 +558,6 @@ class ChatImageIntegrationTest {
         Long sent = uploaded(f, f.owner());
         markSent(f, sent);
         expire(failing);
-        expire(sent);
         String failingKey = imageRows.findById(failing).orElseThrow().getStorageKey();
         doThrow(new RuntimeException("temporary")).doNothing().when(storage).delete(failingKey);
 
@@ -568,6 +571,91 @@ class ChatImageIntegrationTest {
         assertThat(imageRows.findById(failing)).isEmpty();
         assertThat(imageRows.findById(valid)).isPresent();
         assertThat(imageRows.findById(sent)).isPresent();
+    }
+
+    @Test
+    void 나노초_정밀도_시계여도_최초전송과_재시도와_DB조회에서_만료시각이_같다() throws Exception {
+        Fixture f = fixture();
+        Long imageId = uploaded(f, f.owner());
+        Instant precise = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusNanos(123456789);
+        org.mockito.Mockito.doReturn(precise).when(clock).instant();
+        UUID requestId = UUID.randomUUID();
+        var request = new ChatSendRequest(requestId, null, imageId);
+        var sent = commands.send(f.owner(), f.room(), request);
+        Instant persisted = precise.truncatedTo(ChronoUnit.MICROS);
+        assertThat(sent.createdAt()).isEqualTo(persisted);
+        assertThat(sent.image().expiresAt()).isEqualTo(persisted.plus(Duration.ofDays(30)));
+        assertThat(imageRows.findById(imageId).orElseThrow().getExpiresAt()).isEqualTo(sent.image().expiresAt());
+        assertThat(commands.send(f.owner(), f.room(), request).image()).isEqualTo(sent.image());
+        assertThat(query.messages(f.member(), f.room(), null, null, 50).items().getFirst().image()).isEqualTo(sent.image());
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata").header("Authorization", auth(f.member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expiresAt").value(sent.image().expiresAt().toString()));
+    }
+
+    @Test
+    void 전송_시점부터_30일_후_열람을_막고_파일만_정리하며_메타데이터와_재전송은_유지한다() throws Exception {
+        Fixture f = fixture();
+        Long imageId = uploaded(f, f.owner());
+        UUID clientId = UUID.randomUUID();
+        var request = new ChatSendRequest(clientId, null, imageId);
+        var sent = commands.send(f.owner(), f.room(), request);
+        ChatImage row = imageRows.findById(imageId).orElseThrow();
+        assertThat(row.getExpiresAt()).isEqualTo(sent.createdAt().plus(java.time.Duration.ofDays(30)));
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
+                        .header("Authorization", auth(f.member())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.expiresAt").exists());
+        verify(storage, never()).read(anyString());
+
+        jdbc.update("update chat_messages set created_at = ? where id = ?", Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")), sent.messageId());
+        error(() -> images.read(f.owner(), imageId), "CHAT_IMAGE_NOT_FOUND");
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
+                        .header("Authorization", auth(f.member())))
+                .andExpect(status().isNotFound());
+        String key = row.getStorageKey();
+        doThrow(new RuntimeException("s3 unavailable")).doAnswer(i -> { objects.remove(key); return null; })
+                .when(storage).delete(key);
+        assertThatThrownBy(() -> cleanup.image(imageId)).isInstanceOf(RuntimeException.class);
+        assertThat(imageRows.findById(imageId).orElseThrow().getPurgedAt()).isNull();
+        job.run();
+        assertThat(objects).doesNotContainKey(key);
+        assertThat(imageRows.findById(imageId).orElseThrow().getPurgedAt()).isNotNull();
+        assertThat(commands.send(f.owner(), f.room(), request).messageId()).isEqualTo(sent.messageId());
+        job.run();
+        verify(storage, org.mockito.Mockito.times(2)).delete(key);
+    }
+
+    @Test
+    void 구버전이_마이그레이션_후_전송해_업로드_만료가_남아도_메시지_전송부터_30일을_보장한다() throws Exception {
+        Fixture f = fixture();
+        Long imageId = uploaded(f, f.owner());
+        var sent = sendPhoto(f, f.owner(), imageId);
+        // 구버전 attach는 업로드+24시간 값을 수정하지 않음. 그 값이 지나도 보낸 사진은 유효함.
+        jdbc.update("update chat_images set expires_at = ? where id = ?", Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")), imageId);
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
+                        .header("Authorization", auth(f.member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expiresAt").value(sent.createdAt().plus(java.time.Duration.ofDays(30)).toString()));
+        assertThat(images.read(f.member(), imageId)).isNotEmpty();
+        job.run();
+        assertThat(imageRows.findById(imageId).orElseThrow().getPurgedAt()).isNull();
+        assertThat(query.messages(f.member(), f.room(), null, null, 50).items().getFirst().image().expiresAt())
+                .isEqualTo(sent.createdAt().plus(java.time.Duration.ofDays(30)));
+    }
+
+    @Test
+    void 캐시_권한확인은_비구성원과_탈퇴한_구성원을_거부한다() throws Exception {
+        Fixture f = fixture();
+        Long imageId = uploaded(f, f.owner());
+        markSent(f, imageId);
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
+                        .header("Authorization", auth(f.outsider())))
+                .andExpect(status().isNotFound());
+        jdbc.update("update house_members set status = 'LEFT' where house_id = ? and user_id = ?", f.house(), f.member());
+        mvc.perform(get("/api/v1/chat/images/" + imageId + "/metadata")
+                        .header("Authorization", auth(f.member())))
+                .andExpect(status().isNotFound());
+        verify(storage, never()).read(anyString());
     }
 
     @Test
@@ -595,7 +683,7 @@ class ChatImageIntegrationTest {
         var sent = sendPhoto(f, f.owner(), imageId);
         var text = commands.send(f.member(), f.room(), new ChatSendRequest(UUID.randomUUID(), "좋다"));
 
-        var expected = new ChatMessageImageResponse(imageId, 48, 32);
+        var expected = new ChatMessageImageResponse(imageId, 48, 32, sent.image().expiresAt());
         assertThat(sent.messageType()).isEqualTo(ChatMessageType.IMAGE);
         assertThat(sent.content()).isEqualTo("사진을 보냈어요");
         assertThat(sent.image()).isEqualTo(expected);

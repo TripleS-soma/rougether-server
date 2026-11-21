@@ -28,9 +28,11 @@ public class ChatCleanupTransactions {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void image(Long id) {
         var image = images.findForUpdate(id).orElse(null);
-        if (image == null || !removable(image)) return;
+        if (image == null || image.getPurgedAt() != null || !removable(image)) return;
         storage.delete(image.getStorageKey());
-        images.delete(image);
+        if (image.getMessageId() == null || image.getOwner().isDeleted() || messageDeleted(image) || houseDeleted(image))
+            images.delete(image);
+        else image.markPurged(clock.instant()); // 메타데이터는 만료 표시와 멱등 재전송 비교에 남김.
     }
 
     private boolean removable(ChatImage image) {
@@ -39,7 +41,9 @@ public class ChatCleanupTransactions {
         boolean expiredUnsent = image.getMessageId() == null && !image.getExpiresAt().isAfter(now)
                 && image.getCreatedAt().isBefore(ChatImageTransactions.startOfKstDay(now));
         // 저장 중인 행은 S3 객체가 뒤늦게 남지 않도록 만료 후 정리에 맡김.
-        return expiredUnsent || (image.isReady()
+        return expiredUnsent || (image.getMessageId() != null && messages.findById(image.getMessageId())
+                .map(message -> !message.getCreatedAt().plus(ChatImage.SENT_RETENTION).isAfter(now)).orElse(false))
+                || (image.isReady()
                 && (image.getOwner().isDeleted() || messageDeleted(image) || houseDeleted(image)));
     }
 

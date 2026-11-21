@@ -70,14 +70,27 @@ public class ChatImageTransactions {
     // 권한이 없으면 사진의 존재도 드러내지 않도록 전부 404로 응답함.
     @Transactional(readOnly = true)
     public String readableKey(Long viewerId, Long imageId) {
+        return readableImage(viewerId, imageId).getStorageKey();
+    }
+
+    @Transactional(readOnly = true)
+    public ChatImageResponse metadata(Long viewerId, Long imageId) {
+        ChatImage image = readableImage(viewerId, imageId);
+        return ChatImageResponse.of(image, image.getMessageId() == null ? image.getExpiresAt()
+                : messages.findById(image.getMessageId()).orElseThrow(ChatImageTransactions::notFound)
+                        .getCreatedAt().plus(ChatImage.SENT_RETENTION));
+    }
+
+    private ChatImage readableImage(Long viewerId, Long imageId) {
         ChatImage image = images.findById(imageId).orElseThrow(ChatImageTransactions::notFound);
-        if (!image.isReady() || image.getOwner().isDeleted()) throw notFound();
+        if (!image.isReady() || image.getPurgedAt() != null || image.getOwner().isDeleted()) throw notFound();
         boolean readable = image.getMessageId() == null
                 ? image.getOwner().getId().equals(viewerId) && image.getExpiresAt().isAfter(clock.instant())
-                : messages.findById(image.getMessageId()).filter(message -> !message.isDeleted()).isPresent()
+                : messages.findById(image.getMessageId()).filter(message -> !message.isDeleted()
+                        && message.getCreatedAt().plus(ChatImage.SENT_RETENTION).isAfter(clock.instant())).isPresent()
                         && rooms.findById(image.getRoomId()).filter(room -> access.canRead(room, viewerId)).isPresent();
         if (!readable) throw notFound();
-        return image.getStorageKey();
+        return image;
     }
 
     public void cancel(Long userId, Long imageId) {
