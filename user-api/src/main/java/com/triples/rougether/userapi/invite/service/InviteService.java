@@ -24,6 +24,7 @@ import com.triples.rougether.userapi.wallet.service.WalletHistoryRecorder;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 친구 초대 보상.
@@ -90,7 +91,8 @@ public class InviteService {
     }
 
     // 초대코드 사용 - 코드 주인(초대자)과 사용자(초대받은 사람) 양쪽에 코인을 지급한다.
-    @Transactional
+    // 사용자 행이 중복 지급과 초대자 한도를 직렬화한다. 빈 보상 인덱스 구간까지 잠그지 않는다.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public InviteRedeemResponse redeem(Long inviteeUserId, String rawCode) {
         String code = normalize(rawCode);
         UserInviteCode inviteCode = userInviteCodeRepository.findByCode(code)
