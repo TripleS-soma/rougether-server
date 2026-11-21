@@ -1,6 +1,11 @@
 package com.triples.rougether.userapi.attendance.service;
 
 import com.triples.rougether.common.error.BusinessException;
+import com.triples.rougether.domain.character.entity.Character;
+import com.triples.rougether.domain.character.entity.UserCharacter;
+import com.triples.rougether.domain.character.repository.UserCharacterRepository;
+import com.triples.rougether.userapi.attendance.dto.AttendanceCharacterRewardResponse;
+import com.triples.rougether.userapi.global.i18n.CatalogNames;
 import com.triples.rougether.domain.attendance.entity.AttendanceCheckIn;
 import com.triples.rougether.domain.attendance.entity.AttendanceEvent;
 import com.triples.rougether.domain.attendance.entity.AttendanceMode;
@@ -42,6 +47,7 @@ public class AttendanceEventService {
     private final UserRepository userRepository;
     private final UserWalletRepository userWalletRepository;
     private final UserItemRepository userItemRepository;
+    private final UserCharacterRepository userCharacterRepository;
     private final WalletHistoryRecorder walletHistoryRecorder;
     private final Clock kstClock;
     private final ChristmasEventPolicy christmasEventPolicy;
@@ -87,14 +93,14 @@ public class AttendanceEventService {
         if (attendanceCheckInRepository
                 .findForUpdateByEventIdAndUserIdAndAttendanceDate(event.getId(), userId, today)
                 .isPresent()) {
-            return idempotentResponse(event, userId, today, now);
+            return idempotentResponse(event, user, today, now);
         }
 
         AttendanceCheckIn latest = attendanceCheckInRepository
                 .findFirstByEventIdAndUserIdOrderByAttendanceDateDesc(event.getId(), userId)
                 .orElse(null);
         if (latest != null && latest.isCompleted()) {
-            return idempotentResponse(event, userId, today, now);
+            return idempotentResponse(event, user, today, now);
         }
 
         int streakDay = latest != null && latest.getAttendanceDate().equals(today.minusDays(1))
@@ -113,6 +119,7 @@ public class AttendanceEventService {
                 event, user, today, streakDay, coinRewardAmount, now);
         boolean rewardGrantedNow = processFurnitureReward(event, user, checkIn, progressDay, now);
         attendanceCheckInRepository.save(checkIn);
+        boolean characterGrantedNow = grantCharacterReward(event, user, progressDay);
 
         walletHistoryRecorder.record(
                 coinWallet,
@@ -123,7 +130,7 @@ public class AttendanceEventService {
 
         return new AttendanceCheckInResponse(
                 true, coinRewardAmount, coinWallet.getBalance(), rewardGrantedNow,
-                status(event, userId, today, now));
+                status(event, userId, today, now), characterGrantedNow);
     }
 
     private boolean processFurnitureReward(AttendanceEvent event, User user,
@@ -155,9 +162,54 @@ public class AttendanceEventService {
     }
 
     private AttendanceCheckInResponse idempotentResponse(
-            AttendanceEvent event, Long userId, LocalDate today, Instant now) {
+            AttendanceEvent event, User user, LocalDate today, Instant now) {
+        boolean characterGrantedNow = grantCharacterReward(event, user,
+                Math.toIntExact(attendanceCheckInRepository.countByEventIdAndUserId(event.getId(), user.getId())));
         return new AttendanceCheckInResponse(
-                false, 0, coinBalance(userId), false, status(event, userId, today, now));
+                false, 0, coinBalance(user.getId()), false, status(event, user.getId(), today, now), characterGrantedNow);
+    }
+
+    // 기존에 3일차를 받은 사용자도 코인/출석을 건드리지 않고 캐릭터만 수령함.
+    @Transactional
+    public AttendanceCharacterRewardResponse claimCharacterReward(Long userId, Long eventId) {
+        Instant now = kstClock.instant();
+        LocalDate today = LocalDate.ofInstant(now, kstClock.getZone());
+        User user = requireUserForUpdate(userId);
+        AttendanceEvent event = requireEvent(eventId);
+        if (!isActive(event, today, now)) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_EVENT_NOT_ACTIVE);
+        }
+        if (event.getRewardCharacter() == null || !event.getRewardCharacter().isActive()) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHARACTER_REWARD_NOT_AVAILABLE);
+        }
+        int progress = Math.toIntExact(attendanceCheckInRepository.countByEventIdAndUserId(eventId, userId));
+        if (event.getMode() != AttendanceMode.CUMULATIVE || progress < event.getCharacterRewardDay()) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHARACTER_REWARD_LOCKED);
+        }
+        boolean grantedNow = grantCharacterReward(event, user, progress);
+        return new AttendanceCharacterRewardResponse(grantedNow, status(event, userId, today, now));
+    }
+
+    // 온보딩, 뽑기, 관리자 지급과 같은 user 행 잠금 안에서 보유 이력까지 검사함.
+    private boolean grantCharacterReward(AttendanceEvent event, User user, int progress) {
+        Character character = event.getRewardCharacter();
+        if (event.getMode() != AttendanceMode.CUMULATIVE || character == null || !character.isActive()
+                || progress < event.getCharacterRewardDay()
+                || userCharacterRepository.existsByUserIdAndCharacterId(user.getId(), character.getId())) {
+            return false;
+        }
+        userCharacterRepository.save(UserCharacter.create(user, character));
+        return true;
+    }
+
+    private AttendanceEventStatusResponse.CharacterReward characterReward(
+            AttendanceEvent event, Long userId, int progress, boolean active) {
+        Character character = event.getRewardCharacter();
+        if (character == null || !character.isActive()) return null;
+        boolean received = userCharacterRepository.existsByUserIdAndCharacterId(userId, character.getId());
+        return new AttendanceEventStatusResponse.CharacterReward(event.getCharacterRewardDay(),
+                character.getId(), CatalogNames.name(character), character.getBaseAssetKey(), received,
+                active && character.isActive() && progress >= event.getCharacterRewardDay() && !received);
     }
 
     private AttendanceEventStatusResponse status(AttendanceEvent event, Long userId, LocalDate today, Instant now) {
@@ -192,7 +244,8 @@ public class AttendanceEventService {
                                 ? new Reward(null, null, null, null, false, "NONE", 0)
                                 : new Reward(rewardItem.getId(), rewardItem.getName(), rewardItem.getAssetKey(),
                                 rewardUserItemId, completed != null),
-                event.getMode().name(), progressDays, active, active && completed == null && !checkedInToday);
+                event.getMode().name(), progressDays, active, active && completed == null && !checkedInToday,
+                characterReward(event, userId, progressDays, active));
     }
 
     private List<AttendanceEventStatusResponse.DailyReward> dailyRewards(

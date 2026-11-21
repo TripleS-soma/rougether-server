@@ -4,8 +4,8 @@ import com.triples.rougether.domain.room.entity.PersonalRoom;
 import com.triples.rougether.domain.room.repository.PersonalRoomRepository;
 import org.springframework.stereotype.Component;
 
-// 캐릭터 뽑기·착용 교체 해금 정책(제품 결정 2026-10-14). 레벨은 달성 기준이라 완료 취소로 내려가도 해금을 유지함.
-// 방이 아직 없으면 레벨 0으로 봄. 뽑기·교체 guard와 내 방 응답이 이 한 곳의 기준을 공유함.
+// 캐릭터 뽑기 해금 정책(제품 결정 2026-10-14). 레벨은 달성 기준이라 완료 취소로 내려가도 해금을 유지함.
+// 방이 아직 없으면 레벨 0으로 봄. 뽑기 guard와 내 방 응답이 이 한 곳의 기준을 공유함.
 @Component
 public class CharacterUnlockPolicy {
 

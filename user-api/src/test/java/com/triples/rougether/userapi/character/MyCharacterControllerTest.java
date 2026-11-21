@@ -138,16 +138,5 @@ class MyCharacterControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
-    @Test
-    void 방레벨_10_전_착용_교체는_403_CHARACTER_SWAP_LOCKED다() throws Exception {
-        when(myCharacterCommandService.select(7L, 3L))
-                .thenThrow(new BusinessException(MemberErrorCode.CHARACTER_SWAP_LOCKED));
 
-        mockMvc.perform(put("/api/v1/me/characters/select")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"characterId\":3}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHARACTER_SWAP_LOCKED"))
-                .andExpect(jsonPath("$.message").value("방 레벨 10부터 캐릭터를 바꿀 수 있습니다."));
-    }
 }

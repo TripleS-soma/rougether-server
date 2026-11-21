@@ -51,11 +51,9 @@ public class MyCharacterController {
 
     @Operation(summary = "착용 캐릭터 교체",
             description = "보유한 캐릭터로 착용(대표)을 교체합니다. 방 화면(내 방·집 멤버 방)에 표시되는 캐릭터가 바뀝니다. "
-                    + "교체는 개인 방 레벨 10 달성 후에만 가능합니다(현재 레벨과 최고 달성 레벨 중 큰 값 기준, "
-                    + "GET /api/v1/rooms/me 의 characterUnlocked). 해금 전에 다른 캐릭터를 지정하면 403(CHARACTER_SWAP_LOCKED)입니다. "
-                    + "보유하지 않은 캐릭터를 지정하면 409(CHARACTER_NOT_OWNED)이며, 신규 획득은 온보딩 무료 선택(1회) "
-                    + "또는 캐릭터 뽑기(방 레벨 10부터)로 가능합니다. "
-                    + "이미 착용 중인 캐릭터를 지정하면 해금 여부와 관계없이 변경 없이 그대로 성공을 반환합니다.")
+                    + "보유한 활성 캐릭터라면 방 레벨 제한 없이 교체할 수 있습니다. "
+                    + "보유하지 않은 캐릭터는 409(CHARACTER_NOT_OWNED)입니다. "
+                    + "캐릭터 뽑기는 기존 방 레벨 10 조건을 유지하며 출석 캐릭터 보상은 별도입니다.")
     @PutMapping("/select")
     public CharacterSelectResponse select(@CurrentUser AuthUser user,
                                           @Valid @RequestBody CharacterSelectRequest request) {
