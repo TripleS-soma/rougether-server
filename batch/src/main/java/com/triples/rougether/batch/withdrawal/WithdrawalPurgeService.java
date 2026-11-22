@@ -79,6 +79,18 @@ public class WithdrawalPurgeService {
         jdbcTemplate.update("DELETE FROM user_characters WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM attendance_check_ins WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM login_gift_participations WHERE user_id = ?", userId);
+        // 구 거래소의 종료 이력만 분리한다. 미정산 에스크로는 FK가 삭제를 막아 다음 실행에서 재시도한다.
+        jdbcTemplate.update("""
+                UPDATE market_commands c JOIN user_items i ON i.id = c.escrow_user_item_id
+                SET c.escrow_user_item_id = NULL
+                WHERE i.user_id = ? AND c.status IN ('APPLIED', 'REJECTED')
+                  AND (c.reject_code IS NULL OR c.reject_code <> 'MARKET_ENGINE_ERROR_UNREFUNDED')
+                """, userId);
+        jdbcTemplate.update("""
+                UPDATE market_orders o JOIN user_items i ON i.id = o.user_item_id
+                SET o.user_item_id = NULL
+                WHERE i.user_id = ? AND o.status IN ('FILLED', 'CANCELLED', 'EXPIRED')
+                """, userId);
         jdbcTemplate.update("DELETE FROM user_items WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM user_wallets WHERE user_id = ?", userId);
 
