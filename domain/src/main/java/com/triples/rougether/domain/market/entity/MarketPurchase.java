@@ -2,6 +2,7 @@ package com.triples.rougether.domain.market.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,7 +20,7 @@ public class MarketPurchase {
     @Column(nullable = false, length = 36) private String requestId;
     @Column(nullable = false) private int price;
     @Column(nullable = false) private int feeAmount;
-    @Column(nullable = false) private Long userItemId;
+    private Long userItemId; // 구매자 인벤토리 파기 후에도 영수증은 남는다.
     @Column(nullable = false) private Instant createdAt;
 
     public MarketPurchase(Long assetId, Long buyer, Long seller, String requestId, int price,
@@ -30,7 +31,7 @@ public class MarketPurchase {
         this.requestId = requestId;
         this.price = price;
         this.feeAmount = fee;
-        this.userItemId = userItemId;
+        this.userItemId = Objects.requireNonNull(userItemId, "userItemId");
         this.createdAt = now;
     }
 }
