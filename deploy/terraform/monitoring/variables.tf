@@ -34,7 +34,7 @@ variable "service_memory_limits_mib" {
   default = {
     "user-api"  = 1280
     "admin-api" = 768
-    "batch"     = 768
+    "batch"     = 832
   }
 
   validation {
