@@ -186,7 +186,7 @@ class ChatMessageModerationIntegrationTest {
     }
 
     List<Long> cleanupCandidates() {
-        return imageRows.findCleanupCandidates(0, Instant.now(), Instant.now(), PageRequest.of(0, 500));
+        return imageRows.findCleanupCandidates(0, Instant.now(), Instant.now(), Instant.now().minus(com.triples.rougether.domain.chat.entity.ChatImage.SENT_RETENTION), PageRequest.of(0, 500));
     }
 
     String key(Long imageId) { return imageRows.findById(imageId).orElseThrow().getStorageKey(); }

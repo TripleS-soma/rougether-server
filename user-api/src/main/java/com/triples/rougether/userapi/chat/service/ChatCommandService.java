@@ -20,6 +20,7 @@ import com.triples.rougether.userapi.chat.error.ChatErrorCode;
 import com.triples.rougether.userapi.global.text.BannedWordChecker;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -146,7 +147,8 @@ public class ChatCommandService {
             locked.put(imageId, images.findForUpdate(imageId).orElseThrow(ChatCommandService::imageUnavailable));
         }
         // 잠금을 기다리는 동안 취소된 사진이 통과하지 않도록 잠금 뒤의 시각으로 판정함.
-        Instant now = clock.instant();
+        // TIMESTAMP(6)에 맞춰 최초 전송·DB 재조회·재시도의 만료 시각을 동일하게 유지함.
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         if (!locked.values().stream().allMatch(image -> image.isAttachableBy(sender.getId(), room.getId(), now))) {
             throw imageUnavailable();
         }
@@ -155,7 +157,7 @@ public class ChatCommandService {
         List<ChatImage> attached = new ArrayList<>();
         for (int order = 0; order < draft.imageIds().size(); order++) {
             ChatImage image = locked.get(draft.imageIds().get(order));
-            image.attach(message.getId(), order);
+            image.attach(message.getId(), order, now);
             attached.add(image);
         }
         return published(message, attached, room);

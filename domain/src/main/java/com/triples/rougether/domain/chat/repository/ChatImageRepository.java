@@ -32,9 +32,10 @@ public interface ChatImageRepository extends JpaRepository<ChatImage, Long> {
     // 오늘 올린 미전송 행은 다음 날까지 남겨 둠. 취소 후 정리로 하루 업로드 한도가 풀리지 않게 하기 위함.
     @Query("select i.id from ChatImage i join i.owner o join ChatRoom r on r.id = i.roomId "
             + "left join ChatMessage m on m.id = i.messageId left join House h on h.id = r.houseId "
-            + "where i.id > :after and ((i.messageId is null and i.expiresAt <= :now and i.createdAt < :startOfToday) "
+            + "where i.id > :after and i.purgedAt is null and ((i.messageId is null and i.expiresAt <= :now and i.createdAt < :startOfToday) "
+            + "or (i.messageId is not null and m.createdAt <= :sentBefore) "
             + "or (i.ready = true and (m.deletedAt is not null or o.deletedAt is not null or h.deletedAt is not null))) "
             + "order by i.id")
     List<Long> findCleanupCandidates(@Param("after") long after, @Param("now") Instant now,
-                                     @Param("startOfToday") Instant startOfToday, Pageable page);
+                                     @Param("startOfToday") Instant startOfToday, @Param("sentBefore") Instant sentBefore, Pageable page);
 }

@@ -55,7 +55,7 @@ public record ChatMessageResponse(
                                          List<ChatMessageReaction> reactions, ChatRoomResponse room) {
         var sender = message.getSender();
         boolean deleted = message.isDeleted();
-        List<ChatMessageImageResponse> photos = deleted ? List.of() : ChatMessageImageResponse.listOf(images);
+        List<ChatMessageImageResponse> photos = deleted ? List.of() : ChatMessageImageResponse.listOf(images, message.getCreatedAt());
         return new ChatMessageResponse(message.getId(), message.getRoomId(), message.getSequence(),
                 message.getClientMessageId(), sender.getId(), sender.isDeleted() ? null : sender.getNickname(),
                 sender.isDeleted() ? null : sender.getProfileImageKey(),

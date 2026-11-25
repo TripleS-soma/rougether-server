@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.Duration;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +22,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "chat_images")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatImage {
+    public static final Duration SENT_RETENTION = Duration.ofDays(30);
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(name = "room_id", nullable = false)
@@ -46,6 +48,9 @@ public class ChatImage {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
     public static ChatImage reserve(Long roomId, User owner, String storageKey, int width, int height,
                                     Instant now, Instant expiresAt) {
         ChatImage image = new ChatImage();
@@ -66,9 +71,16 @@ public class ChatImage {
     public void attach(Long messageId) { attach(messageId, 0); }
 
     public void attach(Long messageId, int sortOrder) {
+        attach(messageId, sortOrder, Instant.now());
+    }
+
+    public void attach(Long messageId, int sortOrder, Instant sentAt) {
         this.messageId = messageId;
         this.sortOrder = sortOrder;
+        this.expiresAt = sentAt.plus(SENT_RETENTION);
     }
+
+    public void markPurged(Instant now) { purgedAt = now; }
 
     public boolean isAttachableBy(Long userId, Long roomId, Instant now) {
         return owner.getId().equals(userId) && this.roomId.equals(roomId) && ready && messageId == null

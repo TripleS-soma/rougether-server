@@ -44,6 +44,10 @@ public class ChatImageService {
         return transactions.complete(userId, reservation.id());
     }
 
+    public ChatImageResponse metadata(Long userId, Long imageId) {
+        return transactions.metadata(userId, imageId);
+    }
+
     public byte[] read(Long userId, Long imageId) {
         String key = transactions.readableKey(userId, imageId);
         try {
