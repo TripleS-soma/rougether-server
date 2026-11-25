@@ -8,7 +8,7 @@ metric_namespace = "Rougether/Dev"
 service_memory_limits_mib = {
   "user-api"  = 1280
   "admin-api" = 768
-  "batch"     = 768
+  "batch"     = 832
 }
 service_memory_alarm_ratio = 0.9
 host_memory_alarm_percent  = 90

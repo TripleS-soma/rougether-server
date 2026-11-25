@@ -134,7 +134,7 @@ reset_scenario() {
   USER_JAVA_MAX_HEAP="512m"
   ADMIN_MEMORY_LIMIT="768m"
   ADMIN_JAVA_MAX_HEAP="384m"
-  BATCH_MEMORY_LIMIT="768m"
+  BATCH_MEMORY_LIMIT="832m"
   BATCH_JAVA_MAX_HEAP="384m"
   JAVA_RESERVED_CODE_CACHE="128m"
   JAVA_MAX_METASPACE="256m"
@@ -940,7 +940,7 @@ test_blue_green_units_bind_internal_ports_and_cap_memory() {
   assert_contains '--env-file /etc/rougether/admin-api.env --env SERVER_PORT=${ROUGETHER_HOST_PORT}' \
     "$SYSTEMD_DIR/rougether-admin-api@.service" \
     "admin slot port must override the legacy runtime env value"
-  assert_contains '--memory 768m --memory-swap 768m' \
+  assert_contains '--memory 832m --memory-swap 832m' \
     "$SYSTEMD_DIR/rougether-batch.service" \
     "single batch container must also have a hard memory cap"
   assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" \
@@ -1405,7 +1405,7 @@ test_legacy_units_cap_memory_and_pass_jvm_options() {
     "legacy admin-api must carry the shared JVM options"
   assert_contains '${ROUGETHER_ADMIN_API_IMAGE}' "$SYSTEMD_DIR/rougether-admin-api.service" \
     "legacy admin-api image must stay a systemd variable"
-  assert_contains '--memory 768m --memory-swap 768m' "$SYSTEMD_DIR/rougether-batch.service" \
+  assert_contains '--memory 832m --memory-swap 832m' "$SYSTEMD_DIR/rougether-batch.service" \
     "legacy batch must have a hard memory cap"
   assert_contains "\"JAVA_TOOL_OPTIONS=$(expected_java_options 384m)\"" "$SYSTEMD_DIR/rougether-batch.service" \
     "legacy batch must carry the shared JVM options"
@@ -1758,7 +1758,7 @@ test_jvm_options_toggle_nmt_and_reject_heap_at_limit() {
   fi
   JAVA_MAX_DIRECT_MEMORY="64m"
 
-  BATCH_JAVA_MAX_HEAP="768m"
+  BATCH_JAVA_MAX_HEAP="832m"
   if validate_memory_settings >/dev/null 2>&1; then
     echo "not ok - a heap equal to the container limit must be rejected" >&2
     return 1
@@ -2400,10 +2400,10 @@ test_metric_contract_matches_terraform_alarms() {
   assert_contains 'ROUGETHER_CW_NAMESPACE:-Rougether/Dev' "$DEPLOY_SCRIPT" "deploy namespace default must match"
   assert_contains '"user-api" *= 1280' "$monitoring_dir/variables.tf" "user-api alarm limit must match the container limit"
   assert_contains '"admin-api" *= 768' "$monitoring_dir/variables.tf" "admin-api alarm limit must match the container limit"
-  assert_contains '"batch" *= 768' "$monitoring_dir/variables.tf" "batch alarm limit must match the container limit"
+  assert_contains '"batch" *= 832' "$monitoring_dir/variables.tf" "batch alarm limit must match the container limit"
   assert_contains 'ROUGETHER_USER_MEMORY_LIMIT:-1280m' "$DEPLOY_SCRIPT" "user-api container limit default"
   assert_contains 'ROUGETHER_ADMIN_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "admin-api container limit default"
-  assert_contains 'ROUGETHER_BATCH_MEMORY_LIMIT:-768m' "$DEPLOY_SCRIPT" "batch container limit default"
+  assert_contains 'ROUGETHER_BATCH_MEMORY_LIMIT:-832m' "$DEPLOY_SCRIPT" "batch container limit default"
   assert_contains '"cloudwatch:namespace" = var.metric_namespace' "$monitoring_dir/main.tf" \
     "EC2 PutMetricData must be limited to the metric namespace"
   assert_contains 'Action   = \["cloudwatch:PutMetricData"\]' "$monitoring_dir/main.tf" \

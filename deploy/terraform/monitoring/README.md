@@ -24,7 +24,7 @@ app EC2(`rougether-dev-app`)의 메모리 추세를 CloudWatch 지표로 모으�
   - 서비스별 값을 procstat으로 모으지 않는 이유가 있습니다. 세 이미지가 모두 같은 `java -jar /app/app.jar`로 떠서 procstat의 `pattern`·`exe`로는 서비스를 가를 수 없습니다. 또 `docker --memory` 상한이 거는 값은 프로세스 RSS가 아니라 cgroup 사용량입니다.
 - 알람(모두 ALARM과 OK를 SNS로 보냅니다)
   - `rougether-dev-host-memory-high`: `mem_used_percent` 평균 ≥ 90%가 1분 구간 5개 연속입니다. 차원은 없습니다.
-  - `rougether-dev-user-api-memory-high`, `rougether-dev-admin-api-memory-high`, `rougether-dev-batch-memory-high`: `container_memory_working_set` 최댓값 ≥ 상한의 90%가 1분 구간 5개 연속입니다. 상한 기본값은 #418과 같습니다(user-api 1280MiB, admin-api·batch 768MiB). 지표가 없으면(컨테이너 중단) OK로 봅니다. 중단 자체는 #418 감시가 알립니다.
+  - `rougether-dev-user-api-memory-high`, `rougether-dev-admin-api-memory-high`, `rougether-dev-batch-memory-high`: `container_memory_working_set` 최댓값 ≥ 상한의 90%가 1분 구간 5개 연속입니다. 상한 기본값은 user-api 1280MiB, admin-api 768MiB, batch 832MiB입니다. 지표가 없으면(컨테이너 중단) OK로 봅니다. 중단 자체는 #418 감시가 알립니다.
   - `rougether-dev-host-metrics-missing`: `mem_used_percent` 표본이 10분(5분 구간 2개) 동안 없으면 ALARM입니다(`treat_missing_data=breaching`). 에이전트 중단, 권한 오류, 인스턴스 정지를 잡습니다.
   - `rougether-dev-service-metrics-missing`: `container_memory_working_set`(`Service=user-api`) 표본이 10분 동안 없으면 ALARM입니다. 서비스 알람은 지표가 없으면 OK로 보므로, 수집기가 멈추는 것은 이 heartbeat가 잡습니다. user-api는 항상 떠 있어야 하는 서비스라 기준으로 삼았습니다.
   - `rougether-dev-batch-unhealthy`는 `batch_healthy`의 30초 최솟값을 평가합니다. 2개 구간 모두 0이면 장애, 정상 표본이 들어와 평가 조건이 풀리면 복구를 알립니다. 수집 누락도 장애로 평가하므로 이때는 호스트와 수집기를 함께 확인합니다. [훈련 실측 기록](../../../docs/performance/batch-health-comparison.md)

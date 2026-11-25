@@ -45,15 +45,12 @@ deploy_lock_held=false
 USER_MEMORY_LIMIT="${ROUGETHER_USER_MEMORY_LIMIT:-1280m}"
 USER_MEMORY_LIMIT_KB="${ROUGETHER_USER_MEMORY_LIMIT_KB:-}"
 USER_JAVA_MAX_HEAP="${ROUGETHER_USER_JAVA_MAX_HEAP:-512m}"
-# 기본값은 t3.medium(3.8GB)에서 legacy 운영(세 컨테이너 동시)을 기준으로 잡는다(#418).
-# 640m/힙 384m 에서 batch 가 JIT 컴파일 중 OOM kill(anon-rss≈649MB)된 실측을 반영해 admin/batch 를 768m 로 올린다.
-# 주의: admin/batch 는 힙(384m) + MaxMetaspaceSize(256m) + ReservedCodeCacheSize(128m) 상한의 합이 컨테이너 상한(768m)과
-# 같다. 이 셋은 "최대" 예약치이고 평소 사용량(메타스페이스 ~100MB·코드 캐시 ~50MB)은 훨씬 작아서, 그 차이가
-# 상한이 없는 스레드 스택·GC 구조체·direct buffer(MaxDirectMemorySize 로 제한)를 담는다. 여유가 넉넉한 구성은 아니다.
+# 힙 외에도 metaspace, JIT 코드, 스레드 스택, direct buffer가 컨테이너 상한에 포함된다.
+# 배치 working set이 716.3MiB까지 관측되어 힙을 유지하고 컨테이너에 64MiB 여유를 추가한다.
 ADMIN_MEMORY_LIMIT="${ROUGETHER_ADMIN_MEMORY_LIMIT:-768m}"
 ADMIN_MEMORY_LIMIT_KB="${ROUGETHER_ADMIN_MEMORY_LIMIT_KB:-}"
 ADMIN_JAVA_MAX_HEAP="${ROUGETHER_ADMIN_JAVA_MAX_HEAP:-384m}"
-BATCH_MEMORY_LIMIT="${ROUGETHER_BATCH_MEMORY_LIMIT:-768m}"
+BATCH_MEMORY_LIMIT="${ROUGETHER_BATCH_MEMORY_LIMIT:-832m}"
 BATCH_JAVA_MAX_HEAP="${ROUGETHER_BATCH_JAVA_MAX_HEAP:-384m}"
 # *_MEMORY_LIMIT_KB 를 따로 주지 않으면 memory_limit_kb 가 상한 값(예: 1280m → 1310720)에서 계산한다.
 # 힙 바깥 영역 상한과 진단 옵션 — 모든 유닛(blue/green·legacy·batch)의 JAVA_TOOL_OPTIONS 에 공통으로 붙는다.
