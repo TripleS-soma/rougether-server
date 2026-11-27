@@ -37,21 +37,21 @@ public class FurnitureCreditTransactions {
     public record Receipt(String id, long credits, long revokedCredits, boolean storeConsumed, Balance balance) { }
     public record Consumption(String id, Store store, String encryptedReference) { }
 
-    public Balance balance(Long userId) { activeUser(userId); return response(account(userId)); }
+    public Balance balance(Long userId) { activeUser(userId); return response(accounts.lockOrCreate(userId)); }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void grantAttendance(Long userId, Long eventId) {
         activeUser(userId);
         String reference = "attendance:" + eventId;
         if (entries.existsByUserIdAndReferenceIdAndReason(userId, reference, Reason.ATTENDANCE_REWARD)) return;
-        var account = account(userId);
+        var account = accounts.lockOrCreate(userId);
         account.adjust(1);
         record(account, reference, Reason.ATTENDANCE_REWARD, 1);
     }
 
     public Receipt prepare(Long userId, Store store, String hash) {
         activeUser(userId);
-        var account = account(userId);
+        var account = accounts.lockOrCreate(userId);
         var existing = purchases.findByStoreAndEnvironmentAndReferenceHash(store, config.environment(), hash);
         if (existing.isPresent()) {
             if (!existing.get().getUserId().equals(userId)) throw new BusinessException(BILLING_PURCHASE_OWNER_MISMATCH);
@@ -71,7 +71,7 @@ public class FurnitureCreditTransactions {
             throw new BusinessException(BILLING_PURCHASE_OWNER_MISMATCH);
         User user = lockedUser(userId);
         if (verified.environment() != config.environment()) throw new BusinessException(BILLING_PURCHASE_INVALID);
-        var account = account(userId);
+        var account = accounts.lockOrCreate(userId);
         var existing = purchases.findByStoreAndEnvironmentAndReferenceHash(verified.store(), verified.environment(),
                 PurchaseReferenceCipher.hash(verified.reference()));
         var purchase = existing.orElseGet(() -> {
@@ -122,9 +122,6 @@ public class FurnitureCreditTransactions {
         purchases.findForUpdate(id).orElseThrow().consumed(clock.instant());
     }
 
-    private FurnitureCreditAccount account(Long userId) {
-        return accounts.findForUpdate(userId).orElseGet(() -> accounts.save(new FurnitureCreditAccount(userId)));
-    }
     private User lockedUser(Long userId) {
         return users.findByIdForUpdate(userId).orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_TOKEN));
     }

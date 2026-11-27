@@ -1,0 +1,48 @@
+{
+  "before": {
+    "first_requests": {
+      "invite": {
+        "issued": 72,
+        "committed": 25,
+        "seconds": 4.482469,
+        "success_tps": 5.58
+      },
+      "onboarding": {
+        "issued": 72,
+        "committed": 31,
+        "seconds": 3.158358,
+        "success_tps": 9.82
+      },
+      "credit": {
+        "issued": 72,
+        "committed": 10,
+        "seconds": 1.408309,
+        "success_tps": 7.1
+      }
+    },
+    "mysql_deadlocks": 150
+  },
+  "after": {
+    "first_requests": {
+      "invite": {
+        "issued": 72,
+        "committed": 72,
+        "seconds": 4.469929,
+        "success_tps": 16.11
+      },
+      "onboarding": {
+        "issued": 72,
+        "committed": 72,
+        "seconds": 3.956948,
+        "success_tps": 18.2
+      },
+      "credit": {
+        "issued": 72,
+        "committed": 72,
+        "seconds": 1.627941,
+        "success_tps": 44.23
+      }
+    },
+    "mysql_deadlocks": 0
+  }
+}

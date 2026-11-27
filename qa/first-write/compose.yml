@@ -1,0 +1,37 @@
+services:
+  db:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${QA500_DB_PASSWORD:?}
+      MYSQL_DATABASE: qa500
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","127.0.0.1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+  api:
+    image: eclipse-temurin:25-jdk
+    command: [java,-Xmx640m,-jar,/app.jar]
+    volumes:
+      - ${QA500_JAR:?}:/app.jar:ro
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_URL: jdbc:mysql://db:3306/qa500?allowPublicKeyRetrieval=true&sslMode=DISABLED&serverTimezone=Asia/Seoul
+      DB_USERNAME: root
+      DB_PASSWORD: ${QA500_DB_PASSWORD:?}
+      JWT_SECRET: ${QA500_JWT_SECRET:?}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_REGION: ap-northeast-2
+      ASSET_S3_BUCKET: qa500-local
+    depends_on:
+      db: {condition: service_healthy}
+  runner:
+    image: python:3.13-slim
+    command: [sleep,infinity]
+    environment:
+      QA500_JWT_SECRET: ${QA500_JWT_SECRET:?}
+    volumes:
+      - ./probe.py:/qa/probe.py:ro
+networks:
+  default:
+    internal: true

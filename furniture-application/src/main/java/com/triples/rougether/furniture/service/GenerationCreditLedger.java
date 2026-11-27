@@ -57,7 +57,7 @@ public class GenerationCreditLedger {
             requireOwner(existing, userId);
             return;
         }
-        var account = account(userId);
+        var account = accounts.lockOrCreate(userId);
         if (account.getBalance() >= 1) {
             account.reserve();
             reservations.save(new FurnitureCreditReservation(jobId, userId, clock.instant()));
@@ -88,7 +88,7 @@ public class GenerationCreditLedger {
                 recordCoins(wallet, reservation.getPaymentAmount(), WalletHistoryReason.FURNITURE_GENERATION_REFUND);
             }
         } else {
-            var account = account(userId);
+            var account = accounts.lockOrCreate(userId);
             account.settle(success);
             record(account, jobId, success ? FurnitureCreditEntry.Reason.SPEND : FurnitureCreditEntry.Reason.RELEASE,
                     success ? 0 : 1);
@@ -100,9 +100,6 @@ public class GenerationCreditLedger {
         if (!reservation.getUserId().equals(userId)) throw new IllegalStateException("생성권 작업 소유자 불일치");
     }
 
-    private FurnitureCreditAccount account(Long id) {
-        return accounts.findForUpdate(id).orElseGet(() -> accounts.save(new FurnitureCreditAccount(id)));
-    }
 
     private void record(FurnitureCreditAccount account, String id, FurnitureCreditEntry.Reason reason, long delta) {
         entries.save(new FurnitureCreditEntry(account.getUserId(), id, reason, delta, account.getBalance(), clock.instant()));
