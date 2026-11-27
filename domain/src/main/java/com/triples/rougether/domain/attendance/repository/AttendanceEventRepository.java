@@ -14,7 +14,7 @@ public interface AttendanceEventRepository extends JpaRepository<AttendanceEvent
 
     Optional<AttendanceEvent> findByCode(String code);
 
-    @Query("select event from AttendanceEvent event left join fetch event.rewardItem where event.id = :id")
+    @Query("select event from AttendanceEvent event left join fetch event.rewardItem left join fetch event.rewardCharacter where event.id = :id")
     Optional<AttendanceEvent> findWithRewardById(@Param("id") Long id);
 
     @Query("select event from AttendanceEvent event left join fetch event.rewardItem "

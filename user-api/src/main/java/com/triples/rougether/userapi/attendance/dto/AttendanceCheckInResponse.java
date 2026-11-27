@@ -11,5 +11,12 @@ public record AttendanceCheckInResponse(
         int coinBalance,
         @Schema(description = "이번 호출에서 완료 보상(가구 또는 생성권)이 새로 지급됐는지", example = "false")
         boolean rewardGrantedNow,
-        AttendanceEventStatusResponse status) {
+        AttendanceEventStatusResponse status,
+        @Schema(description = "이번 요청에서 캐릭터가 새로 지급됐는지. 기존 완료 보상 필드와 별개임")
+        boolean characterGrantedNow) {
+    public AttendanceCheckInResponse(boolean newCheckIn, int coinRewardAmount, int coinBalance,
+            boolean rewardGrantedNow, AttendanceEventStatusResponse status) {
+        this(newCheckIn, coinRewardAmount, coinBalance, rewardGrantedNow, status, false);
+    }
+
 }

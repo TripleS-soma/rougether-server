@@ -51,9 +51,10 @@ def fixture(staged=True, active=False):
                             "rarity": rarity, "placement_type": "surface_slot" if surface else "positioned",
                             "surface_slot_type": surface, "character_slot_type": None,
                             "category_code": surface or "furniture", "item_theme_code": "ordinary_theme"})
-    attendance = [dict(launch.ATTENDANCE_FIELDS, id=777, is_active=flag)] if staged else []
+    attendance = [dict(launch.ATTENDANCE_FIELDS, id=777, is_active=flag, reward_character_id=99, character_reward_day=3, reward_character_code="fox", reward_character_reserved=1)] if staged else []
     return {"history": [{"version": "100", "checksum": 123, "success": 1},
-                        {"version": "101", "checksum": 456, "success": 1}],
+                        {"version": "101", "checksum": 456, "success": 1},
+                        {"version": "102", "checksum": 789, "success": 1}],
             "columns": set(launch.REQUIRED_COLUMNS), "expected_checksums": {},
             "theme": [theme], "items": items, "gachas": gachas, "event_pool": event_pool,
             "regular_pool": regular, "christmas_leaks": [], "attendance": attendance,
@@ -109,6 +110,34 @@ class FixtureTests(unittest.TestCase):
 
 
 class SafetyTests(FixtureTests):
+    def test_fox_reward_drift_is_refused(self):
+        for field, wrong in (("reward_character_id", None), ("character_reward_day", 2),
+                             ("reward_character_code", "cat"), ("reward_character_reserved", 0)):
+            state = copy.deepcopy(self.state)
+            state["attendance"][0][field] = wrong
+            with self.subTest(field=field), self.assertRaises(launch.GuardError):
+                launch.plan_launch(state, "check")
+
+    def test_load_state_includes_character_schema_and_reward_projection(self):
+        responses = iter([self.state["theme"], self.state["items"], self.state["gachas"],
+                          self.state["event_pool"], [], self.state["regular_pool"],
+                          self.state["attendance"], [], [{"now_utc": self.state["clock"]}]])
+        def read(_connection, sql, params=()):
+            if "flyway_schema_history" in sql:
+                return self.state["history"]
+            if "information_schema.columns" in sql:
+                tables = set(re.findall(r"'([a-z_]+)'", sql))
+                return [{"table_name": table, "column_name": column}
+                        for table, column in launch.REQUIRED_COLUMNS if table in tables]
+            if "FROM attendance_events WHERE code=" in sql:
+                self.assertIn("character_reward_day", sql)
+                self.assertIn("AS reward_character_code", sql)
+                self.assertIn("AS reward_character_reserved", sql)
+            return next(responses)
+        with patch.object(launch, "fetch", side_effect=read):
+            state = launch.load_state(None, False, {})
+        self.assertEqual(launch.plan_launch(state, "check")[0]["state"], "STAGED")
+
     def test_default_mode_is_read_only(self):
         args = launch.parser().parse_args(["--db-host", "db.example", "--ca-file", "/tmp/ca.pem"])
         self.assertEqual(args.mode, "check")

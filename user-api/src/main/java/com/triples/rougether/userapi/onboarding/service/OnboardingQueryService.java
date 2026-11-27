@@ -32,7 +32,7 @@ public class OnboardingQueryService {
 
     public CharacterListResponse getCharacters() {
         return CharacterListResponse.of(characterRepository.findByActiveTrueOrderBySortOrderAsc().stream()
-                .filter(character -> !character.isRoomLevelReward()).toList());
+                .filter(character -> !character.isSpecialReward()).toList());
     }
 
     public OnboardingResponse getOnboarding(Long userId) {

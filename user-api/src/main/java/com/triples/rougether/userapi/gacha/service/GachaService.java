@@ -348,7 +348,7 @@ public class GachaService {
         if (entry.getRewardType() == RewardType.ITEM && EventItemEligibility.isChristmas(entry.getItem())) {
             return false;
         }
-        if (entry.getRewardType() == RewardType.CHARACTER && entry.getCharacter().isRoomLevelReward()) {
+        if (entry.getRewardType() == RewardType.CHARACTER && entry.getCharacter().isSpecialReward()) {
             return false;
         }
         GachaCategory category = gacha.getCategory();

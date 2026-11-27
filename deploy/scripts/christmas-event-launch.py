@@ -49,6 +49,8 @@ ATTENDANCE_FIELDS = {
 REQUIRED_COLUMNS = {
     ("attendance_events", "mode"), ("attendance_events", "milestone_every"),
     ("attendance_events", "milestone_coin_amount"), ("attendance_check_ins", "progress_completed_at"),
+    ("attendance_events", "reward_character_id"), ("attendance_events", "character_reward_day"),
+    ("characters", "is_attendance_reward"),
     ("event_popup_dismissals", "event_code"), ("event_popup_dismissals", "dismissed_at"),
 }
 ALLOWED_WRITE_TABLES = frozenset({"themes", "items", "gacha", "attendance_events"})
@@ -81,9 +83,9 @@ def digest_regular(rows):
 def validate_schema(history, columns, expected_checksums):
     require(history and not any(not r["success"] for r in history), "failed or empty Flyway history")
     versions = {str(r["version"]): r for r in history if r["version"] is not None}
-    require({"100", "101"}.issubset(versions), "Flyway V100 and V101 must both be applied")
-    require(max(int(v.split(".")[0]) for v in versions) >= 101, "schema version must be at least 101")
-    require(REQUIRED_COLUMNS.issubset(columns), "required V100 columns missing")
+    require({"100", "101", "102"}.issubset(versions), "Flyway V100, V101 and V102 must be applied")
+    require(max(int(v.split(".")[0]) for v in versions) >= 102, "schema version must be at least 102")
+    require(REQUIRED_COLUMNS.issubset(columns), "required attendance columns missing")
     for version, checksum in expected_checksums.items():
         require(version in versions and versions[version]["checksum"] == checksum, "Flyway checksum mismatch for V" + version)
 
@@ -164,6 +166,9 @@ def validate_master(state):
     attendance = one(state["attendance"], "Christmas attendance", optional=True)
     if attendance:
         exact(attendance, ATTENDANCE_FIELDS, "attendance")
+        exact(attendance, {"character_reward_day": 3, "reward_character_code": "fox",
+                           "reward_character_reserved": 1}, "attendance character reward")
+        require(attendance["reward_character_id"] is not None, "attendance fox reference missing")
     for row in [theme, gacha, *items, *([attendance] if attendance else [])]:
         require(row["is_active"] in (0, 1), "invalid activation flag")
     active = [bool(theme["is_active"]), bool(gacha["is_active"])] + [bool(r["is_active"]) for r in items]
@@ -206,7 +211,7 @@ def plan_launch(state, mode):
                 operations.append(Operation("UPDATE items SET purchase_currency_type=NULL,price_amount=NULL WHERE id=%s AND purchase_currency_type='DIAMOND' AND price_amount=10", (row["id"],), 1))
         if attendance is None:
             fields = list(ATTENDANCE_FIELDS)
-            sql = "INSERT INTO attendance_events (" + ",".join(fields) + ",is_active,created_at) VALUES (" + ",".join(["%s"] * len(fields)) + ",FALSE,UTC_TIMESTAMP(6))"
+            sql = "INSERT INTO attendance_events (" + ",".join(fields) + ",reward_character_id,character_reward_day,is_active,created_at) VALUES (" + ",".join(["%s"] * len(fields)) + ",(SELECT id FROM characters WHERE code='fox' AND is_attendance_reward=TRUE),3,FALSE,UTC_TIMESTAMP(6))"
             operations.append(Operation(sql, tuple(ATTENDANCE_FIELDS[k] for k in fields), 1))
     else:
         require(staged, "run --stage first; activation never repairs missing configuration")
@@ -230,7 +235,7 @@ def fetch(connection, sql, params=()):
 def load_state(connection, lock, expected_checksums):
     suffix = " FOR UPDATE" if lock else ""
     history = fetch(connection, "SELECT version,checksum,success FROM flyway_schema_history ORDER BY installed_rank")
-    columns = fetch(connection, "SELECT TABLE_NAME AS table_name,COLUMN_NAME AS column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('attendance_events','attendance_check_ins','event_popup_dismissals')")
+    columns = fetch(connection, "SELECT TABLE_NAME AS table_name,COLUMN_NAME AS column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('attendance_events','attendance_check_ins','event_popup_dismissals','characters')")
     column_set = {(r["table_name"], r["column_name"]) for r in columns}
     validate_schema(history, column_set, expected_checksums)
     theme = fetch(connection, "SELECT id,code,name,cover_image_key,is_active FROM themes WHERE code=%s" + suffix, (THEME_CODE,))
@@ -242,7 +247,7 @@ def load_state(connection, lock, expected_checksums):
     event_pool = fetch(connection, "SELECT p.id,p.gacha_id,p.item_id,p.reward_type,p.character_id,p.currency_type,p.reward_amount,p.rarity,p.weight,p.is_active,i.asset_key FROM gacha_pool_entries p LEFT JOIN items i ON i.id=p.item_id WHERE p.gacha_id=%s ORDER BY p.id" + suffix, (event["id"],))
     leaks = fetch(connection, "SELECT p.id FROM gacha_pool_entries p JOIN gacha g ON g.id=p.gacha_id JOIN items i ON i.id=p.item_id WHERE i.theme_id=%s AND g.code<>%s ORDER BY p.id" + suffix, (target["id"], EVENT_CODE))
     regular = fetch(connection, "SELECT p.id,p.item_id,p.reward_type,p.rarity,p.is_active AS entry_active,g.code AS machine_code,i.asset_key,i.category_code,i.placement_type,i.surface_slot_type,i.character_slot_type,i.is_active AS item_active,t.is_active AS theme_active,t.code AS item_theme_code FROM gacha_pool_entries p JOIN gacha g ON g.id=p.gacha_id JOIN items i ON i.id=p.item_id JOIN themes t ON t.id=i.theme_id WHERE g.code IN (%s,%s,%s) ORDER BY g.code,p.item_id,p.id" + suffix, CATEGORY_CODES)
-    attendance = fetch(connection, "SELECT id,code,title,starts_on,ends_on,target_days,mode,daily_coin_amount,milestone_every,milestone_coin_amount,bonus_day,bonus_coin_amount,reward_item_id,generation_credit_amount,is_active FROM attendance_events WHERE code=%s" + suffix, (EVENT_CODE,))
+    attendance = fetch(connection, "SELECT id,code,title,starts_on,ends_on,target_days,mode,daily_coin_amount,milestone_every,milestone_coin_amount,bonus_day,bonus_coin_amount,reward_item_id,generation_credit_amount,is_active,reward_character_id,character_reward_day,(SELECT code FROM characters WHERE id=attendance_events.reward_character_id) AS reward_character_code,(SELECT is_attendance_reward FROM characters WHERE id=attendance_events.reward_character_id) AS reward_character_reserved FROM attendance_events WHERE code=%s" + suffix, (EVENT_CODE,))
     attendance_rewards = fetch(connection, "SELECT reward_item_id FROM attendance_events WHERE reward_item_id IS NOT NULL ORDER BY reward_item_id" + suffix)
     clock = fetch(connection, "SELECT UTC_TIMESTAMP(6) AS now_utc")[0]["now_utc"]
     return {"history": history, "columns": column_set, "expected_checksums": expected_checksums, "theme": theme,
