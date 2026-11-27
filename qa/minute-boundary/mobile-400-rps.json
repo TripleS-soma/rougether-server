@@ -1,0 +1,273 @@
+{
+  "before": {
+    "source": "minute-before-1794075069-peak.json",
+    "sha256": "b825849415877e2bfd96cb4ace2c9b2cc08dead31f7cbc465ed087892cb4ef89",
+    "start_kst": "2026-11-08T03:22:15+09:00",
+    "seconds": 304.087591474,
+    "issued": 121632,
+    "rps": 399.9900140956581,
+    "p95_ms": 25.918,
+    "p99_ms": 245.621,
+    "route_count": 76,
+    "statuses": {
+      "200": 113344,
+      "404": 2688,
+      "201": 560,
+      "204": 1680,
+      "409": 336,
+      "101": 224,
+      "403": 2800
+    },
+    "late75ms": 0,
+    "sent_after_target": 0,
+    "steady_p95_above_300s": [
+      "03:23:00",
+      "03:24:00",
+      "03:25:00",
+      "03:26:00",
+      "03:27:00"
+    ],
+    "db_status_deltas": {
+      "Com_commit": 118573,
+      "Com_rollback": 5264,
+      "Com_set_option": 469282
+    },
+    "boundaries": [
+      {
+        "kst": "03:23:00",
+        "n": 1200,
+        "api_p95_max_ms": 386.19,
+        "api_p99_max_ms": 457.982,
+        "requests_ge_500ms": 1,
+        "sql_probe_max_ms": 7.634,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:24:00",
+        "n": 1200,
+        "api_p95_max_ms": 567.175,
+        "api_p99_max_ms": 723.305,
+        "requests_ge_500ms": 32,
+        "sql_probe_max_ms": 47.314,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:25:00",
+        "n": 1200,
+        "api_p95_max_ms": 619.521,
+        "api_p99_max_ms": 841.951,
+        "requests_ge_500ms": 68,
+        "sql_probe_max_ms": 49.429,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:26:00",
+        "n": 1200,
+        "api_p95_max_ms": 458.973,
+        "api_p99_max_ms": 675.118,
+        "requests_ge_500ms": 13,
+        "sql_probe_max_ms": 53.862,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:27:00",
+        "n": 1200,
+        "api_p95_max_ms": 457.846,
+        "api_p99_max_ms": 619.129,
+        "requests_ge_500ms": 12,
+        "sql_probe_max_ms": 28.651,
+        "sql_probes": 30
+      }
+    ],
+    "controls": [
+      {
+        "kst": "03:23:30",
+        "n": 1200,
+        "api_p95_max_ms": 45.721,
+        "api_p99_max_ms": 69.343,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 4.321,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:24:30",
+        "n": 1200,
+        "api_p95_max_ms": 124.48,
+        "api_p99_max_ms": 193.46,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 5.922,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:25:30",
+        "n": 1200,
+        "api_p95_max_ms": 89.288,
+        "api_p99_max_ms": 124.967,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 9.166,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:26:30",
+        "n": 1200,
+        "api_p95_max_ms": 55.86,
+        "api_p99_max_ms": 117.361,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 18.866,
+        "sql_probes": 30
+      }
+    ],
+    "probe_groups": {
+      "00_02": {
+        "n": 150,
+        "p99": 49.429,
+        "max": 53.862,
+        "ge50ms": 1
+      },
+      "03_59": {
+        "n": 2586,
+        "p99": 4.676,
+        "max": 18.866,
+        "ge50ms": 0
+      }
+    },
+    "runner_cpu_avg_pct": 1.124457606352469,
+    "runner_cpu_p95_pct": 1.2653616013539999
+  },
+  "after": {
+    "source": "minute-after-1794076298-peak.json",
+    "sha256": "37ace207ce77e7f7a1d4366dbd92b3a7eb22fd17baa4e4bc7b6eb2d55b65bf23",
+    "start_kst": "2026-11-08T03:42:15.002000+09:00",
+    "seconds": 304.085696849,
+    "issued": 121632,
+    "rps": 399.9925062585199,
+    "p95_ms": 21.875,
+    "p99_ms": 298.793,
+    "route_count": 76,
+    "statuses": {
+      "200": 113344,
+      "404": 2688,
+      "201": 560,
+      "204": 1680,
+      "409": 336,
+      "101": 224,
+      "403": 2800
+    },
+    "late75ms": 0,
+    "sent_after_target": 0,
+    "steady_p95_above_300s": [
+      "03:44:00",
+      "03:45:00",
+      "03:45:01",
+      "03:46:00",
+      "03:47:00"
+    ],
+    "db_status_deltas": {
+      "Com_commit": 118568,
+      "Com_rollback": 7355,
+      "Com_set_option": 221610
+    },
+    "boundaries": [
+      {
+        "kst": "03:43:00",
+        "n": 1200,
+        "api_p95_max_ms": 266.759,
+        "api_p99_max_ms": 411.581,
+        "requests_ge_500ms": 2,
+        "sql_probe_max_ms": 7.808,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:44:00",
+        "n": 1200,
+        "api_p95_max_ms": 664.725,
+        "api_p99_max_ms": 798.145,
+        "requests_ge_500ms": 81,
+        "sql_probe_max_ms": 28.747,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:45:00",
+        "n": 1200,
+        "api_p95_max_ms": 944.268,
+        "api_p99_max_ms": 1455.271,
+        "requests_ge_500ms": 394,
+        "sql_probe_max_ms": 37.911,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:46:00",
+        "n": 1200,
+        "api_p95_max_ms": 552.43,
+        "api_p99_max_ms": 688.736,
+        "requests_ge_500ms": 28,
+        "sql_probe_max_ms": 123.337,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:47:00",
+        "n": 1200,
+        "api_p95_max_ms": 456.805,
+        "api_p99_max_ms": 576.586,
+        "requests_ge_500ms": 13,
+        "sql_probe_max_ms": 43.672,
+        "sql_probes": 30
+      }
+    ],
+    "controls": [
+      {
+        "kst": "03:43:30",
+        "n": 1200,
+        "api_p95_max_ms": 110.66,
+        "api_p99_max_ms": 158.358,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 10.149,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:44:30",
+        "n": 1200,
+        "api_p95_max_ms": 80.113,
+        "api_p99_max_ms": 126.487,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 3.131,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:45:30",
+        "n": 1200,
+        "api_p95_max_ms": 32.463,
+        "api_p99_max_ms": 51.275,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 9.592,
+        "sql_probes": 30
+      },
+      {
+        "kst": "03:46:30",
+        "n": 1200,
+        "api_p95_max_ms": 31.198,
+        "api_p99_max_ms": 89.819,
+        "requests_ge_500ms": 0,
+        "sql_probe_max_ms": 1.194,
+        "sql_probes": 30
+      }
+    ],
+    "probe_groups": {
+      "00_02": {
+        "n": 150,
+        "p99": 88.384,
+        "max": 123.337,
+        "ge50ms": 2
+      },
+      "03_59": {
+        "n": 2577,
+        "p99": 4.004,
+        "max": 42.878,
+        "ge50ms": 0
+      }
+    },
+    "runner_cpu_avg_pct": 0.9850864963048276,
+    "runner_cpu_p95_pct": 1.0887071501207883
+  },
+  "changed_route_statuses": {}
+}

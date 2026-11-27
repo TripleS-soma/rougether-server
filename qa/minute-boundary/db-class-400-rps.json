@@ -1,0 +1,272 @@
+{
+  "runs": {
+    "t4g.medium": {
+      "source": "minute-after-1794076298-peak.json",
+      "sha256": "37ace207ce77e7f7a1d4366dbd92b3a7eb22fd17baa4e4bc7b6eb2d55b65bf23",
+      "start_kst": "2026-11-08T03:42:15.002000+09:00",
+      "seconds": 304.085696849,
+      "issued": 121632,
+      "rps": 399.9925062585199,
+      "p95_ms": 21.875,
+      "p99_ms": 298.793,
+      "route_count": 76,
+      "statuses": {
+        "200": 113344,
+        "404": 2688,
+        "201": 560,
+        "204": 1680,
+        "409": 336,
+        "101": 224,
+        "403": 2800
+      },
+      "late75ms": 0,
+      "sent_after_target": 0,
+      "steady_p95_above_300s": [
+        "03:44:00",
+        "03:45:00",
+        "03:45:01",
+        "03:46:00",
+        "03:47:00"
+      ],
+      "db_status_deltas": {
+        "Com_commit": 118568,
+        "Com_rollback": 7355,
+        "Com_set_option": 221610
+      },
+      "boundaries": [
+        {
+          "kst": "03:43:00",
+          "n": 1200,
+          "api_p95_max_ms": 266.759,
+          "api_p99_max_ms": 411.581,
+          "requests_ge_500ms": 2,
+          "sql_probe_max_ms": 7.808,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:44:00",
+          "n": 1200,
+          "api_p95_max_ms": 664.725,
+          "api_p99_max_ms": 798.145,
+          "requests_ge_500ms": 81,
+          "sql_probe_max_ms": 28.747,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:45:00",
+          "n": 1200,
+          "api_p95_max_ms": 944.268,
+          "api_p99_max_ms": 1455.271,
+          "requests_ge_500ms": 394,
+          "sql_probe_max_ms": 37.911,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:46:00",
+          "n": 1200,
+          "api_p95_max_ms": 552.43,
+          "api_p99_max_ms": 688.736,
+          "requests_ge_500ms": 28,
+          "sql_probe_max_ms": 123.337,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:47:00",
+          "n": 1200,
+          "api_p95_max_ms": 456.805,
+          "api_p99_max_ms": 576.586,
+          "requests_ge_500ms": 13,
+          "sql_probe_max_ms": 43.672,
+          "sql_probes": 30
+        }
+      ],
+      "controls": [
+        {
+          "kst": "03:43:30",
+          "n": 1200,
+          "api_p95_max_ms": 110.66,
+          "api_p99_max_ms": 158.358,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 10.149,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:44:30",
+          "n": 1200,
+          "api_p95_max_ms": 80.113,
+          "api_p99_max_ms": 126.487,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 3.131,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:45:30",
+          "n": 1200,
+          "api_p95_max_ms": 32.463,
+          "api_p99_max_ms": 51.275,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 9.592,
+          "sql_probes": 30
+        },
+        {
+          "kst": "03:46:30",
+          "n": 1200,
+          "api_p95_max_ms": 31.198,
+          "api_p99_max_ms": 89.819,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 1.194,
+          "sql_probes": 30
+        }
+      ],
+      "probe_groups": {
+        "00_02": {
+          "n": 150,
+          "p99": 88.384,
+          "max": 123.337,
+          "ge50ms": 2
+        },
+        "03_59": {
+          "n": 2577,
+          "p99": 4.004,
+          "max": 42.878,
+          "ge50ms": 0
+        }
+      },
+      "runner_cpu_avg_pct": 0.9850864963048276,
+      "runner_cpu_p95_pct": 1.0887071501207883,
+      "warmup_issued": 35838
+    },
+    "m6g.large": {
+      "source": "minute-m6g-1794077852-peak.json",
+      "sha256": "44d213502c54b1505766def4cf17d5bb6227d932b0c67f2811798e654f5627f8",
+      "start_kst": "2026-11-08T04:16:15+09:00",
+      "seconds": 304.084980188,
+      "issued": 121632,
+      "rps": 399.99344895233315,
+      "p95_ms": 13.431,
+      "p99_ms": 36.132,
+      "route_count": 76,
+      "statuses": {
+        "200": 113344,
+        "404": 2688,
+        "201": 560,
+        "204": 1680,
+        "409": 336,
+        "101": 224,
+        "403": 2800
+      },
+      "late75ms": 0,
+      "sent_after_target": 0,
+      "steady_p95_above_300s": [],
+      "db_status_deltas": {
+        "Com_commit": 118569,
+        "Com_rollback": 7358,
+        "Com_set_option": 221610
+      },
+      "boundaries": [
+        {
+          "kst": "04:17:00",
+          "n": 1200,
+          "api_p95_max_ms": 53.618,
+          "api_p99_max_ms": 97.977,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 9.838,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:18:00",
+          "n": 1200,
+          "api_p95_max_ms": 165.279,
+          "api_p99_max_ms": 214.921,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 3.914,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:19:00",
+          "n": 1200,
+          "api_p95_max_ms": 48.621,
+          "api_p99_max_ms": 101.592,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 2.045,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:20:00",
+          "n": 1200,
+          "api_p95_max_ms": 66.142,
+          "api_p99_max_ms": 131.861,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 3.355,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:21:00",
+          "n": 1200,
+          "api_p95_max_ms": 100.477,
+          "api_p99_max_ms": 163.853,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 4.571,
+          "sql_probes": 30
+        }
+      ],
+      "controls": [
+        {
+          "kst": "04:17:30",
+          "n": 1200,
+          "api_p95_max_ms": 28.945,
+          "api_p99_max_ms": 47.352,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 2.195,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:18:30",
+          "n": 1200,
+          "api_p95_max_ms": 30.758,
+          "api_p99_max_ms": 50.061,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 4.842,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:19:30",
+          "n": 1200,
+          "api_p95_max_ms": 25.91,
+          "api_p99_max_ms": 41.239,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 4.02,
+          "sql_probes": 30
+        },
+        {
+          "kst": "04:20:30",
+          "n": 1200,
+          "api_p95_max_ms": 18.79,
+          "api_p99_max_ms": 43.493,
+          "requests_ge_500ms": 0,
+          "sql_probe_max_ms": 1.39,
+          "sql_probes": 30
+        }
+      ],
+      "probe_groups": {
+        "00_02": {
+          "n": 150,
+          "p99": 8.535,
+          "max": 9.838,
+          "ge50ms": 0
+        },
+        "03_59": {
+          "n": 2587,
+          "p99": 3.357,
+          "max": 11.766,
+          "ge50ms": 0
+        }
+      },
+      "runner_cpu_avg_pct": 1.0991552407354561,
+      "runner_cpu_p95_pct": 1.2109849669132633,
+      "warmup_issued": 35838
+    }
+  },
+  "all_76_route_volumes_match": true,
+  "different_route_statuses": {}
+}
