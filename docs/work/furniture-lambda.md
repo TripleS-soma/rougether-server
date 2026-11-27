@@ -2,7 +2,7 @@
 
 현재 가구 AI 실행은 **Lambda만 지원**한다. 상주 워커 실행 코드와 `furniture-worker` 모듈, 배포 템플릿은 제거했다. 만료 정산과 사진 삭제는 `FurnitureGenerationMaintenanceService`로 분리해 API에서 계속 수행한다. [상주 워커 문서](furniture-worker.md)는 과거 실험 기록이다.
 
-기존 multipart 경로에서 API는 사진 접수·전처리·S3 업로드와 작업 조회를 맡는다. 업로드 완료 또는 피드백 접수 트랜잭션에서 실행 ID와 outbox를 함께 저장한다. 별도 스케줄러가 `jobId`, `executionId`만 SQS로 전송한다. Lambda는 S3에서 이미지를 읽고 기존 특징 추출·제작 지침·이미지 생성·검수를 수행한다. 2026-09-11에 추가한 [직접 업로드와 vips 전처리 경로](furniture-preprocessing.md)는 기본 비활성화이며 별도 배포 검증이 필요하다.
+기존 multipart 경로에서 API는 사진 접수·전처리·S3 업로드와 작업 조회를 맡는다. 업로드 완료 또는 피드백 접수 트랜잭션에서 실행 ID와 outbox를 함께 저장한다. 별도 스케줄러가 `jobId`, `executionId`만 SQS로 전송한다. Lambda는 S3에서 이미지를 읽고 기존 특징 추출·제작 지침·이미지 생성·검수를 수행한다. 2026-09-11에 추가한 [직접 업로드와 vips 전처리 경로](furniture-preprocessing.md)는 기본 비활성화이며 별도 배포 검증이 필요하다. 기존 앱 호환 중계와 단계적 활성화/복구 준비는 [전처리 전환 준비](furniture-preprocess-rollout.md)를 따른다.
 
 ```mermaid
 flowchart LR
