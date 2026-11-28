@@ -1,0 +1,83 @@
+{
+	admin off
+	default_sni {$STAGE_IP}
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+http://:80 {
+	respond 404
+}
+
+https://{$STAGE_IP} {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	header {
+		Cache-Control "no-store"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+	}
+	@outside not remote_ip {$TEST_CIDR} 127.0.0.1
+	@page {
+		method GET HEAD
+		path / /mobile.js
+	}
+	@health {
+		method GET
+		path /api/v1/health
+	}
+	@me {
+		method GET PUT
+		path /api/v1/me
+	}
+	@google {
+		method POST
+		path /api/v1/auth/google
+	}
+	@new {
+		method POST
+		path /rehearsal/session
+	}
+	route {
+		respond @outside 403
+		request_body {
+			max_size 16KB
+		}
+		handle @page {
+			root * /srv/test
+			file_server
+		}
+		handle @new {
+			basic_auth {
+				rehearsal {$STAGE_CODE_HASH}
+			}
+			rewrite * /api/v1/auth/dev-login?
+			request_body {
+				set "{}"
+			}
+			reverse_proxy user-api:8080 {
+				header_up Content-Type application/json
+				header_up -Authorization
+				header_up -Cookie
+			}
+		}
+		handle @health {
+			reverse_proxy user-api:8080
+		}
+		handle @me {
+			reverse_proxy user-api:8080
+		}
+		handle @google {
+			reverse_proxy user-api:8080
+		}
+		respond 404
+	}
+}

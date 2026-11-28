@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub Actions role restricted to the personal HTTPS rehearsal
+Parameters:
+  OidcProviderArn:
+    Type: String
+    AllowedPattern: 'arn:aws:iam::[0-9]{12}:oidc-provider/token.actions.githubusercontent.com'
+  StageInstanceArn:
+    Type: String
+    AllowedPattern: 'arn:aws:lightsail:ap-northeast-2:[0-9]{12}:Instance/[A-Za-z0-9-]+'
+  StageNode:
+    Type: String
+    AllowedPattern: 'mi-[0-9a-f]{17}'
+Resources:
+  StageRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref OidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:TripleS-soma/rougether-server:environment:personal-aws-stage
+      Policies:
+        - PolicyName: IsolatedRehearsal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lightsail:GetInstance
+                  - lightsail:GetInstancePortStates
+                  - ssm:DescribeInstanceInformation
+                  - ssm:ListCommandInvocations
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: ap-northeast-2
+              - Effect: Allow
+                Action:
+                  - lightsail:OpenInstancePublicPorts
+                  - lightsail:CloseInstancePublicPorts
+                Resource: !Ref StageInstanceArn
+              - Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript
+                  - !Sub 'arn:aws:ssm:ap-northeast-2:${AWS::AccountId}:managed-instance/${StageNode}'
+Outputs:
+  StageRoleArn:
+    Value: !GetAtt StageRole.Arn

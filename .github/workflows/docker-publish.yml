@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      personal_stage_https:
+        description: '개인 AWS 합성 DB의 실기기 검증용 HTTPS만 배포'
+        type: boolean
+        default: false
       deploy_furniture_ai:
         description: '현재 실행에서 전체 검증한 가구 AI Lambda 코드를 배포함'
         type: boolean
@@ -20,7 +24,7 @@ on:
         default: false
 
 concurrency:
-  group: rougether-dev-deploy
+  group: ${{ inputs.personal_stage_https && 'rougether-personal-stage-https' || 'rougether-dev-deploy' }}
   cancel-in-progress: false
 
 permissions:
@@ -48,6 +52,7 @@ env:
 
 jobs:
   resolve:
+    if: ${{ !inputs.personal_stage_https }}
     name: Resolve verified PR artifacts
     runs-on: ubuntu-latest
     permissions:
@@ -71,14 +76,14 @@ jobs:
 
   fresh:
     needs: resolve
-    if: needs.resolve.outputs.reused != 'true'
+    if: needs.resolve.result == 'success' && needs.resolve.outputs.reused != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/backend-verify.yml
 
   test:
     name: Gradle test
-    if: always()
+    if: ${{ always() && !inputs.personal_stage_https }}
     needs: [resolve, fresh]
     runs-on: ubuntu-latest
     steps:
@@ -477,3 +482,38 @@ jobs:
           path: build/deploy-health/
           retention-days: 7
           if-no-files-found: warn
+
+  personal-stage-https:
+    if: github.event_name == 'workflow_dispatch' && inputs.personal_stage_https
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    environment: personal-aws-stage
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Require stage-only dispatch
+        env:
+          MIXED_INPUTS: ${{ inputs.rotate_llm_key || inputs.deploy_furniture_ai || inputs.force_verification }}
+          TARGET_ACCOUNT: ${{ vars.PERSONAL_STAGE_ACCOUNT_ID }}
+          TARGET_ROLE: ${{ vars.PERSONAL_STAGE_ROLE_ARN }}
+        run: |
+          test "$MIXED_INPUTS" = false
+          [[ "$TARGET_ACCOUNT" =~ ^[0-9]{12}$ ]]
+          [[ "$TARGET_ROLE" == "arn:aws:iam::$TARGET_ACCOUNT:role/"* ]]
+      - name: Assume isolated stage role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PERSONAL_STAGE_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          allowed-account-ids: ${{ vars.PERSONAL_STAGE_ACCOUNT_ID }}
+      - name: Publish verified HTTPS configuration to the rehearsal node
+        env:
+          STAGE_ACCOUNT: ${{ vars.PERSONAL_STAGE_ACCOUNT_ID }}
+          STAGE_NODE: ${{ vars.PERSONAL_STAGE_NODE_ID }}
+          STAGE_WIFI: ${{ vars.PERSONAL_STAGE_WIFI_CIDR }}
+          STAGE_CODE_HASH: ${{ secrets.PERSONAL_STAGE_CODE_HASH }}
+        run: python3 deploy/personal-stage/publish.py

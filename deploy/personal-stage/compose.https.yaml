@@ -1,0 +1,26 @@
+services:
+  stage-https:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    env_file: ${STAGE_HTTPS_DIR:?}/gateway.env
+    volumes:
+      - ${STAGE_HTTPS_DIR:?}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${STAGE_HTTPS_DIR:?}/web:/srv/test:ro
+      - stage-tls:/data
+    ports:
+      - "0.0.0.0:80:80/tcp"
+      - "0.0.0.0:443:443/tcp"
+    networks: [default, stage-ingress]
+  stage-google-keys:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    volumes:
+      - ${STAGE_HTTPS_DIR:?}/GoogleKeys.Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [default, stage-ingress]
+  user-api:
+    environment:
+      GOOGLE_CERTS_URL: http://stage-google-keys:8089/keys
+networks:
+  stage-ingress: {}
+volumes:
+  stage-tls: {}
