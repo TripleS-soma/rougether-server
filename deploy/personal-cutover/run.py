@@ -39,14 +39,18 @@ def main():
         print('::add-mask::'+url,flush=True)
         params={'Envelope':[url],'Digest':[digest]}
         if mode!='release-config':params['Snapshot']=[snap]
-    if mode in ('clone-sealed-db','prepare-db-users'):
+    if mode in ('clone-sealed-db','prepare-db-users','warm-release'):
         snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
         assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
         params={'Snapshot':[snap],'Digest':[digest]}
-        if mode=='prepare-db-users':
+        if mode in ('prepare-db-users','warm-release'):
             config=os.environ['CONFIG_DIGEST']
             assert re.fullmatch(r'[a-f0-9]{64}',config)
             params['ConfigDigest']=[config]
+    if mode=='warm-release':
+        bundle=os.environ['RELEASE_BUNDLE']
+        assert re.fullmatch(r'[a-f0-9]{64}',bundle)
+        params['Bundle']=[bundle]
     if mode=='prepare-release':
         config=os.environ['CONFIG_DIGEST']
         assert re.fullmatch(r'[a-f0-9]{64}',config)
@@ -81,6 +85,10 @@ def main():
         receipt=json.loads(out)
         assert receipt=={'sealedConfig':True,'connected':False,'services':3,'privateTls':True,'digest':digest}
         Path('release-config-receipt.json').write_text(json.dumps(receipt,indent=2))
+    elif mode=='warm-release':
+        receipt=json.loads(out)
+        assert receipt==dict(warmed=True,publicWrites=False,databaseReadOnly=True,userHealth=200,adminHealth=200,batchRunning=False,snapshot=snap,digest=digest,config=config,bundle=bundle)
+        Path('warm-release-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='prepare-release':
         receipt=json.loads(out)
         assert re.fullmatch(r'[a-f0-9]{64}',receipt['bundle'])

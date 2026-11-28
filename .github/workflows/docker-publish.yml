@@ -9,7 +9,7 @@ on:
       personal_candidate:
         description: '개인 AWS에서 격리 운영 DB를 준비하는 단계'
         type: choice
-        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check, clone-sealed-db, release-config, prepare-db-users, prepare-release]
+        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check, clone-sealed-db, release-config, prepare-db-users, prepare-release, warm-release]
         default: 'off'
       candidate_snapshot:
         description: '격리 복원 시점 YYYYMMDD-HHMM'
@@ -19,6 +19,9 @@ on:
         type: string
       candidate_config_digest:
         description: 개인 호스트에 봉인된 설정 SHA-256
+        type: string
+      release_bundle:
+        description: 대상 호스트 배포 파일 묶음 SHA-256
         type: string
       personal_stage_https:
         description: '개인 AWS 합성 DB의 실기기 검증용 HTTPS만 배포'
@@ -533,7 +536,7 @@ jobs:
         run: python3 deploy/personal-stage/publish.py
 
   personal-candidate:
-    if: github.event_name == 'workflow_dispatch' && (inputs.personal_candidate == 'enroll' || inputs.personal_candidate == 'restore' || inputs.personal_candidate == 'fixture' || inputs.personal_candidate == 'furniture-check' || inputs.personal_candidate == 'runtime-enroll' || inputs.personal_candidate == 'runtime-check' || inputs.personal_candidate == 'standby-check' || inputs.personal_candidate == 'renewal-check' || inputs.personal_candidate == 'clone-sealed-db' || inputs.personal_candidate == 'release-config' || inputs.personal_candidate == 'prepare-db-users' || inputs.personal_candidate == 'prepare-release') && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
+    if: github.event_name == 'workflow_dispatch' && (inputs.personal_candidate == 'enroll' || inputs.personal_candidate == 'restore' || inputs.personal_candidate == 'fixture' || inputs.personal_candidate == 'furniture-check' || inputs.personal_candidate == 'runtime-enroll' || inputs.personal_candidate == 'runtime-check' || inputs.personal_candidate == 'standby-check' || inputs.personal_candidate == 'renewal-check' || inputs.personal_candidate == 'clone-sealed-db' || inputs.personal_candidate == 'release-config' || inputs.personal_candidate == 'prepare-db-users' || inputs.personal_candidate == 'prepare-release' || inputs.personal_candidate == 'warm-release') && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: personal-aws-candidate
@@ -552,6 +555,7 @@ jobs:
       - name: Prepare isolated database
         env:
           CANDIDATE_MODE: ${{ inputs.personal_candidate }}
+          RELEASE_BUNDLE: ${{ inputs.release_bundle }}
           CONFIG_DIGEST: ${{ inputs.candidate_config_digest }}
           SNAPSHOT: ${{ inputs.candidate_snapshot }}
           DIGEST: ${{ inputs.candidate_digest }}
@@ -569,6 +573,7 @@ jobs:
             standby-receipt.json
             renewal-receipt.json
             database-users-receipt.json
+            warm-release-receipt.json
             prepared-release-receipt.json
             release-config-receipt.json
             sealed-copy-receipt.json

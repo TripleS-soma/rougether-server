@@ -46,7 +46,7 @@ python3 runtime/render_routing.py routing "$private" "${interfaces[@]}"
 export RELEASE_ROUTING="$work/routing" DB_RELEASE_DATA="$work/unselected" DB_COLLATION=utf8mb4_0900_ai_ci CUTOVER_MODE=sealed_api
 compose=(docker compose --profile writer -p rougether-release -f runtime/compose.apps.yaml -f runtime/compose.identity.yaml -f runtime/compose.database.yaml -f runtime/compose.routing.yaml)
 "${compose[@]}" config --format json | python3 runtime/release_plan.py
-"${compose[@]}" -f runtime/compose.standby.yaml config --quiet
+DB_ROOT_CNF="$work/unselected-root.cnf" "${compose[@]}" -f runtime/compose.standby.yaml -f runtime/compose.warm.yaml config --quiet
 # Leave only immutable files. All mutable candidate settings come from the protected invocation.
 bundle=$(find gateway runtime routing -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
 [[ "$bundle" =~ ^[a-f0-9]{64}$ ]]
