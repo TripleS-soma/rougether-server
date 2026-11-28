@@ -1495,6 +1495,23 @@ source_writer_units() {
     rougether-batch.service rougether-ai-users.timer rougether-ai-users.service
 }
 
+read_cutover_feature_flags() {
+  local container
+  container="$(slot_container user-api "$active_user_color")"
+  docker inspect "$container" | python3 -c 'import json,sys
+container,=json.load(sys.stdin)
+assert container["State"]["Running"]
+values=dict(pair.split("=",1) for pair in container["Config"]["Env"] if "=" in pair)
+allowed="MARKET_ENGINE_ENABLED CHRISTMAS_EVENT_ENABLED CHRISTMAS_COIN_BONUS_ENABLED BILLING_ENABLED BILLING_REQUIRE_CREDITS BILLING_WORKER_ENABLED FURNITURE_GENERATION_ENABLED FURNITURE_UPLOAD_ENABLED FURNITURE_LAMBDA_DISPATCH_ENABLED CHAT_CLEANUP_ENABLED FEED_CLEANUP_ENABLED LOGIN_GIFT_RETRY_ENABLED ACTIVITY_BATCH_ENABLED".split()
+flags={}
+for key in allowed:
+    if key in values:
+        value=values[key].lower()
+        if value not in ("true","false"):raise SystemExit("Expected a boolean feature setting")
+        flags[key]=value
+print("ROUGETHER_SOURCE_FEATURES="+json.dumps(flags,sort_keys=True,separators=(",",":")))'
+}
+
 hold_source_host() {
   local state="$ENV_DIR/cutover-source" unit load active status running
   local -a installed=()
@@ -3159,6 +3176,7 @@ case "$DEPLOY_MODE" in
         [ "$DEPLOY_MODE" = blue-green ] || exit 2
         load_blue_green_state
         blue_green_release_is_active || { echo "target release must already be active" >&2; exit 2; }
+        if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then read_cutover_feature_flags || exit 2; fi
         apply_proxy_ports "$active_user_port" "$active_admin_port"
         wait_health_stable user-api-current "$(stable_health_url user-api)"
         wait_health_stable admin-api-current "$(stable_health_url admin-api)"
