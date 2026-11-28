@@ -59,7 +59,7 @@ for id in $(docker ps -aq); do
 done
 proxy=rougether-furniture-private-proxy
 test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$proxy")" = host
-test "$(docker inspect -f '{{range .Mounts}}{{.Source}} {{.Destination}}{{end}}' "$proxy")" = "$base/furniture-fixture/haproxy.cfg /etc/haproxy.cfg"
+docker inspect "$proxy" | python3 -c 'import sys,json; mounts=json.load(sys.stdin)[0]["Mounts"]; assert [(m["Source"],m["Destination"]) for m in mounts]==[(sys.argv[1],"/etc/haproxy.cfg")]' "$base/furniture-fixture/haproxy.cfg"
 # Only the prior synthetic stack is put away. Its volumes and public certificate survive.
 if [[ ! -e "$state/previous" ]]; then
   docker ps -q --no-trunc --filter label=com.docker.compose.project=rougether-rehearsal > "$state/previous.pending"

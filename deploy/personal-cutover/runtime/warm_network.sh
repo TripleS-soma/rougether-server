@@ -11,7 +11,7 @@ import sys,ipaddress
 assert ipaddress.IPv4Address(sys.argv[1]) in ipaddress.IPv4Network("172.16.0.0/12")
 PY
 test "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}} {{.HostConfig.RestartPolicy.Name}}' "$id")" = "rougether-release $service no"
-test "$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{.Gateway}}{{end}}' "$id")" = "$address 172.29.242.1"
+docker inspect "$id" | python3 -c 'import sys,json; networks=json.load(sys.stdin)[0]["NetworkSettings"]["Networks"]; assert list(networks)==["rougether-release_clients"]; n=networks["rougether-release_clients"]; assert n["IPAddress"]==sys.argv[1] and n["Gateway"]=="172.29.242.1"' "$address"
 pid=$(docker inspect -f '{{.State.Pid}}' "$id")
 [[ "$pid" =~ ^[1-9][0-9]*$ ]]
 # Keep the namespace handle tied to this specific process if the container exits.
