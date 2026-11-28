@@ -39,10 +39,14 @@ def main():
         print('::add-mask::'+url,flush=True)
         params={'Envelope':[url],'Digest':[digest]}
         if mode!='release-config':params['Snapshot']=[snap]
-    if mode=='clone-sealed-db':
+    if mode in ('clone-sealed-db','prepare-db-users'):
         snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
         assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
         params={'Snapshot':[snap],'Digest':[digest]}
+        if mode=='prepare-db-users':
+            config=os.environ['CONFIG_DIGEST']
+            assert re.fullmatch(r'[a-f0-9]{64}',config)
+            params['ConfigDigest']=[config]
     if mode=='runtime-check':
         stack=aws.client('cloudformation').describe_stacks(StackName='rougether-personal-runtime-identity')['Stacks'][0]
         assert stack['StackStatus'] in ('CREATE_COMPLETE','UPDATE_COMPLETE')
@@ -73,6 +77,10 @@ def main():
         receipt=json.loads(out)
         assert receipt=={'sealedConfig':True,'connected':False,'services':3,'privateTls':True,'digest':digest}
         Path('release-config-receipt.json').write_text(json.dumps(receipt,indent=2))
+    elif mode=='prepare-db-users':
+        receipt=json.loads(out)
+        assert receipt==dict(snapshot=snap,digest=digest,config=config,tlsLogins=2,schemaReadOnly=True,globalReadOnly=True,network='none',checkedGrants=True)
+        Path('database-users-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='clone-sealed-db':
         receipt=json.loads(out)
         assert receipt['readOnly'] and receipt['allTableCountsMatched'] and receipt['binlogEnabled'] and receipt['zeroPublicPorts']
