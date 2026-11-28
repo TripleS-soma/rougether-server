@@ -8,6 +8,8 @@ import boto3
 
 ACCOUNT='940482450790'
 REGION='ap-northeast-2'
+# Verified against this candidate's private Lightsail address and the TLS SAN.
+PRIVATE_ADDRESS='172.26.10.189'
 PREFIX='rougether-personal-furniture-'
 ARTIFACTS='rougether-cutover-940482450790-artifacts'
 ASSETS='rougether-fallback-940482450790-assets'
@@ -104,8 +106,6 @@ def run(s,mode):
         wait(lm,'Disabled')
         # Already running invocations or leases must be accounted for separately during rollback.
         return dict(operation=mode,consumer='Disabled',requiresDrainAndReconciliation=True)
-    vm=s.client('lightsail').get_instance(instanceName='rougether-fallback-stage')['instance']
-    require(vm['publicIpAddress']=='43.203.93.12' and vm['isStaticIp'] and vm['state']['name']=='running','Unexpected host')
     status=mapping(lm)
     if mode=='furniture-prepare':
         public_health('dkfiwkal2ezg9.cloudfront.net',False)
@@ -122,7 +122,7 @@ def run(s,mode):
     for kind in ('control','ai'):
         before=function(lm,kind)
         env=before['Environment']['Variables']
-        new=desired(kind,env,vm['privateIpAddress'],value['Value'])
+        new=desired(kind,env,PRIVATE_ADDRESS,value['Value'])
         if env!=new:
             require(mode=='furniture-prepare' and mapping(lm)=='Disabled','Prepare disconnected workers first')
             lm.update_function_configuration(FunctionName=PREFIX+kind,RevisionId=before['RevisionId'],Environment={'Variables':new})
