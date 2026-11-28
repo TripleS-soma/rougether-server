@@ -12,12 +12,32 @@ REPO = "TripleS-soma/rougether-server"
 def get(path):
     return subprocess.check_output(["gh","api","repos/"+REPO+"/"+path])
 
+def validate_release(run_id, release, main):
+    if release == main:
+        return
+    if (run_id, release) != ("46190905582", "f63108a9d325e4db63975291a8eef60b2bc1940d"):
+        raise RuntimeError("Source deployment changed after the settings were captured")
+    commit = json.loads(get("commits/" + main))
+    expected_paths = {
+        ".github/workflows/docker-publish.yml",
+        ".github/scripts/deploy-ec2-with-rollback.sh",
+        ".github/scripts/test-deploy-ec2-with-rollback.sh",
+    }
+    if (commit["sha"] != main or [p["sha"] for p in commit["parents"]] !=
+            [release, "6444406dce5a24ac0d194428c44cafd7dc32b0f6"] or
+            {f["filename"] for f in commit["files"]} != expected_paths or
+            any(f["status"] != "modified" for f in commit["files"])):
+        raise RuntimeError("The reviewed recovery merge differs from the active source release")
+
+
 def load(run_id):
     if not re.fullmatch("[0-9]+",run_id):
         raise ValueError("Unexpected source settings run")
     run=json.loads(get("actions/runs/"+run_id))
     main=json.loads(get("git/ref/heads/main"))["object"]["sha"]
-    if (run["conclusion"]!="success" or run["head_sha"]!=main or run["head_branch"]!="main" or
+    release=run["head_sha"]
+    validate_release(run_id,release,main)
+    if (run["conclusion"]!="success" or run["head_branch"]!="main" or
         run["event"]!="workflow_dispatch" or run["path"]!=".github/workflows/docker-publish.yml" or
         run["head_repository"]["full_name"]!=REPO):
         raise RuntimeError("Source settings did not come from the reviewed deployment")
@@ -34,7 +54,7 @@ def load(run_id):
         if entry.filename!="source-cutover-settings.json" or entry.file_size>16000:
             raise RuntimeError("Unexpected source settings artifact")
         data=json.loads(z.read(entry))
-    if data!={"sourceAccount":"776158585524","region":"ap-northeast-2","release":main,
+    if data!={"sourceAccount":"776158585524","region":"ap-northeast-2","release":release,
               "run":run_id,"userApiSettings":validated(data["userApiSettings"])}:
         raise ValueError("Unexpected source settings")
     return base64.b64encode(json.dumps(data,sort_keys=True,separators=(",",":")).encode()).decode()
