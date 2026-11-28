@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // - 0: 단체 미션 만료(spec "매시 정각", UPDATE 1문)   - 1: 저녁 미완료 알림   - 2: 주간 회고 push
 // - 3: 하루 마감(day-end)   - 4,9,..,59: 거미줄 알림 발송   - 12,42: 고양이 복귀 알림
 // - 30: 주간 회고 생성(spec 일요일 00:30)   - 12:30 매일: 거미줄 발생(spec)   - 38: 탈퇴 파기   - 47: 루틴 추천
+// - 6,11,..,56: 피드 글·댓글 자동 유해 판정(#478, 외부 Jev 호출)
 @Configuration
 @EnableScheduling
 public class SchedulingConfig {
