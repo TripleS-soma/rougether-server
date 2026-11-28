@@ -54,7 +54,7 @@ def document(mode, machine):
         for key,regex in {'Snapshot':'^[0-9]{8}-[0-9]{4}$','Digest':'^[a-f0-9]{64}$'}.items():
             params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
     if mode == 'activate-release':
-        params['SourceSettings'] = {'type':'String','allowedPattern':'^[A-Za-z0-9+/=]{16,22000}$','interpolationType':'ENV_VAR'}
+        params['SourceSettings'] = {'type':'String','allowedPattern':'^[A-Za-z0-9+/=]+$','interpolationType':'ENV_VAR'}
     if mode in ('warm-release','activate-release','seal-release'):
         params['Bundle'] = {'type':'String','allowedPattern':'^[a-f0-9]{64}$','interpolationType':'ENV_VAR'}
     if mode in ('prepare-db-users','warm-release','activate-release','seal-release'):
