@@ -6,6 +6,19 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      source_furniture_intake:
+        description: '기존 가구 접수 또는 기존 쓰기 호스트의 점검 상태 선택'
+        type: choice
+        default: preserve
+        options: [preserve, close, reopen, hold-host, resume-host, forward-user, inspect-cloud, stop-workers, seal-assets, restore-cloud, seal-schema, unseal-schema]
+      source_furniture_settled:
+        description: 'stop-workers 전용. 신규 접수 차단 후 가구 생성·정산·환불과 예약 잔액을 원본 DB에서 대조함'
+        type: boolean
+        default: false
+      source_resume_target_sealed:
+        description: 'resume-host, restore-cloud, unseal-schema 전용. 개인 AWS 쓰기와 소비자가 닫혀 있고 대상에 수락된 쓰기가 모두 원본에 보존되었음을 확인'
+        type: boolean
+        default: false
       deploy_furniture_ai:
         description: '현재 실행에서 전체 검증한 가구 AI Lambda 코드를 배포함'
         type: boolean
@@ -47,7 +60,58 @@ env:
   DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'blue-green' }}
 
 jobs:
+  intake:
+    name: Validate source intake operation
+    if: inputs.source_furniture_intake && inputs.source_furniture_intake != 'preserve'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Validate source intake operation
+        env:
+          INTAKE: ${{ inputs.source_furniture_intake }}
+          TARGET_SEALED: ${{ inputs.source_resume_target_sealed }}
+          SETTLED: ${{ inputs.source_furniture_settled }}
+          MIXED: ${{ inputs.deploy_furniture_ai || inputs.rotate_llm_key || inputs.force_verification }}
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$DEPLOY_MODE" = blue-green
+          test "$MIXED" = false
+          if [ "$INTAKE" = stop-workers ]; then test "$SETTLED" = true; else test "$SETTLED" != true; fi
+          if [ "$INTAKE" = resume-host ] || [ "$INTAKE" = restore-cloud ] || [ "$INTAKE" = unseal-schema ]; then test "$TARGET_SEALED" = true; else test "$TARGET_SEALED" != true; fi
+          case "$INTAKE" in close|reopen|hold-host|resume-host|forward-user|inspect-cloud|stop-workers|seal-assets|restore-cloud|seal-schema|unseal-schema) ;; *) exit 2 ;; esac
+
+  source-cloud:
+    name: Approved source cloud controls
+    needs: intake
+    if: contains(fromJSON('["inspect-cloud","stop-workers","seal-assets","restore-cloud","seal-schema"]'), inputs.source_furniture_intake)
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    environment: source-aws-cutover
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ap-northeast-2
+          allowed-account-ids: '776158585524'
+          role-to-assume: arn:aws:iam::776158585524:role/rougether-source-cutover-control
+      - run: python3 -m pip install --disable-pip-version-check boto3==1.42.97
+      - name: Apply reviewed source operation
+        env:
+          SOURCE_OPERATION: ${{ inputs.source_furniture_intake }}
+          SOURCE_SETTLED: ${{ inputs.source_furniture_settled }}
+          TARGET_SEALED: ${{ inputs.source_resume_target_sealed }}
+        run: |
+          if [ "$SOURCE_OPERATION" = seal-schema ]; then SOURCE_OPERATION=verify-frozen-cloud; fi
+          python3 .github/scripts/source_cloud_cutover.py "$SOURCE_OPERATION"
+
   resolve:
+    if: (!inputs.source_furniture_intake || inputs.source_furniture_intake == 'preserve')
     name: Resolve verified PR artifacts
     runs-on: ubuntu-latest
     permissions:
@@ -78,7 +142,7 @@ jobs:
 
   test:
     name: Gradle test
-    if: always()
+    if: always() && (!inputs.source_furniture_intake || inputs.source_furniture_intake == 'preserve')
     needs: [resolve, fresh]
     runs-on: ubuntu-latest
     steps:
@@ -158,10 +222,9 @@ jobs:
 
   deploy:
     name: Deploy to EC2
-    if: ${{ !cancelled() && needs.test.result == 'success' && needs.build.result == 'success' }}
+    if: ${{ !cancelled() && !contains(fromJSON('["inspect-cloud","stop-workers","seal-assets","restore-cloud"]'), inputs.source_furniture_intake) && (inputs.source_furniture_intake != 'seal-schema' || needs.source-cloud.result == 'success') && (needs.intake.result == 'success' || (needs.test.result == 'success' && needs.build.result == 'success')) }}
     runs-on: ubuntu-latest
-    # test 와 build 가 모두 성공해야 배포·:dev 승격이 일어난다 (병렬화의 게이트)
-    needs: [test, build]
+    needs: [intake, test, build, source-cloud]
 
     steps:
       - name: Checkout
@@ -195,7 +258,7 @@ jobs:
           python3 .github/scripts/rotate_llm_key.py
 
       - name: Sync Webex alert configuration to SSM
-        if: env.DEPLOY_MODE != 'hold'
+        if: env.DEPLOY_MODE != 'hold' && needs.intake.result == 'skipped'
         shell: bash
         env:
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
@@ -228,16 +291,19 @@ jobs:
           fi
 
       - name: Login to ECR
+        if: needs.intake.result == 'skipped'
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
+        if: needs.intake.result == 'skipped'
         uses: docker/setup-buildx-action@v4
 
       # ":sha = 테스트+빌드 게이트 통과" 불변식 — build 는 :unverified-<sha> 만 push 하므로,
       # test 와 build 가 모두 성공한 여기서만 :sha 가 생긴다 (manifest 복사, 수 초).
       # 이후 배포·롤백·수동 배포는 전부 검증된 :sha 만 바라본다.
       - name: Promote tested images to :sha
+        if: needs.intake.result == 'skipped'
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
@@ -317,6 +383,7 @@ jobs:
           # 봇 플래그와 같은 이유로 이 step 에만 둔다(Gradle test 잡의 Spring 컨텍스트가 읽으면 엔진 스레드가 뜸).
           MARKET_ENGINE_ENABLED: ${{ vars.MARKET_ENGINE_ENABLED || 'true' }}
           ROUGETHER_DEPLOY_MODE: ${{ env.DEPLOY_MODE }}
+          SOURCE_FURNITURE_INTAKE: ${{ inputs.source_furniture_intake || 'preserve' }}
         run: |
           set -euo pipefail
 
@@ -326,6 +393,9 @@ jobs:
           fi
 
           account_id="$(aws sts get-caller-identity --query Account --output text)"
+          if [ "$SOURCE_FURNITURE_INTAKE" != preserve ]; then
+            test "$account_id" = 776158585524
+          fi
           registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           user_image="${registry}/${ECR_REPOSITORY_PREFIX}/user-api:${GITHUB_SHA}"
           admin_image="${registry}/${ECR_REPOSITORY_PREFIX}/admin-api:${GITHUB_SHA}"
@@ -352,6 +422,7 @@ jobs:
               -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
               -e "s|__BOTS_ENABLED__|${ROUGETHER_BOTS_ENABLED}|g" \
               -e "s|__MARKET_ENGINE_ENABLED__|${MARKET_ENGINE_ENABLED}|g" \
+              -e "s|__SOURCE_FURNITURE_INTAKE__|${SOURCE_FURNITURE_INTAKE}|g" \
               -e "s|__DEPLOY_MODE__|${ROUGETHER_DEPLOY_MODE}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
@@ -391,8 +462,42 @@ jobs:
               "$command_id" \
               "${{ steps.ec2.outputs.instance_id }}"
 
+          if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then
+            aws ssm get-command-invocation --command-id "$command_id" --instance-id "${{ steps.ec2.outputs.instance_id }}" \
+              --query StandardOutputContent --output text | python3 .github/scripts/export-cutover-settings.py \
+              "$GITHUB_SHA" "$GITHUB_RUN_ID" source-cutover-settings.json
+          fi
+
+      - name: Save verified source toggles and client settings
+        if: inputs.source_furniture_intake == 'close'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-cutover-settings
+          path: source-cutover-settings.json
+          if-no-files-found: error
+
+      - name: Verify held source through its public API
+        if: inputs.source_furniture_intake == 'hold-host' || inputs.source_furniture_intake == 'forward-user'
+        env:
+          SOURCE_OPERATION: ${{ inputs.source_furniture_intake }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          domain=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='rougether-dev user-api HTTPS entrypoint'].DomainName | [0]" --output text)
+          test "$domain" = dkfiwkal2ezg9.cloudfront.net
+          status=503
+          marker="^x-rougether-cutover: source-held[[:space:]]*$"
+          if [ "$SOURCE_OPERATION" = forward-user ]; then status=200; marker="^x-rougether-origin: personal-api[[:space:]]*$"; fi
+          for attempt in {1..18}; do
+            code=$(curl -sS --max-time 5 -D held-headers -o /dev/null -w '%{http_code}' "https://$domain/api/v1/health" || true)
+            if [ "$code" = "$status" ] && grep -Eiq "$marker" held-headers; then exit 0; fi
+            sleep 5
+          done
+          echo '기존 앱 경로에서 점검 응답을 확인하지 못했습니다.' >&2
+          exit 1
+
       - name: Verify public health endpoints
-        if: env.DEPLOY_MODE != 'hold'
+        if: env.DEPLOY_MODE != 'hold' && inputs.source_furniture_intake != 'hold-host' && inputs.source_furniture_intake != 'forward-user' && inputs.source_furniture_intake != 'seal-schema' && inputs.source_furniture_intake != 'unseal-schema'
         shell: bash
         run: |
           set -euo pipefail
@@ -438,7 +543,7 @@ jobs:
       # 승격은 repo 별 순차라 중간 실패 시 세 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
       # 스크립트가 기존 digest 를 먼저 저장하고, 실패하면 전체 태그 세트를 복원한다.
       - name: Promote deployed images to :dev
-        if: env.DEPLOY_MODE != 'hold'
+        if: env.DEPLOY_MODE != 'hold' && needs.intake.result == 'skipped'
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}

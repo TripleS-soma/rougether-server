@@ -24,6 +24,7 @@ BOTS_ENABLED="__BOTS_ENABLED__"
 # 모든 user-api 컨테이너가 같은 값을 받고, 리스를 가진 컨테이너 하나만 체결한다(blue/green 전환 중에도 펜싱이 이중 체결을 막음).
 MARKET_ENGINE_ENABLED="__MARKET_ENGINE_ENABLED__"
 DEPLOY_MODE="__DEPLOY_MODE__"
+SOURCE_FURNITURE_INTAKE="__SOURCE_FURNITURE_INTAKE__"
 
 ENV_DIR="/etc/rougether"
 SYSTEMD_DIR="${ROUGETHER_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -1360,11 +1361,349 @@ private_upstream_ip() {
   ip -4 route get 1.1.1.1 | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}'
 }
 
+# The two origin listeners return maintenance while all source application processes drain.
+# This affects only the deployment host. RDS, S3 and cloud workers have separate gates.
+render_forwarded_source() {
+  cat > "$1" <<'NGINX'
+# Rougether original user entry to personal Seoul
+map $http_upgrade $rougether_forward_connection { default upgrade; '' ''; }
+server {
+    listen 8080;
+    client_max_body_size 40m;
+    location / {
+        proxy_pass http://127.0.0.1:39080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $rougether_forward_connection;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_request_buffering off;
+        proxy_next_upstream off;
+        proxy_read_timeout 120s;
+    }
+}
+server {
+    listen 8081;
+    listen 127.0.0.1:38082;
+    add_header Retry-After 60 always;
+    add_header Cache-Control "no-store" always;
+    return 503;
+}
+NGINX
+}
+
+forward_source_user() {
+  local state="$ENV_DIR/cutover-source" image name uri unit status file_sha expected
+  test -f "$state/held" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  while IFS= read -r unit; do
+    status=$(systemctl show -p ActiveState --value "$unit") || return 1
+    case "$status" in inactive|failed) ;; *) return 1 ;; esac
+  done < <(source_writer_units)
+  local containers
+  containers=$(docker ps --format '{{.Names}}') || return 1
+  if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$containers"; then return 1; fi
+  # Only the reviewed production gateway adds this marker to a successful response.
+  # The rehearsal API uses the same IP and also has a health route.
+  uri='https://43.203.93.12/api/v1/health'
+  check_personal_origin() {
+    local url="$1" headers code
+    headers=$(mktemp "$state/.headers.XXXXXX") || return 1
+    code=$(curl --noproxy '*' --silent --show-error --max-time 8 -D "$headers" -o /dev/null -w '%{http_code}' "$url") || { rm -f "$headers"; return 1; }
+    if [ "$code" != 200 ] || ! grep -Eiq '^x-rougether-origin: personal-api[[:space:]]*$' "$headers"; then
+      rm -f "$headers"; return 1
+    fi
+    rm -f "$headers"
+  }
+  check_personal_origin "$uri" || return 1
+  image=caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+  name=rougether-personal-entry
+  cat > "$state/compat.pending" <<'COMPAT_CONFIG'
+{
+	admin off
+	auto_https off
+}
+# Bind to loopback on the origin host when deployed as the blue/green upstream.
+http://:8080 {
+	@internal path /api/v1/auth/dev-login* /api/v1/admin* /internal/* /actuator/* /rehearsal/*
+	@api path /api/v1/*
+	@links {
+		method GET HEAD
+		path /.well-known/apple-app-site-association /.well-known/assetlinks.json /i/* /h/*
+	}
+	route {
+		respond @internal 404
+		handle @api {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		handle @links {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		respond 404
+	}
+}
+COMPAT_CONFIG
+  chmod 0444 "$state/compat.pending"
+  file_sha=$(sha256sum "$state/compat.pending" | awk '{print $1}') || return 1
+  if docker container inspect "$name" >/dev/null 2>&1; then
+    expected=$(docker inspect -f '{{.Config.Image}} {{index .Config.Labels "rougether.compat.config"}}' "$name") || return 1
+    test "$expected" = "$image $file_sha" && cmp "$state/compat.pending" "$state/compat.Caddyfile" || return 1
+    rm "$state/compat.pending"
+    docker start "$name" >/dev/null || return 1
+  else
+    mv "$state/compat.pending" "$state/compat.Caddyfile" || return 1
+    docker run -d --name "$name" --label "rougether.compat.config=$file_sha" --restart unless-stopped \
+      --user 65534:65534 --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --tmpfs /config:size=4m,mode=1777 --tmpfs /data:size=4m,mode=1777 --memory 96m \
+      --log-driver local --log-opt max-size=4m -v "$state/compat.Caddyfile:/etc/caddy/Caddyfile:ro" \
+      -p 127.0.0.1:39080:8080 "$image" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || return 1
+  fi
+  test "$(docker port "$name" 8080/tcp)" = 127.0.0.1:39080 || return 1
+  local attempt
+  for attempt in {1..10}; do
+    if check_personal_origin http://127.0.0.1:39080/api/v1/health; then break; fi
+    sleep 1
+  done
+  check_personal_origin http://127.0.0.1:39080/api/v1/health || return 1
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  check_personal_origin http://127.0.0.1:8080/api/v1/health
+}
+
+render_held_source() {
+  cat > "$1" <<'NGINX'
+# Rougether source host held
+server {
+    listen 8080;
+    listen 8081;
+    listen 127.0.0.1:38082;
+    add_header Cache-Control "no-store" always;
+    add_header Retry-After 60 always;
+    add_header X-Rougether-Cutover "source-held" always;
+    return 503;
+}
+NGINX
+}
+
+source_writer_units() {
+  printf '%s\n' rougether-user-api.service rougether-admin-api.service \
+    rougether-user-api@blue.service rougether-user-api@green.service \
+    rougether-admin-api@blue.service rougether-admin-api@green.service \
+    rougether-batch.service rougether-ai-users.timer rougether-ai-users.service
+}
+
+# Read database connection settings locally. Credentials never enter command arguments or output.
+source_schema_control() (
+  set -Eeuo pipefail
+  umask 077
+  local mode="$1" state="$ENV_DIR/cutover-source" tmp image seen
+  local endpoint=rougether-dev-mysql.chcumqo045ix.ap-northeast-2.rds.amazonaws.com
+  image=mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
+  case "$mode" in
+    inspect) ;;
+    seal-schema|unseal-schema)
+      test -f "$state/held" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+      seen=$(docker ps --format '{{.Names}}') || return 1
+      if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$seen"; then return 1; fi
+      ;;
+    *) return 1 ;;
+  esac
+  tmp=$(mktemp -d -p /dev/shm rougether-source-schema.XXXXXXXX)
+  trap 'rm -f -- "$tmp/client.cnf" "$tmp/rds.pem"; rmdir "$tmp"' EXIT
+  curl -fsS --proto '=https' --retry 2 --max-time 15 https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem -o "$tmp/rds.pem" || return 1
+  printf '%s  %s\n' 913fb5b814f17af79d4c1622584a8d0ceddf5b0d76fe353d0c7d1186cdd6b229 "$tmp/rds.pem" | sha256sum --check --status || return 1
+  python3 - "$USER_RUNTIME_ENV" "$tmp/client.cnf" "$endpoint" <<'PY' || return 1
+import re,sys
+from pathlib import Path
+from urllib.parse import urlsplit
+rows=Path(sys.argv[1]).read_text().splitlines()
+settings={}
+for row in rows:
+    if '=' not in row:continue
+    key,value=row.split('=',1)
+    if key in ('DB_URL','DB_USERNAME','DB_PASSWORD'):settings[key]=value
+url=urlsplit(settings['DB_URL'].removeprefix('jdbc:') if hasattr(str,'removeprefix') else settings['DB_URL'][5:])
+assert url.scheme=='mysql' and url.hostname==sys.argv[3] and url.port in (None,3306) and url.path=='/rougether'
+assert re.fullmatch(r'[A-Za-z0-9_]+',settings['DB_USERNAME'])
+password=settings['DB_PASSWORD']
+assert password and not any(c in password for c in ('\r','\n','\x00'))
+quote=lambda text:'"'+text.replace('\\','\\\\').replace('"','\\"')+'"'
+Path(sys.argv[2]).write_text('[client]\nhost='+sys.argv[3]+'\nprotocol=TCP\nuser='+settings['DB_USERNAME']+'\npassword='+quote(password)+'\nssl-mode=VERIFY_IDENTITY\nssl-ca=/guard/rds.pem\nconnect-timeout=5\n')
+PY
+  schema_query() {
+    docker run --rm -i --network host --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint mysql \
+      -v "$tmp:/guard:ro" "$image" --defaults-extra-file=/guard/client.cnf --batch --skip-column-names rougether
+  }
+  local read_state="SELECT IF(LOCATE('READ ONLY=1',COALESCE(options,''))>0,1,0) FROM information_schema.schemata_extensions WHERE schema_name=DATABASE();"
+  seen=$(printf '%s\n' "$read_state" | schema_query) || return 1
+  case "$mode" in
+    inspect) test "$seen" = 0 || return 1 ;;
+    seal-schema)
+      local pending
+      pending=$(schema_query <<'SQL'
+SELECT (SELECT COUNT(*) FROM furniture_generation_jobs WHERE status NOT IN ('SUCCEEDED','FAILED'))
+     + (SELECT COUNT(*) FROM furniture_lambda_execution WHERE state<>'FINISHED')
+     + (SELECT COUNT(*) FROM furniture_credit_reservations WHERE status='RESERVED')
+     + (SELECT COUNT(*) FROM furniture_credit_accounts WHERE reserved<>0);
+SQL
+) || return 1
+      test "$pending" = 0 || return 1
+      if [ ! -f "$state/schema-owned" ]; then
+        test "$seen" = 0 || return 1
+        printf '%s\n' "$DEPLOYED_SHA" > "$state/schema-owned.pending" || return 1
+        mv "$state/schema-owned.pending" "$state/schema-owned" || return 1
+      fi
+      test "$(cat "$state/schema-owned")" = "$DEPLOYED_SHA" || return 1
+      if [ "$seen" = 0 ]; then
+        printf '%s\n' 'SET SESSION lock_wait_timeout=7; ALTER DATABASE rougether READ ONLY=1;' | schema_query || return 1
+      fi
+      test "$(printf '%s\n' "$read_state" | schema_query)" = 1 || return 1
+      ;;
+    unseal-schema)
+      if [ ! -f "$state/schema-owned" ]; then test "$seen" = 0; return; fi
+      test "$(cat "$state/schema-owned")" = "$DEPLOYED_SHA" || return 1
+      if [ "$seen" = 1 ]; then
+        printf '%s\n' 'SET SESSION lock_wait_timeout=7; ALTER DATABASE rougether READ ONLY=0;' | schema_query || return 1
+      fi
+      test "$(printf '%s\n' "$read_state" | schema_query)" = 0 || return 1
+      mv "$state/schema-owned" "$state/schema-last-unsealed" || return 1
+      ;;
+  esac
+  printf 'Source schema guard checked: %s\n' "$mode"
+)
+
+read_cutover_feature_flags() {
+  local container
+  container="$(slot_container user-api "$active_user_color")"
+  docker inspect "$container" | python3 -c 'import json,sys
+container,=json.load(sys.stdin)
+assert container["State"]["Running"]
+values=dict(pair.split("=",1) for pair in container["Config"]["Env"] if "=" in pair)
+import re
+BOOL = set("MARKET_ENGINE_ENABLED CHRISTMAS_EVENT_ENABLED CHRISTMAS_COIN_BONUS_ENABLED BILLING_ENABLED BILLING_REQUIRE_CREDITS BILLING_WORKER_ENABLED FURNITURE_GENERATION_ENABLED FURNITURE_UPLOAD_ENABLED FURNITURE_LAMBDA_DISPATCH_ENABLED CHAT_CLEANUP_ENABLED FEED_CLEANUP_ENABLED LOGIN_GIFT_RETRY_ENABLED ACTIVITY_BATCH_ENABLED".split())
+PUBLIC = {
+    "GOOGLE_ALLOWED_CLIENT_IDS": r"[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com(?:,[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com)*",
+    "APPLE_ALLOWED_CLIENT_IDS": r"[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*",
+    "KAKAO_APP_ID": r"[0-9]+",
+    "INVITE_SHARE_BASE_URL": r"https://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9._/-]*)?",
+    "INVITE_APP_SCHEME": r"[a-z][a-z0-9+.\-]*",
+    "INVITE_ANDROID_PACKAGE": r"[a-zA-Z][\w]*(?:\.[a-zA-Z][\w]*)+",
+    "INVITE_ANDROID_CERT_FINGERPRINTS": r"(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}(?:,(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})*",
+    "INVITE_APPSTORE_ID": r"[0-9]+",
+    "INVITE_APPLE_APP_ID": r"[A-Z0-9]{10}\.[a-zA-Z0-9.-]+",
+}
+
+
+def validated(env):
+    settings = {}
+    for key in sorted(BOOL | PUBLIC.keys()):
+        value = env.get(key)
+        if value is None or value == "":
+            continue
+        if key in BOOL:
+            value = value.lower()
+            pattern = "true|false"
+        else:
+            value = ",".join(v.strip() for v in value.split(","))
+            pattern = PUBLIC[key]
+        if len(value) > 4000 or not re.fullmatch(pattern, value):
+            raise ValueError("Invalid source setting " + key)
+        settings[key] = value
+    return settings
+print("ROUGETHER_SOURCE_FEATURES="+json.dumps(validated(values),sort_keys=True,separators=(",",":")))'
+}
+
+hold_source_host() {
+  local state="$ENV_DIR/cutover-source" unit load active status running
+  local -a installed=()
+  install -d -m 0700 "$state"
+  if [ ! -f "$state/release" ]; then
+    grep -Fxq '# Rougether furniture intake closed' "$NGINX_CONFIG_FILE" || {
+      echo '먼저 신규 가구 접수를 닫고 정산을 확인하세요.' >&2; return 1;
+    }
+    : > "$state/active.pending"
+    while IFS= read -r unit; do
+      load=$(systemctl show -p LoadState --value "$unit") || return 1
+      case "$load" in not-found) continue ;; loaded) ;; *) return 1 ;; esac
+      active=$(systemctl show -p ActiveState --value "$unit") || return 1
+      case "$active" in active|activating) printf '%s\n' "$unit" >> "$state/active.pending" ;; inactive|failed) ;; *) return 1 ;; esac
+    done < <(source_writer_units)
+    for unit in "$(slot_unit user-api "$active_user_color")" "$(slot_unit admin-api "$active_admin_color")" rougether-batch.service; do
+      grep -Fxq "$unit" "$state/active.pending" || return 1
+    done
+    mv "$state/active.pending" "$state/active"
+    printf '%s\n' "$DEPLOYED_SHA" > "$state/release.pending"
+    mv "$state/release.pending" "$state/release"
+  fi
+  test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  test -f "$state/active" || return 1
+  # A reboot between phases must not start application services after the fence is armed.
+  while IFS= read -r unit; do
+    load=$(systemctl show -p LoadState --value "$unit") || return 1
+    case "$load" in not-found) continue ;; loaded) ;; *) return 1 ;; esac
+    install -d -m 0755 "$SYSTEMD_DIR/$unit.d"
+    printf '[Unit]\nConditionPathExists=!%s/held\n' "$state" > "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf.pending"
+    mv "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf.pending" "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf"
+    installed+=("$unit")
+  done < <(source_writer_units)
+  systemctl daemon-reload || return 1
+  touch "$state/held"
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  systemctl stop "${installed[@]}" || return 1
+  for unit in "${installed[@]}"; do
+    status=$(systemctl show -p ActiveState --value "$unit") || return 1
+    case "$status" in inactive|failed) ;; *) return 1 ;; esac
+  done
+  running=$(docker ps --format '{{.Names}}') || return 1
+  if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$running"; then
+    echo '기존 쓰기 컨테이너가 남아 있습니다.' >&2; return 1
+  fi
+  for port in 8080 8081 38082; do
+    test "$(curl --noproxy '*' -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/")" = 503 || return 1
+  done
+}
+
+resume_source_host() {
+  local state="$ENV_DIR/cutover-source" unit
+  test -f "$state/release" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  test -s "$state/active" || return 1
+  while IFS= read -r unit; do
+    source_writer_units | grep -Fxq "$unit" || return 1
+  done < "$state/active"
+  # A failed start leaves public ingress held, and the recorded list permits a retry.
+  rm -f "$state/held"
+  while IFS= read -r unit; do
+    case "$unit" in rougether-ai-users.service|*.timer) continue ;; esac
+    systemctl start "$unit" || return 1
+  done < "$state/active"
+  wait_health_stable user-api-slot "$(service_health_url user-api "$active_user_port")" || return 1
+  wait_health_stable admin-api-slot "$(service_health_url admin-api "$active_admin_port")" || return 1
+  wait_health batch http://127.0.0.1:8082/actuator/health || return 1
+  SOURCE_FURNITURE_INTAKE=close
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  if grep -Fxq rougether-ai-users.timer "$state/active"; then systemctl start rougether-ai-users.timer || return 1; fi
+  # The inert conditions can be reused on the next hold. Keep the prior active list for audit.
+  mv "$state/release" "$state/last-resumed-release"
+}
+
 render_nginx_config() {
   local destination="$1"
   local user_port="$2"
   local admin_port="$3"
-  local admin_upstream_ip
+  case "$SOURCE_FURNITURE_INTAKE" in
+    hold-host) render_held_source "$destination"; return ;;
+    forward-user) render_forwarded_source "$destination"; return ;;
+  esac
+  local admin_upstream_ip intake_closed=false
+  if [ "$SOURCE_FURNITURE_INTAKE" = close ] || {
+    [ "$SOURCE_FURNITURE_INTAKE" != reopen ] && [ -f "$NGINX_CONFIG_FILE" ] &&
+      grep -Fxq '# Rougether furniture intake closed' "$NGINX_CONFIG_FILE"
+  }; then
+    intake_closed=true
+  fi
   admin_upstream_ip="$(private_upstream_ip)"
 
   if [ -n "$admin_port" ] && [ -z "$admin_upstream_ip" ]; then
@@ -1375,6 +1714,19 @@ render_nginx_config() {
   {
     echo "# Generated by deploy-ec2-with-rollback.sh; do not edit manually."
     if [ -n "$user_port" ]; then
+      if [ "$intake_closed" = true ]; then
+        cat <<'MAP'
+# Rougether furniture intake closed
+map "$request_method:$uri" $rougether_close_furniture {
+    default 0;
+    "POST:/api/v1/me/furniture-generations" 1;
+    "POST:/api/v1/me/furniture-generations/" 1;
+    "POST:/api/v1/me/furniture-generations/uploads" 1;
+    "POST:/api/v1/me/furniture-generations/uploads/" 1;
+    ~^POST:/api/v1/me/furniture-generations/[^/]+/feedback/?$ 1;
+}
+MAP
+      fi
       cat <<EOF
 upstream rougether_user_api {
     server 127.0.0.1:$user_port;
@@ -1384,6 +1736,21 @@ upstream rougether_user_api {
 server {
     listen 8080;
     client_max_body_size 40m;
+EOF
+      if [ "$intake_closed" = true ]; then
+        cat <<'INTAKE'
+    proxy_hide_header X-Rougether-Furniture-Intake;
+    add_header X-Rougether-Furniture-Intake closed always;
+    if ($rougether_close_furniture) { return 418; }
+    error_page 418 = @rougether_furniture_paused;
+    location @rougether_furniture_paused {
+        add_header Cache-Control "no-store" always;
+        add_header Retry-After "60" always;
+        return 503;
+    }
+INTAKE
+      fi
+      cat <<EOF
 
     location ^~ /internal/ {
         return 404;
@@ -2891,6 +3258,42 @@ case "$DEPLOY_MODE" in
   legacy|blue-green)
     # 메모리 설정이 잘못되면 호스트를 건드리기 전에 멈춘다(유닛 작성·롤백 모두 같은 값을 쓴다).
     acquire_deploy_lock || exit 75
+    if [ -f "$ENV_DIR/cutover-source/release" ]; then
+      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host|forward-user|seal-schema|unseal-schema) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
+    fi
+    case "$SOURCE_FURNITURE_INTAKE" in
+      hold-host|resume-host|forward-user|seal-schema|unseal-schema)
+        trap release_deploy_lock EXIT
+        [ "$DEPLOY_MODE" = blue-green ] || exit 2
+        load_blue_green_state
+        blue_green_release_is_active || { echo '배포된 SHA가 다릅니다.' >&2; exit 2; }
+        case "$SOURCE_FURNITURE_INTAKE" in
+          hold-host) hold_source_host ;;
+          resume-host) test ! -e "$ENV_DIR/cutover-source/schema-owned" && source_schema_control inspect && resume_source_host || exit 2 ;;
+          forward-user) forward_source_user ;;
+          seal-schema|unseal-schema) source_schema_control "$SOURCE_FURNITURE_INTAKE" ;;
+        esac
+        exit 0
+        ;;
+      preserve) ;;
+      close|reopen)
+        trap release_deploy_lock EXIT
+        [ "$DEPLOY_MODE" = blue-green ] || exit 2
+        load_blue_green_state
+        blue_green_release_is_active || { echo "target release must already be active" >&2; exit 2; }
+        if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then
+          source_schema_control inspect || exit 2
+          read_cutover_feature_flags || exit 2
+        fi
+        apply_proxy_ports "$active_user_port" "$active_admin_port"
+        wait_health_stable user-api-current "$(stable_health_url user-api)"
+        wait_health_stable admin-api-current "$(stable_health_url admin-api)"
+        wait_health batch http://127.0.0.1:8082/actuator/health
+        echo "source furniture intake operation completed: $SOURCE_FURNITURE_INTAKE"
+        exit 0
+        ;;
+      *) echo "invalid source furniture intake operation" >&2; exit 2 ;;
+    esac
     validate_memory_settings || exit 2
     trap 'end_deploy_watch_suppression; release_deploy_lock' EXIT
     begin_deploy_watch_suppression || echo "cannot mark deployment for the container watch; alerts may fire during deploy" >&2
