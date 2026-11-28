@@ -849,6 +849,25 @@ EOF
   [ "$(inactive_color "$active_user_color")" = blue ] \
     || { echo "not ok - inactive user slot must alternate" >&2; return 1; }
 
+  (
+    mkdir -p "$ENV_DIR/cutover-source"
+    touch "$ENV_DIR/cutover-source/held"
+    echo old-release > "$ENV_DIR/cutover-source/release"
+    DEPLOYED_SHA=old-release
+    SOURCE_FURNITURE_INTAKE=seal-schema
+    render_held_source "$NGINX_CONFIG_FILE"
+    load_blue_green_state || exit 1
+    echo '# unexpected' >> "$NGINX_CONFIG_FILE"
+    if load_blue_green_state; then exit 1; fi
+    render_forwarded_source "$NGINX_CONFIG_FILE"
+    if load_blue_green_state; then exit 1; fi
+    SOURCE_FURNITURE_INTAKE=forward-user
+    load_blue_green_state || exit 1
+    echo different-release > "$ENV_DIR/cutover-source/release"
+    if load_blue_green_state; then exit 1; fi
+  )
+  rm -f "$ENV_DIR/cutover-source/held" "$ENV_DIR/cutover-source/release"
+  write_matching_nginx_config 28080 18081
   sed -i.bak 's/ADMIN_API_ACTIVE_PORT=18081/ADMIN_API_ACTIVE_PORT=28081/' "$STATE_FILE"
   active_admin_color=""
   active_admin_port=""

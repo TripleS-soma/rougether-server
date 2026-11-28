@@ -1006,6 +1006,19 @@ load_blue_green_state() {
       echo "blue/green state exists but Nginx routing config is missing" >&2
       return 1
     }
+    if [ -f "$ENV_DIR/cutover-source/held" ]; then
+      case "$SOURCE_FURNITURE_INTAKE" in
+        hold-host|resume-host|seal-schema|unseal-schema|forward-user) ;;
+        *) return 1 ;;
+      esac
+      [ "$current_deployment_status" = ready ] &&
+        [ "$current_deployed_sha" = "$DEPLOYED_SHA" ] &&
+        [ "$(cat "$ENV_DIR/cutover-source/release")" = "$DEPLOYED_SHA" ] || return 1
+      if cmp -s "$NGINX_CONFIG_FILE" <(render_held_source /dev/stdout); then return 0; fi
+      [ "$SOURCE_FURNITURE_INTAKE" = forward-user ] &&
+        cmp -s "$NGINX_CONFIG_FILE" <(render_forwarded_source /dev/stdout)
+      return $?
+    fi
     if [ -n "$active_user_color" ]; then
       grep -q "server 127.0.0.1:$active_user_port;" "$NGINX_CONFIG_FILE" || {
         echo "Nginx user upstream does not match deploy state" >&2
