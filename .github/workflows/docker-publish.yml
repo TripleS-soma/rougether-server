@@ -6,6 +6,11 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      source_furniture_intake:
+        description: '기존 운영 환경의 신규 가구 접수만 변경'
+        type: choice
+        default: preserve
+        options: [preserve, close, reopen]
       deploy_furniture_ai:
         description: '현재 실행에서 전체 검증한 가구 AI Lambda 코드를 배포함'
         type: boolean
@@ -47,7 +52,25 @@ env:
   DEPLOY_MODE: ${{ vars.ROUGETHER_DEPLOY_MODE || 'blue-green' }}
 
 jobs:
+  intake:
+    name: Validate source intake operation
+    if: inputs.source_furniture_intake && inputs.source_furniture_intake != 'preserve'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Validate source intake operation
+        env:
+          INTAKE: ${{ inputs.source_furniture_intake }}
+          MIXED: ${{ inputs.deploy_furniture_ai || inputs.rotate_llm_key || inputs.force_verification }}
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$DEPLOY_MODE" = blue-green
+          test "$MIXED" = false
+          case "$INTAKE" in close|reopen) ;; *) exit 2 ;; esac
+
   resolve:
+    if: (!inputs.source_furniture_intake || inputs.source_furniture_intake == 'preserve')
     name: Resolve verified PR artifacts
     runs-on: ubuntu-latest
     permissions:
@@ -78,7 +101,7 @@ jobs:
 
   test:
     name: Gradle test
-    if: always()
+    if: always() && (!inputs.source_furniture_intake || inputs.source_furniture_intake == 'preserve')
     needs: [resolve, fresh]
     runs-on: ubuntu-latest
     steps:
@@ -158,10 +181,9 @@ jobs:
 
   deploy:
     name: Deploy to EC2
-    if: ${{ !cancelled() && needs.test.result == 'success' && needs.build.result == 'success' }}
+    if: ${{ !cancelled() && (needs.intake.result == 'success' || (needs.test.result == 'success' && needs.build.result == 'success')) }}
     runs-on: ubuntu-latest
-    # test 와 build 가 모두 성공해야 배포·:dev 승격이 일어난다 (병렬화의 게이트)
-    needs: [test, build]
+    needs: [intake, test, build]
 
     steps:
       - name: Checkout
@@ -195,7 +217,7 @@ jobs:
           python3 .github/scripts/rotate_llm_key.py
 
       - name: Sync Webex alert configuration to SSM
-        if: env.DEPLOY_MODE != 'hold'
+        if: env.DEPLOY_MODE != 'hold' && needs.intake.result == 'skipped'
         shell: bash
         env:
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
@@ -228,16 +250,19 @@ jobs:
           fi
 
       - name: Login to ECR
+        if: needs.intake.result == 'skipped'
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
+        if: needs.intake.result == 'skipped'
         uses: docker/setup-buildx-action@v4
 
       # ":sha = 테스트+빌드 게이트 통과" 불변식 — build 는 :unverified-<sha> 만 push 하므로,
       # test 와 build 가 모두 성공한 여기서만 :sha 가 생긴다 (manifest 복사, 수 초).
       # 이후 배포·롤백·수동 배포는 전부 검증된 :sha 만 바라본다.
       - name: Promote tested images to :sha
+        if: needs.intake.result == 'skipped'
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
@@ -317,6 +342,7 @@ jobs:
           # 봇 플래그와 같은 이유로 이 step 에만 둔다(Gradle test 잡의 Spring 컨텍스트가 읽으면 엔진 스레드가 뜸).
           MARKET_ENGINE_ENABLED: ${{ vars.MARKET_ENGINE_ENABLED || 'true' }}
           ROUGETHER_DEPLOY_MODE: ${{ env.DEPLOY_MODE }}
+          SOURCE_FURNITURE_INTAKE: ${{ inputs.source_furniture_intake || 'preserve' }}
         run: |
           set -euo pipefail
 
@@ -326,6 +352,9 @@ jobs:
           fi
 
           account_id="$(aws sts get-caller-identity --query Account --output text)"
+          if [ "$SOURCE_FURNITURE_INTAKE" != preserve ]; then
+            test "$account_id" = 776158585524
+          fi
           registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           user_image="${registry}/${ECR_REPOSITORY_PREFIX}/user-api:${GITHUB_SHA}"
           admin_image="${registry}/${ECR_REPOSITORY_PREFIX}/admin-api:${GITHUB_SHA}"
@@ -352,6 +381,7 @@ jobs:
               -e "s|__ENVIRONMENT__|${DEPLOYMENT_ENVIRONMENT}|g" \
               -e "s|__BOTS_ENABLED__|${ROUGETHER_BOTS_ENABLED}|g" \
               -e "s|__MARKET_ENGINE_ENABLED__|${MARKET_ENGINE_ENABLED}|g" \
+              -e "s|__SOURCE_FURNITURE_INTAKE__|${SOURCE_FURNITURE_INTAKE}|g" \
               -e "s|__DEPLOY_MODE__|${ROUGETHER_DEPLOY_MODE}|g" \
               .github/scripts/deploy-ec2-with-rollback.sh
           )"
@@ -438,7 +468,7 @@ jobs:
       # 승격은 repo 별 순차라 중간 실패 시 세 :dev 가 서로 다른 SHA 를 가리킬 수 있다 —
       # 스크립트가 기존 digest 를 먼저 저장하고, 실패하면 전체 태그 세트를 복원한다.
       - name: Promote deployed images to :dev
-        if: env.DEPLOY_MODE != 'hold'
+        if: env.DEPLOY_MODE != 'hold' && needs.intake.result == 'skipped'
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}

@@ -1054,6 +1054,23 @@ test_nginx_config_preserves_websocket_upgrade() {
   echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
 }
 
+test_furniture_intake_survives_deployment_until_reopened() (
+  reset_scenario "furniture-intake"
+  ROUGETHER_PRIVATE_IP=10.0.1.10
+  SOURCE_FURNITURE_INTAKE=close
+  render_nginx_config "$NGINX_CONFIG_FILE" 18080 18081
+  local marker='# Rougether furniture intake closed'
+  assert_contains "$marker" "$NGINX_CONFIG_FILE" "closure must be recorded"
+  SOURCE_FURNITURE_INTAKE=preserve
+  render_nginx_config "$NGINX_CONFIG_FILE" 28080 28081
+  assert_contains "$marker" "$NGINX_CONFIG_FILE" "ordinary deployment must preserve closure"
+  assert_contains 'server 127.0.0.1:28080;' "$NGINX_CONFIG_FILE" "new active slot must be used"
+  SOURCE_FURNITURE_INTAKE=reopen
+  render_nginx_config "$NGINX_CONFIG_FILE" 28080 28081
+  if grep -Fq "$marker" "$NGINX_CONFIG_FILE"; then return 1; fi
+  echo "ok - source furniture intake closure survives slot switches and can be reopened"
+)
+
 test_nginx_reload_failure_restores_previous_config() {
   reset_scenario "blue-green-nginx-rollback"
   local expected="$ENV_DIR/expected-nginx.conf"
@@ -1935,7 +1952,7 @@ setup_dispatch_fixture() {
   DISPATCH_LOG="$DISPATCH_DIR/host-calls.log"
   mkdir -p "$DISPATCH_BIN"
   : > "$DISPATCH_LOG"
-  sed -e "s|__DEPLOY_MODE__|$deploy_mode|g" -e 's|__ENVIRONMENT__|dev|g' \
+  sed -e 's|__SOURCE_FURNITURE_INTAKE__|preserve|g' -e "s|__DEPLOY_MODE__|$deploy_mode|g" -e 's|__ENVIRONMENT__|dev|g' \
     -e 's|__[A-Z_]*__|test-value|g' "$DEPLOY_SCRIPT" > "$DISPATCH_DIR/deploy.sh"
 
   local command_name
@@ -2170,6 +2187,7 @@ test_monitoring_install_failure_does_not_block_deploy() {
     install_memory_metrics() { echo metrics >> "$events"; return 1; }
     deploy_blue_green() { echo deploy >> "$events"; }
     DEPLOY_MODE=blue-green
+    SOURCE_FURNITURE_INTAKE=preserve
     # shellcheck disable=SC1090
     source "$dispatch"
   ) >/dev/null 2> "$errors" || status="$?"
@@ -2469,6 +2487,7 @@ test_memory_preflight_failure_does_not_start_candidate
 test_candidate_health_precedes_initial_proxy_cutover
 test_candidate_health_failure_never_stops_active_service
 test_nginx_config_preserves_websocket_upgrade
+test_furniture_intake_survives_deployment_until_reopened
 test_nginx_reload_failure_restores_previous_config
 test_concurrent_deploy_is_rejected_by_host_lock
 test_previous_slot_stays_up_when_proxy_points_elsewhere
