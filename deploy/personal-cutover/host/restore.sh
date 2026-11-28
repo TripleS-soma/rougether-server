@@ -10,8 +10,9 @@ test -f transport/key.pem
 [[ "$SSM_Digest" =~ ^[a-f0-9]{64}$ ]]
 [[ "$SSM_Envelope" == "https://rougether-cutover-940482450790-artifacts.s3.ap-northeast-2.amazonaws.com/restore/$SSM_Snapshot/"* ]]
 readonly img=mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
-name="rougether-candidate-$SSM_Snapshot"
-snap="$base/$SSM_Snapshot"
+slot="$SSM_Snapshot-${SSM_Digest:0:12}"
+name="rougether-candidate-$slot"
+snap="$base/$slot"
 test "$(df -Pk "$base" | awk 'NR==2{print $4}')" -ge 4000000
 install -d -m 0700 "$snap"
 if [[ -e "$snap/receipt.json" ]]; then
