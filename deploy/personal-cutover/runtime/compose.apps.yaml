@@ -1,0 +1,90 @@
+x-app: &app
+  image: eclipse-temurin@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112
+  entrypoint: ["/bin/sh", "-ec"]
+  command:
+    - |
+      printf '%s  /app/app.jar\n' "$$JAR_SHA256" | sha256sum -c --status
+      exec java -jar /app/app.jar
+  read_only: true
+  tmpfs:
+    - /tmp:size=96m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: local
+    options:
+      max-size: 8m
+      max-file: "3"
+
+x-settings: &settings
+  SPRING_PROFILES_ACTIVE: mysql
+  SPRING_CONFIG_IMPORT: configtree:/run/rougether/config/
+  SPRING_FLYWAY_ENABLED: "false"
+  ROUGETHER_BOTS_ENABLED: "false"
+  AI_USERS_ENABLED: "false"
+  AI_SERVICE_ENABLED: "false"
+  AWS_EC2_METADATA_DISABLED: "true"
+
+services:
+  user-api:
+    <<: *app
+    mem_limit: 1280m
+    environment:
+      <<: *settings
+      JAVA_TOOL_OPTIONS: -Xmx512m -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=64m
+      JAR_SHA256: 8ae9387d6b4c8bb0741a058170c43c15518db6c00116c03fc77d4dfb91f094a2
+    volumes:
+      - type: bind
+        source: ${RUNTIME_JARS:?}/user-api.jar
+        target: /app/app.jar
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${RUNTIME_CONFIG:?}/user-api
+        target: /run/rougether/config
+        read_only: true
+        bind: {create_host_path: false}
+
+  admin-api:
+    <<: *app
+    mem_limit: 768m
+    environment:
+      <<: *settings
+      ADMIN_SEED_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: -Xmx384m -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=64m
+      JAR_SHA256: 2d0f2b7b33cd00ad7201ae2a7504f9c94c363374e915a27f900bbeeb0a92677b
+    volumes:
+      - type: bind
+        source: ${RUNTIME_JARS:?}/admin-api.jar
+        target: /app/app.jar
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${RUNTIME_CONFIG:?}/admin-api
+        target: /run/rougether/config
+        read_only: true
+        bind: {create_host_path: false}
+
+  batch:
+    <<: *app
+    profiles: [writer]
+    mem_limit: 768m
+    environment:
+      <<: *settings
+      JAVA_TOOL_OPTIONS: -Xmx384m -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=64m
+      JAR_SHA256: d0cddb42c2d814425c3830358f1014e5548d89054fc25fcfc139307856313024
+    volumes:
+      - type: bind
+        source: ${RUNTIME_JARS:?}/batch.jar
+        target: /app/app.jar
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${RUNTIME_CONFIG:?}/batch
+        target: /run/rougether/config
+        read_only: true
+        bind: {create_host_path: false}
+
+networks:
+  default:
+    internal: true

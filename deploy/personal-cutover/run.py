@@ -59,6 +59,11 @@ def main():
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
         certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
         Path(certificate).write_text(out+'\n')
+    elif mode=='standby-check':
+        receipt=json.loads(out)
+        assert receipt['synthetic'] and receipt['cleanup'] and receipt['writeRejectedAfterRestart']
+        assert receipt['userHealth']==receipt['adminHealth']==200 and receipt['flywayLatest']=='109'
+        Path('standby-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='runtime-check':
         receipt=json.loads(out)
         assert receipt['runtimeIdentity'] and receipt['adminMediaDeleteDenied'] and receipt['crossRoleDenied']

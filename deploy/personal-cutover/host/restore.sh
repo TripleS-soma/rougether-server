@@ -15,10 +15,20 @@ name="rougether-candidate-$slot"
 snap="$base/$slot"
 test "$(df -Pk "$base" | awk 'NR==2{print $4}')" -ge 4000000
 install -d -m 0700 "$snap"
+seal_database() {
+  test "$(docker inspect -f '{{.State.Running}} {{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$name")" = 'true none 0'
+  docker exec -i "$name" mysql --defaults-extra-file=/run/private/client.cnf -N -B <<'SQL' | grep -qx 1
+SET PERSIST super_read_only=ON;
+SELECT @@global.super_read_only AND EXISTS (
+  SELECT 1 FROM performance_schema.persisted_variables
+  WHERE VARIABLE_NAME='super_read_only' AND VARIABLE_VALUE='ON'
+);
+SQL
+}
 if [[ -e "$snap/receipt.json" ]]; then
   test "$(cat "$snap/envelope.sha256")" = "$SSM_Digest"
   test "$(docker inspect -f '{{.State.Running}} {{.HostConfig.NetworkMode}}' "$name")" = 'true none'
-  docker exec "$name" mysql --defaults-extra-file=/run/private/client.cnf -Nse 'SELECT @@GLOBAL.super_read_only' | grep -qx 1
+  seal_database
   cat "$snap/receipt.json"
   exit 0
 fi
@@ -57,8 +67,7 @@ done
 # Restore each table in a transaction. DDL commits at the same boundaries as the dump.
 # Keep the last COMMIT behind the successful decryption and tar extraction.
 { printf 'SET SESSION autocommit=0;\n'; decrypt | tar -xO -f - database.sql || exit 1; printf '\nCOMMIT;\n'; } | docker exec -i "$name" mysql --defaults-extra-file=/run/private/client.cnf --binary-mode --default-character-set=utf8mb4 rougether >/dev/null 2>/dev/null
-echo 'SET GLOBAL super_read_only=ON' | sql
-[[ "$(echo 'SELECT @@global.super_read_only' | sql)" = 1 ]]
+seal_database
 test "$(docker inspect -f '{{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$name")" = 'none 0'
 python3 "$tmp/verify.py" "$name" "$tmp/metadata.json" > "$snap/receipt.pending"
 mv "$snap/receipt.pending" "$snap/receipt.json"

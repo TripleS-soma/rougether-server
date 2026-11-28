@@ -1,0 +1,11 @@
+services:
+  user-api:
+    environment:
+      FURNITURE_GENERATION_ENABLED: "false"
+      FURNITURE_UPLOAD_ENABLED: "false"
+      FURNITURE_LAMBDA_DISPATCH_ENABLED: "false"
+      MARKET_ENGINE_ENABLED: "false"
+      BILLING_WORKER_ENABLED: "false"
+      LOGIN_GIFT_RETRY_ENABLED: "false"
+      CHAT_CLEANUP_ENABLED: "false"
+      FEED_CLEANUP_ENABLED: "false"

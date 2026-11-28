@@ -11,9 +11,16 @@ BUCKET = 'rougether-cutover-940482450790-artifacts'
 NODE = 'mi-017285f379d04931f'
 INSTANCE = 'rougether-fallback-stage'
 def document(mode, machine):
-    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
+    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
     source = (HERE / 'host' / (mode+'.sh')).read_text().replace('EXPECTED_MACHINE',machine)
     params = {}
+    if mode == 'standby-check':
+        files = []
+        for name in ('compose.apps.yaml','compose.standby.yaml','standby_check.py'):
+            content = (HERE/'runtime'/name).read_text()
+            files.append(f"cat > {name} <<'STANDBY_END'\n{content}STANDBY_END")
+        assert source.count('# STANDBY_TOOLS') == 1
+        source = source.replace('# STANDBY_TOOLS', '\n'.join(files))
     if mode == 'runtime-check':
         marker = '# JAVA_PROBE_SOURCE'
         assert source.count(marker) == 1
