@@ -9,7 +9,7 @@ on:
       personal_candidate:
         description: '개인 AWS에서 격리 운영 DB를 준비하는 단계'
         type: choice
-        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check, clone-sealed-db, release-config, prepare-db-users, prepare-release, warm-release, activate-release, seal-release]
+        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check, clone-sealed-db, release-config, prepare-db-users, prepare-release, warm-release, activate-release, seal-release, furniture-prepare, furniture-enable, furniture-pause]
         default: 'off'
       candidate_snapshot:
         description: '격리 복원 시점 YYYYMMDD-HHMM'
@@ -599,5 +599,36 @@ jobs:
             sealed-copy-receipt.json
             restore-receipt.json
             fixture-receipt.json
+          retention-days: 7
+          if-no-files-found: error
+
+  personal-furniture:
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["furniture-prepare","furniture-enable","furniture-pause"]'), inputs.personal_candidate) && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: personal-aws-candidate
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::940482450790:role/rougether-personal-furniture-cutover
+          aws-region: ap-northeast-2
+          allowed-account-ids: '940482450790'
+      - name: Configure the reviewed private furniture runtime
+        env:
+          CANDIDATE_MODE: ${{ inputs.personal_candidate }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/rougether-aws"
+          "$RUNNER_TEMP/rougether-aws/bin/pip" -q install boto3==1.42.97
+          "$RUNNER_TEMP/rougether-aws/bin/python" deploy/personal-cutover/furniture_control.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-candidate-proof
+          path: furniture-runtime-receipt.json
           retention-days: 7
           if-no-files-found: error
