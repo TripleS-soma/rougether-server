@@ -45,16 +45,16 @@ PY_LIB
   fi
   test "$(docker inspect -f '{{index .Config.Labels "rougether.purpose"}}' "$probe")" = credential-renewal
   for ((i=0;i<80;i++)); do
-    if docker logs "$probe" 2>/dev/null | grep -Fxq FIRST_REQUEST_OK; then break; fi
+    if docker logs "$probe" 2>/dev/null | grep -Fx FIRST_REQUEST_OK >/dev/null; then break; fi
     test "$(docker inspect -f '{{.State.Running}}' "$probe")" = true || { echo "Initial $role request failed" >&2; exit 1; }
     sleep 1
   done
-  docker logs "$probe" 2>/dev/null | grep -Fxq FIRST_REQUEST_OK
+  docker logs "$probe" 2>/dev/null | grep -Fx FIRST_REQUEST_OK >/dev/null
   if [[ $(docker inspect -f '{{.State.Running}}' "$probe") == true ]]; then
     results+=(running)
   else
     test "$(docker inspect -f '{{.State.ExitCode}}' "$probe")" = 0
-    docker logs "$probe" 2>/dev/null | grep -Fxq RENEWED_REQUEST_OK
+    docker logs "$probe" 2>/dev/null | grep -Fx RENEWED_REQUEST_OK >/dev/null
     docker rm "$probe" >/dev/null
     rm -f -- "$dir/"*.jar "$dir/RenewalProbe.java"
     touch "$dir/verified"
