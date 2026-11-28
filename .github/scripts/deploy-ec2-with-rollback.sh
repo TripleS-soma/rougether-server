@@ -1361,10 +1361,108 @@ private_upstream_ip() {
   ip -4 route get 1.1.1.1 | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}'
 }
 
+# The two origin listeners return maintenance while all source application processes drain.
+# This affects only the deployment host. RDS, S3 and cloud workers have separate gates.
+render_held_source() {
+  cat > "$1" <<'NGINX'
+# Rougether source host held
+server {
+    listen 8080;
+    listen 8081;
+    listen 127.0.0.1:38082;
+    add_header Cache-Control "no-store" always;
+    add_header Retry-After 60 always;
+    add_header X-Rougether-Cutover "source-held" always;
+    return 503;
+}
+NGINX
+}
+
+source_writer_units() {
+  printf '%s\n' rougether-user-api.service rougether-admin-api.service \
+    rougether-user-api@blue.service rougether-user-api@green.service \
+    rougether-admin-api@blue.service rougether-admin-api@green.service \
+    rougether-batch.service rougether-ai-users.timer rougether-ai-users.service
+}
+
+hold_source_host() {
+  local state="$ENV_DIR/cutover-source" unit load active status running
+  local -a installed=()
+  install -d -m 0700 "$state"
+  if [ ! -f "$state/release" ]; then
+    grep -Fxq '# Rougether furniture intake closed' "$NGINX_CONFIG_FILE" || {
+      echo '먼저 신규 가구 접수를 닫고 정산을 확인하세요.' >&2; return 1;
+    }
+    : > "$state/active.pending"
+    while IFS= read -r unit; do
+      load=$(systemctl show -p LoadState --value "$unit") || return 1
+      case "$load" in not-found) continue ;; loaded) ;; *) return 1 ;; esac
+      active=$(systemctl show -p ActiveState --value "$unit") || return 1
+      case "$active" in active|activating) printf '%s\n' "$unit" >> "$state/active.pending" ;; inactive|failed) ;; *) return 1 ;; esac
+    done < <(source_writer_units)
+    for unit in "$(slot_unit user-api "$active_user_color")" "$(slot_unit admin-api "$active_admin_color")" rougether-batch.service; do
+      grep -Fxq "$unit" "$state/active.pending" || return 1
+    done
+    mv "$state/active.pending" "$state/active"
+    printf '%s\n' "$DEPLOYED_SHA" > "$state/release.pending"
+    mv "$state/release.pending" "$state/release"
+  fi
+  test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  test -f "$state/active" || return 1
+  # A reboot between phases must not start application services after the fence is armed.
+  while IFS= read -r unit; do
+    load=$(systemctl show -p LoadState --value "$unit") || return 1
+    case "$load" in not-found) continue ;; loaded) ;; *) return 1 ;; esac
+    install -d -m 0755 "$SYSTEMD_DIR/$unit.d"
+    printf '[Unit]\nConditionPathExists=!%s/held\n' "$state" > "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf.pending"
+    mv "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf.pending" "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf"
+    installed+=("$unit")
+  done < <(source_writer_units)
+  systemctl daemon-reload || return 1
+  touch "$state/held"
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  systemctl stop "${installed[@]}" || return 1
+  for unit in "${installed[@]}"; do
+    status=$(systemctl show -p ActiveState --value "$unit") || return 1
+    case "$status" in inactive|failed) ;; *) return 1 ;; esac
+  done
+  running=$(docker ps --format '{{.Names}}') || return 1
+  if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$running"; then
+    echo '기존 쓰기 컨테이너가 남아 있습니다.' >&2; return 1
+  fi
+  for port in 8080 8081 38082; do
+    test "$(curl --noproxy '*' -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/")" = 503 || return 1
+  done
+}
+
+resume_source_host() {
+  local state="$ENV_DIR/cutover-source" unit
+  test -f "$state/release" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  test -s "$state/active" || return 1
+  while IFS= read -r unit; do
+    source_writer_units | grep -Fxq "$unit" || return 1
+  done < "$state/active"
+  # A failed start leaves public ingress held, and the recorded list permits a retry.
+  rm -f "$state/held"
+  while IFS= read -r unit; do
+    case "$unit" in rougether-ai-users.service|*.timer) continue ;; esac
+    systemctl start "$unit" || return 1
+  done < "$state/active"
+  wait_health_stable user-api-slot "$(service_health_url user-api "$active_user_port")" || return 1
+  wait_health_stable admin-api-slot "$(service_health_url admin-api "$active_admin_port")" || return 1
+  wait_health batch http://127.0.0.1:8082/actuator/health || return 1
+  SOURCE_FURNITURE_INTAKE=close
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  if grep -Fxq rougether-ai-users.timer "$state/active"; then systemctl start rougether-ai-users.timer || return 1; fi
+  # The inert conditions can be reused on the next hold. Keep the prior active list for audit.
+  mv "$state/release" "$state/last-resumed-release"
+}
+
 render_nginx_config() {
   local destination="$1"
   local user_port="$2"
   local admin_port="$3"
+  if [ "$SOURCE_FURNITURE_INTAKE" = hold-host ]; then render_held_source "$destination"; return; fi
   local admin_upstream_ip intake_closed=false
   if [ "$SOURCE_FURNITURE_INTAKE" = close ] || {
     [ "$SOURCE_FURNITURE_INTAKE" != reopen ] && [ -f "$NGINX_CONFIG_FILE" ] &&
@@ -2924,7 +3022,18 @@ case "$DEPLOY_MODE" in
   legacy|blue-green)
     # 메모리 설정이 잘못되면 호스트를 건드리기 전에 멈춘다(유닛 작성·롤백 모두 같은 값을 쓴다).
     acquire_deploy_lock || exit 75
+    if [ -f "$ENV_DIR/cutover-source/release" ]; then
+      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
+    fi
     case "$SOURCE_FURNITURE_INTAKE" in
+      hold-host|resume-host)
+        trap release_deploy_lock EXIT
+        [ "$DEPLOY_MODE" = blue-green ] || exit 2
+        load_blue_green_state
+        blue_green_release_is_active || { echo '배포된 SHA가 다릅니다.' >&2; exit 2; }
+        if [ "$SOURCE_FURNITURE_INTAKE" = hold-host ]; then hold_source_host; else resume_source_host; fi
+        exit 0
+        ;;
       preserve) ;;
       close|reopen)
         trap release_deploy_lock EXIT

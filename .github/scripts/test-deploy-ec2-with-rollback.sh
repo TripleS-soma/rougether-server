@@ -1054,6 +1054,66 @@ test_nginx_config_preserves_websocket_upgrade() {
   echo "ok - deployed Nginx config preserves WebSocket and ordinary HTTP routing"
 }
 
+test_hold_and_resume_source_writers() (
+  reset_scenario source-writers
+  active_user_color=blue; active_admin_color=green
+  active_user_port=18081; active_admin_port=28082
+  DEPLOYED_SHA=synthetic-release
+  SOURCE_FURNITURE_INTAKE=hold-host
+  touch "$NGINX_CONFIG_FILE"
+  if hold_source_host; then echo 'freeze accepted an open intake' >&2; exit 1; fi
+  echo '# Rougether furniture intake closed' > "$NGINX_CONFIG_FILE"
+  mkdir "$ENV_DIR/units"
+  for unit in rougether-user-api@blue.service rougether-admin-api@green.service rougether-batch.service rougether-ai-users.timer; do
+    touch "$ENV_DIR/units/$unit"
+  done
+  systemctl() {
+    local sub="$1"; shift
+    case "$sub" in
+      show)
+        case "$2" in
+          LoadState) echo loaded ;;
+          ActiveState) if test -f "$ENV_DIR/units/$4"; then echo active; else echo inactive; fi ;;
+          *) return 1 ;;
+        esac ;;
+      stop) for unit in "$@"; do rm -f "$ENV_DIR/units/$unit"; done ;;
+      start) test ! -f "$ENV_DIR/cutover-source/held" && touch "$ENV_DIR/units/$1" ;;
+      daemon-reload) ;;
+      *) return 1 ;;
+    esac
+  }
+  apply_proxy_ports() { render_nginx_config "$NGINX_CONFIG_FILE" "$@"; }
+  docker() { if test -f "$ENV_DIR/stray"; then echo rougether-user-api-green; fi; }
+  curl() { grep -q 'source host held' "$NGINX_CONFIG_FILE" && printf 503; }
+  wait_health_stable() { test ! -f "$ENV_DIR/no-health"; }
+  wait_health() { return 0; }
+  ROUGETHER_PRIVATE_IP=127.0.0.1
+  touch "$ENV_DIR/stray"
+  if hold_source_host; then echo 'orphan source process not caught' >&2; exit 1; fi
+  test -f "$ENV_DIR/cutover-source/held"
+  rm "$ENV_DIR/stray"
+  hold_source_host
+  hold_source_host
+  test "$(wc -l < "$ENV_DIR/cutover-source/active" | tr -d ' ')" = 4
+  for unit in rougether-user-api@blue.service rougether-admin-api@green.service rougether-batch.service rougether-ai-users.timer; do
+    test ! -f "$ENV_DIR/units/$unit"
+    grep -Fq "ConditionPathExists=!$ENV_DIR/cutover-source/held" "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf"
+  done
+  SOURCE_FURNITURE_INTAKE=resume-host
+  touch "$ENV_DIR/no-health"
+  if resume_source_host; then echo 'ingress resumed with unhealthy API' >&2; exit 1; fi
+  grep -q 'source host held' "$NGINX_CONFIG_FILE"
+  test -f "$ENV_DIR/cutover-source/release"
+  rm "$ENV_DIR/no-health"
+  resume_source_host
+  grep -Fqx '# Rougether furniture intake closed' "$NGINX_CONFIG_FILE"
+  test ! -f "$ENV_DIR/cutover-source/release"
+  test -f "$ENV_DIR/units/rougether-ai-users.timer"
+  test ! -f "$ENV_DIR/units/rougether-user-api@green.service"
+  test ! -f "$ENV_DIR/units/rougether-admin-api@blue.service"
+  echo 'ok - source hold survives retries and resumes only recorded units after health'
+)
+
 test_furniture_intake_survives_deployment_until_reopened() (
   reset_scenario "furniture-intake"
   ROUGETHER_PRIVATE_IP=10.0.1.10
@@ -2488,6 +2548,7 @@ test_candidate_health_precedes_initial_proxy_cutover
 test_candidate_health_failure_never_stops_active_service
 test_nginx_config_preserves_websocket_upgrade
 test_furniture_intake_survives_deployment_until_reopened
+test_hold_and_resume_source_writers
 test_nginx_reload_failure_restores_previous_config
 test_concurrent_deploy_is_rejected_by_host_lock
 test_previous_slot_stays_up_when_proxy_points_elsewhere
