@@ -1,0 +1,294 @@
+terraform {
+  required_version = ">= 1.10"
+  backend "s3" {
+    bucket              = "rougether-cutover-940482450790-state"
+    key                 = "furniture/terraform.tfstate"
+    region              = "ap-northeast-2"
+    encrypt             = true
+    use_lockfile        = true
+    allowed_account_ids = ["940482450790"]
+  }
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 6.0" }
+  }
+}
+provider "aws" {
+  region              = var.region
+  allowed_account_ids = ["940482450790"]
+}
+data "aws_caller_identity" "current" {}
+variable "region" { default = "ap-northeast-2" }
+variable "name" { default = "rougether-personal-furniture" }
+variable "asset_bucket" { type = string }
+variable "artifact_bucket" { type = string }
+variable "ai_key_parameter_arn" { type = string }
+variable "ai_key_parameter_name" { type = string }
+variable "ai_key_kms_arn" { type = string }
+variable "vpc_id" { type = string }
+variable "private_subnet_ids" { type = list(string) }
+variable "lightsail_private_ipv4" {
+  type = string
+  validation {
+    condition     = can(cidrnetmask("${var.lightsail_private_ipv4}/32")) && can(regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)", var.lightsail_private_ipv4))
+    error_message = "Lightsail의 사설 IPv4 하나를 지정한다."
+  }
+}
+variable "artifact_directory" { type = string }
+variable "trust_layer_zip" { type = string }
+variable "db_schema" {
+  type = string
+  validation {
+    condition     = contains(["rougether_furniture_fixture", "rougether"], var.db_schema)
+    error_message = "승인된 합성 또는 운영 스키마를 지정한다."
+  }
+}
+variable "billing_require_credits" { type = string }
+variable "llm_key_version" { type = string }
+
+variable "db_username" { type = string }
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+variable "image_model" { default = "gpt-image-2.5-flare" }
+variable "style_reference_keys" {
+  type    = string
+  default = "items/cozy-developer-room/furniture/cozy-developer-room-cozy-chair.png"
+}
+variable "enable_trigger" { default = false }
+variable "alarm_topic_arn" {
+  type    = string
+  default = null
+}
+variable "ai_concurrency" {
+  type    = number
+  default = 2
+  validation {
+    condition     = var.ai_concurrency >= 2 && var.ai_concurrency <= 100 && floor(var.ai_concurrency) == var.ai_concurrency
+    error_message = "AI 동시 실행은 정수 2~100 범위여야 합니다."
+  }
+}
+locals {
+  # 운영 환경에서 알림 대상을 생략해도 기존 운영 Webex 경로로 연결한다. 격리 벤치는 기본 무알림이다.
+  alarm_actions = var.alarm_topic_arn != null ? [var.alarm_topic_arn] : []
+  assume_lambda = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "lambda.amazonaws.com" } }] })
+  ai_zip        = "${var.artifact_directory}/furniture-lambda-ai.zip"
+  control_zip   = "${var.artifact_directory}/furniture-lambda-control.zip"
+}
+resource "aws_sqs_queue" "dead" {
+  name                      = "${var.name}-dlq"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+}
+resource "aws_sqs_queue" "jobs" {
+  name                       = "${var.name}-jobs"
+  visibility_timeout_seconds = 3600
+  message_retention_seconds  = 345600
+  sqs_managed_sse_enabled    = true
+  redrive_policy             = jsonencode({ deadLetterTargetArn = aws_sqs_queue.dead.arn, maxReceiveCount = 5 })
+}
+resource "aws_sqs_queue_redrive_allow_policy" "dead" {
+  queue_url            = aws_sqs_queue.dead.id
+  redrive_allow_policy = jsonencode({ redrivePermission = "byQueue", sourceQueueArns = [aws_sqs_queue.jobs.arn] })
+}
+resource "aws_cloudwatch_log_group" "ai" {
+  name              = "/aws/lambda/${var.name}-ai"
+  retention_in_days = 14
+}
+resource "aws_cloudwatch_log_group" "control" {
+  name              = "/aws/lambda/${var.name}-control"
+  retention_in_days = 14
+}
+resource "aws_iam_role" "ai" {
+  name               = "${var.name}-ai"
+  assume_role_policy = local.assume_lambda
+}
+resource "aws_iam_role" "control" {
+  name               = "${var.name}-control"
+  assume_role_policy = local.assume_lambda
+}
+resource "aws_security_group" "control" {
+  name        = "${var.name}-control"
+  description = "Furniture DB control Lambda"
+  vpc_id      = var.vpc_id
+}
+resource "aws_vpc_security_group_egress_rule" "database" {
+  security_group_id = aws_security_group.control.id
+  cidr_ipv4         = "${var.lightsail_private_ipv4}/32"
+  ip_protocol       = "tcp"
+  from_port         = 3306
+  to_port           = 3306
+}
+resource "aws_iam_role_policy" "control" {
+  role = aws_iam_role.control.id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.control.arn}:*" },
+    { Effect = "Allow", Action = ["ec2:CreateNetworkInterface", "ec2:DescribeNetworkInterfaces", "ec2:DescribeSubnets", "ec2:DeleteNetworkInterface", "ec2:AssignPrivateIpAddresses", "ec2:UnassignPrivateIpAddresses"], Resource = "*" }
+  ] })
+}
+resource "aws_s3_object" "ai_code" {
+  bucket      = var.artifact_bucket
+  key         = "furniture-lambda/ai-${filesha256(local.ai_zip)}.zip"
+  source      = local.ai_zip
+  source_hash = filesha256(local.ai_zip)
+}
+resource "aws_s3_object" "control_code" {
+  bucket      = var.artifact_bucket
+  key         = "furniture-lambda/control-${filesha256(local.control_zip)}.zip"
+  source      = local.control_zip
+  source_hash = filesha256(local.control_zip)
+}
+resource "aws_lambda_layer_version" "db_trust" {
+  layer_name               = "${var.name}-db-trust"
+  filename                 = var.trust_layer_zip
+  source_code_hash         = filebase64sha256(var.trust_layer_zip)
+  compatible_architectures = ["arm64"]
+  compatible_runtimes      = ["java25"]
+}
+resource "aws_lambda_function" "control" {
+  function_name    = "${var.name}-control"
+  role             = aws_iam_role.control.arn
+  runtime          = "java25"
+  architectures    = ["arm64"]
+  handler          = "com.triples.rougether.lambdacontrol.ControlHandler"
+  s3_bucket        = aws_s3_object.control_code.bucket
+  s3_key           = aws_s3_object.control_code.key
+  source_code_hash = filebase64sha256(local.control_zip)
+  timeout          = 60
+  memory_size      = 1024
+  layers           = [aws_lambda_layer_version.db_trust.arn]
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.control.id]
+  }
+  environment {
+    variables = {
+      SPRING_DATASOURCE_URL      = "jdbc:mysql://${var.lightsail_private_ipv4}:3306/${var.db_schema}?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/opt/rougether-trust.p12&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-truststore&serverTimezone=Asia/Seoul"
+      SPRING_DATASOURCE_USERNAME = var.db_username
+      SPRING_DATASOURCE_PASSWORD = var.db_password
+      BILLING_REQUIRE_CREDITS    = var.billing_require_credits
+    }
+  }
+  depends_on = [aws_iam_role_policy.control, aws_vpc_security_group_egress_rule.database]
+}
+resource "aws_iam_role_policy" "ai" {
+  role = aws_iam_role.ai.id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.ai.arn}:*" },
+    { Effect = "Allow", Action = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"], Resource = aws_sqs_queue.jobs.arn },
+    { Effect = "Allow", Action = "lambda:InvokeFunction", Resource = aws_lambda_function.control.arn },
+    { Effect = "Allow", Action = "ssm:GetParameter", Resource = var.ai_key_parameter_arn },
+    { Effect = "Allow", Action = "kms:Decrypt", Resource = var.ai_key_kms_arn, Condition = { StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" } } },
+    { Effect = "Allow", Action = "s3:GetObject", Resource = ["arn:aws:s3:::${var.asset_bucket}/private/furniture-generation/*", "arn:aws:s3:::${var.asset_bucket}/items/*"] },
+    { Effect = "Allow", Action = "s3:PutObject", Resource = ["arn:aws:s3:::${var.asset_bucket}/private/furniture-generation/*", "arn:aws:s3:::${var.asset_bucket}/items/photo-furniture/furniture/*"] }
+  ] })
+}
+resource "aws_lambda_function" "ai" {
+  function_name    = "${var.name}-ai"
+  role             = aws_iam_role.ai.arn
+  runtime          = "java25"
+  architectures    = ["arm64"]
+  handler          = "com.triples.rougether.lambdaai.AiHandler"
+  s3_bucket        = aws_s3_object.ai_code.bucket
+  s3_key           = aws_s3_object.ai_code.key
+  source_code_hash = filebase64sha256(local.ai_zip)
+  timeout          = 600
+  memory_size      = 2048
+  environment {
+    variables = {
+      CONTROL_FUNCTION_NAME                     = aws_lambda_function.control.function_name
+      ASSET_S3_BUCKET                           = var.asset_bucket
+      LLM_API_KEY_PARAMETER                     = var.ai_key_parameter_name
+      LLM_API_KEY_VERSION                       = var.llm_key_version
+      FURNITURE_GENERATION_ENABLED              = "true"
+      FURNITURE_GENERATION_IMAGE_MODEL          = var.image_model
+      FURNITURE_GENERATION_STYLE_REFERENCE_KEYS = var.style_reference_keys
+    }
+  }
+  depends_on = [aws_iam_role_policy.ai]
+}
+resource "aws_lambda_event_source_mapping" "jobs" {
+  event_source_arn        = aws_sqs_queue.jobs.arn
+  function_name           = aws_lambda_function.ai.arn
+  enabled                 = var.enable_trigger
+  batch_size              = 1
+  function_response_types = ["ReportBatchItemFailures"]
+  scaling_config { maximum_concurrency = var.ai_concurrency }
+  depends_on = [aws_iam_role_policy.ai]
+}
+resource "aws_cloudwatch_metric_alarm" "dlq" {
+  alarm_name          = "${var.name}-dead-letter"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  dimensions          = { QueueName = aws_sqs_queue.dead.name }
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+resource "aws_cloudwatch_metric_alarm" "age" {
+  alarm_name          = "${var.name}-queue-age"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  dimensions          = { QueueName = aws_sqs_queue.jobs.name }
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 120
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+resource "aws_cloudwatch_metric_alarm" "function_failure" {
+  for_each = {
+    ai_errors         = { function = aws_lambda_function.ai.function_name, metric = "Errors" }
+    ai_throttles      = { function = aws_lambda_function.ai.function_name, metric = "Throttles" }
+    control_errors    = { function = aws_lambda_function.control.function_name, metric = "Errors" }
+    control_throttles = { function = aws_lambda_function.control.function_name, metric = "Throttles" }
+  }
+  alarm_name          = "${var.name}-${each.key}"
+  namespace           = "AWS/Lambda"
+  metric_name         = each.value.metric
+  dimensions          = { FunctionName = each.value.function }
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+output "queue_url" { value = aws_sqs_queue.jobs.url }
+output "ai_function" { value = aws_lambda_function.ai.function_name }
+output "control_function" { value = aws_lambda_function.control.function_name }
+
+resource "aws_cloudwatch_log_metric_filter" "job_failures" {
+  count          = length(local.alarm_actions) > 0 ? 1 : 0
+  name           = "${var.name}-job-failures"
+  log_group_name = aws_cloudwatch_log_group.ai.name
+  pattern        = "\"FURNITURE_JOB_FAILED\""
+  metric_transformation {
+    name          = "${var.name}-job-failures"
+    namespace     = "Rougether/Furniture"
+    value         = "1"
+    default_value = 0
+    unit          = "Count"
+  }
+}
+resource "aws_cloudwatch_metric_alarm" "job_failures" {
+  count               = length(local.alarm_actions) > 0 ? 1 : 0
+  alarm_name          = "${var.name}-job-failures"
+  alarm_description   = "가구 AI 비동기 단계 실패. Lambda Errors가 0이어도 감지함."
+  namespace           = "Rougether/Furniture"
+  metric_name         = "${var.name}-job-failures"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}

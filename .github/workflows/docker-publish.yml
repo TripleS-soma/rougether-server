@@ -6,6 +6,17 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      personal_candidate:
+        description: '개인 AWS에서 격리 운영 DB를 준비하는 단계'
+        type: choice
+        options: ['off', enroll, restore]
+        default: 'off'
+      candidate_snapshot:
+        description: '격리 복원 시점 YYYYMMDD-HHMM'
+        type: string
+      candidate_digest:
+        description: '격리 복원 암호문 SHA-256'
+        type: string
       personal_stage_https:
         description: '개인 AWS 합성 DB의 실기기 검증용 HTTPS만 배포'
         type: boolean
@@ -24,7 +35,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ inputs.personal_stage_https && 'rougether-personal-stage-https' || 'rougether-dev-deploy' }}
+  group: ${{ (inputs.personal_stage_https || (inputs.personal_candidate && inputs.personal_candidate != 'off')) && 'rougether-personal-stage-https' || 'rougether-dev-deploy' }}
   cancel-in-progress: false
 
 permissions:
@@ -52,7 +63,7 @@ env:
 
 jobs:
   resolve:
-    if: ${{ !inputs.personal_stage_https }}
+    if: ${{ !inputs.personal_stage_https && (!inputs.personal_candidate || inputs.personal_candidate == 'off') }}
     name: Resolve verified PR artifacts
     runs-on: ubuntu-latest
     permissions:
@@ -83,7 +94,7 @@ jobs:
 
   test:
     name: Gradle test
-    if: ${{ always() && !inputs.personal_stage_https }}
+    if: ${{ always() && !inputs.personal_stage_https && (!inputs.personal_candidate || inputs.personal_candidate == 'off') }}
     needs: [resolve, fresh]
     runs-on: ubuntu-latest
     steps:
@@ -484,7 +495,7 @@ jobs:
           if-no-files-found: warn
 
   personal-stage-https:
-    if: github.event_name == 'workflow_dispatch' && inputs.personal_stage_https
+    if: github.event_name == 'workflow_dispatch' && inputs.personal_stage_https && (!inputs.personal_candidate || inputs.personal_candidate == 'off')
     runs-on: ubuntu-latest
     timeout-minutes: 18
     environment: personal-aws-stage
@@ -517,3 +528,38 @@ jobs:
           STAGE_WIFI: ${{ secrets.PERSONAL_STAGE_WIFI_CIDR }}
           STAGE_CODE_HASH: ${{ secrets.PERSONAL_STAGE_CODE_HASH }}
         run: python3 deploy/personal-stage/publish.py
+
+  personal-candidate:
+    if: github.event_name == 'workflow_dispatch' && (inputs.personal_candidate == 'enroll' || inputs.personal_candidate == 'restore') && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: personal-aws-candidate
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::940482450790:role/rougether-personal-candidate-deploy
+          aws-region: ap-northeast-2
+          allowed-account-ids: '940482450790'
+      - name: Prepare isolated database
+        env:
+          CANDIDATE_MODE: ${{ inputs.personal_candidate }}
+          SNAPSHOT: ${{ inputs.candidate_snapshot }}
+          DIGEST: ${{ inputs.candidate_digest }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/rougether-aws"
+          "$RUNNER_TEMP/rougether-aws/bin/pip" -q install boto3==1.42.97
+          "$RUNNER_TEMP/rougether-aws/bin/python" deploy/personal-cutover/run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-candidate-proof
+          path: |
+            transport-cert.pem
+            restore-receipt.json
+          retention-days: 7
+          if-no-files-found: error
