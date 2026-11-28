@@ -64,7 +64,7 @@ sql < "$dir/grants.sql" >/dev/null 2>/dev/null
 rm "$dir/grants.sql"
 test "$(echo 'SELECT COUNT(*) FROM users' | sql)" = 0
 test "$(echo 'SELECT @@require_secure_transport' | sql)" = 1
-dbaddr=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db")
+dbaddr=$(docker inspect "$db" | python3 -c 'import sys,json,ipaddress; n=json.load(sys.stdin)[0]["NetworkSettings"]["Networks"]; assert list(n)==["rougether-furniture-isolated"]; print(ipaddress.IPv4Address(next(iter(n.values()))["IPAddress"]))')
 private=$(cat "$dir/private.addr"); allowed=$(cat "$dir/allow.addr")
 ip -o -4 addr show | grep -Fq " $private/"
 cat > "$dir/haproxy.cfg" <<EOF

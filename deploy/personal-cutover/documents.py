@@ -26,7 +26,7 @@ def document(mode, machine):
     # SSM launches a POSIX shell. Explicitly select Bash for the locked host routine.
     command = "exec /bin/bash <<'ROUGETHER_SSM_END'\n"+source+"\nROUGETHER_SSM_END"
     content = {'schemaVersion':'2.2','description':'Rougether Seoul isolated candidate '+mode,
-               'parameters':params,'mainSteps':[{'action':'aws:runShellScript','name':mode,
+               'parameters':params,'mainSteps':[{'action':'aws:runShellScript','name':mode.replace('-',''),
                'inputs':{'timeoutSeconds':'1800','runCommand':[command]}}]}
     raw=json.dumps(content,sort_keys=True,separators=(',',':'))
     return 'RougetherPersonal-'+mode+'-'+hashlib.sha256(raw.encode()).hexdigest()[:20],raw
