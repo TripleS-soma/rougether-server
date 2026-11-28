@@ -1,0 +1,128 @@
+{
+	admin off
+	default_sni {$STAGE_IP}
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+http://:80 {
+	respond 404
+}
+
+https://{$STAGE_IP} {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	header {
+		Cache-Control "no-store"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+	}
+	@outside not remote_ip {$TEST_CIDR} 127.0.0.1
+	@page {
+		method GET HEAD
+		path / /mobile.js
+	}
+	@health {
+		method GET
+		path /api/v1/health
+	}
+	@me {
+		method GET PUT PATCH
+		path /api/v1/me
+	}
+	@google {
+		method POST
+		path /api/v1/auth/google
+	}
+	@journeyRead {
+		method GET
+		path /api/v1/items /api/v1/me/join-requests /api/v1/reports/weekly /api/v1/recommendations /api/v1/events/christmas /api/v1/calendar/month /api/v1/characters /api/v1/onboarding /api/v1/onboarding/house /api/v1/today /api/v1/categories /api/v1/me/houses /api/v1/me/characters /api/v1/me/items /api/v1/notifications /api/v1/notifications/* /api/v1/events/login-gifts/* /api/v1/events/attendance /api/v1/calendar /api/v1/todos /api/v1/goals /api/v1/rooms/me /api/v1/me/wallets /api/v1/routines /api/v1/routines/* /api/v1/houses /api/v1/houses/* /api/v1/chat/rooms/* /api/v1/chat/images/*
+	}
+	@journeyWrite {
+		method POST
+		path_regexp journey ^/api/v1/(auth/refresh|routines|routines/[0-9]+/logs|houses|houses/join-by-code|houses/[0-9]+/chat-room|chat/rooms/[0-9]+/messages)$
+	}
+	@onboarding {
+		method PUT
+		path /api/v1/onboarding/goals /api/v1/onboarding/character /api/v1/onboarding/house
+	}
+	@photo {
+		method POST
+		path_regexp photo ^/api/v1/chat/rooms/[0-9]+/images$
+	}
+	@pwaPreflight {
+		method OPTIONS
+		path /api/v1/*
+		not path /api/v1/auth/dev-login*
+		header Origin https://app.rougether.com
+	}
+	@pwaFixture {
+		path /rehearsal/session
+		header Origin https://app.rougether.com
+	}
+	@new {
+		method POST
+		path /rehearsal/session
+	}
+	route {
+		respond @outside 403
+		respond @pwaFixture 403
+		handle @pwaPreflight {
+			reverse_proxy user-api:8080
+		}
+		handle @photo {
+			request_body {
+				max_size 10MB
+			}
+			reverse_proxy user-api:8080
+		}
+		request_body {
+			max_size 16KB
+		}
+		handle @page {
+			root * /srv/test
+			file_server
+		}
+		handle @new {
+			basic_auth {
+				rehearsal {$STAGE_CODE_HASH}
+			}
+			rewrite * /api/v1/auth/dev-login?
+			request_body {
+				set "{}"
+			}
+			reverse_proxy user-api:8080 {
+				header_up Content-Type application/json
+				header_up -Authorization
+				header_up -Cookie
+			}
+		}
+		handle @health {
+			reverse_proxy user-api:8080
+		}
+		handle @me {
+			reverse_proxy user-api:8080
+		}
+		handle @journeyRead {
+			reverse_proxy user-api:8080
+		}
+		handle @onboarding {
+			reverse_proxy user-api:8080
+		}
+		handle @journeyWrite {
+			reverse_proxy user-api:8080
+		}
+		handle @google {
+			reverse_proxy user-api:8080
+		}
+		respond 404
+	}
+}
