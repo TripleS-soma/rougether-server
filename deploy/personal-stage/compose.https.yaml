@@ -17,11 +17,27 @@ services:
     volumes:
       - ${STAGE_HTTPS_DIR:?}/GoogleKeys.Caddyfile:/etc/caddy/Caddyfile:ro
     networks: [default, stage-ingress]
+  stage-objects:
+    image: chrislusf/seaweedfs@sha256:7ca46aeae2f223b37e5d91593c17ab37738eec6df6ab69b48a0487f7643342b9
+    command: ["mini", "-dir=/data", "-bucket=rougether-synthetic-only", "-s3.domainName=stage-objects", "-s3.config=/etc/weed/qa-s3.json"]
+    restart: unless-stopped
+    mem_limit: 384m
+    volumes:
+      - stage-synthetic-objects:/data
+      - ${STAGE_HTTPS_DIR:?}/qa-s3.json:/etc/weed/qa-s3.json:ro
+    networks:
+      default:
+        aliases: [rougether-synthetic-only.stage-objects]
   user-api:
+    env_file: ${STAGE_HTTPS_DIR:?}/qa-object.env
     environment:
+      ASSET_S3_ENDPOINT: ""
+      AWS_ENDPOINT_URL_S3: http://stage-objects:8333
+      ASSET_S3_BUCKET: rougether-synthetic-only
       CORS_ALLOWED_ORIGINS: https://${STAGE_IP:?}
       GOOGLE_CERTS_URL: http://stage-google-keys:8089/keys
 networks:
   stage-ingress: {}
 volumes:
   stage-tls: {}
+  stage-synthetic-objects: {}
