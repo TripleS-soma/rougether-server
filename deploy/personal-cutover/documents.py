@@ -11,7 +11,7 @@ BUCKET = 'rougether-cutover-940482450790-artifacts'
 NODE = 'mi-017285f379d04931f'
 INSTANCE = 'rougether-fallback-stage'
 def document(mode, machine):
-    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users','prepare-release','warm-release','activate-release','seal-release') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
+    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users','prepare-release','warm-release','activate-release','seal-release','release-health') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
     source = (HERE / 'host' / (mode+'.sh')).read_text().replace('EXPECTED_MACHINE',machine)
     params = {}
     if mode == 'prepare-release':
@@ -55,9 +55,9 @@ def document(mode, machine):
             params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
     if mode == 'activate-release':
         params['SourceSettings'] = {'type':'String','allowedPattern':'^[A-Za-z0-9+/=]+$','interpolationType':'ENV_VAR'}
-    if mode in ('warm-release','activate-release','seal-release'):
+    if mode in ('warm-release','activate-release','seal-release','release-health'):
         params['Bundle'] = {'type':'String','allowedPattern':'^[a-f0-9]{64}$','interpolationType':'ENV_VAR'}
-    if mode in ('prepare-db-users','warm-release','activate-release','seal-release'):
+    if mode in ('prepare-db-users','warm-release','activate-release','seal-release','release-health'):
         for key,regex in {'Snapshot':'^[0-9]{8}-[0-9]{4}$','Digest':'^[a-f0-9]{64}$','ConfigDigest':'^[a-f0-9]{64}$'}.items():
             params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
     if mode == 'release-config':

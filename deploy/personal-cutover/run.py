@@ -39,18 +39,18 @@ def main():
         print('::add-mask::'+url,flush=True)
         params={'Envelope':[url],'Digest':[digest]}
         if mode!='release-config':params['Snapshot']=[snap]
-    if mode in ('clone-sealed-db','prepare-db-users','warm-release','activate-release','seal-release'):
+    if mode in ('clone-sealed-db','prepare-db-users','warm-release','activate-release','seal-release','release-health'):
         snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
         assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
         params={'Snapshot':[snap],'Digest':[digest]}
-        if mode in ('prepare-db-users','warm-release','activate-release','seal-release'):
+        if mode in ('prepare-db-users','warm-release','activate-release','seal-release','release-health'):
             config=os.environ['CONFIG_DIGEST']
             assert re.fullmatch(r'[a-f0-9]{64}',config)
             params['ConfigDigest']=[config]
     if mode=='activate-release':
         from source_artifact import load as source_settings
         params['SourceSettings']=[source_settings(os.environ['SOURCE_SETTINGS_RUN'])]
-    if mode in ('warm-release','activate-release','seal-release'):
+    if mode in ('warm-release','activate-release','seal-release','release-health'):
         bundle=os.environ['RELEASE_BUNDLE']
         assert re.fullmatch(r'[a-f0-9]{64}',bundle)
         params['Bundle']=[bundle]
@@ -88,6 +88,14 @@ def main():
         receipt=json.loads(out)
         assert receipt=={'sealedConfig':True,'connected':False,'services':3,'privateTls':True,'digest':digest}
         Path('release-config-receipt.json').write_text(json.dumps(receipt,indent=2))
+    elif mode=='release-health':
+        receipt=json.loads(out)
+        assert receipt['snapshot']==snap and receipt['windowSeconds']==3600
+        assert set(receipt['services'])=={'user-api','admin-api','batch'}
+        for service in receipt['services'].values():
+            assert isinstance(service['health'],int) and len(service['jarDigest'])==64
+            assert service['errorOrFatalLines']>=0 and isinstance(service['coversLastHour'],bool)
+        Path('release-health-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='activate-release':
         receipt=json.loads(out)
         assert receipt==dict(active=True,snapshot=snap,originVerified=True,adminHealth=200,batchHealth=200,binlogBaseline=True)
