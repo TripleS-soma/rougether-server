@@ -9,7 +9,8 @@ PREFIX = '/rougether-personal/cutover/'
 AUTH = {'jwt/secret':'JWT_SECRET', 'kakao/admin-key':'KAKAO_ADMIN_KEY',
         'apple/team-id':'APPLE_TEAM_ID', 'apple/key-id':'APPLE_KEY_ID',
         'apple/private-key':'APPLE_PRIVATE_KEY', 'apple/refresh-token-enc-key':'APPLE_REFRESH_TOKEN_ENC_KEY'}
-REQUIRED = set(AUTH) | {'firebase/credentials-json','admin/origin-secret','llm/api-key','db/api-password','db/furniture-password','db/server-tls'}
+ALERTS = {'alerts/webex-bot-token':'OPERATIONS_WEBEX_BOT_TOKEN','alerts/webex-room-id':'OPERATIONS_WEBEX_ROOM_ID'}
+REQUIRED = set(AUTH) | set(ALERTS) | {'firebase/credentials-json','admin/origin-secret','llm/api-key','db/api-password','db/furniture-password','db/server-tls'}
 BUCKET = 'rougether-fallback-940482450790-assets'
 CDN = 'https://d25hfubpdm45t2.cloudfront.net'
 QUEUE = 'https://sqs.ap-northeast-2.amazonaws.com/940482450790/rougether-personal-furniture-jobs'
@@ -50,6 +51,8 @@ def materialize(bundle, destination):
         apps[svc].update({'asset.s3.bucket':BUCKET,'asset.s3.region':'ap-northeast-2','asset.public-base-url':CDN})
     for svc in ['user-api','batch']:
         apps[svc]['llm.api-key']=values['llm/api-key']
+        for field, key in ALERTS.items():
+            apps[svc][key] = values[field]
     apps['user-api'].update({'furniture.lambda.queue-url':QUEUE,
                             'asset.s3.purge-versions-on-delete':'true',
                             'chat.websocket.allowed-origins':'https://43.203.93.12,https://dkfiwkal2ezg9.cloudfront.net',

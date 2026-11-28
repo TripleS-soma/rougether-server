@@ -47,6 +47,10 @@ def main():
             config=os.environ['CONFIG_DIGEST']
             assert re.fullmatch(r'[a-f0-9]{64}',config)
             params['ConfigDigest']=[config]
+    if mode=='prepare-release':
+        config=os.environ['CONFIG_DIGEST']
+        assert re.fullmatch(r'[a-f0-9]{64}',config)
+        params={'ConfigDigest':[config]}
     if mode=='runtime-check':
         stack=aws.client('cloudformation').describe_stacks(StackName='rougether-personal-runtime-identity')['Stacks'][0]
         assert stack['StackStatus'] in ('CREATE_COMPLETE','UPDATE_COMPLETE')
@@ -77,6 +81,11 @@ def main():
         receipt=json.loads(out)
         assert receipt=={'sealedConfig':True,'connected':False,'services':3,'privateTls':True,'digest':digest}
         Path('release-config-receipt.json').write_text(json.dumps(receipt,indent=2))
+    elif mode=='prepare-release':
+        receipt=json.loads(out)
+        assert re.fullmatch(r'[a-f0-9]{64}',receipt['bundle'])
+        assert receipt==dict(prepared=True,bundle=receipt['bundle'],config=config,services=6,productionWritersStarted=0)
+        Path('prepared-release-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='prepare-db-users':
         receipt=json.loads(out)
         assert receipt==dict(snapshot=snap,digest=digest,config=config,tlsLogins=2,schemaReadOnly=True,globalReadOnly=True,network='none',checkedGrants=True)

@@ -11,9 +11,23 @@ BUCKET = 'rougether-cutover-940482450790-artifacts'
 NODE = 'mi-017285f379d04931f'
 INSTANCE = 'rougether-fallback-stage'
 def document(mode, machine):
-    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
+    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users','prepare-release') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
     source = (HERE / 'host' / (mode+'.sh')).read_text().replace('EXPECTED_MACHINE',machine)
     params = {}
+    if mode == 'prepare-release':
+        files = [
+            'runtime/compose.apps.yaml', 'runtime/compose.identity.yaml', 'runtime/compose.database.yaml',
+            'runtime/compose.routing.yaml', 'runtime/compose.standby.yaml', 'runtime/render_routing.py',
+            'runtime/release_plan.py', 'runtime/release_candidate.py', 'gateway/target.Caddyfile', 'gateway/admin.Caddyfile',
+        ]
+        parts = []
+        for path in files:
+            content = (HERE / path).read_text()
+            assert content.endswith('\n') and 'RELEASE_FILE_END' not in content
+            parts.append(f"cat > {path} <<'RELEASE_FILE_END'\n{content}RELEASE_FILE_END")
+        assert source.count('# RELEASE_TOOLS') == 1
+        source = source.replace('# RELEASE_TOOLS', '\n'.join(parts))
+        params['ConfigDigest'] = {'type':'String','allowedPattern':'^[a-f0-9]{64}$','interpolationType':'ENV_VAR'}
     if mode == 'renewal-check':
         java = (HERE/'runtime/RenewalProbe.java').read_text()
         assert source.count('# RENEWAL_JAVA_SOURCE') == 1

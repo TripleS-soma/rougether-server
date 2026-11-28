@@ -1,6 +1,8 @@
 services:
   user-api:
     environment:
+      OPERATIONS_WEBEX_BOT_TOKEN: ""
+      OPERATIONS_WEBEX_ROOM_ID: ""
       FURNITURE_GENERATION_ENABLED: "false"
       FURNITURE_UPLOAD_ENABLED: "false"
       FURNITURE_LAMBDA_DISPATCH_ENABLED: "false"
