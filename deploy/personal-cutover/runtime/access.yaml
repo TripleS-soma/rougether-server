@@ -31,6 +31,7 @@ Resources:
   UserRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: rougether-personal-user-api
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -72,6 +73,7 @@ Resources:
   AdminRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: rougether-personal-admin-api
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

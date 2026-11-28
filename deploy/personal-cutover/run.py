@@ -33,6 +33,14 @@ def main():
         url=client.generate_presigned_url('get_object',Params={'Bucket':BUCKET,'Key':key},ExpiresIn=900)
         print('::add-mask::'+url,flush=True)
         params={'Envelope':[url],'Snapshot':[snap],'Digest':[digest]}
+    if mode=='runtime-check':
+        stack=aws.client('cloudformation').describe_stacks(StackName='rougether-personal-runtime-identity')['Stacks'][0]
+        assert stack['StackStatus'] in ('CREATE_COMPLETE','UPDATE_COMPLETE')
+        outputs={row['OutputKey']:row['OutputValue'] for row in stack['Outputs']}
+        for key,kind in [('Anchor','trust-anchor'),('UserProfile','profile'),('AdminProfile','profile')]:
+            arn=outputs[key+'Arn']
+            assert arn.startswith(f'arn:aws:rolesanywhere:{REGION}:{ACCOUNT}:{kind}/')
+            params[key+'Id']=[arn.split('/')[-1]]
     command=ssm.send_command(InstanceIds=[NODE],DocumentName=name,DocumentVersion='1',Parameters=params,TimeoutSeconds=120,
             Comment='Verified personal AWS candidate '+mode)['Command']['CommandId']
     print('Deployment command',command,flush=True)
@@ -51,6 +59,10 @@ def main():
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
         certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
         Path(certificate).write_text(out+'\n')
+    elif mode=='runtime-check':
+        receipt=json.loads(out)
+        assert receipt['runtimeIdentity'] and receipt['adminMediaDeleteDenied'] and receipt['crossRoleDenied']
+        Path('runtime-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='restore':
         receipt=json.loads(out)
         assert receipt['network']=='none' and receipt['readOnly'] and receipt['orphanViolations']==0
