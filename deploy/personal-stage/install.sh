@@ -101,6 +101,11 @@ test "$("${probe[@]}" -o /dev/null -w '%{http_code}' "https://$STAGE_IP/api/v1/m
 google_probe=("${probe[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data '{"idToken":"invalid"}')
 test "$("${google_probe[@]}" -H "Origin: https://$STAGE_IP" "https://$STAGE_IP/api/v1/auth/google")" = 401
 test "$("${google_probe[@]}" -H 'Origin: https://other.invalid' "https://$STAGE_IP/api/v1/auth/google")" = 403
+pwa_origin='https://app.rougether.com'
+preflight=("${probe[@]}" -X OPTIONS -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization')
+"${preflight[@]}" -f -D - -o /dev/null -H "Origin: $pwa_origin" "https://$STAGE_IP/api/v1/me" | tr -d '\r' | grep -Fix "Access-Control-Allow-Origin: $pwa_origin"
+test "$("${preflight[@]}" -o /dev/null -w '%{http_code}' -H 'Origin: https://other.invalid' "https://$STAGE_IP/api/v1/me")" = 404
+test "$("${probe[@]}" -o /dev/null -w '%{http_code}' -X POST -H "Origin: $pwa_origin" "https://$STAGE_IP/rehearsal/session")" = 403
 ln -s "$STAGE_HTTPS_DIR" "$STAGE_HTTPS_DIR.next"
 mv -Tf "$STAGE_HTTPS_DIR.next" "$stage_root/current"
 echo 'Trusted IP TLS, synthetic API health and private route restrictions verified.'

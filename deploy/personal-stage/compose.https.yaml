@@ -34,7 +34,7 @@ services:
       ASSET_S3_ENDPOINT: ""
       AWS_ENDPOINT_URL_S3: http://stage-objects:8333
       ASSET_S3_BUCKET: rougether-synthetic-only
-      CORS_ALLOWED_ORIGINS: https://${STAGE_IP:?}
+      CORS_ALLOWED_ORIGINS: https://${STAGE_IP:?},https://app.rougether.com
       GOOGLE_CERTS_URL: http://stage-google-keys:8089/keys
 networks:
   stage-ingress: {}
