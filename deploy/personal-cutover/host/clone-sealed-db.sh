@@ -15,7 +15,7 @@ img=mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be0
 test "$(cat "$snap/envelope.sha256")" = "$SSM_Digest"
 test -d "$snap/data" && test ! -L "$snap/data"
 test "$(docker inspect -f '{{.Config.Image}} {{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$candidate")" = "$img none 0"
-test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/mysql"}}{{.Source}}{{end}}{{end}}' "$candidate")" = "$snap/data"
+docker inspect "$candidate" | python3 -c 'import json,sys; mounts=json.load(sys.stdin)[0]["Mounts"]; assert [m["Source"] for m in mounts if m["Destination"]=="/var/lib/mysql"]==[sys.argv[1]]' "$snap/data"
 python3 - "$snap/receipt.json" "$candidate" <<'PY'
 import json,sys
 r=json.load(open(sys.argv[1]))
