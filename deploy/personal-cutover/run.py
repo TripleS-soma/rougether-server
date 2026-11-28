@@ -33,6 +33,10 @@ def main():
         url=client.generate_presigned_url('get_object',Params={'Bucket':BUCKET,'Key':key},ExpiresIn=900)
         print('::add-mask::'+url,flush=True)
         params={'Envelope':[url],'Snapshot':[snap],'Digest':[digest]}
+    if mode=='clone-sealed-db':
+        snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
+        assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
+        params={'Snapshot':[snap],'Digest':[digest]}
     if mode=='runtime-check':
         stack=aws.client('cloudformation').describe_stacks(StackName='rougether-personal-runtime-identity')['Stacks'][0]
         assert stack['StackStatus'] in ('CREATE_COMPLETE','UPDATE_COMPLETE')
@@ -59,6 +63,10 @@ def main():
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
         certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
         Path(certificate).write_text(out+'\n')
+    elif mode=='clone-sealed-db':
+        receipt=json.loads(out)
+        assert receipt['readOnly'] and receipt['allTableCountsMatched'] and receipt['binlogEnabled'] and receipt['zeroPublicPorts']
+        Path('sealed-copy-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='renewal-check':
         receipt=json.loads(out)
         assert receipt['firstRequestsVerified'] and {receipt['user'],receipt['admin']} <= {'running','verified'}

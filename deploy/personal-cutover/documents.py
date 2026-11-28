@@ -11,7 +11,7 @@ BUCKET = 'rougether-cutover-940482450790-artifacts'
 NODE = 'mi-017285f379d04931f'
 INSTANCE = 'rougether-fallback-stage'
 def document(mode, machine):
-    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
+    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
     source = (HERE / 'host' / (mode+'.sh')).read_text().replace('EXPECTED_MACHINE',machine)
     params = {}
     if mode == 'renewal-check':
@@ -32,6 +32,12 @@ def document(mode, machine):
         source = source.replace(marker, 'cat > "$tmp/RuntimeProbe.java" <<\'JAVA_END\'\n'+java+'JAVA_END')
         for key in ('AnchorId','UserProfileId','AdminProfileId'):
             params[key] = {'type':'String','allowedPattern':'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$','interpolationType':'ENV_VAR'}
+    if mode == 'clone-sealed-db':
+        verifier = (HERE/'host/verify.py').read_text()
+        assert source.count('# SEALED_DB_VERIFIER') == 1
+        source = source.replace('# SEALED_DB_VERIFIER', 'cat > "$tmp/verify.py" <<\'VERIFY_END\'\n'+verifier+'VERIFY_END')
+        for key,regex in {'Snapshot':'^[0-9]{8}-[0-9]{4}$','Digest':'^[a-f0-9]{64}$'}.items():
+            params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
     if mode == 'restore':
         verifier = (HERE/'host/verify.py').read_text()
         marker = 'python3 "$tmp/verify.py"'

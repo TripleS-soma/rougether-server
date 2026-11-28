@@ -1,0 +1,21 @@
+# Import into the target gateway only after the approved management CIDRs are configured.
+https://43.203.93.12:8443 {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	@operator remote_ip {$ADMIN_ALLOWED_CIDRS:127.0.0.1/32}
+	route {
+		handle @operator {
+			reverse_proxy admin-api:8081 {
+				header_up -Forwarded
+				header_up X-Rougether-Viewer-Ip {http.request.remote.host}
+				header_up X-Rougether-Admin-Origin {env.ROUGETHER_ADMIN_ORIGIN}
+			}
+		}
+		respond 403
+	}
+}

@@ -1,0 +1,39 @@
+# 검증된 최종 후보에서 별도로 준비한 데이터 디렉터리를 사용한다.
+services:
+  mysql:
+    image: mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
+    restart: unless-stopped
+    mem_limit: 1536m
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=${DB_COLLATION:?}
+      - --event-scheduler=DISABLED
+      - --require-secure-transport=ON
+      - --ssl-ca=/run/rougether-db/ca.pem
+      - --ssl-cert=/run/rougether-db/server.pem
+      - --ssl-key=/run/rougether-db/server-key.pem
+      - --innodb-buffer-pool-size=512M
+      - --log-bin=binlog
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --binlog-expire-logs-seconds=259200
+      - --max-binlog-size=64M
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+    logging:
+      driver: local
+      options: {max-size: 8m, max-file: "3"}
+    volumes:
+      - type: bind
+        source: ${DB_RELEASE_DATA:?}
+        target: /var/lib/mysql
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${DB_RELEASE_CONFIG:?}
+        target: /run/rougether-db
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [default]
+networks:
+  default:
+    internal: true

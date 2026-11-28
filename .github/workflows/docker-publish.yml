@@ -9,7 +9,7 @@ on:
       personal_candidate:
         description: '개인 AWS에서 격리 운영 DB를 준비하는 단계'
         type: choice
-        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check]
+        options: ['off', enroll, restore, fixture, furniture-check, runtime-enroll, runtime-check, standby-check, renewal-check, clone-sealed-db]
         default: 'off'
       candidate_snapshot:
         description: '격리 복원 시점 YYYYMMDD-HHMM'
@@ -530,7 +530,7 @@ jobs:
         run: python3 deploy/personal-stage/publish.py
 
   personal-candidate:
-    if: github.event_name == 'workflow_dispatch' && (inputs.personal_candidate == 'enroll' || inputs.personal_candidate == 'restore' || inputs.personal_candidate == 'fixture' || inputs.personal_candidate == 'furniture-check' || inputs.personal_candidate == 'runtime-enroll' || inputs.personal_candidate == 'runtime-check' || inputs.personal_candidate == 'standby-check' || inputs.personal_candidate == 'renewal-check') && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
+    if: github.event_name == 'workflow_dispatch' && (inputs.personal_candidate == 'enroll' || inputs.personal_candidate == 'restore' || inputs.personal_candidate == 'fixture' || inputs.personal_candidate == 'furniture-check' || inputs.personal_candidate == 'runtime-enroll' || inputs.personal_candidate == 'runtime-check' || inputs.personal_candidate == 'standby-check' || inputs.personal_candidate == 'renewal-check' || inputs.personal_candidate == 'clone-sealed-db') && !inputs.personal_stage_https && !inputs.deploy_furniture_ai && !inputs.rotate_llm_key && !inputs.force_verification
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: personal-aws-candidate
@@ -564,6 +564,7 @@ jobs:
             runtime-receipt.json
             standby-receipt.json
             renewal-receipt.json
+            sealed-copy-receipt.json
             restore-receipt.json
             fixture-receipt.json
           retention-days: 7
