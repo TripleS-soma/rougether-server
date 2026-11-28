@@ -59,6 +59,10 @@ def main():
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
         certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
         Path(certificate).write_text(out+'\n')
+    elif mode=='renewal-check':
+        receipt=json.loads(out)
+        assert receipt['firstRequestsVerified'] and {receipt['user'],receipt['admin']} <= {'running','verified'}
+        Path('renewal-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='standby-check':
         receipt=json.loads(out)
         assert receipt['synthetic'] and receipt['cleanup'] and receipt['writeRejectedAfterRestart']
