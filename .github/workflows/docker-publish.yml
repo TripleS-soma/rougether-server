@@ -514,6 +514,6 @@ jobs:
         env:
           STAGE_ACCOUNT: ${{ vars.PERSONAL_STAGE_ACCOUNT_ID }}
           STAGE_NODE: ${{ vars.PERSONAL_STAGE_NODE_ID }}
-          STAGE_WIFI: ${{ vars.PERSONAL_STAGE_WIFI_CIDR }}
+          STAGE_WIFI: ${{ secrets.PERSONAL_STAGE_WIFI_CIDR }}
           STAGE_CODE_HASH: ${{ secrets.PERSONAL_STAGE_CODE_HASH }}
         run: python3 deploy/personal-stage/publish.py
