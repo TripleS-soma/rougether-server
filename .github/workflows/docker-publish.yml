@@ -10,9 +10,13 @@ on:
         description: '기존 가구 접수 또는 기존 쓰기 호스트의 점검 상태 선택'
         type: choice
         default: preserve
-        options: [preserve, close, reopen, hold-host, resume-host, forward-user]
+        options: [preserve, close, reopen, hold-host, resume-host, forward-user, inspect-cloud, stop-workers, seal-assets, restore-cloud]
+      source_furniture_settled:
+        description: 'stop-workers 전용. 신규 접수 차단 후 가구 생성·정산·환불과 예약 잔액을 원본 DB에서 대조함'
+        type: boolean
+        default: false
       source_resume_target_sealed:
-        description: 'resume-host 전용. 개인 AWS 쓰기와 소비자가 닫혀 있고 대상에 수락된 쓰기가 모두 원본에 보존되었음을 확인'
+        description: 'resume-host 또는 restore-cloud 전용. 개인 AWS 쓰기와 소비자가 닫혀 있고 대상에 수락된 쓰기가 모두 원본에 보존되었음을 확인'
         type: boolean
         default: false
       deploy_furniture_ai:
@@ -66,14 +70,43 @@ jobs:
         env:
           INTAKE: ${{ inputs.source_furniture_intake }}
           TARGET_SEALED: ${{ inputs.source_resume_target_sealed }}
+          SETTLED: ${{ inputs.source_furniture_settled }}
           MIXED: ${{ inputs.deploy_furniture_ai || inputs.rotate_llm_key || inputs.force_verification }}
         run: |
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$DEPLOY_MODE" = blue-green
           test "$MIXED" = false
-          if [ "$INTAKE" = resume-host ]; then test "$TARGET_SEALED" = true; else test "$TARGET_SEALED" != true; fi
-          case "$INTAKE" in close|reopen|hold-host|resume-host|forward-user) ;; *) exit 2 ;; esac
+          if [ "$INTAKE" = stop-workers ]; then test "$SETTLED" = true; else test "$SETTLED" != true; fi
+          if [ "$INTAKE" = resume-host ] || [ "$INTAKE" = restore-cloud ]; then test "$TARGET_SEALED" = true; else test "$TARGET_SEALED" != true; fi
+          case "$INTAKE" in close|reopen|hold-host|resume-host|forward-user|inspect-cloud|stop-workers|seal-assets|restore-cloud) ;; *) exit 2 ;; esac
+
+  source-cloud:
+    name: Approved source cloud controls
+    needs: intake
+    if: contains(fromJSON('["inspect-cloud","stop-workers","seal-assets","restore-cloud"]'), inputs.source_furniture_intake)
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    environment: source-aws-cutover
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ap-northeast-2
+          allowed-account-ids: '776158585524'
+          role-to-assume: arn:aws:iam::776158585524:role/rougether-source-cutover-control
+      - run: python3 -m pip install --disable-pip-version-check boto3==1.42.97
+      - name: Apply reviewed source operation
+        env:
+          SOURCE_OPERATION: ${{ inputs.source_furniture_intake }}
+          SOURCE_SETTLED: ${{ inputs.source_furniture_settled }}
+          TARGET_SEALED: ${{ inputs.source_resume_target_sealed }}
+        run: python3 .github/scripts/source_cloud_cutover.py "$SOURCE_OPERATION"
 
   resolve:
     if: (!inputs.source_furniture_intake || inputs.source_furniture_intake == 'preserve')
@@ -187,7 +220,7 @@ jobs:
 
   deploy:
     name: Deploy to EC2
-    if: ${{ !cancelled() && (needs.intake.result == 'success' || (needs.test.result == 'success' && needs.build.result == 'success')) }}
+    if: ${{ !cancelled() && !contains(fromJSON('["inspect-cloud","stop-workers","seal-assets","restore-cloud"]'), inputs.source_furniture_intake) && (needs.intake.result == 'success' || (needs.test.result == 'success' && needs.build.result == 'success')) }}
     runs-on: ubuntu-latest
     needs: [intake, test, build]
 

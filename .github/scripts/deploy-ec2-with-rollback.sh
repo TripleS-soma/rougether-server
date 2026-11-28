@@ -1618,6 +1618,8 @@ server {
 EOF
       if [ "$intake_closed" = true ]; then
         cat <<'INTAKE'
+    proxy_hide_header X-Rougether-Furniture-Intake;
+    add_header X-Rougether-Furniture-Intake closed always;
     if ($rougether_close_furniture) { return 418; }
     error_page 418 = @rougether_furniture_paused;
     location @rougether_furniture_paused {
