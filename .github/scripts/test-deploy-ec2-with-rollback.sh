@@ -1099,6 +1099,11 @@ test_hold_and_resume_source_writers() (
     test ! -f "$ENV_DIR/units/$unit"
     grep -Fq "ConditionPathExists=!$ENV_DIR/cutover-source/held" "$SYSTEMD_DIR/$unit.d/98-rougether-cutover.conf"
   done
+  # A staging health 200 at the same IP must never activate forwarding.
+  SOURCE_FURNITURE_INTAKE=forward-user
+  curl() { printf '200'; }
+  if forward_source_user; then echo 'forwarding accepted an unmarked target' >&2; exit 1; fi
+  grep -q 'source host held' "$NGINX_CONFIG_FILE"
   SOURCE_FURNITURE_INTAKE=resume-host
   touch "$ENV_DIR/no-health"
   if resume_source_host; then echo 'ingress resumed with unhealthy API' >&2; exit 1; fi

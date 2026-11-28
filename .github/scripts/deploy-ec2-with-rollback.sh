@@ -1363,6 +1363,116 @@ private_upstream_ip() {
 
 # The two origin listeners return maintenance while all source application processes drain.
 # This affects only the deployment host. RDS, S3 and cloud workers have separate gates.
+render_forwarded_source() {
+  cat > "$1" <<'NGINX'
+# Rougether original user entry to personal Seoul
+map $http_upgrade $rougether_forward_connection { default upgrade; '' ''; }
+server {
+    listen 8080;
+    client_max_body_size 40m;
+    location / {
+        proxy_pass http://127.0.0.1:39080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $rougether_forward_connection;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_request_buffering off;
+        proxy_next_upstream off;
+        proxy_read_timeout 120s;
+    }
+}
+server {
+    listen 8081;
+    listen 127.0.0.1:38082;
+    add_header Retry-After 60 always;
+    add_header Cache-Control "no-store" always;
+    return 503;
+}
+NGINX
+}
+
+forward_source_user() {
+  local state="$ENV_DIR/cutover-source" image name uri unit status file_sha expected
+  test -f "$state/held" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+  while IFS= read -r unit; do
+    status=$(systemctl show -p ActiveState --value "$unit") || return 1
+    case "$status" in inactive|failed) ;; *) return 1 ;; esac
+  done < <(source_writer_units)
+  local containers
+  containers=$(docker ps --format '{{.Names}}') || return 1
+  if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$containers"; then return 1; fi
+  # Only the reviewed production gateway adds this marker to a successful response.
+  # The rehearsal API uses the same IP and also has a health route.
+  uri='https://43.203.93.12/api/v1/health'
+  check_personal_origin() {
+    local url="$1" headers code
+    headers=$(mktemp "$state/.headers.XXXXXX") || return 1
+    code=$(curl --noproxy '*' --silent --show-error --max-time 8 -D "$headers" -o /dev/null -w '%{http_code}' "$url") || { rm -f "$headers"; return 1; }
+    if [ "$code" != 200 ] || ! grep -Eiq '^x-rougether-origin: personal-api[[:space:]]*$' "$headers"; then
+      rm -f "$headers"; return 1
+    fi
+    rm -f "$headers"
+  }
+  check_personal_origin "$uri" || return 1
+  image=caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+  name=rougether-personal-entry
+  cat > "$state/compat.pending" <<'COMPAT_CONFIG'
+{
+	admin off
+	auto_https off
+}
+# Bind to loopback on the origin host when deployed as the blue/green upstream.
+http://:8080 {
+	@internal path /api/v1/auth/dev-login* /api/v1/admin* /internal/* /actuator/* /rehearsal/*
+	@api path /api/v1/*
+	@links {
+		method GET HEAD
+		path /.well-known/apple-app-site-association /.well-known/assetlinks.json /i/* /h/*
+	}
+	route {
+		respond @internal 404
+		handle @api {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		handle @links {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		respond 404
+	}
+}
+COMPAT_CONFIG
+  chmod 0444 "$state/compat.pending"
+  file_sha=$(sha256sum "$state/compat.pending" | awk '{print $1}') || return 1
+  if docker container inspect "$name" >/dev/null 2>&1; then
+    expected=$(docker inspect -f '{{.Config.Image}} {{index .Config.Labels "rougether.compat.config"}}' "$name") || return 1
+    test "$expected" = "$image $file_sha" && cmp "$state/compat.pending" "$state/compat.Caddyfile" || return 1
+    rm "$state/compat.pending"
+    docker start "$name" >/dev/null || return 1
+  else
+    mv "$state/compat.pending" "$state/compat.Caddyfile" || return 1
+    docker run -d --name "$name" --label "rougether.compat.config=$file_sha" --restart unless-stopped \
+      --user 65534:65534 --read-only --security-opt no-new-privileges --cap-drop ALL \
+      --tmpfs /config:size=4m,mode=1777 --tmpfs /data:size=4m,mode=1777 --memory 96m \
+      --log-driver local --log-opt max-size=4m -v "$state/compat.Caddyfile:/etc/caddy/Caddyfile:ro" \
+      -p 127.0.0.1:39080:8080 "$image" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || return 1
+  fi
+  test "$(docker port "$name" 8080/tcp)" = 127.0.0.1:39080 || return 1
+  local attempt
+  for attempt in {1..10}; do
+    if check_personal_origin http://127.0.0.1:39080/api/v1/health; then break; fi
+    sleep 1
+  done
+  check_personal_origin http://127.0.0.1:39080/api/v1/health || return 1
+  apply_proxy_ports "$active_user_port" "$active_admin_port" || return 1
+  check_personal_origin http://127.0.0.1:8080/api/v1/health
+}
+
 render_held_source() {
   cat > "$1" <<'NGINX'
 # Rougether source host held
@@ -1462,7 +1572,10 @@ render_nginx_config() {
   local destination="$1"
   local user_port="$2"
   local admin_port="$3"
-  if [ "$SOURCE_FURNITURE_INTAKE" = hold-host ]; then render_held_source "$destination"; return; fi
+  case "$SOURCE_FURNITURE_INTAKE" in
+    hold-host) render_held_source "$destination"; return ;;
+    forward-user) render_forwarded_source "$destination"; return ;;
+  esac
   local admin_upstream_ip intake_closed=false
   if [ "$SOURCE_FURNITURE_INTAKE" = close ] || {
     [ "$SOURCE_FURNITURE_INTAKE" != reopen ] && [ -f "$NGINX_CONFIG_FILE" ] &&
@@ -3023,15 +3136,19 @@ case "$DEPLOY_MODE" in
     # 메모리 설정이 잘못되면 호스트를 건드리기 전에 멈춘다(유닛 작성·롤백 모두 같은 값을 쓴다).
     acquire_deploy_lock || exit 75
     if [ -f "$ENV_DIR/cutover-source/release" ]; then
-      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
+      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host|forward-user) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
     fi
     case "$SOURCE_FURNITURE_INTAKE" in
-      hold-host|resume-host)
+      hold-host|resume-host|forward-user)
         trap release_deploy_lock EXIT
         [ "$DEPLOY_MODE" = blue-green ] || exit 2
         load_blue_green_state
         blue_green_release_is_active || { echo '배포된 SHA가 다릅니다.' >&2; exit 2; }
-        if [ "$SOURCE_FURNITURE_INTAKE" = hold-host ]; then hold_source_host; else resume_source_host; fi
+        case "$SOURCE_FURNITURE_INTAKE" in
+          hold-host) hold_source_host ;;
+          resume-host) resume_source_host ;;
+          forward-user) forward_source_user ;;
+        esac
         exit 0
         ;;
       preserve) ;;
