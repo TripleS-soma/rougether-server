@@ -462,6 +462,20 @@ jobs:
               "$command_id" \
               "${{ steps.ec2.outputs.instance_id }}"
 
+          if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then
+            aws ssm get-command-invocation --command-id "$command_id" --instance-id "${{ steps.ec2.outputs.instance_id }}" \
+              --query StandardOutputContent --output text | python3 .github/scripts/export-cutover-settings.py \
+              "$GITHUB_SHA" "$GITHUB_RUN_ID" source-cutover-settings.json
+          fi
+
+      - name: Save verified source toggles and client settings
+        if: inputs.source_furniture_intake == 'close'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-cutover-settings
+          path: source-cutover-settings.json
+          if-no-files-found: error
+
       - name: Verify held source through its public API
         if: inputs.source_furniture_intake == 'hold-host' || inputs.source_furniture_intake == 'forward-user'
         env:
