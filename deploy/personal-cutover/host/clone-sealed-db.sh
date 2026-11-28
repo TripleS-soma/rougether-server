@@ -13,7 +13,8 @@ release="$base/release-$slot"
 candidate="rougether-candidate-$slot"
 img=mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
 test "$(cat "$snap/envelope.sha256")" = "$SSM_Digest"
-test -d "$snap/data" && test ! -L "$snap/data"
+test -d "$snap/data"
+test ! -L "$snap/data"
 test "$(docker inspect -f '{{.Config.Image}} {{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$candidate")" = "$img none 0"
 docker inspect "$candidate" | python3 -c 'import json,sys; mounts=json.load(sys.stdin)[0]["Mounts"]; assert [m["Source"] for m in mounts if m["Destination"]=="/var/lib/mysql"]==[sys.argv[1]]' "$snap/data"
 python3 - "$snap/receipt.json" "$candidate" <<'PY'
@@ -25,7 +26,8 @@ PY
 install -d -m 0700 "$release"
 if [[ -f "$release/verified.json" ]]; then
   cmp "$release/copy/receipt.json" "$snap/receipt.json"
-  test -f "$release/copy/data/ibdata1" && test -f "$release/copy/data/mysqld-auto.cnf"
+  test -f "$release/copy/data/ibdata1"
+  test -f "$release/copy/data/mysqld-auto.cnf"
   cat "$release/verified.json"
   exit 0
 fi
@@ -55,7 +57,8 @@ if [[ ! -d "$release/copy" ]]; then
   docker stop --time 90 "$candidate" >/dev/null
   test "$(docker inspect -f '{{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$candidate")" = 'false 0 false'
   cp -a --reflink=auto "$snap/data" "$pending/data"
-  test -f "$pending/data/ibdata1" && test -f "$pending/data/mysqld-auto.cnf"
+  test -f "$pending/data/ibdata1"
+  test -f "$pending/data/mysqld-auto.cnf"
   cmp "$snap/data/mysqld-auto.cnf" "$pending/data/mysqld-auto.cnf"
   # MySQL assigns the service database an independent server UUID on first start.
   rm "$pending/data/auto.cnf"

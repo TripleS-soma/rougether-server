@@ -55,7 +55,8 @@ if [[ -n "$db" ]]; then
   stop_one mysql
 else
   # For a partial warm-up with an owned selection but no running database.
-  test ! -e "$state/accepted-writes" && test ! -e "$state/activating"
+  test ! -e "$state/accepted-writes"
+  test ! -e "$state/activating"
 fi
 test -z "$(docker ps -q --filter "label=com.docker.compose.project=$project")"
 writes=false
