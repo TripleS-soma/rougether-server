@@ -1495,6 +1495,86 @@ source_writer_units() {
     rougether-batch.service rougether-ai-users.timer rougether-ai-users.service
 }
 
+# Read database connection settings locally. Credentials never enter command arguments or output.
+source_schema_control() (
+  set -Eeuo pipefail
+  umask 077
+  local mode="$1" state="$ENV_DIR/cutover-source" tmp image seen
+  local endpoint=rougether-dev-mysql.chcumqo045ix.ap-northeast-2.rds.amazonaws.com
+  image=mysql@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
+  case "$mode" in
+    inspect) ;;
+    seal-schema|unseal-schema)
+      test -f "$state/held" && test "$(cat "$state/release")" = "$DEPLOYED_SHA" || return 1
+      seen=$(docker ps --format '{{.Names}}') || return 1
+      if grep -Eq '^rougether-(user-api|admin-api)(-(blue|green))?$|^rougether-(batch|ai-users)$' <<< "$seen"; then return 1; fi
+      ;;
+    *) return 1 ;;
+  esac
+  tmp=$(mktemp -d -p /dev/shm rougether-source-schema.XXXXXXXX)
+  trap 'rm -f -- "$tmp/client.cnf" "$tmp/rds.pem"; rmdir "$tmp"' EXIT
+  curl -fsS --proto '=https' --retry 2 --max-time 15 https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem -o "$tmp/rds.pem" || return 1
+  printf '%s  %s\n' 913fb5b814f17af79d4c1622584a8d0ceddf5b0d76fe353d0c7d1186cdd6b229 "$tmp/rds.pem" | sha256sum --check --status || return 1
+  python3 - "$USER_RUNTIME_ENV" "$tmp/client.cnf" "$endpoint" <<'PY' || return 1
+import re,sys
+from pathlib import Path
+from urllib.parse import urlsplit
+rows=Path(sys.argv[1]).read_text().splitlines()
+settings={}
+for row in rows:
+    if '=' not in row:continue
+    key,value=row.split('=',1)
+    if key in ('DB_URL','DB_USERNAME','DB_PASSWORD'):settings[key]=value
+url=urlsplit(settings['DB_URL'].removeprefix('jdbc:') if hasattr(str,'removeprefix') else settings['DB_URL'][5:])
+assert url.scheme=='mysql' and url.hostname==sys.argv[3] and url.port in (None,3306) and url.path=='/rougether'
+assert re.fullmatch(r'[A-Za-z0-9_]+',settings['DB_USERNAME'])
+password=settings['DB_PASSWORD']
+assert password and not any(c in password for c in ('\r','\n','\x00'))
+quote=lambda text:'"'+text.replace('\\','\\\\').replace('"','\\"')+'"'
+Path(sys.argv[2]).write_text('[client]\nhost='+sys.argv[3]+'\nprotocol=TCP\nuser='+settings['DB_USERNAME']+'\npassword='+quote(password)+'\nssl-mode=VERIFY_IDENTITY\nssl-ca=/guard/rds.pem\nconnect-timeout=5\n')
+PY
+  schema_query() {
+    docker run --rm -i --network host --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint mysql \
+      -v "$tmp:/guard:ro" "$image" --defaults-extra-file=/guard/client.cnf --batch --skip-column-names rougether
+  }
+  local read_state="SELECT IF(LOCATE('READ ONLY=1',COALESCE(options,''))>0,1,0) FROM information_schema.schemata_extensions WHERE schema_name=DATABASE();"
+  seen=$(printf '%s\n' "$read_state" | schema_query) || return 1
+  case "$mode" in
+    inspect) test "$seen" = 0 || return 1 ;;
+    seal-schema)
+      local pending
+      pending=$(schema_query <<'SQL'
+SELECT (SELECT COUNT(*) FROM furniture_generation_jobs WHERE status NOT IN ('SUCCEEDED','FAILED'))
+     + (SELECT COUNT(*) FROM furniture_lambda_execution WHERE state<>'FINISHED')
+     + (SELECT COUNT(*) FROM furniture_credit_reservations WHERE status='RESERVED')
+     + (SELECT COUNT(*) FROM furniture_credit_accounts WHERE reserved<>0);
+SQL
+) || return 1
+      test "$pending" = 0 || return 1
+      if [ ! -f "$state/schema-owned" ]; then
+        test "$seen" = 0 || return 1
+        printf '%s\n' "$DEPLOYED_SHA" > "$state/schema-owned.pending" || return 1
+        mv "$state/schema-owned.pending" "$state/schema-owned" || return 1
+      fi
+      test "$(cat "$state/schema-owned")" = "$DEPLOYED_SHA" || return 1
+      if [ "$seen" = 0 ]; then
+        printf '%s\n' 'SET SESSION lock_wait_timeout=7; ALTER DATABASE rougether READ ONLY=1;' | schema_query || return 1
+      fi
+      test "$(printf '%s\n' "$read_state" | schema_query)" = 1 || return 1
+      ;;
+    unseal-schema)
+      if [ ! -f "$state/schema-owned" ]; then test "$seen" = 0; return; fi
+      test "$(cat "$state/schema-owned")" = "$DEPLOYED_SHA" || return 1
+      if [ "$seen" = 1 ]; then
+        printf '%s\n' 'SET SESSION lock_wait_timeout=7; ALTER DATABASE rougether READ ONLY=0;' | schema_query || return 1
+      fi
+      test "$(printf '%s\n' "$read_state" | schema_query)" = 0 || return 1
+      mv "$state/schema-owned" "$state/schema-last-unsealed" || return 1
+      ;;
+  esac
+  printf 'Source schema guard checked: %s\n' "$mode"
+)
+
 read_cutover_feature_flags() {
   local container
   container="$(slot_container user-api "$active_user_color")"
@@ -3155,18 +3235,19 @@ case "$DEPLOY_MODE" in
     # 메모리 설정이 잘못되면 호스트를 건드리기 전에 멈춘다(유닛 작성·롤백 모두 같은 값을 쓴다).
     acquire_deploy_lock || exit 75
     if [ -f "$ENV_DIR/cutover-source/release" ]; then
-      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host|forward-user) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
+      case "$SOURCE_FURNITURE_INTAKE" in hold-host|resume-host|forward-user|seal-schema|unseal-schema) ;; *) echo '기존 호스트가 전환 대기 중입니다.' >&2; exit 2 ;; esac
     fi
     case "$SOURCE_FURNITURE_INTAKE" in
-      hold-host|resume-host|forward-user)
+      hold-host|resume-host|forward-user|seal-schema|unseal-schema)
         trap release_deploy_lock EXIT
         [ "$DEPLOY_MODE" = blue-green ] || exit 2
         load_blue_green_state
         blue_green_release_is_active || { echo '배포된 SHA가 다릅니다.' >&2; exit 2; }
         case "$SOURCE_FURNITURE_INTAKE" in
           hold-host) hold_source_host ;;
-          resume-host) resume_source_host ;;
+          resume-host) test ! -e "$ENV_DIR/cutover-source/schema-owned" && source_schema_control inspect && resume_source_host || exit 2 ;;
           forward-user) forward_source_user ;;
+          seal-schema|unseal-schema) source_schema_control "$SOURCE_FURNITURE_INTAKE" ;;
         esac
         exit 0
         ;;
@@ -3176,7 +3257,10 @@ case "$DEPLOY_MODE" in
         [ "$DEPLOY_MODE" = blue-green ] || exit 2
         load_blue_green_state
         blue_green_release_is_active || { echo "target release must already be active" >&2; exit 2; }
-        if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then read_cutover_feature_flags || exit 2; fi
+        if [ "$SOURCE_FURNITURE_INTAKE" = close ]; then
+          source_schema_control inspect || exit 2
+          read_cutover_feature_flags || exit 2
+        fi
         apply_proxy_ports "$active_user_port" "$active_admin_port"
         wait_health_stable user-api-current "$(stable_health_url user-api)"
         wait_health_stable admin-api-current "$(stable_health_url admin-api)"

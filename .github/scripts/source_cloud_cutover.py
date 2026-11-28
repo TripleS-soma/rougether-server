@@ -149,6 +149,10 @@ class SourceControls:
             if self.mapping() != 'Disabled' or any(self.limits().values()):
                 raise RuntimeError('Source function fence changed during drain')
             self.empty_queues()
+        elif mode == 'verify-frozen-cloud':
+            if route != 'held' or mapping != 'Disabled' or any(limits.values()) or digest(policy)!=SEALED or self.upload_count():
+                raise RuntimeError('Source cloud writers are not sealed')
+            self.empty_queues()
         elif mode == 'seal-assets':
             if route != 'held' or mapping != 'Disabled' or any(limits.values()) or self.upload_count():
                 raise RuntimeError('Hold the original API, drain functions and finish uploads first')
@@ -170,7 +174,7 @@ class SourceControls:
 if __name__ == '__main__':
     import boto3
     parser=argparse.ArgumentParser()
-    parser.add_argument('mode',choices=['inspect-cloud','stop-workers','seal-assets','restore-cloud'])
+    parser.add_argument('mode',choices=['inspect-cloud','stop-workers','seal-assets','restore-cloud','verify-frozen-cloud'])
     args=parser.parse_args()
     controls=SourceControls(boto3.Session(region_name=REGION))
     if args.mode!='inspect-cloud':
