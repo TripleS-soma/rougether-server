@@ -1,0 +1,38 @@
+# 개인 운영 후보의 user-api, admin-api 서비스에 합쳐 사용한다.
+x-aws-environment: &aws-environment
+  AWS_CONFIG_FILE: /run/rougether-identity/config
+  AWS_PROFILE: default
+  AWS_REGION: ap-northeast-2
+  AWS_EC2_METADATA_DISABLED: "true"
+  AWS_SHARED_CREDENTIALS_FILE: /dev/null
+
+x-helper: &helper
+  type: bind
+  source: /var/lib/rougether-personal-cutover/runtime-identity/aws_signing_helper
+  target: /usr/local/bin/aws_signing_helper
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  user-api:
+    environment: *aws-environment
+    volumes:
+      - *helper
+      - type: bind
+        source: /var/lib/rougether-personal-cutover/runtime-identity/user
+        target: /run/rougether-identity
+        read_only: true
+        bind:
+          create_host_path: false
+
+  admin-api:
+    environment: *aws-environment
+    volumes:
+      - *helper
+      - type: bind
+        source: /var/lib/rougether-personal-cutover/runtime-identity/admin
+        target: /run/rougether-identity
+        read_only: true
+        bind:
+          create_host_path: false
