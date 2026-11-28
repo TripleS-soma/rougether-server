@@ -26,7 +26,7 @@
 (drain_furniture) {
 	@newGeneration {
 		method POST
-		path /api/v1/me/furniture-generations /api/v1/me/furniture-generations/ /api/v1/me/furniture-generations/uploads /api/v1/me/furniture-generations/uploads/
+		path_regexp intake ^/api/v1/me/furniture-generations(/uploads|/[^/]+/feedback)?/?$
 	}
 	handle @newGeneration {
 		header Retry-After 60
