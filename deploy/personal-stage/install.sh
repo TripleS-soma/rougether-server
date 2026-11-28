@@ -45,7 +45,10 @@ printf 'AWS_ACCESS_KEY_ID=stage-photos
 AWS_SECRET_ACCESS_KEY=%s
 ' "$object_secret" > "$STAGE_HTTPS_DIR/qa-object.env"
 printf '{"identities":[{"name":"stage-api","credentials":[{"accessKey":"stage-photos","secretKey":"%s"}],"actions":["Read:rougether-synthetic-only","Write:rougether-synthetic-only"]}]}' "$object_secret" > "$STAGE_HTTPS_DIR/qa-s3.json"
-unset object_secret
+# The pinned image drops root before it opens its read-only S3 configuration.
+# Keep the release directory owner-only and grant its container group file access.
+chgrp 1000 "$STAGE_HTTPS_DIR/qa-s3.json"
+chmod 0440 "$STAGE_HTTPS_DIR/qa-s3.json"
 compose=("${base[@]}" -f "$STAGE_HTTPS_DIR/compose.https.yaml")
 "${compose[@]}" config --quiet
 "${compose[@]}" pull stage-https stage-google-keys stage-objects
@@ -62,6 +65,22 @@ rollback() {
 }
 trap 'rollback' ERR
 "${compose[@]}" up -d --no-deps stage-objects stage-google-keys user-api stage-https
+# Only an authenticated request to the initialized bucket returns NoSuchKey.
+# An unreadable config, AccessDenied and NoSuchBucket must fail the deployment.
+ready=false
+for attempt in {1..30}; do
+  if response=$(printf 'user = "stage-photos:%s"\n' "$object_secret" |
+      "${compose[@]}" exec -T --user seaweed stage-objects curl -s --max-time 3 \
+        --aws-sigv4 aws:amz:ap-northeast-2:s3 --config - -w '\n%{http_code}' \
+        http://127.0.0.1:8333/rougether-synthetic-only/__stage_readiness__/absent) &&
+      [[ $response == *'<Code>NoSuchKey</Code>'* && ${response##*$'\n'} == 404 ]]; then
+    ready=true
+    break
+  fi
+  sleep 2
+done
+unset object_secret response
+"$ready"
 gateway=$("${compose[@]}" ps -q stage-https)
 pid=$(docker inspect -f '{{.State.Pid}}' "$gateway")
 probe=(nsenter -t "$pid" -n curl -sS --max-time 6 --noproxy '*' --connect-to "$STAGE_IP:443:127.0.0.1:443")
