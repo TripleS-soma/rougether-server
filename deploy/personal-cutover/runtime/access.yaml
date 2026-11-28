@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Short-lived application credentials for the personal Seoul Lightsail host.
+Parameters:
+  IssueSessions:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Enable certificate sessions only for the approved runtime.
+  SigningCaPem:
+    Type: String
+    Description: Public PEM of the dedicated runtime issuing CA.
+Rules:
+  PersonalSeoulOnly:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::AccountId', '940482450790']
+        AssertDescription: Deploy in the personal AWS account.
+      - Assert: !Equals [!Ref 'AWS::Region', ap-northeast-2]
+        AssertDescription: Deploy in Seoul.
+Conditions:
+  IssueRuntimeSessions: !Equals [!Ref IssueSessions, 'true']
+Resources:
+  Anchor:
+    Type: AWS::RolesAnywhere::TrustAnchor
+    Properties:
+      Name: rougether-personal-runtime
+      Enabled: !If [IssueRuntimeSessions, true, false]
+      Source:
+        SourceType: CERTIFICATE_BUNDLE
+        SourceData:
+          X509CertificateData: !Ref SigningCaPem
+  UserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: rolesanywhere.amazonaws.com}
+            Action: ['sts:AssumeRole', 'sts:SetSourceIdentity', 'sts:TagSession']
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt Anchor.TrustAnchorArn
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:PrincipalTag/x509Subject/CN: rougether-personal-user-api
+      Policies:
+        - PolicyName: user-media-and-furniture
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:DeleteObjectVersion']
+                Resource:
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/private/chat/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/private/feed/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/private/furniture-generation/*
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject']
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets/bug-reports/*
+              - Effect: Allow
+                Action: ['s3:DeleteObject', 's3:DeleteObjectVersion']
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets/items/photo-furniture/*
+              - Effect: Allow
+                Action: 's3:ListBucketVersions'
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets
+                Condition:
+                  StringLike:
+                    s3:prefix: ['private/chat/*', 'private/feed/*', 'private/furniture-generation/*', 'items/photo-furniture/*']
+              - Effect: Allow
+                Action: 'sqs:SendMessage'
+                Resource: arn:aws:sqs:ap-northeast-2:940482450790:rougether-personal-furniture-jobs
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: rolesanywhere.amazonaws.com}
+            Action: ['sts:AssumeRole', 'sts:SetSourceIdentity', 'sts:TagSession']
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt Anchor.TrustAnchorArn
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:PrincipalTag/x509Subject/CN: rougether-personal-admin-api
+      Policies:
+        - PolicyName: admin-catalog-and-moderation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject']
+                Resource:
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/characters/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/categories/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/themes/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/items/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/house/*
+              - Effect: Allow
+                Action: 's3:ListBucket'
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets
+                Condition:
+                  StringLike:
+                    s3:prefix: ['characters/*', 'categories/*', 'themes/*', 'items/*', 'house/*']
+              - Effect: Allow
+                Action: 's3:GetObject'
+                Resource:
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/bug-reports/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/private/feed/*
+                  - arn:aws:s3:::rougether-fallback-940482450790-assets/private/chat/*
+              - Effect: Allow
+                Action: 's3:DeleteObject'
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets/characters/*
+              - Effect: Allow
+                Action: 's3:PutObject'
+                Resource: arn:aws:s3:::rougether-fallback-940482450790-assets/archive/admin-deleted/*
+  UserProfile:
+    Type: AWS::RolesAnywhere::Profile
+    Properties:
+      Name: rougether-personal-user-api
+      Enabled: !If [IssueRuntimeSessions, true, false]
+      DurationSeconds: 3600
+      RoleArns: [!GetAtt UserRole.Arn]
+  AdminProfile:
+    Type: AWS::RolesAnywhere::Profile
+    Properties:
+      Name: rougether-personal-admin-api
+      Enabled: !If [IssueRuntimeSessions, true, false]
+      DurationSeconds: 3600
+      RoleArns: [!GetAtt AdminRole.Arn]
+Outputs:
+  AnchorArn: {Value: !GetAtt Anchor.TrustAnchorArn}
+  UserRoleArn: {Value: !GetAtt UserRole.Arn}
+  AdminRoleArn: {Value: !GetAtt AdminRole.Arn}
+  UserProfileArn: {Value: !GetAtt UserProfile.ProfileArn}
+  AdminProfileArn: {Value: !GetAtt AdminProfile.ProfileArn}
