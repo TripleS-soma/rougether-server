@@ -56,6 +56,10 @@ for path in /api/v1/auth/dev-login /admin/health /actuator/health; do
   test "$status" = 404
 done
 test "$("${probe[@]}" -o /dev/null -w '%{http_code}' "https://$STAGE_IP/api/v1/me")" = 401
+# A browser sends Origin on writes. Check Spring accepts this exact HTTPS origin.
+google_probe=("${probe[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data '{"idToken":"invalid"}')
+test "$("${google_probe[@]}" -H "Origin: https://$STAGE_IP" "https://$STAGE_IP/api/v1/auth/google")" = 401
+test "$("${google_probe[@]}" -H 'Origin: https://other.invalid' "https://$STAGE_IP/api/v1/auth/google")" = 403
 ln -s "$STAGE_HTTPS_DIR" "$STAGE_HTTPS_DIR.next"
 mv -Tf "$STAGE_HTTPS_DIR.next" "$stage_root/current"
 echo 'Trusted IP TLS, synthetic API health and private route restrictions verified.'

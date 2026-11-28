@@ -17,8 +17,10 @@ assert urlsplit(args.origin).scheme == "https"
 ctx = ssl.create_default_context(cafile=args.ca)
 opener = build_opener(ProxyHandler({}), HTTPSHandler(context=ctx))
 
-def send(path, method="GET", data=None, *, code=None, token=None, expected=200):
+def send(path, method="GET", data=None, *, code=None, token=None, expected=200, origin=None):
     headers = {"Content-Type": "application/json"}
+    if origin is not None or method in ("POST", "PUT"):
+        headers["Origin"] = origin if origin is not None else args.origin
     if code:
         headers["Authorization"] = "Basic " + base64.b64encode(("rehearsal:" + code).encode()).decode()
     if token:
@@ -45,6 +47,7 @@ send("/actuator/health", expected=404)
 send("/api/v1/me", expected=401)
 send("/api/v1/auth/google", "POST", {"idToken":"invalid"}, expected=401)
 code = os.environ["STAGE_CODE"]
+send("/rehearsal/session", "POST", {}, code=code, origin="https://other.invalid", expected=403)
 def create():
     login = send("/rehearsal/session", "POST", {"userId": 1}, code=code)
     assert login["isNewUser"]
