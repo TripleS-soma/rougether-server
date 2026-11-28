@@ -23,16 +23,22 @@ def main():
     stored=ssm.get_document(Name=name,DocumentVersion='1',DocumentFormat='JSON')
     assert json.loads(stored['Content'])==json.loads(raw)
     params={}
-    if mode in ('restore','fixture'):
+    if mode in ('restore','fixture','release-config'):
         snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
-        assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
+        assert re.fullmatch(r'[a-f0-9]{64}',digest)
+        if mode=='release-config':
+            assert not snap
+            snap='config'
+        else:
+            assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap)
         client=aws.client('s3',config=Config(signature_version='s3v4',s3={'addressing_style':'virtual'}))
         key=f'restore/{snap}/{digest}.cms'
         head=client.head_object(Bucket=BUCKET,Key=key,ExpectedBucketOwner=ACCOUNT)
         assert head['ContentLength']>0 and head['Metadata'].get('sha256')==digest
         url=client.generate_presigned_url('get_object',Params={'Bucket':BUCKET,'Key':key},ExpiresIn=900)
         print('::add-mask::'+url,flush=True)
-        params={'Envelope':[url],'Snapshot':[snap],'Digest':[digest]}
+        params={'Envelope':[url],'Digest':[digest]}
+        if mode!='release-config':params['Snapshot']=[snap]
     if mode=='clone-sealed-db':
         snap=os.environ['SNAPSHOT'];digest=os.environ['DIGEST']
         assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',snap) and re.fullmatch(r'[a-f0-9]{64}',digest)
@@ -63,6 +69,10 @@ def main():
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
         certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
         Path(certificate).write_text(out+'\n')
+    elif mode=='release-config':
+        receipt=json.loads(out)
+        assert receipt=={'sealedConfig':True,'connected':False,'services':3,'privateTls':True,'digest':digest}
+        Path('release-config-receipt.json').write_text(json.dumps(receipt,indent=2))
     elif mode=='clone-sealed-db':
         receipt=json.loads(out)
         assert receipt['readOnly'] and receipt['allTableCountsMatched'] and receipt['binlogEnabled'] and receipt['zeroPublicPorts']
