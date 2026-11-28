@@ -544,6 +544,7 @@ jobs:
     timeout-minutes: 35
     environment: personal-aws-candidate
     permissions:
+      actions: read
       contents: read
       id-token: write
     steps:
@@ -555,6 +556,18 @@ jobs:
           role-to-assume: arn:aws:iam::940482450790:role/rougether-personal-candidate-deploy
           aws-region: ap-northeast-2
           allowed-account-ids: '940482450790'
+      - name: Verify cross-run receipt access for activation
+        if: inputs.personal_candidate == 'prepare-release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          receipt=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=personal-candidate-proof&per_page=10" |
+            jq -ce 'first(.artifacts[] | select(.expired == false and .size_in_bytes > 0 and .size_in_bytes < 65536)) | {id, digest}')
+          artifact=$(jq -er '.id | select(type == "number")' <<< "$receipt")
+          digest=$(jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' <<< "$receipt")
+          actual=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" | sha256sum | cut -d' ' -f1)
+          test "$digest" = "sha256:$actual"
       - name: Prepare isolated database
         env:
           CANDIDATE_MODE: ${{ inputs.personal_candidate }}
