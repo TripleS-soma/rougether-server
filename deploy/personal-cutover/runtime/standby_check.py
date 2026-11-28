@@ -32,7 +32,9 @@ def run(args, *, data=None, allow=False):
 with tempfile.TemporaryDirectory(dir=root) as temp:
     d = Path(temp)
     conf = d / "config"
-    os.environ.update(RUNTIME_JARS=str(jars), RUNTIME_CONFIG=str(conf))
+    release = d / "release"
+    release.mkdir(mode=0o700)
+    os.environ.update(RUNTIME_JARS=str(release), RUNTIME_CONFIG=str(conf))
     lines = [
         "2d0f2b7b33cd00ad7201ae2a7504f9c94c363374e915a27f900bbeeb0a92677b  admin-api.jar",
         "d0cddb42c2d814425c3830358f1014e5548d89054fc25fcfc139307856313024  batch.jar",
@@ -41,9 +43,12 @@ with tempfile.TemporaryDirectory(dir=root) as temp:
     for line in lines:
         sha, name = line.split()
         digest = hashlib.sha256()
-        with (jars / name).open("rb") as payload:
+        target = release / name
+        with (jars / name).open("rb") as payload, target.open("xb") as copy:
             for block in iter(lambda: payload.read(1048576), b""):
                 digest.update(block)
+                copy.write(block)
+        target.chmod(0o444)
         assert digest.hexdigest() == sha
     receipt["artifactChecksums"] = dict(reversed(line.split()) for line in lines)
     os.umask(0o077)
@@ -128,7 +133,30 @@ sys.exit(1)
             pid = run(
                 ["docker", "inspect", "-f", "{{.State.Pid}}", container]
             ).stdout.strip()
-            assert pid.isdigit() and int(pid) > 1
+            if not pid.isdigit() or int(pid) <= 1:
+                state = run(
+                    [
+                        "docker",
+                        "inspect",
+                        "-f",
+                        "{{.State.ExitCode}} {{.State.OOMKilled}}",
+                        container,
+                    ]
+                ).stdout.strip()
+                log = run(["docker", "logs", "--tail", "30", container], allow=True)
+                known = [
+                    "Permission denied",
+                    "Unrecognized VM option",
+                    "Invalid or corrupt jarfile",
+                    "No such file",
+                    "FAILED",
+                    "APPLICATION FAILED",
+                    "exec format error",
+                ]
+                reasons = [text for text in known if text in log.stdout + log.stderr]
+                raise RuntimeError(
+                    f"{service} exited before HTTP probe: {state}, {reasons}"
+                )
             launcher = ["nsenter", "-t", pid, "-n", "python3"]
         else:
             launcher = [
