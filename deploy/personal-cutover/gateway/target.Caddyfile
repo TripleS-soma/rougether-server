@@ -1,0 +1,57 @@
+{
+	admin off
+	default_sni 43.203.93.12
+	auto_https disable_redirects
+}
+
+(maintenance) {
+	header Retry-After 60
+	header Cache-Control "no-store"
+	respond "서비스 이전 중입니다. 잠시 후 다시 시도해 주세요." 503
+}
+
+(live_api) {
+	@internal path /api/v1/auth/dev-login* /api/v1/admin* /rehearsal/* /internal/* /actuator/* /admin/*
+	respond @internal 404
+	@links {
+		method GET HEAD
+		path /.well-known/apple-app-site-association /.well-known/assetlinks.json /i/* /h/*
+	}
+	reverse_proxy @links user-api:8080
+	@api path /api/v1/*
+	reverse_proxy @api user-api:8080
+	respond 404
+}
+
+(drain_furniture) {
+	@newGeneration {
+		method POST
+		path /api/v1/me/furniture-generations /api/v1/me/furniture-generations/*
+	}
+	handle @newGeneration {
+		header Retry-After 60
+		header Cache-Control "no-store"
+		respond "가구 생성 접수를 잠시 중단했습니다." 503
+	}
+	handle {
+		route {
+			import live_api
+		}
+	}
+}
+
+http://:80 {
+	respond 404
+}
+https://43.203.93.12 {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	route {
+		import {$CUTOVER_MODE:maintenance}
+	}
+}

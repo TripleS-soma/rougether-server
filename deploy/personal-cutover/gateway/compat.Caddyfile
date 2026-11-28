@@ -1,0 +1,27 @@
+{
+	admin off
+	auto_https off
+}
+# Bind to loopback on the origin host when deployed as the blue/green upstream.
+http://:8080 {
+	@internal path /api/v1/auth/dev-login* /api/v1/admin* /internal/* /actuator/* /rehearsal/*
+	@api path /api/v1/*
+	@links {
+		method GET HEAD
+		path /.well-known/apple-app-site-association /.well-known/assetlinks.json /i/* /h/*
+	}
+	route {
+		respond @internal 404
+		handle @api {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		handle @links {
+			reverse_proxy https://43.203.93.12 {
+				header_up Host 43.203.93.12
+			}
+		}
+		respond 404
+	}
+}

@@ -28,5 +28,9 @@ for (_, table, parent), pairs in groups.items():
 assert sum(map(int,query(' UNION ALL '.join(checks)).splitlines())) == 0
 assert len(groups)==expected['fk'] and len(tables)==expected['tables']
 assert sum(counts.values())==expected['total'] and all(counts[k]==v for k,v in expected['core'].items())
+if 'nonemptyCounts' in expected:
+    assert {table:count for table,count in counts.items() if count} == expected['nonemptyCounts']
+routines = int(query("SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema=DATABASE()"))
+assert routines == expected.get('routines',2)
 assert hashlib.sha256(history).hexdigest()==expected['flyway']
-print(json.dumps(dict(candidate=name,tables=len(tables),rows=sum(counts.values()),foreignKeys=len(groups),orphanViolations=0,flywayMatched=True,readOnly=True,network='none')))
+print(json.dumps(dict(candidate=name,tables=len(tables),rows=sum(counts.values()),foreignKeys=len(groups),orphanViolations=0,flywayMatched=True,allTableCountsMatched='nonemptyCounts' in expected,routines=routines,readOnly=True,network='none')))

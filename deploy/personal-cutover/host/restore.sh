@@ -53,7 +53,9 @@ for ((i=0;i<150;i++)); do
 done
 [[ "$(echo 'SHOW TABLES' | sql)" = '' ]]
 # mysql can include failed customer SQL in stderr. Keep the error stream off SSM and Actions.
-decrypt | tar -xO -f - database.sql | sql >/dev/null 2>/dev/null
+# Restore each table in a transaction. DDL commits at the same boundaries as the dump.
+# Keep the last COMMIT behind the successful decryption and tar extraction.
+{ printf 'SET SESSION autocommit=0;\n'; decrypt | tar -xO -f - database.sql || exit 1; printf '\nCOMMIT;\n'; } | docker exec -i "$name" mysql --defaults-extra-file=/run/private/client.cnf --binary-mode --default-character-set=utf8mb4 rougether >/dev/null 2>/dev/null
 echo 'SET GLOBAL super_read_only=ON' | sql
 [[ "$(echo 'SELECT @@global.super_read_only' | sql)" = 1 ]]
 test "$(docker inspect -f '{{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$name")" = 'none 0'
