@@ -47,9 +47,10 @@ def main():
         time.sleep(4)
     else:raise RuntimeError('Candidate timed out')
     out=result['StandardOutputContent'].strip()
-    if mode=='enroll':
+    if mode in ('enroll','runtime-enroll'):
         assert re.fullmatch(r'-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+\n-----END CERTIFICATE-----',out)
-        Path('transport-cert.pem').write_text(out+'\n')
+        certificate = 'transport-cert.pem' if mode=='enroll' else 'runtime-ca.crt'
+        Path(certificate).write_text(out+'\n')
     elif mode=='restore':
         receipt=json.loads(out)
         assert receipt['network']=='none' and receipt['readOnly'] and receipt['orphanViolations']==0
