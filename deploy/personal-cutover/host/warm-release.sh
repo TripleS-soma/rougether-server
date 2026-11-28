@@ -52,7 +52,7 @@ else
   mv "$state/selection.pending" "$state/selection"
 fi
 test ! -e "$state/accepted-writes"
-test ! -e "$state/activating"
+test ! -e "$state/activating" && test ! -e "$state/sealing" && test ! -e "$state/sealed"
 # A previously selected release may own this data after a retry.
 for id in $(docker ps -aq); do
   docker inspect "$id" | python3 -c 'import sys,json; c=json.load(sys.stdin)[0]; m=[x for x in c["Mounts"] if x.get("Source")==sys.argv[1]]; assert not m or (c["Config"]["Labels"].get("com.docker.compose.project")=="rougether-release" and c["Config"]["Labels"].get("com.docker.compose.service")=="mysql" and m[0]["Destination"]=="/var/lib/mysql")' "$DB_RELEASE_DATA"

@@ -1,0 +1,11 @@
+services:
+  user-api:
+    env_file:
+      - ${RELEASE_FLAGS:?}
+  mysql:
+    volumes:
+      - type: bind
+        source: ${DB_ROOT_CNF:?}
+        target: /run/release-root.cnf
+        read_only: true
+        bind: {create_host_path: false}

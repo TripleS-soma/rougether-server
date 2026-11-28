@@ -47,6 +47,9 @@ export RELEASE_ROUTING="$work/routing" DB_RELEASE_DATA="$work/unselected" DB_COL
 compose=(docker compose --profile writer -p rougether-release -f runtime/compose.apps.yaml -f runtime/compose.identity.yaml -f runtime/compose.database.yaml -f runtime/compose.routing.yaml)
 "${compose[@]}" config --format json | python3 runtime/release_plan.py
 DB_ROOT_CNF="$work/unselected-root.cnf" "${compose[@]}" -f runtime/compose.standby.yaml -f runtime/compose.warm.yaml config --quiet
+: > "$work/empty.env"
+DB_ROOT_CNF="$work/unselected-root.cnf" RELEASE_FLAGS="$work/empty.env" "${compose[@]}" -f runtime/compose.live.yaml config --quiet
+rm "$work/empty.env"
 # Leave only immutable files. All mutable candidate settings come from the protected invocation.
 bundle=$(find gateway runtime routing -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
 [[ "$bundle" =~ ^[a-f0-9]{64}$ ]]

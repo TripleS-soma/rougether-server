@@ -11,14 +11,14 @@ BUCKET = 'rougether-cutover-940482450790-artifacts'
 NODE = 'mi-017285f379d04931f'
 INSTANCE = 'rougether-fallback-stage'
 def document(mode, machine):
-    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users','prepare-release','warm-release') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
+    assert mode in ('enroll','restore','fixture','furniture-check','runtime-enroll','runtime-check','standby-check','renewal-check','clone-sealed-db','release-config','prepare-db-users','prepare-release','warm-release','activate-release','seal-release') and re.fullmatch(r'i-[0-9a-f]{17}',machine)
     source = (HERE / 'host' / (mode+'.sh')).read_text().replace('EXPECTED_MACHINE',machine)
     params = {}
     if mode == 'prepare-release':
         files = [
             'runtime/compose.apps.yaml', 'runtime/compose.identity.yaml', 'runtime/compose.database.yaml',
             'runtime/compose.routing.yaml', 'runtime/compose.standby.yaml', 'runtime/compose.warm.yaml',
-            'runtime/render_routing.py', 'runtime/warm_network.sh',
+            'runtime/render_routing.py', 'runtime/warm_network.sh', 'runtime/compose.live.yaml', 'runtime/source_settings.py',
             'runtime/release_plan.py', 'runtime/release_candidate.py', 'gateway/target.Caddyfile', 'gateway/admin.Caddyfile',
         ]
         parts = []
@@ -53,9 +53,11 @@ def document(mode, machine):
         source = source.replace('# SEALED_DB_VERIFIER', 'cat > "$tmp/verify.py" <<\'VERIFY_END\'\n'+verifier+'VERIFY_END')
         for key,regex in {'Snapshot':'^[0-9]{8}-[0-9]{4}$','Digest':'^[a-f0-9]{64}$'}.items():
             params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
-    if mode == 'warm-release':
+    if mode == 'activate-release':
+        params['SourceSettings'] = {'type':'String','allowedPattern':'^[A-Za-z0-9+/=]{16,22000}$','interpolationType':'ENV_VAR'}
+    if mode in ('warm-release','activate-release','seal-release'):
         params['Bundle'] = {'type':'String','allowedPattern':'^[a-f0-9]{64}$','interpolationType':'ENV_VAR'}
-    if mode in ('prepare-db-users','warm-release'):
+    if mode in ('prepare-db-users','warm-release','activate-release','seal-release'):
         for key,regex in {'Snapshot':'^[0-9]{8}-[0-9]{4}$','Digest':'^[a-f0-9]{64}$','ConfigDigest':'^[a-f0-9]{64}$'}.items():
             params[key]={'type':'String','allowedPattern':regex,'interpolationType':'ENV_VAR'}
     if mode == 'release-config':
