@@ -35,7 +35,7 @@ https://{$STAGE_IP} {
 		path /api/v1/health
 	}
 	@me {
-		method GET PUT
+		method GET PUT PATCH
 		path /api/v1/me
 	}
 	@google {
@@ -44,11 +44,15 @@ https://{$STAGE_IP} {
 	}
 	@journeyRead {
 		method GET
-		path /api/v1/goals /api/v1/rooms/me /api/v1/me/wallets /api/v1/routines /api/v1/routines/* /api/v1/houses /api/v1/houses/* /api/v1/chat/rooms/* /api/v1/chat/images/*
+		path /api/v1/items /api/v1/me/join-requests /api/v1/reports/weekly /api/v1/recommendations /api/v1/events/christmas /api/v1/calendar/month /api/v1/characters /api/v1/onboarding /api/v1/onboarding/house /api/v1/today /api/v1/categories /api/v1/me/houses /api/v1/me/characters /api/v1/me/items /api/v1/notifications /api/v1/notifications/* /api/v1/events/login-gifts/* /api/v1/events/attendance /api/v1/calendar /api/v1/todos /api/v1/goals /api/v1/rooms/me /api/v1/me/wallets /api/v1/routines /api/v1/routines/* /api/v1/houses /api/v1/houses/* /api/v1/chat/rooms/* /api/v1/chat/images/*
 	}
 	@journeyWrite {
 		method POST
 		path_regexp journey ^/api/v1/(auth/refresh|routines|routines/[0-9]+/logs|houses|houses/join-by-code|houses/[0-9]+/chat-room|chat/rooms/[0-9]+/messages)$
+	}
+	@onboarding {
+		method PUT
+		path /api/v1/onboarding/goals /api/v1/onboarding/character /api/v1/onboarding/house
 	}
 	@photo {
 		method POST
@@ -94,6 +98,9 @@ https://{$STAGE_IP} {
 			reverse_proxy user-api:8080
 		}
 		handle @journeyRead {
+			reverse_proxy user-api:8080
+		}
+		handle @onboarding {
 			reverse_proxy user-api:8080
 		}
 		handle @journeyWrite {

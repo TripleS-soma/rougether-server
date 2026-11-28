@@ -27,6 +27,9 @@ test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/mysql
 INSERT INTO goals (code, name, sort_order, is_active)
 SELECT 'STAGE_JOURNEY', 'Rehearsal', 9999, TRUE
 WHERE NOT EXISTS (SELECT 1 FROM goals WHERE is_active = TRUE);
+INSERT INTO characters (code,name,base_asset_key,sort_order,is_active)
+SELECT 'CAT','Rehearsal cat','characters/stage-cat.png',9999,TRUE
+WHERE NOT EXISTS (SELECT 1 FROM characters WHERE is_active=TRUE);
 SQL
 install -d -m 700 .stage-https/releases
 stage_root=$(realpath .stage-https)
