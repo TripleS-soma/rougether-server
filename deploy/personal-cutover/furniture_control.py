@@ -126,7 +126,7 @@ def run(s,mode):
         if env!=new:
             require(mode=='furniture-prepare' and mapping(lm)=='Disabled','Prepare disconnected workers first')
             lm.update_function_configuration(FunctionName=PREFIX+kind,RevisionId=before['RevisionId'],Environment={'Variables':new})
-            lm.get_waiter('function_updated_v2').wait(FunctionName=PREFIX+kind)
+            lm.get_waiter('function_updated').wait(FunctionName=PREFIX+kind)
         verified=function(lm,kind)['Environment']['Variables']
         require(verified.keys()==new.keys() and all(hmac.compare_digest(verified[k].encode(),v.encode()) for k,v in new.items()),
                 'Runtime readback failed')
