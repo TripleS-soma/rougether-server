@@ -230,6 +230,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+        with:
+          fetch-depth: 2
+
       - name: Download current-run tested furniture AI package
         if: inputs.deploy_furniture_ai == true
         uses: actions/download-artifact@v4
@@ -397,9 +400,21 @@ jobs:
             test "$account_id" = 776158585524
           fi
           registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          user_image="${registry}/${ECR_REPOSITORY_PREFIX}/user-api:${GITHUB_SHA}"
-          admin_image="${registry}/${ECR_REPOSITORY_PREFIX}/admin-api:${GITHUB_SHA}"
-          batch_image="${registry}/${ECR_REPOSITORY_PREFIX}/batch:${GITHUB_SHA}"
+          release_sha="$GITHUB_SHA"
+          held_release=f63108a9d325e4db63975291a8eef60b2bc1940d
+          case "$SOURCE_FURNITURE_INTAKE" in
+            seal-schema|unseal-schema|resume-host|forward-user)
+              if [ "$(git rev-parse HEAD^1)" = "$held_release" ]; then
+                git diff --quiet "$held_release" HEAD -- . \
+                  ':(exclude).github/workflows/docker-publish.yml' \
+                  ':(exclude).github/scripts/deploy-ec2-with-rollback.sh' \
+                  ':(exclude).github/scripts/test-deploy-ec2-with-rollback.sh'
+                release_sha="$held_release"
+              fi ;;
+          esac
+          user_image="${registry}/${ECR_REPOSITORY_PREFIX}/user-api:${release_sha}"
+          admin_image="${registry}/${ECR_REPOSITORY_PREFIX}/admin-api:${release_sha}"
+          batch_image="${registry}/${ECR_REPOSITORY_PREFIX}/batch:${release_sha}"
 
           deploy_script="$(
             sed \
@@ -408,7 +423,7 @@ jobs:
               -e "s|__USER_IMAGE__|${user_image}|g" \
               -e "s|__ADMIN_IMAGE__|${admin_image}|g" \
               -e "s|__BATCH_IMAGE__|${batch_image}|g" \
-              -e "s|__DEPLOYED_SHA__|${GITHUB_SHA}|g" \
+              -e "s|__DEPLOYED_SHA__|${release_sha}|g" \
               -e "s|__FIREBASE_PARAMETER_NAME__|${FIREBASE_CREDENTIALS_PARAMETER}|g" \
               -e "s|__ADMIN_ORIGIN_SECRET_PARAMETER_NAME__|${ADMIN_ORIGIN_SECRET_PARAMETER}|g" \
               -e "s|__WEBEX_BOT_TOKEN_PARAMETER_NAME__|${WEBEX_BOT_TOKEN_PARAMETER}|g" \
