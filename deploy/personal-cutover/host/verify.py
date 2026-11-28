@@ -33,4 +33,12 @@ if 'nonemptyCounts' in expected:
 routines = int(query("SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema=DATABASE()"))
 assert routines == expected.get('routines',2)
 assert hashlib.sha256(history).hexdigest()==expected['flyway']
-print(json.dumps(dict(candidate=name,tables=len(tables),rows=sum(counts.values()),foreignKeys=len(groups),orphanViolations=0,flywayMatched=True,allTableCountsMatched='nonemptyCounts' in expected,routines=routines,readOnly=True,network='none')))
+receipt=dict(candidate=name,tables=len(tables),rows=sum(counts.values()),foreignKeys=len(groups),orphanViolations=0,flywayMatched=True,allTableCountsMatched='nonemptyCounts' in expected,routines=routines,readOnly=True,network='none')
+if 'frozenSource' in expected:
+    source=expected['frozenSource']
+    assert source['sourceAccount']=='776158585524' and source['schema']=='rougether'
+    assert re.fullmatch(r'[0-9]{8}-[0-9]{4}',source['snapshot']) and '-'+source['snapshot']+'-' in name
+    assert all(re.fullmatch(r'[a-f0-9]{64}',source[k]) for k in ('countDigest','sourceDumpSHA256','objectInventorySHA256'))
+    assert hashlib.sha256(json.dumps(counts,sort_keys=True,separators=(',',':')).encode()).hexdigest()==source['countDigest']
+    receipt['frozenSource']=source
+print(json.dumps(receipt))

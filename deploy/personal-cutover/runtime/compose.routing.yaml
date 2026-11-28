@@ -1,0 +1,87 @@
+services:
+  mysql:
+    networks:
+      default:
+        ipv4_address: 172.29.243.2
+  user-api:
+    restart: unless-stopped
+    networks:
+      clients:
+        ipv4_address: 172.29.242.2
+  admin-api:
+    restart: unless-stopped
+    networks:
+      clients:
+        ipv4_address: 172.29.242.3
+  batch:
+    restart: unless-stopped
+    networks:
+      clients:
+        ipv4_address: 172.29.242.4
+  db-proxy:
+    image: haproxy@sha256:7816a9801a6846b912bc37e48529808e2fa87c3c47992441940f68e393ebcfeb
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 48m
+    command: [haproxy, -W, -db, -f, /etc/haproxy.cfg]
+    volumes:
+      - type: bind
+        source: ${RELEASE_ROUTING:?}/haproxy.cfg
+        target: /etc/haproxy.cfg
+        read_only: true
+        bind: {create_host_path: false}
+  gateway:
+    image: caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 160m
+    tmpfs: [/tmp, /config]
+    environment:
+      CUTOVER_MODE: ${CUTOVER_MODE:-maintenance}
+      ADMIN_ALLOWED_CIDRS: ${ADMIN_ALLOWED_CIDRS:-127.0.0.1/32}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export ROUGETHER_ADMIN_ORIGIN="$$(cat /run/rougether-admin-origin)"
+        test -n "$$ROUGETHER_ADMIN_ORIGIN"
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    ports:
+      - "0.0.0.0:80:80/tcp"
+      - "0.0.0.0:443:443/tcp"
+      - "${ADMIN_BIND_IP:-127.0.0.1}:8443:8443/tcp"
+    networks: [clients]
+    volumes:
+      - gateway-certificates:/data
+      - type: bind
+        source: ${RELEASE_ROUTING:?}/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${RELEASE_ROUTING:?}/admin.Caddyfile
+        target: /etc/caddy/admin.Caddyfile
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${RUNTIME_CONFIG:?}/gateway/admin-origin
+        target: /run/rougether-admin-origin
+        read_only: true
+        bind: {create_host_path: false}
+networks:
+  default:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.243.0/28
+  clients:
+    ipam:
+      config:
+        - subnet: 172.29.242.0/28
+volumes:
+  gateway-certificates:
+    external: true
+    name: rougether-rehearsal_stage-tls
